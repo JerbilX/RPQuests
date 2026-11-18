@@ -7,10 +7,10 @@ local Addon = RPQuest
 Addon.TargetCapture = {}
 local TargetCapture = Addon.TargetCapture
 
-function TargetCapture:GetPlayerMapContext()
+function TargetCapture:GetPlayerMapContext(forceSync)
     if SetMapToPlayerLocation then
         local mapSceneShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("worldMap")
-        if not mapSceneShowing then
+        if forceSync or not mapSceneShowing then
             SetMapToPlayerLocation()
         end
     end
@@ -78,11 +78,7 @@ function TargetCapture:CaptureFromReticle()
         return nil, nameOrErr
     end
 
-    if SetMapToPlayerLocation then
-        SetMapToPlayerLocation()
-    end
-
-    local ctx = self:GetPlayerMapContext()
+    local ctx = self:GetPlayerMapContext(true)
     local draft = Addon.QuestRepository:SetDraftCapturedTarget({
         targetName = nameOrErr,
         mapId = ctx.mapId,
