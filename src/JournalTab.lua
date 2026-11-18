@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
+-- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -101,6 +102,7 @@ function JournalTab:Initialize()
     end
 
     self.viewMode = VIEW_MODE.DETAIL
+    self.listRole = Addon.Constants.QUEST_ROLE.RECEIVED
     self.selectedQuestId = nil
     self.shareCodeVisible = false
     self.listOffset = 0
@@ -126,8 +128,17 @@ function JournalTab:Initialize()
     self:IntegrateIntoQuestJournalModeBar()
 
     Addon.QuestRepository:RegisterListener(function(eventType, quest)
-        if eventType == "QUEST_CREATED" or eventType == "QUEST_IMPORTED" or eventType == "QUEST_UPDATED" then
+        if eventType == "QUEST_CREATED" or eventType == "QUEST_UPDATED" then
             if quest and quest.id then
+                self.listRole = quest.role or Addon.Constants.QUEST_ROLE.PREPARED
+                self.listOffset = 0
+                self.selectedQuestId = quest.id
+            end
+            self.viewMode = VIEW_MODE.DETAIL
+        elseif eventType == "QUEST_IMPORTED" then
+            if quest and quest.id then
+                self.listRole = Addon.Constants.QUEST_ROLE.RECEIVED
+                self.listOffset = 0
                 self.selectedQuestId = quest.id
             end
             self.viewMode = VIEW_MODE.DETAIL
@@ -199,9 +210,34 @@ function JournalTab:BuildLeftColumn(panel)
     )
     self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 160, 32)
 
+    local roles = Addon.Constants.QUEST_ROLE
+    self.btnTabPlay = CreateStyledButton(
+        PANEL_NAME .. "_TabPlayBtn",
+        leftCol,
+        150,
+        26,
+        Addon.Locale:Get("TAB_PLAY_QUESTS", 0),
+        function()
+            self:SetListRole(roles.RECEIVED)
+        end
+    )
+    self.btnTabPlay:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 66)
+
+    self.btnTabPrepare = CreateStyledButton(
+        PANEL_NAME .. "_TabPrepareBtn",
+        leftCol,
+        150,
+        26,
+        Addon.Locale:Get("TAB_PREPARE_QUESTS", 0),
+        function()
+            self:SetListRole(roles.PREPARED)
+        end
+    )
+    self.btnTabPrepare:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 160, 66)
+
     local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
     emptyLabel:SetDimensions(310, 80)
-    emptyLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 78)
+    emptyLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 104)
     if emptyLabel.SetFont then emptyLabel:SetFont("ZoFontGame") end
     if emptyLabel.SetColor then emptyLabel:SetColor(0.75, 0.75, 0.75, 1) end
     emptyLabel:SetHidden(true)
@@ -213,7 +249,7 @@ function JournalTab:BuildLeftColumn(panel)
     for i = 1, MAX_VISIBLE_ROWS do
         local rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_Row" .. i, leftCol, CT_BUTTON)
         rowBtn:SetDimensions(315, 30)
-        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 72 + ((i - 1) * 34))
+        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 100 + ((i - 1) * 32))
         if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
         local rowIndex = i
         rowBtn:SetHandler("OnClicked", function()
@@ -614,9 +650,27 @@ function JournalTab:OpenCreateEditor()
     self:Refresh()
 end
 
+function JournalTab:SetListRole(role)
+    if not role or self.listRole == role then return end
+    self.listRole = role
+    self.listOffset = 0
+    self.shareCodeVisible = false
+    self.viewMode = VIEW_MODE.DETAIL
+    local selected = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not selected or selected.role ~= role then
+        self.selectedQuestId = nil
+    end
+    self:Refresh()
+end
+
 function JournalTab:OpenEditEditor(questId)
-    local draft = Addon.QuestRepository:LoadQuestIntoDraft(questId)
-    if not draft then return end
+    local draft, err = Addon.QuestRepository:LoadQuestIntoDraft(questId)
+    if not draft then
+        if err then
+            Addon.Announcements:ShowAlert(err, true)
+        end
+        return
+    end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
     self.viewMode = VIEW_MODE.EDITOR
@@ -750,23 +804,50 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     allQuests = allQuests or Addon.QuestRepository:GetAllQuests()
     activeQuest = activeQuest or Addon.QuestRepository:GetActiveQuest()
 
+    local roles = Addon.Constants.QUEST_ROLE
+    local currentRole = self.listRole or roles.RECEIVED
+
+    local playCount = 0
+    local prepareCount = 0
     local activeAndAvail = {}
     local completedQuests = {}
     for _, q in ipairs(allQuests) do
-        if q.completed then
-            table.insert(completedQuests, q)
+        if q.role == roles.PREPARED then
+            prepareCount = prepareCount + 1
         else
-            table.insert(activeAndAvail, q)
+            playCount = playCount + 1
+        end
+        if q.role == currentRole then
+            if q.completed then
+                table.insert(completedQuests, q)
+            else
+                table.insert(activeAndAvail, q)
+            end
+        end
+    end
+
+    if self.btnTabPlay and self.btnTabPrepare then
+        local isPlay = (currentRole == roles.RECEIVED)
+        self.btnTabPlay:SetText(Addon.Locale:Get("TAB_PLAY_QUESTS", playCount))
+        self.btnTabPrepare:SetText(Addon.Locale:Get("TAB_PREPARE_QUESTS", prepareCount))
+        if self.btnTabPlay._bg then
+            self.btnTabPlay._bg:SetEdgeColor(isPlay and 0.95 or 0.45, isPlay and 0.85 or 0.40, isPlay and 0.50 or 0.25, isPlay and 1.0 or 0.70)
+            self.btnTabPlay._bg:SetCenterColor(isPlay and 0.16 or 0.06, isPlay and 0.14 or 0.06, isPlay and 0.09 or 0.06, 0.85)
+        end
+        if self.btnTabPrepare._bg then
+            self.btnTabPrepare._bg:SetEdgeColor((not isPlay) and 0.95 or 0.45, (not isPlay) and 0.85 or 0.40, (not isPlay) and 0.50 or 0.25, (not isPlay) and 1.0 or 0.70)
+            self.btnTabPrepare._bg:SetCenterColor((not isPlay) and 0.16 or 0.06, (not isPlay) and 0.14 or 0.06, (not isPlay) and 0.09 or 0.06, 0.85)
         end
     end
 
     self.headerLabel:SetText(Addon.Locale:Get("HEADER_QUEST_LIST", #allQuests))
     self.rowBindings = {}
 
-    if #allQuests == 0 then
+    if (#activeAndAvail + #completedQuests) == 0 then
         self.listOffset = 0
         self._maxListOffset = 0
-        self.emptyLabel:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
+        local emptyKey = (currentRole == roles.PREPARED) and "EMPTY_PREPARE_LIST" or "EMPTY_PLAY_LIST"
+        self.emptyLabel:SetText(Addon.Locale:Get(emptyKey))
         self.emptyLabel:SetHidden(false)
         for i = 1, MAX_VISIBLE_ROWS do
             self.rowControls[i]:SetHidden(true)
@@ -781,7 +862,8 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     local displayRows = {}
 
     if #activeAndAvail > 0 then
-        table.insert(displayRows, { isHeader = true, text = "|cE8D5A0— " .. Addon.Locale:Get("SECTION_ACTIVE_QUESTS") .. " —|r" })
+        local secKey = (currentRole == roles.PREPARED) and "SECTION_PREPARED_QUESTS" or "SECTION_ACTIVE_QUESTS"
+        table.insert(displayRows, { isHeader = true, text = "|cE8D5A0— " .. Addon.Locale:Get(secKey) .. " —|r" })
         for _, q in ipairs(activeAndAvail) do
             local isAct = (activeQuest and activeQuest.id == q.id)
             local prefix = isAct and "|c33FF33★ |r" or "   "
@@ -845,17 +927,21 @@ function JournalTab:Refresh()
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
     self._dirty = false
 
+    local currentRole = self.listRole or Addon.Constants.QUEST_ROLE.RECEIVED
+    local roleQuests = Addon.QuestRepository:GetQuestsByRole(currentRole)
+
     local selectedQuest = nil
     if self.viewMode == VIEW_MODE.DETAIL then
         selectedQuest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-        if not selectedQuest then
-            if activeQuest then
+        if not selectedQuest or selectedQuest.role ~= currentRole then
+            if activeQuest and activeQuest.role == currentRole then
                 selectedQuest = activeQuest
                 self.selectedQuestId = activeQuest.id
-            elseif allQuests[1] then
-                selectedQuest = allQuests[1]
-                self.selectedQuestId = allQuests[1].id
+            elseif roleQuests[1] then
+                selectedQuest = roleQuests[1]
+                self.selectedQuestId = roleQuests[1].id
             else
+                selectedQuest = nil
                 self.selectedQuestId = nil
             end
         end
@@ -887,8 +973,10 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     activeQuest = activeQuest or Addon.QuestRepository:GetActiveQuest()
 
     if not selectedQuest then
+        local currentRole = self.listRole or Addon.Constants.QUEST_ROLE.RECEIVED
+        local emptyKey = (currentRole == Addon.Constants.QUEST_ROLE.PREPARED) and "EMPTY_PREPARE_LIST" or "EMPTY_PLAY_LIST"
         self.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
-        self.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
+        self.detailStatus:SetText(Addon.Locale:Get(emptyKey))
         self.detailLocation:SetText("")
         self.detailDescHeader:SetHidden(true)
         self.detailDescBody:SetText("")
@@ -909,16 +997,20 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.detailObjHeader:SetHidden(false)
     self.detailTitle:SetText((selectedQuest.title or ""):upper())
 
+    local isPrepared = Addon.QuestRepository:IsPreparedQuest(selectedQuest)
     local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
+    local activateLabel = isPrepared and Addon.Locale:Get("BTN_TEST_QUEST") or Addon.Locale:Get("BTN_ACTIVATE")
+    local deactivateLabel = isPrepared and Addon.Locale:Get("BTN_STOP_TEST") or Addon.Locale:Get("BTN_DEACTIVATE")
+
     if isCurrentActive then
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_ACTIVE"))
-        self.btnActivate:SetText(Addon.Locale:Get("BTN_DEACTIVATE"))
+        self.btnActivate:SetText(deactivateLabel)
     elseif selectedQuest.completed then
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_COMPLETED"))
-        self.btnActivate:SetText(Addon.Locale:Get("BTN_ACTIVATE"))
+        self.btnActivate:SetText(activateLabel)
     else
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_AVAILABLE"))
-        self.btnActivate:SetText(Addon.Locale:Get("BTN_ACTIVATE"))
+        self.btnActivate:SetText(activateLabel)
     end
 
     local locText = (selectedQuest.mapName and selectedQuest.mapName ~= "" and selectedQuest.mapName)
@@ -960,7 +1052,14 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.btnActivate:SetHidden(false)
     self.btnShowOnMap:SetHidden(false)
     self.btnShare:SetHidden(false)
-    self.btnEdit:SetHidden(false)
+    self.btnReset:ClearAnchors()
+    if isPrepared then
+        self.btnEdit:SetHidden(false)
+        self.btnReset:SetAnchor(TOPLEFT, self.btnEdit, TOPRIGHT, 12, 0)
+    else
+        self.btnEdit:SetHidden(true)
+        self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
+    end
     self.btnReset:SetHidden(false)
     self.btnDelete:SetHidden(false)
 end

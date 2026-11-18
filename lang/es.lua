@@ -13,15 +13,22 @@ RPQuest.Locales["es"] = {
     -- Tab & General
     TAB_TITLE = "Misiones Custom",
     HEADER_QUEST_LIST = "MISIONES CUSTOM (%d)",
+    TAB_PLAY_QUESTS = "Para Jugar (%d)",
+    TAB_PREPARE_QUESTS = "En Preparación (%d)",
     SECTION_ACTIVE_QUESTS = "Activas / Disponibles",
+    SECTION_PREPARED_QUESTS = "En Preparación (Para Enviar)",
     SECTION_COMPLETED_QUESTS = "Completadas",
     EMPTY_QUEST_LIST = "No hay misiones creadas. Pulsa '+ Nueva' o 'Importar' para comenzar.",
+    EMPTY_PLAY_LIST = "No hay misiones para jugar. Pulsa 'Importar' para pegar un código.",
+    EMPTY_PREPARE_LIST = "No hay misiones en preparación. Pulsa '+ Nueva' para crear una.",
 
     -- Buttons
     BTN_NEW_QUEST = "+ Nueva",
     BTN_IMPORT_CODE = "Importar",
     BTN_ACTIVATE = "Activar",
     BTN_DEACTIVATE = "Desactivar",
+    BTN_TEST_QUEST = "Probar",
+    BTN_STOP_TEST = "Dejar de probar",
     BTN_SHOW_ON_MAP = "Ver en Mapa",
     BTN_EDIT = "Editar",
     BTN_RESET = "Reiniciar",
@@ -76,6 +83,7 @@ RPQuest.Locales["es"] = {
     ALERT_SHARE_READY = "RPQuest: ¡Código seleccionado! Pulsa Ctrl+C para copiarlo.",
     ERR_MISSING_TARGET = "Captura primero al menos un objetivo NPC con la tecla bajo la retícula.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
+    ERR_CANNOT_EDIT_RECEIVED = "Las misiones recibidas para jugar no se pueden editar.",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Misión Completada: %s",
 
