@@ -934,7 +934,7 @@ function JournalTab:RefreshDetailPane()
     self.detailDescBody:SetText(descText)
 
     self.detailObjHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
-    local targets = Addon.QuestRepository:EnsureQuestTargets(selectedQuest)
+    local targets = selectedQuest.targets or {}
     local objLines = {}
     for _, t in ipairs(targets) do
         local line = Addon.Locale:Get(
@@ -995,7 +995,7 @@ function JournalTab:RefreshEditorPane()
         self.descEdit:SetText(draftDesc)
     end
 
-    local targets = Addon.QuestRepository:EnsureQuestTargets(draft)
+    local targets = draft.targets or {}
     local summary = Addon.QuestRepository:FormatTargetsSummary(targets)
     if summary ~= "" then
         local locName = (draft.mapName and draft.mapName ~= "" and draft.mapName)

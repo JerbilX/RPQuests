@@ -49,7 +49,7 @@ function WorldMapArea:Initialize()
             if tooltip and tooltip.AddLine then
                 local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", activeQuest.title or "")
                 tooltip:AddLine(headerText, "ZoFontWinH4", 0.91, 0.83, 0.63)
-                local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(activeQuest)) or {}
+                local targets = activeQuest.targets or {}
                 for _, t in ipairs(targets) do
                     local objText = Addon.Locale:Get(
                         "MAP_TOOLTIP_OBJECTIVE",

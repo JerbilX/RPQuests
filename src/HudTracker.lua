@@ -116,7 +116,7 @@ function HudTracker:Refresh()
 
     self.titleLabel:SetText(activeQuest.title or "")
 
-    local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(activeQuest)) or {}
+    local targets = activeQuest.targets or {}
     local objLines = {}
     for _, t in ipairs(targets) do
         table.insert(objLines, Addon.Locale:Get(
