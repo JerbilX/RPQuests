@@ -43,7 +43,7 @@ function WorldMapArea:Initialize()
 
     local pinTooltipCreator = {
         creator = function(pin)
-            local activeQuest = Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest()
+            local activeQuest = Addon.QuestRepository:GetActiveQuest()
             if not activeQuest then return end
             local tooltip = InformationTooltip
             if tooltip and tooltip.AddLine then
@@ -97,13 +97,11 @@ function WorldMapArea:Initialize()
         end
     end
 
-    if Addon.QuestRepository then
-        Addon.QuestRepository:RegisterListener(function(eventType)
-            if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
-                self:RefreshPins()
-            end
-        end)
-    end
+    Addon.QuestRepository:RegisterListener(function(eventType)
+        if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
+            self:RefreshPins()
+        end
+    end)
 
     self.isInitialized = true
     self:RefreshPins()
@@ -145,19 +143,14 @@ function WorldMapArea:OnLayoutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.pinTypeId then return end
 
-    local activeQuest = Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest()
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
     if not self:ShouldRenderOnCurrentMap(activeQuest) then
         return
     end
 
-    local pinTag = {
-        questId = activeQuest.id,
-        title = activeQuest.title,
-    }
-
     pManager:CreatePin(
         self.pinTypeId,
-        pinTag,
+        activeQuest.id,
         activeQuest.areaCenterX,
         activeQuest.areaCenterY,
         activeQuest.areaRadius
@@ -177,7 +170,7 @@ function WorldMapArea:RefreshPins()
 end
 
 function WorldMapArea:ShowQuestOnMap(quest)
-    local targetQuest = quest or (Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest())
+    local targetQuest = quest or Addon.QuestRepository:GetActiveQuest()
     if not targetQuest then return false end
 
     if MAIN_MENU_KEYBOARD and MAIN_MENU_KEYBOARD.ShowCategory and MENU_CATEGORY_MAP then
@@ -186,14 +179,18 @@ function WorldMapArea:ShowQuestOnMap(quest)
         SCENE_MANAGER:Show("worldMap")
     end
 
+    local refreshedByCallback = false
     if SetMapToMapId and targetQuest.mapId and targetQuest.mapId > 0 then
         local res = SetMapToMapId(targetQuest.mapId)
         if res == SET_MAP_RESULT_MAP_CHANGED and CALLBACK_MANAGER and CALLBACK_MANAGER.FireCallbacks then
             CALLBACK_MANAGER:FireCallbacks("OnWorldMapChanged")
+            refreshedByCallback = true
         end
     end
 
-    self:RefreshPins()
+    if not refreshedByCallback then
+        self:RefreshPins()
+    end
 
     if targetQuest.areaCenterX and targetQuest.areaCenterY then
         PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)

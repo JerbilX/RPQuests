@@ -125,37 +125,35 @@ function JournalTab:Initialize()
 
     self:IntegrateIntoQuestJournalModeBar()
 
-    if Addon.QuestRepository then
-        Addon.QuestRepository:RegisterListener(function(eventType, quest)
-            if eventType == "QUEST_CREATED" or eventType == "QUEST_IMPORTED" or eventType == "QUEST_UPDATED" then
-                if quest and quest.id then
-                    self.selectedQuestId = quest.id
-                end
-                self.viewMode = VIEW_MODE.DETAIL
-            elseif eventType == "QUEST_DELETED" then
-                if quest and self.selectedQuestId == quest.id then
-                    self.selectedQuestId = nil
-                end
-                self.shareCodeVisible = false
-            elseif eventType == "DRAFT_TARGET_CAPTURED" then
-                if self.viewMode ~= VIEW_MODE.EDITOR then
-                    self.viewMode = VIEW_MODE.EDITOR
-                end
-            elseif eventType == "DRAFT_UPDATED" then
-                if self.viewMode == VIEW_MODE.EDITOR and not self.panel:IsHidden() then
-                    self:RefreshEditorPane()
-                else
-                    self._dirty = true
-                end
-                return
+    Addon.QuestRepository:RegisterListener(function(eventType, quest)
+        if eventType == "QUEST_CREATED" or eventType == "QUEST_IMPORTED" or eventType == "QUEST_UPDATED" then
+            if quest and quest.id then
+                self.selectedQuestId = quest.id
             end
-            if self.panel:IsHidden() then
-                self._dirty = true
+            self.viewMode = VIEW_MODE.DETAIL
+        elseif eventType == "QUEST_DELETED" then
+            if quest and self.selectedQuestId == quest.id then
+                self.selectedQuestId = nil
+            end
+            self.shareCodeVisible = false
+        elseif eventType == "DRAFT_TARGET_CAPTURED" then
+            if self.viewMode ~= VIEW_MODE.EDITOR then
+                self.viewMode = VIEW_MODE.EDITOR
+            end
+        elseif eventType == "DRAFT_UPDATED" then
+            if self.viewMode == VIEW_MODE.EDITOR and not self.panel:IsHidden() then
+                self:RefreshEditorPane()
             else
-                self:Refresh()
+                self._dirty = true
             end
-        end)
-    end
+            return
+        end
+        if self.panel:IsHidden() then
+            self._dirty = true
+        else
+            self:Refresh()
+        end
+    end)
 
     self.isInitialized = true
     self:Refresh()
@@ -255,8 +253,12 @@ end
 function JournalTab:ScrollQuestList(step)
     local delta = tonumber(step) or 0
     if delta == 0 then return end
-    self.listOffset = math.max(0, (self.listOffset or 0) + delta)
-    self:Refresh()
+    local prevOffset = self.listOffset or 0
+    local maxOffset = self._maxListOffset or 0
+    local nextOffset = math.min(math.max(0, prevOffset + delta), maxOffset)
+    if nextOffset == prevOffset then return end
+    self.listOffset = nextOffset
+    self:RefreshQuestList()
 end
 
 function JournalTab:BuildRightColumn(panel)
@@ -301,6 +303,7 @@ function JournalTab:BuildDetailPane(parent)
     descHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 96)
     if descHeader.SetFont then descHeader:SetFont("ZoFontWinH4") end
     if descHeader.SetColor then descHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    descHeader:SetText(Addon.Locale:Get("LABEL_DESCRIPTION_HEADER"))
     self.detailDescHeader = descHeader
 
     local descBody = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescBody", pane, CT_LABEL)
@@ -320,6 +323,7 @@ function JournalTab:BuildDetailPane(parent)
     objHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 264)
     if objHeader.SetFont then objHeader:SetFont("ZoFontWinH3") end
     if objHeader.SetColor then objHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    objHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     self.detailObjHeader = objHeader
 
     local objText = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjText", pane, CT_LABEL)
@@ -334,6 +338,7 @@ function JournalTab:BuildDetailPane(parent)
     shareHeader:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 8)
     if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
     if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     shareHeader:SetHidden(true)
     self.shareHeader = shareHeader
 
@@ -343,48 +348,44 @@ function JournalTab:BuildDetailPane(parent)
     self.shareBg = shareBg
     self.shareEdit = shareEdit
 
-    -- Fila 1 de botones de acción
+    -- Fila 1 de botones de acción (anclada dinámicamente debajo de objetivos o código de compartición)
     self.btnActivate = CreateStyledButton(PANEL_NAME .. "_BtnActivate", pane, 160, 32, "", function()
         self:OnToggleActiveClicked()
     end)
-    self.btnActivate:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 425)
+    self.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 18)
 
-    self.btnShowOnMap = CreateStyledButton(PANEL_NAME .. "_BtnShowMap", pane, 160, 32, "", function()
+    self.btnShowOnMap = CreateStyledButton(PANEL_NAME .. "_BtnShowMap", pane, 160, 32, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
         local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-        if q and Addon.WorldMapArea then
+        if q then
             Addon.WorldMapArea:ShowQuestOnMap(q)
         end
     end)
-    self.btnShowOnMap:SetAnchor(TOPLEFT, pane, TOPLEFT, 172, 425)
+    self.btnShowOnMap:SetAnchor(TOPLEFT, self.btnActivate, TOPRIGHT, 12, 0)
 
-    self.btnShare = CreateStyledButton(PANEL_NAME .. "_BtnShare", pane, 160, 32, "", function()
+    self.btnShare = CreateStyledButton(PANEL_NAME .. "_BtnShare", pane, 160, 32, Addon.Locale:Get("BTN_SHARE"), function()
         self:OnShareClicked()
     end)
-    self.btnShare:SetAnchor(TOPLEFT, pane, TOPLEFT, 344, 425)
+    self.btnShare:SetAnchor(TOPLEFT, self.btnShowOnMap, TOPRIGHT, 12, 0)
 
     -- Fila 2 de botones de acción
-    self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", pane, 160, 32, "", function()
+    self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", pane, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
         self:OpenEditEditor(self.selectedQuestId)
     end)
-    self.btnEdit:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 467)
+    self.btnEdit:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
 
-    self.btnReset = CreateStyledButton(PANEL_NAME .. "_BtnReset", pane, 160, 32, "", function()
+    self.btnReset = CreateStyledButton(PANEL_NAME .. "_BtnReset", pane, 160, 32, Addon.Locale:Get("BTN_RESET"), function()
         if self.selectedQuestId and Addon.QuestRepository:ResetQuest(self.selectedQuestId) then
-            if Addon.Announcements then
-                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
-            end
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
         end
     end)
-    self.btnReset:SetAnchor(TOPLEFT, pane, TOPLEFT, 172, 467)
+    self.btnReset:SetAnchor(TOPLEFT, self.btnEdit, TOPRIGHT, 12, 0)
 
-    self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", pane, 160, 32, "", function()
+    self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", pane, 160, 32, Addon.Locale:Get("BTN_DELETE"), function()
         if self.selectedQuestId and Addon.QuestRepository:DeleteQuest(self.selectedQuestId) then
-            if Addon.Announcements then
-                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
-            end
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
         end
     end)
-    self.btnDelete:SetAnchor(TOPLEFT, pane, TOPLEFT, 344, 467)
+    self.btnDelete:SetAnchor(TOPLEFT, self.btnReset, TOPRIGHT, 12, 0)
 end
 
 function JournalTab:BuildEditorPane(parent)
@@ -403,6 +404,7 @@ function JournalTab:BuildEditorPane(parent)
     local lblTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputTitle", pane, CT_LABEL)
     lblTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 42)
     if lblTitle.SetFont then lblTitle:SetFont("ZoFontGameBold") end
+    lblTitle:SetText(Addon.Locale:Get("LABEL_INPUT_TITLE"))
     self.lblInputTitle = lblTitle
 
     local titleBg, titleEdit = CreateEditBoxWithBackdrop(
@@ -413,9 +415,7 @@ function JournalTab:BuildEditorPane(parent)
         90,
         false,
         function(val)
-            if Addon.QuestRepository then
-                Addon.QuestRepository:UpdateDraftFields({ title = val }, true)
-            end
+            Addon.QuestRepository:UpdateDraftFields({ title = val }, true)
         end
     )
     titleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 66)
@@ -425,6 +425,7 @@ function JournalTab:BuildEditorPane(parent)
     local lblDesc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputDesc", pane, CT_LABEL)
     lblDesc:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 112)
     if lblDesc.SetFont then lblDesc:SetFont("ZoFontGameBold") end
+    lblDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
     self.lblInputDesc = lblDesc
 
     local descBg, descEdit = CreateEditBoxWithBackdrop(
@@ -435,9 +436,7 @@ function JournalTab:BuildEditorPane(parent)
         400,
         true,
         function(val)
-            if Addon.QuestRepository then
-                Addon.QuestRepository:UpdateDraftFields({ description = val }, true)
-            end
+            Addon.QuestRepository:UpdateDraftFields({ description = val }, true)
         end
     )
     descBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 136)
@@ -447,12 +446,11 @@ function JournalTab:BuildEditorPane(parent)
     local lblTargetSec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetSec", pane, CT_LABEL)
     lblTargetSec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 246)
     if lblTargetSec.SetFont then lblTargetSec:SetFont("ZoFontGameBold") end
+    lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
     self.lblTargetSec = lblTargetSec
 
-    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", pane, 150, 26, "", function()
-        if Addon.QuestRepository then
-            Addon.QuestRepository:ClearDraftTargets()
-        end
+    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", pane, 150, 26, Addon.Locale:Get("BTN_CLEAR_TARGETS"), function()
+        Addon.QuestRepository:ClearDraftTargets()
     end)
     self.btnClearTargets:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 242)
     self.btnClearTargets:SetHidden(true)
@@ -467,6 +465,7 @@ function JournalTab:BuildEditorPane(parent)
     local lblAreaSize = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblAreaSize", pane, CT_LABEL)
     lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 342)
     if lblAreaSize.SetFont then lblAreaSize:SetFont("ZoFontGameBold") end
+    lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))
     self.lblAreaSize = lblAreaSize
 
     local radii = Addon.Constants.AREA_RADIUS
@@ -486,12 +485,12 @@ function JournalTab:BuildEditorPane(parent)
     end)
     self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 368)
 
-    self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, "", function()
+    self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, Addon.Locale:Get("BTN_SAVE"), function()
         self:OnSaveDraftClicked()
     end)
     self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 425)
 
-    self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, "", function()
+    self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
         Addon.QuestRepository:ResetDraft()
         self.titleEdit:SetText("")
@@ -512,12 +511,14 @@ function JournalTab:BuildImportPane(parent)
     header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
     if header.SetFont then header:SetFont("ZoFontWinH2") end
     if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
+    header:SetText(Addon.Locale:Get("IMPORT_VIEW_TITLE"))
     self.importHeader = header
 
     local instr = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ImportInstr", pane, CT_LABEL)
     instr:SetDimensions(510, 48)
     instr:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 44)
     if instr.SetFont then instr:SetFont("ZoFontGame") end
+    instr:SetText(Addon.Locale:Get("IMPORT_INSTRUCTIONS"))
     self.importInstr = instr
 
     local codeBg, codeEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ImportCodeEdit", pane, 510, 80, 1024, true)
@@ -525,12 +526,12 @@ function JournalTab:BuildImportPane(parent)
     self.importCodeBg = codeBg
     self.importCodeEdit = codeEdit
 
-    self.btnConfirmImport = CreateStyledButton(PANEL_NAME .. "_BtnConfirmImport", pane, 180, 36, "", function()
+    self.btnConfirmImport = CreateStyledButton(PANEL_NAME .. "_BtnConfirmImport", pane, 180, 36, Addon.Locale:Get("BTN_CONFIRM_IMPORT"), function()
         self:OnConfirmImportClicked()
     end)
     self.btnConfirmImport:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 196)
 
-    self.btnCancelImport = CreateStyledButton(PANEL_NAME .. "_BtnCancelImport", pane, 150, 36, "", function()
+    self.btnCancelImport = CreateStyledButton(PANEL_NAME .. "_BtnCancelImport", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
         self.importCodeEdit:SetText("")
         self.viewMode = VIEW_MODE.DETAIL
         self:Refresh()
@@ -560,7 +561,9 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
             if qj.SetMode then
                 qj:SetMode(tabDescriptor)
             end
-            self:Refresh()
+            if self._dirty then
+                self:Refresh()
+            end
         end,
     }
 
@@ -579,7 +582,9 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
         EnsureTabAdded()
         if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
             qjSelf.tabs:SelectFragment(self.tabCategoryName)
-            self:Refresh()
+            if self._dirty then
+                self:Refresh()
+            end
         end
         if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
             qjSelf.tabs:UpdateButtons()
@@ -588,7 +593,7 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
 end
 
 function JournalTab:SelectQuest(questId)
-    if Addon.QuestRepository and Addon.QuestRepository:GetDraft().editingQuestId then
+    if Addon.QuestRepository:GetDraft().editingQuestId then
         Addon.QuestRepository:ResetDraft()
     end
     self.selectedQuestId = questId
@@ -619,7 +624,7 @@ function JournalTab:OpenEditEditor(questId)
 end
 
 function JournalTab:OpenImportView()
-    if Addon.QuestRepository and Addon.QuestRepository:GetDraft().editingQuestId then
+    if Addon.QuestRepository:GetDraft().editingQuestId then
         Addon.QuestRepository:ResetDraft()
     end
     self.importCodeEdit:SetText("")
@@ -636,35 +641,27 @@ function JournalTab:OnSaveDraftClicked()
 
     local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText)
     if not savedQuest then
-        if Addon.Announcements then
-            Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
-        end
+        Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
         return
     end
 
     self.titleEdit:SetText("")
     self.descEdit:SetText("")
 
-    if Addon.Announcements then
-        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
-    end
+    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
 end
 
 function JournalTab:OnConfirmImportClicked()
     local rawCode = self.importCodeEdit:GetText()
     local importedQuest, err = Addon.QuestRepository:ImportQuestFromCode(rawCode)
     if not importedQuest then
-        if Addon.Announcements then
-            Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_INVALID_CODE"), true)
-        end
+        Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_INVALID_CODE"), true)
         return
     end
 
     self.importCodeEdit:SetText("")
 
-    if Addon.Announcements then
-        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_IMPORTED", importedQuest.title), false)
-    end
+    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_IMPORTED", importedQuest.title), false)
 end
 
 function JournalTab:OnToggleActiveClicked()
@@ -701,9 +698,7 @@ function JournalTab:OnShareClicked()
         self.shareEdit:SelectAll()
     end
 
-    if Addon.Announcements then
-        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_SHARE_READY"), false)
-    end
+    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_SHARE_READY"), false)
 end
 
 function JournalTab:OpenTab()
@@ -726,7 +721,9 @@ function JournalTab:OpenTab()
         self.panel:SetHidden(false)
     end
 
-    self:Refresh()
+    if self._dirty then
+        self:Refresh()
+    end
 end
 
 function JournalTab:ToggleTab()
@@ -747,10 +744,12 @@ function JournalTab:ToggleTab()
     end
 end
 
-function JournalTab:Refresh()
+function JournalTab:RefreshQuestList(allQuests, activeQuest)
     if not self.panel then return end
 
-    local allQuests = Addon.QuestRepository:GetAllQuests()
+    allQuests = allQuests or Addon.QuestRepository:GetAllQuests()
+    activeQuest = activeQuest or Addon.QuestRepository:GetActiveQuest()
+
     local activeAndAvail = {}
     local completedQuests = {}
     for _, q in ipairs(allQuests) do
@@ -760,31 +759,13 @@ function JournalTab:Refresh()
             table.insert(activeAndAvail, q)
         end
     end
-    local activeQuest = Addon.QuestRepository:GetActiveQuest()
-    self._dirty = false
 
-    -- Asegurar selección por defecto si estamos en vista DETAIL
-    if self.viewMode == VIEW_MODE.DETAIL then
-        local currentSelected = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-        if not currentSelected then
-            if activeQuest then
-                self.selectedQuestId = activeQuest.id
-            elseif allQuests[1] then
-                self.selectedQuestId = allQuests[1].id
-            else
-                self.selectedQuestId = nil
-            end
-        end
-    end
-
-    -- 1. Actualizar columna izquierda
     self.headerLabel:SetText(Addon.Locale:Get("HEADER_QUEST_LIST", #allQuests))
-    self.newBtn:SetText(Addon.Locale:Get("BTN_NEW_QUEST"))
-    self.importBtn:SetText(Addon.Locale:Get("BTN_IMPORT_CODE"))
-
     self.rowBindings = {}
+
     if #allQuests == 0 then
         self.listOffset = 0
+        self._maxListOffset = 0
         self.emptyLabel:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
         self.emptyLabel:SetHidden(false)
         for i = 1, MAX_VISIBLE_ROWS do
@@ -793,66 +774,95 @@ function JournalTab:Refresh()
         if self.btnListPrev then self.btnListPrev:SetHidden(true) end
         if self.btnListNext then self.btnListNext:SetHidden(true) end
         if self.scrollInfoLabel then self.scrollInfoLabel:SetHidden(true) end
-    else
-        self.emptyLabel:SetHidden(true)
-        local displayRows = {}
+        return
+    end
 
-        if #activeAndAvail > 0 then
-            table.insert(displayRows, { isHeader = true, text = "|cE8D5A0— " .. Addon.Locale:Get("SECTION_ACTIVE_QUESTS") .. " —|r" })
-            for _, q in ipairs(activeAndAvail) do
-                local isAct = (activeQuest and activeQuest.id == q.id)
-                local prefix = isAct and "|c33FF33★ |r" or "   "
-                local selColor = (self.selectedQuestId == q.id) and "|cFFFFFF" or "|cC5C29E"
-                table.insert(displayRows, {
-                    isHeader = false,
-                    questId = q.id,
-                    text = prefix .. selColor .. (q.title or "") .. "|r",
-                })
-            end
+    self.emptyLabel:SetHidden(true)
+    local displayRows = {}
+
+    if #activeAndAvail > 0 then
+        table.insert(displayRows, { isHeader = true, text = "|cE8D5A0— " .. Addon.Locale:Get("SECTION_ACTIVE_QUESTS") .. " —|r" })
+        for _, q in ipairs(activeAndAvail) do
+            local isAct = (activeQuest and activeQuest.id == q.id)
+            local prefix = isAct and "|c33FF33★ |r" or "   "
+            local selColor = (self.selectedQuestId == q.id) and "|cFFFFFF" or "|cC5C29E"
+            table.insert(displayRows, {
+                isHeader = false,
+                questId = q.id,
+                text = prefix .. selColor .. (q.title or "") .. "|r",
+            })
         end
+    end
 
-        if #completedQuests > 0 then
-            table.insert(displayRows, { isHeader = true, text = "|c88AAFF— " .. Addon.Locale:Get("SECTION_COMPLETED_QUESTS") .. " —|r" })
-            for _, q in ipairs(completedQuests) do
-                local selColor = (self.selectedQuestId == q.id) and "|cFFFFFF" or "|c8899AA"
-                table.insert(displayRows, {
-                    isHeader = false,
-                    questId = q.id,
-                    text = "|c00CCFF✓ |r" .. selColor .. (q.title or "") .. "|r",
-                })
-            end
+    if #completedQuests > 0 then
+        table.insert(displayRows, { isHeader = true, text = "|c88AAFF— " .. Addon.Locale:Get("SECTION_COMPLETED_QUESTS") .. " —|r" })
+        for _, q in ipairs(completedQuests) do
+            local selColor = (self.selectedQuestId == q.id) and "|cFFFFFF" or "|c8899AA"
+            table.insert(displayRows, {
+                isHeader = false,
+                questId = q.id,
+                text = "|c00CCFF✓ |r" .. selColor .. (q.title or "") .. "|r",
+            })
         end
+    end
 
-        local maxOffset = math.max(0, #displayRows - MAX_VISIBLE_ROWS)
-        self.listOffset = math.min(math.max(0, self.listOffset or 0), maxOffset)
+    local maxOffset = math.max(0, #displayRows - MAX_VISIBLE_ROWS)
+    self._maxListOffset = maxOffset
+    self.listOffset = math.min(math.max(0, self.listOffset or 0), maxOffset)
 
-        for i = 1, MAX_VISIBLE_ROWS do
-            local rowCtrl = self.rowControls[i]
-            local rowData = displayRows[self.listOffset + i]
-            if rowData then
-                rowCtrl:SetHidden(false)
-                rowCtrl:SetText(rowData.text)
-                rowCtrl:SetMouseEnabled(not rowData.isHeader)
-                self.rowBindings[i] = rowData
+    for i = 1, MAX_VISIBLE_ROWS do
+        local rowCtrl = self.rowControls[i]
+        local rowData = displayRows[self.listOffset + i]
+        if rowData then
+            rowCtrl:SetHidden(false)
+            rowCtrl:SetText(rowData.text)
+            rowCtrl:SetMouseEnabled(not rowData.isHeader)
+            self.rowBindings[i] = rowData
+        else
+            rowCtrl:SetHidden(true)
+        end
+    end
+
+    local needsScroll = (#displayRows > MAX_VISIBLE_ROWS)
+    if self.btnListPrev then self.btnListPrev:SetHidden(not needsScroll) end
+    if self.btnListNext then self.btnListNext:SetHidden(not needsScroll) end
+    if self.scrollInfoLabel then
+        if needsScroll then
+            local firstRow = self.listOffset + 1
+            local lastRow = math.min(#displayRows, self.listOffset + MAX_VISIBLE_ROWS)
+            self.scrollInfoLabel:SetText(string.format("%d-%d / %d", firstRow, lastRow, #displayRows))
+            self.scrollInfoLabel:SetHidden(false)
+        else
+            self.scrollInfoLabel:SetHidden(true)
+        end
+    end
+end
+
+function JournalTab:Refresh()
+    if not self.panel then return end
+
+    local allQuests = Addon.QuestRepository:GetAllQuests()
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    self._dirty = false
+
+    local selectedQuest = nil
+    if self.viewMode == VIEW_MODE.DETAIL then
+        selectedQuest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        if not selectedQuest then
+            if activeQuest then
+                selectedQuest = activeQuest
+                self.selectedQuestId = activeQuest.id
+            elseif allQuests[1] then
+                selectedQuest = allQuests[1]
+                self.selectedQuestId = allQuests[1].id
             else
-                rowCtrl:SetHidden(true)
-            end
-        end
-
-        local needsScroll = (#displayRows > MAX_VISIBLE_ROWS)
-        if self.btnListPrev then self.btnListPrev:SetHidden(not needsScroll) end
-        if self.btnListNext then self.btnListNext:SetHidden(not needsScroll) end
-        if self.scrollInfoLabel then
-            if needsScroll then
-                local firstRow = self.listOffset + 1
-                local lastRow = math.min(#displayRows, self.listOffset + MAX_VISIBLE_ROWS)
-                self.scrollInfoLabel:SetText(string.format("%d-%d / %d", firstRow, lastRow, #displayRows))
-                self.scrollInfoLabel:SetHidden(false)
-            else
-                self.scrollInfoLabel:SetHidden(true)
+                self.selectedQuestId = nil
             end
         end
     end
+
+    -- 1. Actualizar columna izquierda
+    self:RefreshQuestList(allQuests, activeQuest)
 
     -- 2. Actualizar columna derecha según el modo de vista
     if self.viewMode == VIEW_MODE.EDITOR then
@@ -864,26 +874,25 @@ function JournalTab:Refresh()
         self.detailPane:SetHidden(true)
         self.editorPane:SetHidden(true)
         self.importPane:SetHidden(false)
-        self:RefreshImportPane()
     else
         self.editorPane:SetHidden(true)
         self.importPane:SetHidden(true)
         self.detailPane:SetHidden(false)
-        self:RefreshDetailPane()
+        self:RefreshDetailPane(selectedQuest, activeQuest)
     end
 end
 
-function JournalTab:RefreshDetailPane()
-    local selectedQuest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
+    selectedQuest = selectedQuest or (self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId))
+    activeQuest = activeQuest or Addon.QuestRepository:GetActiveQuest()
 
     if not selectedQuest then
         self.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
         self.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
         self.detailLocation:SetText("")
-        self.detailDescHeader:SetText("")
+        self.detailDescHeader:SetHidden(true)
         self.detailDescBody:SetText("")
-        self.detailObjHeader:SetText("")
+        self.detailObjHeader:SetHidden(true)
         self.detailObjText:SetText("")
         self.shareHeader:SetHidden(true)
         self.shareBg:SetHidden(true)
@@ -896,6 +905,8 @@ function JournalTab:RefreshDetailPane()
         return
     end
 
+    self.detailDescHeader:SetHidden(false)
+    self.detailObjHeader:SetHidden(false)
     self.detailTitle:SetText((selectedQuest.title or ""):upper())
 
     local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
@@ -914,12 +925,10 @@ function JournalTab:RefreshDetailPane()
         or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
     self.detailLocation:SetText(Addon.Locale:Get("LABEL_LOCATION", locText))
 
-    self.detailDescHeader:SetText(Addon.Locale:Get("LABEL_DESCRIPTION_HEADER"))
     local descText = (selectedQuest.description and selectedQuest.description ~= "" and selectedQuest.description)
         or Addon.Locale:Get("LABEL_NO_DESCRIPTION")
     self.detailDescBody:SetText(descText)
 
-    self.detailObjHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     local targets = selectedQuest.targets or {}
     local objLines = {}
     for _, t in ipairs(targets) do
@@ -937,25 +946,22 @@ function JournalTab:RefreshDetailPane()
     self.detailObjText:SetDimensions(510, math.max(32, #objLines * 24))
     self.detailObjText:SetText(table.concat(objLines, "\n"))
 
+    self.btnActivate:ClearAnchors()
     if self.shareCodeVisible then
-        self.shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
         self.shareHeader:SetHidden(false)
         self.shareBg:SetHidden(false)
+        self.btnActivate:SetAnchor(TOPLEFT, self.shareBg, BOTTOMLEFT, 0, 14)
     else
         self.shareHeader:SetHidden(true)
         self.shareBg:SetHidden(true)
+        self.btnActivate:SetAnchor(TOPLEFT, self.detailObjText, BOTTOMLEFT, -12, 18)
     end
 
     self.btnActivate:SetHidden(false)
-    self.btnShowOnMap:SetText(Addon.Locale:Get("BTN_SHOW_ON_MAP"))
     self.btnShowOnMap:SetHidden(false)
-    self.btnShare:SetText(Addon.Locale:Get("BTN_SHARE"))
     self.btnShare:SetHidden(false)
-    self.btnEdit:SetText(Addon.Locale:Get("BTN_EDIT"))
     self.btnEdit:SetHidden(false)
-    self.btnReset:SetText(Addon.Locale:Get("BTN_RESET"))
     self.btnReset:SetHidden(false)
-    self.btnDelete:SetText(Addon.Locale:Get("BTN_DELETE"))
     self.btnDelete:SetHidden(false)
 end
 
@@ -967,10 +973,6 @@ function JournalTab:RefreshEditorPane()
     else
         self.editorHeader:SetText(Addon.Locale:Get("EDITOR_CREATE_TITLE"))
     end
-
-    self.lblInputTitle:SetText(Addon.Locale:Get("LABEL_INPUT_TITLE"))
-    self.lblInputDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
-    self.lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
 
     local draftTitle = draft.title or ""
     if not self.titleEdit._focused and self.titleEdit:GetText() ~= draftTitle then
@@ -987,14 +989,12 @@ function JournalTab:RefreshEditorPane()
         local locName = (draft.mapName and draft.mapName ~= "" and draft.mapName)
             or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
         self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_CAPTURED_FORMAT", summary, locName))
-        self.btnClearTargets:SetText(Addon.Locale:Get("BTN_CLEAR_TARGETS"))
         self.btnClearTargets:SetHidden(false)
     else
         self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
         self.btnClearTargets:SetHidden(true)
     end
 
-    self.lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))
     local radii = Addon.Constants.AREA_RADIUS
     local curRad = draft.areaRadius or radii.MEDIUM
 
@@ -1008,14 +1008,4 @@ function JournalTab:RefreshEditorPane()
     self.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
     self.btnRadiusMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_MEDIUM"), math.abs(curRad - radii.MEDIUM) < 0.005))
     self.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
-
-    self.btnSaveEditor:SetText(Addon.Locale:Get("BTN_SAVE"))
-    self.btnCancelEditor:SetText(Addon.Locale:Get("BTN_CANCEL"))
-end
-
-function JournalTab:RefreshImportPane()
-    self.importHeader:SetText(Addon.Locale:Get("IMPORT_VIEW_TITLE"))
-    self.importInstr:SetText(Addon.Locale:Get("IMPORT_INSTRUCTIONS"))
-    self.btnConfirmImport:SetText(Addon.Locale:Get("BTN_CONFIRM_IMPORT"))
-    self.btnCancelImport:SetText(Addon.Locale:Get("BTN_CANCEL"))
 end

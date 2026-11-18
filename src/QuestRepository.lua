@@ -354,53 +354,50 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     draft.targets = draft.targets or {}
 
     if #draft.targets == 0 or not draft.targetX or not draft.targetY then
-        local errMsg = (Addon.Locale and Addon.Locale:Get("ERR_MISSING_TARGET")) or "Missing target"
-        return nil, errMsg
+        return nil, Addon.Locale:Get("ERR_MISSING_TARGET")
     end
 
     if not draft.areaCenterX or not draft.areaCenterY then
         draft.areaCenterX, draft.areaCenterY = self:ComputeOffsetCenter(draft.targetX, draft.targetY, draft.areaRadius)
     end
 
+    local existing = draft.editingQuestId and self:GetQuestById(draft.editingQuestId) or nil
+    local targetId = existing and existing.id or self.savedVars.nextId
+
     local cleanTitle = (draft.title or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if cleanTitle == "" then
-        local nextIndex = #self.savedVars.quests + 1
-        cleanTitle = (Addon.Locale and Addon.Locale:Get("DEFAULT_QUEST_TITLE", nextIndex)) or ("Custom Quest #" .. tostring(nextIndex))
+        cleanTitle = Addon.Locale:Get("DEFAULT_QUEST_TITLE", targetId)
     end
 
     local cleanDesc = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", "")
 
-    if draft.editingQuestId then
-        local existing = self:GetQuestById(draft.editingQuestId)
-        if existing then
-            local prevProgress = {}
-            for _, t in ipairs(existing.targets or {}) do
-                prevProgress[t.name:lower()] = t.currentCount or 0
-            end
-
-            existing.title = cleanTitle
-            existing.description = cleanDesc
-            existing.targets = CloneTargetsList(draft.targets, prevProgress)
-            existing.mapId = draft.mapId or 0
-            existing.zoneId = draft.zoneId or 0
-            existing.mapName = draft.mapName or ""
-            existing.targetX = draft.targetX
-            existing.targetY = draft.targetY
-            existing.areaCenterX = draft.areaCenterX
-            existing.areaCenterY = draft.areaCenterY
-            existing.areaRadius = draft.areaRadius
-            existing.completed = AreAllTargetsCompleted(existing.targets)
-
-            self:ResetDraft()
-            self:NotifyListeners("QUEST_UPDATED", existing)
-            return existing
+    if existing then
+        local prevProgress = {}
+        for _, t in ipairs(existing.targets or {}) do
+            prevProgress[t.name:lower()] = t.currentCount or 0
         end
+
+        existing.title = cleanTitle
+        existing.description = cleanDesc
+        existing.targets = CloneTargetsList(draft.targets, prevProgress)
+        existing.mapId = draft.mapId or 0
+        existing.zoneId = draft.zoneId or 0
+        existing.mapName = draft.mapName or ""
+        existing.targetX = draft.targetX
+        existing.targetY = draft.targetY
+        existing.areaCenterX = draft.areaCenterX
+        existing.areaCenterY = draft.areaCenterY
+        existing.areaRadius = draft.areaRadius
+        existing.completed = AreAllTargetsCompleted(existing.targets)
+
+        self:ResetDraft()
+        self:NotifyListeners("QUEST_UPDATED", existing)
+        return existing
     end
 
-    local newId = self.savedVars.nextId or (#self.savedVars.quests + 1)
-    self.savedVars.nextId = newId + 1
+    self.savedVars.nextId = targetId + 1
 
-    local newQuest = BuildQuestRecord(newId, cleanTitle, cleanDesc, CloneTargetsList(draft.targets), draft)
+    local newQuest = BuildQuestRecord(targetId, cleanTitle, cleanDesc, CloneTargetsList(draft.targets), draft)
 
     table.insert(self.savedVars.quests, newQuest)
     self.savedVars.activeQuestId = newQuest.id
@@ -411,22 +408,17 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 end
 
 function QuestRepository:ImportQuestFromCode(codeString)
-    if not Addon.ShareCodec then
-        return nil, "ShareCodec not available"
-    end
-
-    local decoded, err = Addon.ShareCodec:DecodeQuest(codeString)
+    local decoded = Addon.ShareCodec:DecodeQuest(codeString)
     if not decoded then
-        local msg = (Addon.Locale and Addon.Locale:Get("ERR_INVALID_CODE")) or err
-        return nil, msg
+        return nil, Addon.Locale:Get("ERR_INVALID_CODE")
     end
 
-    local newId = self.savedVars.nextId or (#self.savedVars.quests + 1)
+    local newId = self.savedVars.nextId
     self.savedVars.nextId = newId + 1
 
     local cleanTitle = (decoded.title or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if cleanTitle == "" then
-        cleanTitle = (Addon.Locale and Addon.Locale:Get("DEFAULT_QUEST_TITLE", newId)) or ("Custom Quest #" .. tostring(newId))
+        cleanTitle = Addon.Locale:Get("DEFAULT_QUEST_TITLE", newId)
     end
 
     local importedTargets = {}
@@ -454,7 +446,7 @@ end
 
 function QuestRepository:ExportQuestToCode(questId)
     local quest = self:GetQuestById(questId)
-    if not quest or not Addon.ShareCodec then
+    if not quest then
         return nil
     end
     return Addon.ShareCodec:EncodeQuest(quest)

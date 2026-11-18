@@ -52,10 +52,12 @@ function TargetCapture:ValidateReticleTarget()
 
     if GetUnitReaction then
         local reaction = GetUnitReaction("reticleover")
-        if reaction == UNIT_REACTION_PLAYER_ALLY or reaction == UNIT_REACTION_COMPANION then
+        if reaction == UNIT_REACTION_PLAYER_ALLY
+            or reaction == UNIT_REACTION_COMPANION
+            or reaction == UNIT_REACTION_NPC_ALLY then
             return false, Addon.Locale:Get("ALERT_INVALID_TARGET_FRIENDLY")
         end
-        if IsUnitAttackable and not IsUnitAttackable("reticleover") and reaction == UNIT_REACTION_FRIENDLY then
+        if IsUnitAttackable and not IsUnitAttackable("reticleover") and reaction ~= UNIT_REACTION_HOSTILE then
             return false, Addon.Locale:Get("ALERT_INVALID_TARGET_FRIENDLY")
         end
     end
@@ -72,9 +74,7 @@ end
 function TargetCapture:CaptureFromReticle()
     local isValid, nameOrErr = self:ValidateReticleTarget()
     if not isValid then
-        if Addon.Announcements then
-            Addon.Announcements:ShowAlert(nameOrErr, true)
-        end
+        Addon.Announcements:ShowAlert(nameOrErr, true)
         return nil, nameOrErr
     end
 
@@ -88,7 +88,7 @@ function TargetCapture:CaptureFromReticle()
         targetY = ctx.y,
     })
 
-    if draft and Addon.Announcements then
+    if draft then
         local locText = (draft.mapName ~= "" and draft.mapName) or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
         local displayTarget = draft.lastCapturedDisplay or (draft.targets and draft.targets[1] and draft.targets[1].name) or ""
         local msg = Addon.Locale:Get("ALERT_TARGET_CAPTURED", displayTarget, locText)

@@ -61,18 +61,16 @@ function HudTracker:Initialize()
         if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
             PlaySound(SOUNDS.DEFAULT_CLICK)
         end
-        local activeQuest = Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest()
+        local activeQuest = Addon.QuestRepository:GetActiveQuest()
         if button == (MOUSE_BUTTON_INDEX_RIGHT or 2) then
-            if Addon.WorldMapArea and activeQuest then
+            if activeQuest then
                 Addon.WorldMapArea:ShowQuestOnMap(activeQuest)
             end
         else
-            if Addon.JournalTab then
-                if activeQuest then
-                    Addon.JournalTab:SelectQuest(activeQuest.id)
-                end
-                Addon.JournalTab:OpenTab()
+            if activeQuest then
+                Addon.JournalTab:SelectQuest(activeQuest.id)
             end
+            Addon.JournalTab:OpenTab()
         end
     end)
 
@@ -89,13 +87,11 @@ function HudTracker:Initialize()
         end
     end
 
-    if Addon.QuestRepository then
-        Addon.QuestRepository:RegisterListener(function(eventType)
-            if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
-                self:Refresh()
-            end
-        end)
-    end
+    Addon.QuestRepository:RegisterListener(function(eventType)
+        if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
+            self:Refresh()
+        end
+    end)
 
     self.isInitialized = true
     self:Refresh()
@@ -104,7 +100,7 @@ end
 function HudTracker:Refresh()
     if not self.panel then return end
 
-    local activeQuest = Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest()
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
     if not activeQuest or activeQuest.completed then
         if self.fragment and self.fragment.SetHiddenForReason then
             self.fragment:SetHiddenForReason("NoActiveRPQuest", true)
