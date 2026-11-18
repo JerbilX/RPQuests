@@ -180,38 +180,19 @@ function ShareCodec:EncodeQuest(quest)
     end
 
     local targets = quest.targets
-    if (type(targets) ~= "table" or #targets == 0) and type(quest.targetName) == "string" and quest.targetName ~= "" then
-        targets = {
-            {
-                name = quest.targetName,
-                requiredCount = math.max(1, math.floor(tonumber(quest.requiredCount) or 1)),
-            },
-        }
-    end
-
     if type(targets) ~= "table" or #targets == 0 then
         return nil, "Invalid quest table"
     end
 
-    local primaryTargetName = quest.targetName
-    if not primaryTargetName or primaryTargetName == "" then
-        primaryTargetName = targets[1].name
-    end
-
-    local totalRequired = tonumber(quest.requiredCount)
-    if not totalRequired or totalRequired < 1 then
-        totalRequired = 0
-        for _, t in ipairs(targets) do
-            totalRequired = totalRequired + math.max(1, math.floor(tonumber(t.requiredCount) or 1))
-        end
+    local encodedTargets = EncodeTargetsList(targets)
+    if encodedTargets == "" then
+        return nil, "Invalid quest table"
     end
 
     local prefix = (Addon.Constants and Addon.Constants.SHARE_CODEC and Addon.Constants.SHARE_CODEC.PREFIX) or "RPQ1"
     local fields = {
         EscapeField(quest.title or ""),
         EscapeField(quest.description or ""),
-        EscapeField(primaryTargetName or ""),
-        tostring(math.max(1, math.floor(totalRequired))),
         tostring(math.floor(tonumber(quest.mapId) or 0)),
         tostring(math.floor(tonumber(quest.zoneId) or 0)),
         EscapeField(quest.mapName or ""),
@@ -220,7 +201,7 @@ function ShareCodec:EncodeQuest(quest)
         string.format("%.4f", tonumber(quest.areaCenterX) or 0.5),
         string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
         string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
-        EncodeTargetsList(targets),
+        encodedTargets,
     }
 
     local rawPayload = table.concat(fields, "|")
@@ -254,25 +235,23 @@ function ShareCodec:DecodeQuest(codeString)
     end
 
     local fields = SplitByChar(rawPayload, "|")
-    if #fields < 12 then
+    if #fields < 11 then
         return nil, "Incomplete quest payload"
     end
 
     local title = UnescapeField(fields[1])
     local description = UnescapeField(fields[2])
-    local targetName = UnescapeField(fields[3])
-    local requiredCount = tonumber(fields[4])
-    local mapId = tonumber(fields[5])
-    local zoneId = tonumber(fields[6])
-    local mapName = UnescapeField(fields[7])
-    local targetX = tonumber(fields[8])
-    local targetY = tonumber(fields[9])
-    local areaCenterX = tonumber(fields[10])
-    local areaCenterY = tonumber(fields[11])
-    local areaRadius = tonumber(fields[12])
-    local decodedTargets = fields[13] and DecodeTargetsList(fields[13]) or nil
+    local mapId = tonumber(fields[3])
+    local zoneId = tonumber(fields[4])
+    local mapName = UnescapeField(fields[5])
+    local targetX = tonumber(fields[6])
+    local targetY = tonumber(fields[7])
+    local areaCenterX = tonumber(fields[8])
+    local areaCenterY = tonumber(fields[9])
+    local areaRadius = tonumber(fields[10])
+    local decodedTargets = DecodeTargetsList(fields[11])
 
-    if not targetName or targetName == "" or not requiredCount or requiredCount < 1 then
+    if not decodedTargets or #decodedTargets == 0 then
         return nil, "Invalid target data in code"
     end
 
@@ -280,22 +259,10 @@ function ShareCodec:DecodeQuest(codeString)
         return nil, "Invalid area coordinates in code"
     end
 
-    if not decodedTargets or #decodedTargets == 0 then
-        decodedTargets = {
-            {
-                name = targetName,
-                currentCount = 0,
-                requiredCount = math.floor(requiredCount),
-            },
-        }
-    end
-
     return {
         title = title,
         description = description,
         targets = decodedTargets,
-        targetName = targetName,
-        requiredCount = math.floor(requiredCount),
         mapId = math.floor(mapId or 0),
         zoneId = math.floor(zoneId or 0),
         mapName = mapName,

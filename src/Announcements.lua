@@ -29,9 +29,11 @@ end
 function Announcements:AnnounceQuestProgress(quest, matchedTarget)
     if not quest then return end
 
-    local tName = (matchedTarget and matchedTarget.name) or quest.targetName or ""
-    local tCur = (matchedTarget and matchedTarget.currentCount) or quest.currentCount or 0
-    local tReq = (matchedTarget and matchedTarget.requiredCount) or quest.requiredCount or 1
+    local fallbackTarget = quest.targets and quest.targets[1]
+    local target = matchedTarget or fallbackTarget
+    local tName = (target and target.name) or ""
+    local tCur = (target and target.currentCount) or 0
+    local tReq = (target and target.requiredCount) or 1
 
     local text = Addon.Locale:Get("CSA_QUEST_PROGRESS", tName, tCur, tReq)
     local soundId = SOUNDS and SOUNDS.QUEST_OBJECTIVE_INCREMENT or nil
@@ -54,15 +56,11 @@ function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
     if not quest then return end
 
     local mainText = Addon.Locale:Get("CSA_QUEST_COMPLETED", quest.title or "")
-    local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(quest)) or {}
-    local subText
-    if #targets == 1 then
-        local t = targets[1]
-        subText = Addon.Locale:Get("OBJECTIVE_KILL_FORMAT", t.name or "", t.currentCount or 1, t.requiredCount or 1)
-    elseif matchedTarget and matchedTarget.name then
-        subText = Addon.Locale:Get("OBJECTIVE_KILL_FORMAT", matchedTarget.name, matchedTarget.currentCount or 1, matchedTarget.requiredCount or 1)
-    else
-        subText = Addon.Locale:Get("OBJECTIVE_KILL_FORMAT", quest.targetName or "", quest.currentCount or 1, quest.requiredCount or 1)
+    local targets = quest.targets or {}
+    local target = (#targets == 1 and targets[1]) or matchedTarget or targets[1]
+    local subText = ""
+    if target and target.name then
+        subText = Addon.Locale:Get("OBJECTIVE_KILL_FORMAT", target.name, target.currentCount or 1, target.requiredCount or 1)
     end
     local soundId = SOUNDS and SOUNDS.QUEST_COMPLETED or nil
 

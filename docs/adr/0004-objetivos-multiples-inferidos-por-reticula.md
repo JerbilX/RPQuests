@@ -49,4 +49,4 @@ Opción elegida: **"Opción 2: Inferir una lista agregada de objetivos (`targets
   * Los campos de título y descripción son 100% editables con clic y teclado en el cliente real de ESO.
   * El jugador puede armar misiones de asesinato múltiple o caza por cantidad simplemente apuntando y pulsando la tecla de captura en el mundo.
 * **Negativas / Trade-offs:**
-  * Se mantiene sincronizado `quest.targetName`, `quest.currentCount` y `quest.requiredCount` como resumen agregado del modelo para preservar retrocompatibilidad con llamadas e inspecciones existentes.
+  * Requiere iterar sobre `quest.targets` al registrar bajas y renderizar UI. *(Enmienda Issue #18: se retiraron los campos resumen legacy `targetName`/`currentCount`/`requiredCount` al quedar `targets[]` como única fuente de verdad).*

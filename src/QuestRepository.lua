@@ -49,57 +49,53 @@ function QuestRepository:FormatTargetsSummary(targets)
     return table.concat(parts, ", ")
 end
 
-function QuestRepository:EnsureQuestTargets(questOrDraft)
-    if type(questOrDraft) ~= "table" then return {} end
-
-    if type(questOrDraft.targets) ~= "table" then
-        questOrDraft.targets = {}
+local function AreAllTargetsCompleted(targets)
+    if type(targets) ~= "table" or #targets == 0 then
+        return false
     end
-
-    if #questOrDraft.targets == 0 and type(questOrDraft.targetName) == "string" then
-        local clean = self:NormalizeName(questOrDraft.targetName)
-        if clean ~= "" then
-            table.insert(questOrDraft.targets, {
-                name = clean,
-                currentCount = math.max(0, math.floor(tonumber(questOrDraft.currentCount) or 0)),
-                requiredCount = math.max(1, math.floor(tonumber(questOrDraft.requiredCount) or 1)),
-                targetX = questOrDraft.targetX,
-                targetY = questOrDraft.targetY,
-            })
+    for _, t in ipairs(targets) do
+        if (t.currentCount or 0) < (t.requiredCount or 1) then
+            return false
         end
     end
-
-    return questOrDraft.targets
+    return true
 end
 
-function QuestRepository:SyncQuestSummaryFields(questOrDraft)
-    if type(questOrDraft) ~= "table" then return end
-    local targets = self:EnsureQuestTargets(questOrDraft)
+local function CreateDefaultDraft()
+    local defaultRadius = (Addon.Constants and Addon.Constants.AREA_RADIUS and Addon.Constants.AREA_RADIUS.MEDIUM) or 0.075
+    return {
+        editingQuestId = nil,
+        title = "",
+        description = "",
+        targets = {},
+        lastCapturedDisplay = nil,
+        mapId = 0,
+        zoneId = 0,
+        mapName = "",
+        targetX = nil,
+        targetY = nil,
+        areaCenterX = nil,
+        areaCenterY = nil,
+        areaRadius = defaultRadius,
+    }
+end
 
-    if #targets == 0 then
-        questOrDraft.targetName = ""
-        questOrDraft.currentCount = 0
-        questOrDraft.requiredCount = 1
-        return
-    end
-
-    if #targets == 1 then
-        questOrDraft.targetName = targets[1].name
-        questOrDraft.currentCount = math.max(0, math.floor(tonumber(targets[1].currentCount) or 0))
-        questOrDraft.requiredCount = math.max(1, math.floor(tonumber(targets[1].requiredCount) or 1))
-        return
-    end
-
-    local totalCur = 0
-    local totalReq = 0
-    for _, t in ipairs(targets) do
-        totalCur = totalCur + math.max(0, math.floor(tonumber(t.currentCount) or 0))
-        totalReq = totalReq + math.max(1, math.floor(tonumber(t.requiredCount) or 1))
-    end
-
-    questOrDraft.targetName = self:FormatTargetsSummary(targets)
-    questOrDraft.currentCount = totalCur
-    questOrDraft.requiredCount = math.max(1, totalReq)
+local function BuildQuestRecord(id, title, description, targets, data)
+    return {
+        id = id,
+        title = title,
+        description = description,
+        targets = targets,
+        completed = false,
+        mapId = data.mapId or 0,
+        zoneId = data.zoneId or 0,
+        mapName = data.mapName or "",
+        targetX = data.targetX,
+        targetY = data.targetY,
+        areaCenterX = data.areaCenterX,
+        areaCenterY = data.areaCenterY,
+        areaRadius = data.areaRadius,
+    }
 end
 
 local function CloneTargetsList(targets, existingTargetsByName)
@@ -124,27 +120,6 @@ local function CloneTargetsList(targets, existingTargetsByName)
     return out
 end
 
-local function CreateDefaultDraft()
-    local defaultRadius = (Addon.Constants and Addon.Constants.AREA_RADIUS and Addon.Constants.AREA_RADIUS.MEDIUM) or 0.075
-    return {
-        editingQuestId = nil,
-        title = "",
-        description = "",
-        targets = {},
-        targetName = "",
-        requiredCount = 1,
-        lastCapturedDisplay = nil,
-        mapId = 0,
-        zoneId = 0,
-        mapName = "",
-        targetX = nil,
-        targetY = nil,
-        areaCenterX = nil,
-        areaCenterY = nil,
-        areaRadius = defaultRadius,
-    }
-end
-
 function QuestRepository:GetDefaults()
     return {
         nextId = 1,
@@ -161,11 +136,10 @@ function QuestRepository:Initialize(savedVars)
     if not self.savedVars.draft then
         self.savedVars.draft = CreateDefaultDraft()
     else
-        self:EnsureQuestTargets(self.savedVars.draft)
+        self.savedVars.draft.targets = self.savedVars.draft.targets or {}
     end
     for _, q in ipairs(self.savedVars.quests) do
-        self:EnsureQuestTargets(q)
-        self:SyncQuestSummaryFields(q)
+        q.targets = q.targets or {}
     end
     self._listeners = self._listeners or {}
 end
@@ -227,7 +201,7 @@ function QuestRepository:GetDraft()
     if not self.savedVars then
         self:Initialize()
     end
-    self:EnsureQuestTargets(self.savedVars.draft)
+    self.savedVars.draft.targets = self.savedVars.draft.targets or {}
     return self.savedVars.draft
 end
 
@@ -243,8 +217,6 @@ end
 function QuestRepository:ClearDraftTargets()
     local draft = self:GetDraft()
     draft.targets = {}
-    draft.targetName = ""
-    draft.requiredCount = 1
     draft.lastCapturedDisplay = nil
     draft.mapId = 0
     draft.zoneId = 0
@@ -261,15 +233,11 @@ function QuestRepository:LoadQuestIntoDraft(questId)
     local quest = self:GetQuestById(questId)
     if not quest then return nil end
 
-    self:EnsureQuestTargets(quest)
-
     self.savedVars.draft = {
         editingQuestId = quest.id,
         title = quest.title or "",
         description = quest.description or "",
         targets = CloneTargetsList(quest.targets),
-        targetName = quest.targetName or "",
-        requiredCount = quest.requiredCount or 1,
         lastCapturedDisplay = nil,
         mapId = quest.mapId or 0,
         zoneId = quest.zoneId or 0,
@@ -280,7 +248,6 @@ function QuestRepository:LoadQuestIntoDraft(questId)
         areaCenterY = quest.areaCenterY,
         areaRadius = quest.areaRadius or 0.075,
     }
-    self:SyncQuestSummaryFields(self.savedVars.draft)
     self:NotifyListeners("DRAFT_UPDATED", self.savedVars.draft)
     return self.savedVars.draft
 end
@@ -372,7 +339,6 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     draft.areaRadius = radius
     draft.areaCenterX, draft.areaCenterY = self:ComputeOffsetCenter(draft.targetX, draft.targetY, radius)
 
-    self:SyncQuestSummaryFields(draft)
     self:NotifyListeners("DRAFT_TARGET_CAPTURED", draft)
     return draft
 end
@@ -386,8 +352,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         draft.areaRadius = tonumber(areaRadiusInput)
     end
 
-    self:EnsureQuestTargets(draft)
-    self:SyncQuestSummaryFields(draft)
+    draft.targets = draft.targets or {}
 
     if #draft.targets == 0 or not draft.targetX or not draft.targetY then
         local errMsg = (Addon.Locale and Addon.Locale:Get("ERR_MISSING_TARGET")) or "Missing target"
@@ -409,9 +374,8 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     if draft.editingQuestId then
         local existing = self:GetQuestById(draft.editingQuestId)
         if existing then
-            self:EnsureQuestTargets(existing)
             local prevProgress = {}
-            for _, t in ipairs(existing.targets) do
+            for _, t in ipairs(existing.targets or {}) do
                 prevProgress[t.name:lower()] = t.currentCount or 0
             end
 
@@ -426,17 +390,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
             existing.areaCenterX = draft.areaCenterX
             existing.areaCenterY = draft.areaCenterY
             existing.areaRadius = draft.areaRadius
-
-            self:SyncQuestSummaryFields(existing)
-
-            local allDone = (#existing.targets > 0)
-            for _, t in ipairs(existing.targets) do
-                if (t.currentCount or 0) < (t.requiredCount or 1) then
-                    allDone = false
-                    break
-                end
-            end
-            existing.completed = allDone
+            existing.completed = AreAllTargetsCompleted(existing.targets)
 
             self:ResetDraft()
             self:NotifyListeners("QUEST_UPDATED", existing)
@@ -447,25 +401,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     local newId = self.savedVars.nextId or (#self.savedVars.quests + 1)
     self.savedVars.nextId = newId + 1
 
-    local newQuest = {
-        id = newId,
-        title = cleanTitle,
-        description = cleanDesc,
-        targets = CloneTargetsList(draft.targets),
-        targetName = "",
-        currentCount = 0,
-        requiredCount = 1,
-        completed = false,
-        mapId = draft.mapId or 0,
-        zoneId = draft.zoneId or 0,
-        mapName = draft.mapName or "",
-        targetX = draft.targetX,
-        targetY = draft.targetY,
-        areaCenterX = draft.areaCenterX,
-        areaCenterY = draft.areaCenterY,
-        areaRadius = draft.areaRadius,
-    }
-    self:SyncQuestSummaryFields(newQuest)
+    local newQuest = BuildQuestRecord(newId, cleanTitle, cleanDesc, CloneTargetsList(draft.targets), draft)
 
     table.insert(self.savedVars.quests, newQuest)
     self.savedVars.activeQuestId = newQuest.id
@@ -508,25 +444,7 @@ function QuestRepository:ImportQuestFromCode(codeString)
         end
     end
 
-    local importedQuest = {
-        id = newId,
-        title = cleanTitle,
-        description = decoded.description or "",
-        targets = importedTargets,
-        targetName = "",
-        currentCount = 0,
-        requiredCount = 1,
-        completed = false,
-        mapId = decoded.mapId or 0,
-        zoneId = decoded.zoneId or 0,
-        mapName = decoded.mapName or "",
-        targetX = decoded.targetX,
-        targetY = decoded.targetY,
-        areaCenterX = decoded.areaCenterX,
-        areaCenterY = decoded.areaCenterY,
-        areaRadius = decoded.areaRadius,
-    }
-    self:SyncQuestSummaryFields(importedQuest)
+    local importedQuest = BuildQuestRecord(newId, cleanTitle, decoded.description or "", importedTargets, decoded)
 
     table.insert(self.savedVars.quests, importedQuest)
     self.savedVars.activeQuestId = importedQuest.id
@@ -540,8 +458,6 @@ function QuestRepository:ExportQuestToCode(questId)
     if not quest or not Addon.ShareCodec then
         return nil
     end
-    self:EnsureQuestTargets(quest)
-    self:SyncQuestSummaryFields(quest)
     return Addon.ShareCodec:EncodeQuest(quest)
 end
 
@@ -574,7 +490,6 @@ function QuestRepository:GetQuestById(questId)
     if not questId then return nil end
     for _, q in ipairs(self:GetAllQuests()) do
         if q.id == questId then
-            self:EnsureQuestTargets(q)
             return q
         end
     end
@@ -613,13 +528,10 @@ function QuestRepository:ResetQuest(questId)
     local q = self:GetQuestById(questId)
     if not q then return false end
 
-    self:EnsureQuestTargets(q)
-    for _, t in ipairs(q.targets) do
+    for _, t in ipairs(q.targets or {}) do
         t.currentCount = 0
     end
-    q.currentCount = 0
     q.completed = false
-    self:SyncQuestSummaryFields(q)
     self.savedVars.activeQuestId = q.id
     self:NotifyListeners("QUEST_RESET", q)
     return true
@@ -689,8 +601,7 @@ function QuestRepository:FindPendingTarget(rawTargetName)
         return nil, nil
     end
 
-    self:EnsureQuestTargets(activeQuest)
-    for _, entry in ipairs(activeQuest.targets) do
+    for _, entry in ipairs(activeQuest.targets or {}) do
         if (entry.name or ""):lower() == cleanKilled and (entry.currentCount or 0) < (entry.requiredCount or 1) then
             return activeQuest, entry
         end
@@ -719,17 +630,8 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext)
     end
 
     matchedTarget.currentCount = math.min(matchedTarget.requiredCount or 1, (matchedTarget.currentCount or 0) + 1)
-    self:SyncQuestSummaryFields(activeQuest)
 
-    local allCompleted = (#activeQuest.targets > 0)
-    for _, entry in ipairs(activeQuest.targets) do
-        if (entry.currentCount or 0) < (entry.requiredCount or 1) then
-            allCompleted = false
-            break
-        end
-    end
-
-    if allCompleted then
+    if AreAllTargetsCompleted(activeQuest.targets) then
         activeQuest.completed = true
         if self.savedVars.activeQuestId == activeQuest.id then
             self.savedVars.activeQuestId = nil

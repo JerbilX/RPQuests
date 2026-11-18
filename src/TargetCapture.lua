@@ -90,7 +90,7 @@ function TargetCapture:CaptureFromReticle()
 
     if draft and Addon.Announcements then
         local locText = (draft.mapName ~= "" and draft.mapName) or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
-        local displayTarget = draft.lastCapturedDisplay or draft.targetName
+        local displayTarget = draft.lastCapturedDisplay or (draft.targets and draft.targets[1] and draft.targets[1].name) or ""
         local msg = Addon.Locale:Get("ALERT_TARGET_CAPTURED", displayTarget, locText)
         Addon.Announcements:ShowAlert(msg, false)
     end

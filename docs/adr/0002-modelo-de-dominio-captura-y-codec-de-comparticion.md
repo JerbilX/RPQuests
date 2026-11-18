@@ -40,7 +40,8 @@ Al capturar un objetivo en $(x_t, y_t) \in (0, 1)^2$ con un radio normalizado $R
 
 ### 3. Protocolo de Serialización (`ShareCodec`)
 * Formato de cadena: `RPQ1:<HEX_CRC16>:<PAYLOAD_BASE64URL>` (o codificación hexadecimal/escape imprimible ASCII 7-bit segura para `EditControl`).
-* Al importar un código, se valida el prefijo `RPQ1:`, se recalcula el CRC16 sobre el payload y se reconstruye una nueva misión en estado activa (`currentCount = 0`, `completed = false`) conservando título, descripción, objetivo, cantidad requerida y coordenadas del área de búsqueda.
+* Al importar un código, se valida el prefijo `RPQ1:`, se recalcula el CRC16 sobre el payload y se reconstruye una nueva misión en estado activa (`completed = false`, cada entrada de `targets` con `currentCount = 0`) conservando título, descripción, objetivos y coordenadas del área de búsqueda.
+* **Enmienda (Issue #18):** Como no existían versiones publicadas previas a `targets[]`, se eliminaron los campos planos legacy (`targetName`, `currentCount`, `requiredCount`) del modelo y del payload `RPQ1` (ahora de 11 campos con `targets` como única fuente de verdad).
 
 ### Consecuencias
 * **Positivas:**

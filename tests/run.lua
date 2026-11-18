@@ -348,8 +348,10 @@ RunTest("ShareCodec roundtrip preserves UTF-8, pipes, newlines and coordinates",
     local original = {
         title = "Caza en Auridon: El Traidor | Parte 1",
         description = "Busca al capitán cerca del muelle.\nNo tengas piedad con él.",
-        targetName = "Capitán Pirata",
-        requiredCount = 3,
+        targets = {
+            { name = "Capitán Pirata", currentCount = 0, requiredCount = 3 },
+            { name = "Contramaestre", currentCount = 0, requiredCount = 1 },
+        },
         mapId = 32,
         zoneId = 381,
         mapName = "Auridon",
@@ -368,8 +370,10 @@ RunTest("ShareCodec roundtrip preserves UTF-8, pipes, newlines and coordinates",
     AssertTrue(decoded ~= nil, "Decode should succeed: " .. tostring(decErr))
     AssertEqual(decoded.title, original.title, "Title matches")
     AssertEqual(decoded.description, original.description, "Description with newline matches")
-    AssertEqual(decoded.targetName, original.targetName, "Target name matches")
-    AssertEqual(decoded.requiredCount, 3, "Required count matches")
+    AssertEqual(#decoded.targets, 2, "Decoded targets count matches")
+    AssertEqual(decoded.targets[1].name, "Capitán Pirata", "Target 1 name matches")
+    AssertEqual(decoded.targets[1].requiredCount, 3, "Target 1 required count matches")
+    AssertEqual(decoded.targets[2].name, "Contramaestre", "Target 2 name matches")
     AssertEqual(decoded.mapId, 32, "MapId matches")
     AssertEqual(decoded.zoneId, 381, "ZoneId matches")
     AssertEqual(decoded.mapName, "Auridon", "MapName matches")
@@ -382,8 +386,9 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
     local validQuest = {
         title = "Test",
         description = "Desc",
-        targetName = "Goblin",
-        requiredCount = 1,
+        targets = {
+            { name = "Goblin", currentCount = 0, requiredCount = 1 },
+        },
         mapId = 10,
         zoneId = 20,
         mapName = "Glenumbra",
@@ -445,8 +450,8 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
     -- 2. Guardar misión con 2 bajas requeridas inferidas
     local quest, err = RPQuest.QuestRepository:SaveDraft("Purga en el Bosque", "Elimina a los nigromantes.", 0.075)
     AssertTrue(quest ~= nil, "Quest should be created: " .. tostring(err))
-    AssertEqual(quest.targetName, "Nigromante Oscuro", "Gender suffix stripped")
-    AssertEqual(quest.requiredCount, 2, "Required count is 2")
+    AssertEqual(quest.targets[1].name, "Nigromante Oscuro", "Gender suffix stripped")
+    AssertEqual(quest.targets[1].requiredCount, 2, "Required count is 2")
     AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, quest.id, "Newly created quest becomes active")
 
     -- 3. Editar la misión
@@ -473,7 +478,7 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
     })
     AssertTrue(rec1, "First valid kill recorded")
     AssertEqual(comp1, false, "Not completed at 1/2")
-    AssertEqual(quest.currentCount, 1, "Current count is 1")
+    AssertEqual(quest.targets[1].currentCount, 1, "Current count is 1")
 
     -- 6. Segunda baja válida (2/2 -> Completada)
     local rec2, _, comp2 = RPQuest.QuestRepository:RecordTargetEliminated("Nigromante Oscuro", {
@@ -495,13 +500,13 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
     AssertTrue(imported ~= nil, "Imported quest created: " .. tostring(impErr))
     AssertEqual(imported.title, "Purga Real en el Bosque", "Imported title matches")
     AssertEqual(imported.completed, false, "Imported quest starts uncompleted")
-    AssertEqual(imported.currentCount, 0, "Imported quest starts at 0 kills")
+    AssertEqual(imported.targets[1].currentCount, 0, "Imported quest starts at 0 kills")
     AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, imported.id, "Imported quest becomes active")
 
     -- 8. Reiniciar misión completada
     RPQuest.QuestRepository:ResetQuest(quest.id)
     AssertEqual(quest.completed, false, "Reset quest is uncompleted")
-    AssertEqual(quest.currentCount, 0, "Reset quest count is 0")
+    AssertEqual(quest.targets[1].currentCount, 0, "Reset quest count is 0")
 
     -- 9. Eliminar misiones
     AssertTrue(RPQuest.QuestRepository:DeleteQuest(imported.id), "Delete imported quest")
@@ -545,7 +550,7 @@ RunTest("TargetCapture validates reticle unit and captures map coordinates into 
 
     local draft = RPQuest.TargetCapture:CaptureFromReticle()
     AssertTrue(draft ~= nil, "Valid NPC must be captured into draft")
-    AssertEqual(draft.targetName, "Jefe Bandido", "Captured target name normalized")
+    AssertEqual(draft.targets[1].name, "Jefe Bandido", "Captured target name normalized")
     AssertEqual(draft.mapId, 45, "Captured mapId matches")
     AssertEqual(draft.mapName, "Deshaan", "Captured mapName matches")
     AssertEqual(draft.targetX, 0.3300, "Captured targetX matches")
@@ -610,7 +615,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
         "Jugador", COMBAT_UNIT_TYPE_PLAYER, "Cultista de Gusano^m", COMBAT_UNIT_TYPE_OTHER,
         1500, 0, 0, false, 1, 2001, 100
     )
-    AssertEqual(q.currentCount, 1, "Kill count incremented to 1")
+    AssertEqual(q.targets[1].currentCount, 1, "Kill count incremented to 1")
     AssertEqual(q.completed, false, "Not yet completed")
     AssertEqual(#mockState.csaMessages, 1, "1 CSA progress message emitted")
 
@@ -621,7 +626,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
         "Jugador", COMBAT_UNIT_TYPE_PLAYER, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
         1500, 0, 0, false, 1, 2001, 100
     )
-    AssertEqual(q.currentCount, 1, "Duplicate death event for same targetUnitId is ignored")
+    AssertEqual(q.targets[1].currentCount, 1, "Duplicate death event for same targetUnitId is ignored")
 
     -- Muerte causada por otro jugador ajeno (sin grupo) no cuenta
     mockState.isGrouped = false
@@ -631,7 +636,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
         "Desconocido", COMBAT_UNIT_TYPE_OTHER, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
         1500, 0, 0, false, 99, 2002, 100
     )
-    AssertEqual(q.currentCount, 1, "Unrelated player kill does not count")
+    AssertEqual(q.targets[1].currentCount, 1, "Unrelated player kill does not count")
 
     -- Muerte de miembro de grupo cuando NO se está en grupo no cuenta
     EVENT_MANAGER:FireEvent(
@@ -640,7 +645,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
         "Compañero", COMBAT_UNIT_TYPE_GROUP, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
         1500, 0, 0, false, 98, 2003, 100
     )
-    AssertEqual(q.currentCount, 1, "Group unit kill ignored when solo")
+    AssertEqual(q.targets[1].currentCount, 1, "Group unit kill ignored when solo")
 
     -- En grupo, muerte de miembro del grupo (distinto targetUnitId) sí cuenta y completa
     mockState.isGrouped = true
@@ -754,7 +759,7 @@ RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs +
     AssertEqual(RPQuest.QuestRepository:FormatTargetsSummary(draftImp.targets), "Imp x3", "Formatted summary is Imp x3")
 
     local impQuest = RPQuest.QuestRepository:SaveDraft("Imp Hunt", "Clear the imps.")
-    AssertEqual(impQuest.requiredCount, 3, "Saved quest inferred requiredCount = 3 from reticle")
+    AssertEqual(impQuest.targets[1].requiredCount, 3, "Saved quest inferred requiredCount = 3 from reticle")
 
     -- Caso B: Apuntar a dos NPCs con nombre distinto -> ambos son objetivos exclusivos
     mockState.reticleName = "Lord Vane"
