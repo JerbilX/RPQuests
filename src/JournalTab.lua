@@ -140,6 +140,9 @@ function JournalTab:Initialize()
                 if self.viewMode ~= VIEW_MODE.EDITOR then
                     self.viewMode = VIEW_MODE.EDITOR
                 end
+            elseif eventType == "DRAFT_UPDATED" and self.viewMode == VIEW_MODE.EDITOR then
+                self:RefreshEditorPane()
+                return
             end
             self:Refresh()
         end)
@@ -942,11 +945,13 @@ function JournalTab:RefreshEditorPane()
     self.lblInputDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
     self.lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
 
-    if not self.titleEdit._focused and self.titleEdit:GetText() == "" and (draft.title or "") ~= "" then
-        self.titleEdit:SetText(draft.title)
+    local draftTitle = draft.title or ""
+    if not self.titleEdit._focused and self.titleEdit:GetText() ~= draftTitle then
+        self.titleEdit:SetText(draftTitle)
     end
-    if not self.descEdit._focused and self.descEdit:GetText() == "" and (draft.description or "") ~= "" then
-        self.descEdit:SetText(draft.description)
+    local draftDesc = draft.description or ""
+    if not self.descEdit._focused and self.descEdit:GetText() ~= draftDesc then
+        self.descEdit:SetText(draftDesc)
     end
 
     local targets = Addon.QuestRepository:EnsureQuestTargets(draft)

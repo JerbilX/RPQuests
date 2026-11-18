@@ -288,14 +288,6 @@ function QuestRepository:UpdateDraftFields(fields, silent)
 
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
-    if fields.requiredCount ~= nil then
-        local count = math.max(1, math.min(999, math.floor(tonumber(fields.requiredCount) or 1)))
-        draft.requiredCount = count
-        if draft.targets and #draft.targets == 1 then
-            draft.targets[1].requiredCount = count
-            self:SyncQuestSummaryFields(draft)
-        end
-    end
     if fields.areaRadius ~= nil then
         local newRadius = tonumber(fields.areaRadius) or draft.areaRadius
         if newRadius > 0 then
@@ -317,7 +309,12 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     if cleanName == "" then return nil end
 
     local draft = self:GetDraft()
-    draft.targets = draft.targets or {}
+    local newMapId = tonumber(captureData.mapId) or 0
+    if draft.mapId and draft.mapId > 0 and newMapId > 0 and draft.mapId ~= newMapId then
+        draft.targets = {}
+    else
+        draft.targets = draft.targets or {}
+    end
 
     local tx = tonumber(captureData.targetX) or 0.5
     local ty = tonumber(captureData.targetY) or 0.5
