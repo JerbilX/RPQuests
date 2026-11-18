@@ -7,7 +7,7 @@ local Addon = RPQuest
 Addon.WorldMapArea = {}
 local WorldMapArea = Addon.WorldMapArea
 
-local PIN_TYPE_STRING = (Addon.Constants and Addon.Constants.UI and Addon.Constants.UI.PIN_TYPE_STRING) or "RPQUEST_SEARCH_AREA_PIN"
+local PIN_TYPE_STRING = Addon.Constants.UI.PIN_TYPE_STRING
 local MAP_LISTENER_NAME = "RPQuest_WorldMapArea"
 
 local function GetWorldMapPinManager()

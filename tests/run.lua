@@ -60,6 +60,15 @@ SET_MAP_RESULT_FAILED = 0
 MENU_CATEGORY_MAP = 4
 MOUSE_BUTTON_INDEX_LEFT = 1
 MOUSE_BUTTON_INDEX_RIGHT = 2
+TEXT_ALIGN_RIGHT = 2
+
+ZO_PostHook = function(tbl, fnName, hookFn)
+    local orig = tbl[fnName]
+    tbl[fnName] = function(...)
+        if orig then orig(...) end
+        hookFn(...)
+    end
+end
 
 SOUNDS.QUEST_COMPLETED = "Quest_Complete"
 SOUNDS.QUEST_OBJECTIVE_INCREMENT = "Quest_ObjectivesIncrement"
@@ -250,7 +259,17 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
     CreateControl = function(self, name, parent, controlType)
         local c = CreateControl(name, parent, controlType)
         function c:TakeFocus() self._focused = true end
+        function c:LoseFocus() self._focused = false end
         function c:SelectAll() self._selectedAll = true end
+        function c:SetHorizontalAlignment() end
+        function c:SetNormalFontColor() end
+        function c:SetMouseOverFontColor() end
+        function c:SetCenterColor() end
+        function c:SetEdgeColor() end
+        function c:SetEditEnabled() end
+        function c:SetMaxInputChars() end
+        function c:SetMultiLine() end
+        function c:SetNewLineEnabled() end
         return c
     end,
     CreateTopLevelWindow = function(self, name)

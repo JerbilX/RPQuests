@@ -189,7 +189,7 @@ function ShareCodec:EncodeQuest(quest)
         return nil, "Invalid quest table"
     end
 
-    local prefix = (Addon.Constants and Addon.Constants.SHARE_CODEC and Addon.Constants.SHARE_CODEC.PREFIX) or "RPQ1"
+    local prefix = Addon.Constants.SHARE_CODEC.PREFIX
     local fields = {
         EscapeField(quest.title or ""),
         EscapeField(quest.description or ""),
@@ -217,7 +217,7 @@ function ShareCodec:DecodeQuest(codeString)
     end
 
     local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
-    local prefix = (Addon.Constants and Addon.Constants.SHARE_CODEC and Addon.Constants.SHARE_CODEC.PREFIX) or "RPQ1"
+    local prefix = Addon.Constants.SHARE_CODEC.PREFIX
 
     local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
     if not pfx or pfx ~= prefix or not checksum or #checksum ~= 4 or not encodedPayload then

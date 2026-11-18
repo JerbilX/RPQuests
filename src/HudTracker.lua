@@ -29,33 +29,31 @@ function HudTracker:Initialize()
     local icon = WINDOW_MANAGER:CreateControl(TRACKER_CONTROL_NAME .. "_Icon", panel, CT_TEXTURE)
     icon:SetDimensions(22, 22)
     icon:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -4, 2)
-    if icon.SetTexture then
-        icon:SetTexture((Addon.Constants and Addon.Constants.UI and Addon.Constants.UI.ICON_QUEST) or "EsoUI/Art/Compass/quest_icon_assisted.dds")
-    end
+    icon:SetTexture(Addon.Constants.UI.ICON_QUEST)
     self.icon = icon
 
     local titleLabel = WINDOW_MANAGER:CreateControl(TRACKER_CONTROL_NAME .. "_Title", panel, CT_LABEL)
     titleLabel:SetDimensions(254, 24)
     titleLabel:SetAnchor(TOPRIGHT, icon, TOPLEFT, -4, 0)
-    if titleLabel.SetFont then titleLabel:SetFont("ZoFontWinH3") end
-    if titleLabel.SetHorizontalAlignment then titleLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT or 2) end
-    if titleLabel.SetColor then titleLabel:SetColor(0.91, 0.83, 0.63, 1) end
+    titleLabel:SetFont("ZoFontWinH3")
+    titleLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    titleLabel:SetColor(0.91, 0.83, 0.63, 1)
     self.titleLabel = titleLabel
 
     local objectiveLabel = WINDOW_MANAGER:CreateControl(TRACKER_CONTROL_NAME .. "_Objective", panel, CT_LABEL)
     objectiveLabel:SetDimensions(280, 22)
     objectiveLabel:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -4, 28)
-    if objectiveLabel.SetFont then objectiveLabel:SetFont("ZoFontGameShadow") end
-    if objectiveLabel.SetHorizontalAlignment then objectiveLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT or 2) end
-    if objectiveLabel.SetColor then objectiveLabel:SetColor(1, 1, 1, 0.95) end
+    objectiveLabel:SetFont("ZoFontGameShadow")
+    objectiveLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    objectiveLabel:SetColor(1, 1, 1, 0.95)
     self.objectiveLabel = objectiveLabel
 
     local locationLabel = WINDOW_MANAGER:CreateControl(TRACKER_CONTROL_NAME .. "_Location", panel, CT_LABEL)
     locationLabel:SetDimensions(280, 18)
     locationLabel:SetAnchor(TOPRIGHT, objectiveLabel, BOTTOMRIGHT, 0, 2)
-    if locationLabel.SetFont then locationLabel:SetFont("ZoFontGameSmall") end
-    if locationLabel.SetHorizontalAlignment then locationLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT or 2) end
-    if locationLabel.SetColor then locationLabel:SetColor(0.75, 0.75, 0.75, 0.85) end
+    locationLabel:SetFont("ZoFontGameSmall")
+    locationLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    locationLabel:SetColor(0.75, 0.75, 0.75, 0.85)
     self.locationLabel = locationLabel
 
     panel:SetHandler("OnMouseUp", function(_, button, upInside)
