@@ -59,13 +59,17 @@ El servidor MCP indexa la documentación oficial (`ESOUIDocumentation.txt`), el 
 
 ## 2. Guardrails Operativos y Circuit Breaker
 
-* **Búsqueda Guiada por Hipótesis:** Antes de usar `eso_search_ui_source`, formula qué sistema o manager de EsoUI buscas (ej. *"Quiero ver cómo `ZO_QuestJournal_Keyboard` registra sus escenas y fragmentos"*).
+* **Edición Quirúrgica (`edit_file` obligatorio sobre archivos existentes):** Al modificar archivos `.lua` o `.xml` existentes, utiliza **siempre `edit_file`** sobre los bloques o funciones afectadas. Queda **prohibido usar `write_file` (`Overwrite: true`) para reescribir un archivo existente completo**, ya que desperdicia miles de tokens de salida y arriesga introducir regresiones o errores tipográficos en código que no debía tocarse.
+* **Invocación Nativa del MCP (`call_mcp_tool`) y Cero Sobre-Exploración:**
+  * Invoca las herramientas `eso_*` directamente mediante `call_mcp_tool` (`ServerName: "eso-addon-suite_eso-mcp-server"`), evitando lanzar subprocesos `python3 -c` por terminal (`run_command`).
+  * **Búsqueda Guiada por Hipótesis y Corte Temprano:** Antes de usar `eso_search_ui_source`, formula qué sistema o template de EsoUI buscas. En cuanto una consulta confirme la firma de la API o el template XML buscado, **corta la exploración y pasa directamente a implementar el cambio** sin seguir inspeccionando archivos no relacionados.
 * **Circuit Breaker ante Búsquedas Fallidas (Stop & Ask):**
   * Puedes utilizar libremente todas las herramientas del MCP necesarias cuando cada llamada aporte información válida al flujo (buscar API -> inspeccionar fuente -> validar con linter).
   * Sin embargo, si realizas **3 búsquedas consecutivas sin éxito** intentando encontrar una función, evento o símbolo que no aparece en el índice, **detente y consulta al usuario** en lugar de adivinar firmas o entrar en un bucle de pruebas ciegas.
   * **Prohibido inventar APIs:** Nunca asumas que existe una función `Get*`/`Set*` o evento `EVENT_*` sin verificar su firma en el MCP.
-* **Validación Obligatoria Post-Edición:**
-  * Tras crear o modificar archivos `.lua` o `.xml`, ejecuta siempre `eso_validate_addon` (o `eso_lint_code` / `eso_lint_xml`) y la suite de pruebas (`luajit tests/run.lua` o `lua tests/run.lua`) antes de dar por terminada la tarea.
+* **Validación Obligatoria Post-Edición y Empaquetado Único:**
+  * Tras crear o modificar archivos `.lua` o `.xml`, ejecuta `eso_validate_addon` (o `eso_lint_code` / `eso_lint_xml`) y la suite de pruebas directamente con **`luajit tests/run.lua`** (no pruebes `lua` antes si el entorno usa LuaJIT).
+  * En iteraciones de UI/UX donde el usuario está probando en vivo dentro del juego (`/reloadui`), aplica los cambios y pasa los tests primero para que el usuario valide in-game; ejecuta `eso_package_addon` una sola vez al cerrar/empaquetar la entrega.
 
 ---
 
