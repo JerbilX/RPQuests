@@ -1,0 +1,21 @@
+# Distribution and build artifacts
+dist/
+*.zip
+
+# Local EsoUI API references (if provisioned locally via eso_init_project_references)
+references/
+
+# OS and editor temporary files
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+*.swp
+*.swo
+*.bak
+
+# Python / tooling caches
+__pycache__/
+.pytest_cache/
+.venv/
+venv/

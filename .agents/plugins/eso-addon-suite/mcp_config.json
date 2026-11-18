@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "eso-mcp-server": {
+      "command": "eso-mcp-server",
+      "args": [],
+      "env": {}
+    }
+  }
+}
