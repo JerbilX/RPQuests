@@ -631,6 +631,9 @@ function QuestRepository:DeleteQuest(questId)
         if q.id == questId then
             local wasActive = (self.savedVars.activeQuestId == questId)
             table.remove(self.savedVars.quests, i)
+            if self.savedVars.draft and self.savedVars.draft.editingQuestId == questId then
+                self:ResetDraft()
+            end
             if wasActive then
                 self.savedVars.activeQuestId = nil
                 local nextAvailable = self:GetActiveAndAvailableQuests()[1]

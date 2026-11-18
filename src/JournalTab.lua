@@ -108,6 +108,7 @@ function JournalTab:Initialize()
     self.viewMode = VIEW_MODE.DETAIL
     self.selectedQuestId = nil
     self.shareCodeVisible = false
+    self.listOffset = 0
 
     local panel = WINDOW_MANAGER:CreateControl(PANEL_NAME, GuiRoot, CT_TOPLEVELCONTROL)
     panel:SetDimensions(980, 680)
@@ -163,6 +164,10 @@ function JournalTab:BuildLeftColumn(panel)
     local leftCol = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LeftCol", panel, CT_CONTROL)
     leftCol:SetDimensions(335, 620)
     leftCol:SetAnchor(TOPLEFT, panel, TOPLEFT, 12, 10)
+    leftCol:SetMouseEnabled(true)
+    leftCol:SetHandler("OnMouseWheel", function(_, delta)
+        self:ScrollQuestList(-delta)
+    end)
     self.leftCol = leftCol
 
     local headerLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_QuestCount", leftCol, CT_LABEL)
@@ -224,6 +229,33 @@ function JournalTab:BuildLeftColumn(panel)
         rowBtn:SetHidden(true)
         self.rowControls[i] = rowBtn
     end
+
+    self.btnListPrev = CreateStyledButton(PANEL_NAME .. "_ListPrevBtn", leftCol, 60, 26, "<", function()
+        self:ScrollQuestList(-1)
+    end)
+    self.btnListPrev:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 554)
+    self.btnListPrev:SetHidden(true)
+
+    local scrollInfoLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ListScrollInfo", leftCol, CT_LABEL)
+    scrollInfoLabel:SetDimensions(180, 26)
+    scrollInfoLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 66, 558)
+    if scrollInfoLabel.SetFont then scrollInfoLabel:SetFont("ZoFontGame") end
+    if scrollInfoLabel.SetColor then scrollInfoLabel:SetColor(0.82, 0.82, 0.82, 1) end
+    scrollInfoLabel:SetHidden(true)
+    self.scrollInfoLabel = scrollInfoLabel
+
+    self.btnListNext = CreateStyledButton(PANEL_NAME .. "_ListNextBtn", leftCol, 60, 26, ">", function()
+        self:ScrollQuestList(1)
+    end)
+    self.btnListNext:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 250, 554)
+    self.btnListNext:SetHidden(true)
+end
+
+function JournalTab:ScrollQuestList(step)
+    local delta = tonumber(step) or 0
+    if delta == 0 then return end
+    self.listOffset = math.max(0, (self.listOffset or 0) + delta)
+    self:Refresh()
 end
 
 function JournalTab:BuildRightColumn(panel)
@@ -766,11 +798,15 @@ function JournalTab:Refresh()
 
     self.rowBindings = {}
     if #allQuests == 0 then
+        self.listOffset = 0
         self.emptyLabel:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
         self.emptyLabel:SetHidden(false)
         for i = 1, MAX_VISIBLE_ROWS do
             self.rowControls[i]:SetHidden(true)
         end
+        if self.btnListPrev then self.btnListPrev:SetHidden(true) end
+        if self.btnListNext then self.btnListNext:SetHidden(true) end
+        if self.scrollInfoLabel then self.scrollInfoLabel:SetHidden(true) end
     else
         self.emptyLabel:SetHidden(true)
         local displayRows = {}
@@ -801,9 +837,12 @@ function JournalTab:Refresh()
             end
         end
 
+        local maxOffset = math.max(0, #displayRows - MAX_VISIBLE_ROWS)
+        self.listOffset = math.min(math.max(0, self.listOffset or 0), maxOffset)
+
         for i = 1, MAX_VISIBLE_ROWS do
             local rowCtrl = self.rowControls[i]
-            local rowData = displayRows[i]
+            local rowData = displayRows[self.listOffset + i]
             if rowData then
                 rowCtrl:SetHidden(false)
                 rowCtrl:SetText(rowData.text)
@@ -811,6 +850,20 @@ function JournalTab:Refresh()
                 self.rowBindings[i] = rowData
             else
                 rowCtrl:SetHidden(true)
+            end
+        end
+
+        local needsScroll = (#displayRows > MAX_VISIBLE_ROWS)
+        if self.btnListPrev then self.btnListPrev:SetHidden(not needsScroll) end
+        if self.btnListNext then self.btnListNext:SetHidden(not needsScroll) end
+        if self.scrollInfoLabel then
+            if needsScroll then
+                local firstRow = self.listOffset + 1
+                local lastRow = math.min(#displayRows, self.listOffset + MAX_VISIBLE_ROWS)
+                self.scrollInfoLabel:SetText(string.format("%d-%d / %d", firstRow, lastRow, #displayRows))
+                self.scrollInfoLabel:SetHidden(false)
+            else
+                self.scrollInfoLabel:SetHidden(true)
             end
         end
     end
