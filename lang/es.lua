@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 RPQuest.Locales = RPQuest.Locales or {}
@@ -26,7 +27,8 @@ RPQuest.Locales["es"] = {
     BTN_RESET = "Reiniciar",
     BTN_SHARE = "Compartir",
     BTN_DELETE = "Eliminar",
-    BTN_SAVE = "Guardar Misión",
+    BTN_SAVE = "Crear Misión",
+    BTN_CLEAR_TARGETS = "Limpiar Objetivos",
     BTN_CANCEL = "Cancelar",
     BTN_CONFIRM_IMPORT = "Importar Misión",
     BTN_RADIUS_SMALL = "Pequeña",
@@ -55,7 +57,6 @@ RPQuest.Locales["es"] = {
     LABEL_TARGET_SECTION = "Objetivo (NPC) y Área de Búsqueda:",
     TARGET_CAPTURED_FORMAT = "Objetivo: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Apunta a un NPC vivo y pulsa la tecla de captura.|r",
-    LABEL_KILL_COUNT = "Cantidad a eliminar:",
     LABEL_AREA_SIZE = "Tamaño del área en el mapa:",
 
     -- Import View
@@ -68,12 +69,12 @@ RPQuest.Locales["es"] = {
     ALERT_INVALID_TARGET_DEAD = "RPQuest: El objetivo bajo la retícula ya está muerto.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: El objetivo seleccionado no es atacable.",
     ALERT_TARGET_CAPTURED = "RPQuest: Objetivo capturado -> %s (%s)",
-    ALERT_QUEST_SAVED = "RPQuest: Misión guardada -> %s",
+    ALERT_QUEST_SAVED = "RPQuest: Misión creada -> %s",
     ALERT_QUEST_DELETED = "RPQuest: Misión eliminada.",
     ALERT_QUEST_RESET = "RPQuest: Progreso de la misión reiniciado.",
     ALERT_QUEST_IMPORTED = "RPQuest: Misión importada -> %s",
     ALERT_SHARE_READY = "RPQuest: ¡Código seleccionado! Pulsa Ctrl+C para copiarlo.",
-    ERR_MISSING_TARGET = "Captura primero un objetivo NPC con la tecla bajo la retícula.",
+    ERR_MISSING_TARGET = "Captura primero al menos un objetivo NPC con la tecla bajo la retícula.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Misión Completada: %s",

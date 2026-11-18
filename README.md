@@ -7,10 +7,12 @@ Addon nativo para **The Elder Scrolls Online** (`APIVersion: 101051`) que permit
 ## Características Principales
 
 - **Pestaña propia en el Diario Nativo (`J`):** Integrada directamente en la barra superior de modos del Diario de Misiones (`ZO_QuestJournal_Keyboard`).
-- **Creación y Edición Completa:**
-  - Define **Título**, **Descripción / Historia**, **Cantidad de bajas requeridas ($1..N$)** y **Tamaño del área de búsqueda** (`Pequeña`, `Mediana`, `Grande`).
-- **Captura de Objetivo bajo Retícula (`Keybind`):**
-  - Apunta a cualquier NPC vivo y presiona la tecla asignada en *Controles -> RPQuest* para registrarlo como objetivo junto con su ubicación cartográfica.
+- **Creación y Edición Completa (`Create Quest`):**
+  - Define **Título**, **Descripción / Historia** y **Tamaño del área de búsqueda** (`Pequeña`, `Mediana`, `Grande`).
+- **Objetivos y Cantidades Inferidos bajo Retícula (`Keybind`):**
+  - Apunta a cualquier NPC vivo y presiona la tecla asignada en *Controles -> RPQuest*:
+    - Si apuntas y capturas a distintos NPCs con nombre, todos quedan registrados como objetivos exclusivos de la misión.
+    - Si apuntas y capturas a un mismo tipo de NPC varias veces (ej. `Imp` 3 veces), se acumula automáticamente como `Imp x3`.
 - **Marca de Área de Búsqueda en el Mapa Mundial (`M`):**
   - Cuando tienes una misión custom activa, se dibuja en el mapa un círculo amplio de exploración (usando el shader circular nativo `ZO_PinBlob`) desplazado con un **offset aleatorio fijo** respecto a la posición exacta del NPC. Así el objetivo siempre se encuentra dentro del círculo, pero nunca en su centro exacto.
   - Al completar o desactivar la misión, el círculo desaparece automáticamente del mapa.

@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -17,6 +18,8 @@ local function EscapeField(str)
     local s = tostring(str)
     s = s:gsub("%%", "%%25")
     s = s:gsub("|", "%%7C")
+    s = s:gsub(";", "%%3B")
+    s = s:gsub("~", "%%7E")
     s = s:gsub("\r", "")
     s = s:gsub("\n", "%%0A")
     return s
@@ -26,9 +29,66 @@ local function UnescapeField(str)
     if str == nil then return "" end
     local s = tostring(str)
     s = s:gsub("%%0A", "\n")
+    s = s:gsub("%%7E", "~")
+    s = s:gsub("%%3B", ";")
     s = s:gsub("%%7C", "|")
     s = s:gsub("%%25", "%%")
     return s
+end
+
+local function SplitByChar(raw, sep)
+    local parts = {}
+    local startIdx = 1
+    while true do
+        local pos = string.find(raw, sep, startIdx, true)
+        if not pos then
+            table.insert(parts, string.sub(raw, startIdx))
+            break
+        end
+        table.insert(parts, string.sub(raw, startIdx, pos - 1))
+        startIdx = pos + 1
+    end
+    return parts
+end
+
+local function EncodeTargetsList(targets)
+    if type(targets) ~= "table" or #targets == 0 then
+        return ""
+    end
+    local items = {}
+    for _, t in ipairs(targets) do
+        if type(t) == "table" and type(t.name) == "string" and t.name ~= "" then
+            local req = math.max(1, math.floor(tonumber(t.requiredCount) or 1))
+            table.insert(items, EscapeField(t.name) .. "~" .. tostring(req))
+        end
+    end
+    return table.concat(items, ";")
+end
+
+local function DecodeTargetsList(rawTargets)
+    if type(rawTargets) ~= "string" or rawTargets == "" then
+        return nil
+    end
+    local entries = SplitByChar(rawTargets, ";")
+    local targets = {}
+    for _, item in ipairs(entries) do
+        if item ~= "" then
+            local kv = SplitByChar(item, "~")
+            local name = UnescapeField(kv[1] or "")
+            local req = tonumber(kv[2]) or 1
+            if name ~= "" and req >= 1 then
+                table.insert(targets, {
+                    name = name,
+                    currentCount = 0,
+                    requiredCount = math.max(1, math.floor(req)),
+                })
+            end
+        end
+    end
+    if #targets == 0 then
+        return nil
+    end
+    return targets
 end
 
 local function ComputeChecksum16(data)
@@ -114,32 +174,44 @@ local function Base64UrlDecode(encoded)
     return table.concat(out)
 end
 
-local function SplitByPipe(raw)
-    local fields = {}
-    local startIdx = 1
-    while true do
-        local pos = string.find(raw, "|", startIdx, true)
-        if not pos then
-            table.insert(fields, string.sub(raw, startIdx))
-            break
-        end
-        table.insert(fields, string.sub(raw, startIdx, pos - 1))
-        startIdx = pos + 1
-    end
-    return fields
-end
-
 function ShareCodec:EncodeQuest(quest)
-    if type(quest) ~= "table" or not quest.targetName or quest.targetName == "" then
+    if type(quest) ~= "table" then
         return nil, "Invalid quest table"
+    end
+
+    local targets = quest.targets
+    if (type(targets) ~= "table" or #targets == 0) and type(quest.targetName) == "string" and quest.targetName ~= "" then
+        targets = {
+            {
+                name = quest.targetName,
+                requiredCount = math.max(1, math.floor(tonumber(quest.requiredCount) or 1)),
+            },
+        }
+    end
+
+    if type(targets) ~= "table" or #targets == 0 then
+        return nil, "Invalid quest table"
+    end
+
+    local primaryTargetName = quest.targetName
+    if not primaryTargetName or primaryTargetName == "" then
+        primaryTargetName = targets[1].name
+    end
+
+    local totalRequired = tonumber(quest.requiredCount)
+    if not totalRequired or totalRequired < 1 then
+        totalRequired = 0
+        for _, t in ipairs(targets) do
+            totalRequired = totalRequired + math.max(1, math.floor(tonumber(t.requiredCount) or 1))
+        end
     end
 
     local prefix = (Addon.Constants and Addon.Constants.SHARE_CODEC and Addon.Constants.SHARE_CODEC.PREFIX) or "RPQ1"
     local fields = {
         EscapeField(quest.title or ""),
         EscapeField(quest.description or ""),
-        EscapeField(quest.targetName or ""),
-        tostring(math.max(1, math.floor(tonumber(quest.requiredCount) or 1))),
+        EscapeField(primaryTargetName or ""),
+        tostring(math.max(1, math.floor(totalRequired))),
         tostring(math.floor(tonumber(quest.mapId) or 0)),
         tostring(math.floor(tonumber(quest.zoneId) or 0)),
         EscapeField(quest.mapName or ""),
@@ -148,6 +220,7 @@ function ShareCodec:EncodeQuest(quest)
         string.format("%.4f", tonumber(quest.areaCenterX) or 0.5),
         string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
         string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
+        EncodeTargetsList(targets),
     }
 
     local rawPayload = table.concat(fields, "|")
@@ -180,7 +253,7 @@ function ShareCodec:DecodeQuest(codeString)
         return nil, "Checksum mismatch"
     end
 
-    local fields = SplitByPipe(rawPayload)
+    local fields = SplitByChar(rawPayload, "|")
     if #fields < 12 then
         return nil, "Incomplete quest payload"
     end
@@ -197,6 +270,7 @@ function ShareCodec:DecodeQuest(codeString)
     local areaCenterX = tonumber(fields[10])
     local areaCenterY = tonumber(fields[11])
     local areaRadius = tonumber(fields[12])
+    local decodedTargets = fields[13] and DecodeTargetsList(fields[13]) or nil
 
     if not targetName or targetName == "" or not requiredCount or requiredCount < 1 then
         return nil, "Invalid target data in code"
@@ -206,9 +280,20 @@ function ShareCodec:DecodeQuest(codeString)
         return nil, "Invalid area coordinates in code"
     end
 
+    if not decodedTargets or #decodedTargets == 0 then
+        decodedTargets = {
+            {
+                name = targetName,
+                currentCount = 0,
+                requiredCount = math.floor(requiredCount),
+            },
+        }
+    end
+
     return {
         title = title,
         description = description,
+        targets = decodedTargets,
         targetName = targetName,
         requiredCount = math.floor(requiredCount),
         mapId = math.floor(mapId or 0),

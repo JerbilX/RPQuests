@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -47,14 +48,27 @@ function WorldMapArea:Initialize()
             local tooltip = InformationTooltip
             if tooltip and tooltip.AddLine then
                 local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", activeQuest.title or "")
-                local objText = Addon.Locale:Get(
-                    "MAP_TOOLTIP_OBJECTIVE",
-                    activeQuest.targetName or "",
-                    activeQuest.currentCount or 0,
-                    activeQuest.requiredCount or 1
-                )
                 tooltip:AddLine(headerText, "ZoFontWinH4", 0.91, 0.83, 0.63)
-                tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
+                local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(activeQuest)) or {}
+                if #targets > 0 then
+                    for _, t in ipairs(targets) do
+                        local objText = Addon.Locale:Get(
+                            "MAP_TOOLTIP_OBJECTIVE",
+                            t.name or "",
+                            t.currentCount or 0,
+                            t.requiredCount or 1
+                        )
+                        tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
+                    end
+                else
+                    local objText = Addon.Locale:Get(
+                        "MAP_TOOLTIP_OBJECTIVE",
+                        activeQuest.targetName or "",
+                        activeQuest.currentCount or 0,
+                        activeQuest.requiredCount or 1
+                    )
+                    tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
+                end
             end
         end,
         tooltip = 1,

@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 RPQuest.Locales = RPQuest.Locales or {}
@@ -26,7 +27,8 @@ RPQuest.Locales["en"] = {
     BTN_RESET = "Reset",
     BTN_SHARE = "Share Code",
     BTN_DELETE = "Delete",
-    BTN_SAVE = "Save Quest",
+    BTN_SAVE = "Create Quest",
+    BTN_CLEAR_TARGETS = "Clear Targets",
     BTN_CANCEL = "Cancel",
     BTN_CONFIRM_IMPORT = "Import Quest",
     BTN_RADIUS_SMALL = "Small",
@@ -55,7 +57,6 @@ RPQuest.Locales["en"] = {
     LABEL_TARGET_SECTION = "Target (NPC) & Search Area:",
     TARGET_CAPTURED_FORMAT = "Target: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Aim at a living NPC and press the Capture keybind.|r",
-    LABEL_KILL_COUNT = "Kills Required:",
     LABEL_AREA_SIZE = "Map Search Area Size:",
 
     -- Import View
@@ -73,7 +74,7 @@ RPQuest.Locales["en"] = {
     ALERT_QUEST_RESET = "RPQuest: Quest progress reset.",
     ALERT_QUEST_IMPORTED = "RPQuest: Quest imported -> %s",
     ALERT_SHARE_READY = "RPQuest: Code selected! Press Ctrl+C to copy.",
-    ERR_MISSING_TARGET = "Capture an NPC target with the reticle keybind before saving.",
+    ERR_MISSING_TARGET = "Capture an NPC target with the reticle keybind before creating the quest.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Quest Completed: %s",
