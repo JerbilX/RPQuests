@@ -34,6 +34,8 @@ UNIT_REACTION_PLAYER_ALLY = 5
 
 ACTION_RESULT_DIED = 2260
 ACTION_RESULT_DIED_XP = 2262
+REGISTER_FILTER_COMBAT_RESULT = 2
+REGISTER_FILTER_IS_ERROR = 5
 EVENT_COMBAT_EVENT = 131103
 EVENT_ZONE_CHANGED = 131072
 UI_ALERT_CATEGORY_ALERT = 0
@@ -704,6 +706,24 @@ RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs +
     AssertEqual(#imported.targets, 2, "Imported multi-target quest preserves both targets")
     AssertEqual(imported.targets[1].name, "Lord Vane", "First imported target matches")
     AssertEqual(imported.targets[2].name, "Lady Vane", "Second imported target matches")
+
+    -- Caso C: Capturar objetivos en mapas distintos reinicia la lista al nuevo mapa
+    RPQuest.QuestRepository:ResetDraft()
+    mockState.mapId = 32
+    mockState.playerX = 0.20
+    mockState.playerY = 0.20
+    mockState.reticleName = "Guardia de Auridon"
+    RPQuest.TargetCapture:CaptureFromReticle()
+
+    mockState.mapId = 45
+    mockState.playerX = 0.80
+    mockState.playerY = 0.80
+    mockState.reticleName = "Guardia de Deshaan"
+    local draftMapSwitch = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(#draftMapSwitch.targets, 1, "Capturing target in a new map resets targets from previous map")
+    AssertEqual(draftMapSwitch.targets[1].name, "Guardia de Deshaan", "Only the new map target remains")
+    AssertEqual(draftMapSwitch.targetX, 0.80, "Centroid X is strictly from the new map")
+    AssertEqual(draftMapSwitch.targetY, 0.80, "Centroid Y is strictly from the new map")
 end)
 
 if failed > 0 then

@@ -27,13 +27,6 @@ Addon.Constants = {
     AREA_OFFSET = {
         MIN_RATIO = 0.25,
         MAX_RATIO = 0.65,
-        MIN_BOUND = 0.05,
-        MAX_BOUND = 0.95,
-    },
-    QUEST_STATUS = {
-        ACTIVE = "ACTIVE",
-        AVAILABLE = "AVAILABLE",
-        COMPLETED = "COMPLETED",
     },
     UI = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",

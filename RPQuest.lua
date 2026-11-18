@@ -14,7 +14,7 @@ if Addon.Locale then
 end
 
 function Addon:Initialize()
-    if Addon.Locale then
+    if Addon.Locale and not Addon.Locale.activeLang then
         Addon.Locale:Initialize()
     end
 
