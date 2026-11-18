@@ -228,7 +228,43 @@ CENTER_SCREEN_ANNOUNCE = {
     end,
 }
 
--- Load core and gameplay modules under test
+WINDOW_MANAGER = WINDOW_MANAGER or {
+    CreateControl = function(self, name, parent, controlType)
+        local c = CreateControl(name, parent, controlType)
+        function c:TakeFocus() self._focused = true end
+        function c:SelectAll() self._selectedAll = true end
+        return c
+    end,
+    CreateTopLevelWindow = function(self, name)
+        return CreateControl(name, GuiRoot, CT_TOPLEVELCONTROL)
+    end,
+}
+
+QUEST_JOURNAL_KEYBOARD = {
+    initializedTabs = true,
+    mode = 1,
+    SetMode = function(self, m) self.mode = m end,
+    OnShowing = function(self) end,
+    tabs = {
+        _addedTabs = {},
+        _selectedFragment = nil,
+        Add = function(self, name, fragments, tabData)
+            self._addedTabs[name] = { fragments = fragments, tabData = tabData }
+        end,
+        SelectFragment = function(self, name)
+            self._selectedFragment = name
+            local entry = self._addedTabs[name]
+            if entry and entry.fragments then
+                for _, f in ipairs(entry.fragments) do
+                    if f.Show then f:Show() end
+                end
+            end
+        end,
+        UpdateButtons = function(self) end,
+    },
+}
+
+-- Load core, gameplay, UI and entrypoint modules under test
 dofile("src/Constants.lua")
 dofile("lang/en.lua")
 dofile("lang/es.lua")
@@ -239,6 +275,9 @@ dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
 dofile("src/CombatTracker.lua")
 dofile("src/WorldMapArea.lua")
+dofile("src/HudTracker.lua")
+dofile("src/JournalTab.lua")
+dofile("RPQuest.lua")
 
 local passed = 0
 local failed = 0
@@ -543,6 +582,67 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
     AssertEqual(#mockState.csaMessages, 2, "CSA completion message emitted")
     AssertEqual(mockState.csaMessages[2].sound, SOUNDS.QUEST_COMPLETED, "Played QUEST_COMPLETED sound")
     AssertEqual(#mockPinManager._createdPins, 0, "Search area pin automatically removed when quest completes")
+end)
+
+-- ============================================================================
+-- 5. Tests de HudTracker, JournalTab y Ciclo de Vida EVENT_ADD_ON_LOADED
+-- ============================================================================
+RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars, JournalTab and HudTracker", function()
+    mockState.language = "es"
+    EVENT_MANAGER:FireEvent(EVENT_ADD_ON_LOADED, "RPQuest")
+
+    AssertTrue(RPQuest.savedVars ~= nil, "Character SavedVars initialized")
+    AssertTrue(RPQuest.JournalTab.isInitialized, "JournalTab initialized")
+    AssertTrue(RPQuest.HudTracker.isInitialized, "HudTracker initialized")
+    AssertTrue(RPQuest.JournalTab.isTabAdded, "Custom Quests tab registered in QUEST_JOURNAL_KEYBOARD.tabs")
+
+    -- Sin misión activa, el HUD Tracker está oculto
+    SCENE_MANAGER:Show("hud")
+    RPQuest.HudTracker:Refresh()
+    AssertTrue(RPQuest.HudTracker.panel:IsHidden(), "HudTracker hidden when no active quest")
+
+    -- Crear una misión desde la UI del Editor en la pestaña del Diario
+    RPQuest.JournalTab:OpenCreateEditor()
+    AssertEqual(RPQuest.JournalTab.editorPane:IsHidden(), false, "Editor pane is visible")
+
+    mockState.reticleExists = true
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = false
+    mockState.reticleName = "Señor Vampiro"
+    mockState.mapId = 60
+    mockState.zoneId = 200
+    mockState.mapName = "Rivenspire"
+    mockState.playerX = 0.25
+    mockState.playerY = 0.75
+
+    RPQuest:OnCaptureTargetKeybind()
+    RPQuest.JournalTab.titleEdit:SetText("Cacería Nocturna")
+    RPQuest.JournalTab.descEdit:SetText("Derrota al vampiro en las ruinas.")
+    RPQuest.JournalTab.countEdit:SetText("1")
+    RPQuest.JournalTab:OnSaveDraftClicked()
+
+    local active = RPQuest.QuestRepository:GetActiveQuest()
+    AssertTrue(active ~= nil, "Quest saved and set active from JournalTab")
+    AssertEqual(active.title, "Cacería Nocturna", "Saved title matches")
+
+    -- Con misión activa en escena HUD, el HudTracker se muestra con título y objetivo
+    SCENE_MANAGER:Show("hud")
+    RPQuest.HudTracker:Refresh()
+    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), false, "HudTracker shown for active quest")
+    AssertEqual(RPQuest.HudTracker.titleLabel:GetText(), "Cacería Nocturna", "HudTracker title updated")
+
+    -- Probar botón Compartir en JournalTab (genera código y lo selecciona en shareEdit)
+    RPQuest.JournalTab:OnShareClicked()
+    local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ1:", "Share edit box populated with RPQ1 code")
+    AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selected all text for Ctrl+C")
+
+    -- Probar vista Importar en JournalTab
+    RPQuest.JournalTab:OpenImportView()
+    AssertEqual(RPQuest.JournalTab.importPane:IsHidden(), false, "Import pane is visible")
+    RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
+    RPQuest.JournalTab:OnConfirmImportClicked()
+    AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
 end)
 
 if failed > 0 then

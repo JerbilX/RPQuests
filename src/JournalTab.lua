@@ -1,0 +1,924 @@
+-- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
+
+RPQuest = RPQuest or {}
+local Addon = RPQuest
+
+Addon.JournalTab = {}
+local JournalTab = Addon.JournalTab
+
+local PANEL_NAME = "RPQuest_JournalPanel"
+local MAX_VISIBLE_ROWS = 14
+
+local VIEW_MODE = {
+    DETAIL = "DETAIL",
+    EDITOR = "EDITOR",
+    IMPORT = "IMPORT",
+}
+
+local function CreateStyledButton(name, parent, width, height, text, onClick)
+    local btn = WINDOW_MANAGER:CreateControl(name, parent, CT_BUTTON)
+    btn:SetDimensions(width, height)
+    if btn.SetFont then btn:SetFont("ZoFontGameBold") end
+    if btn.SetNormalFontColor then btn:SetNormalFontColor(0.91, 0.83, 0.63, 1) end
+    if btn.SetMouseOverFontColor then btn:SetMouseOverFontColor(1, 1, 1, 1) end
+
+    local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", btn, CT_BACKDROP)
+    bg:SetDimensions(width, height)
+    bg:SetAnchor(TOPLEFT, btn, TOPLEFT, 0, 0)
+    if bg.SetCenterColor then bg:SetCenterColor(0.08, 0.08, 0.08, 0.78) end
+    if bg.SetEdgeColor then bg:SetEdgeColor(0.65, 0.56, 0.34, 0.85) end
+    btn._bg = bg
+
+    btn:SetText(text or "")
+    btn:SetHandler("OnClicked", function()
+        if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
+            PlaySound(SOUNDS.DEFAULT_CLICK)
+        end
+        if onClick then onClick() end
+    end)
+    return btn
+end
+
+local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine)
+    local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", parent, CT_BACKDROP)
+    bg:SetDimensions(width, height)
+    if bg.SetCenterColor then bg:SetCenterColor(0.04, 0.04, 0.04, 0.82) end
+    if bg.SetEdgeColor then bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80) end
+
+    local edit = WINDOW_MANAGER:CreateControl(name, bg, CT_EDITBOX)
+    edit:SetDimensions(width - 12, height - 8)
+    edit:SetAnchor(TOPLEFT, bg, TOPLEFT, 6, 4)
+    if edit.SetFont then edit:SetFont("ZoFontGame") end
+    if edit.SetMaxInputChars then edit:SetMaxInputChars(maxChars or 256) end
+    if isMultiLine then
+        if edit.SetMultiLine then edit:SetMultiLine(true) end
+        if edit.SetNewLineEnabled then edit:SetNewLineEnabled(true) end
+    end
+    edit:SetText("")
+
+    return bg, edit
+end
+
+function JournalTab:Initialize()
+    if self.isInitialized or not WINDOW_MANAGER or not GuiRoot then
+        return
+    end
+
+    self.viewMode = VIEW_MODE.DETAIL
+    self.selectedQuestId = nil
+    self.shareCodeVisible = false
+
+    local panel = WINDOW_MANAGER:CreateControl(PANEL_NAME, GuiRoot, CT_TOPLEVELCONTROL)
+    panel:SetDimensions(980, 680)
+    if ZO_QuestJournal then
+        panel:SetAnchor(TOPLEFT, ZO_QuestJournal, TOPLEFT, 0, 0)
+        panel:SetAnchor(BOTTOMRIGHT, ZO_QuestJournal, BOTTOMRIGHT, 0, 0)
+    else
+        panel:SetAnchor(TOPRIGHT, GuiRoot, TOPRIGHT, -30, 95)
+    end
+    panel:SetHidden(true)
+    self.panel = panel
+
+    self:BuildLeftColumn(panel)
+    self:BuildRightColumn(panel)
+
+    if ZO_FadeSceneFragment then
+        self.fragment = ZO_FadeSceneFragment:New(panel)
+    end
+
+    self:IntegrateIntoQuestJournalModeBar()
+
+    if Addon.QuestRepository then
+        Addon.QuestRepository:RegisterListener(function(eventType, quest)
+            if eventType == "QUEST_CREATED" or eventType == "QUEST_IMPORTED" or eventType == "QUEST_UPDATED" then
+                if quest and quest.id then
+                    self.selectedQuestId = quest.id
+                end
+                self.viewMode = VIEW_MODE.DETAIL
+            elseif eventType == "DRAFT_TARGET_CAPTURED" then
+                if self.viewMode ~= VIEW_MODE.EDITOR then
+                    self.viewMode = VIEW_MODE.EDITOR
+                end
+            end
+            self:Refresh()
+        end)
+    end
+
+    self.isInitialized = true
+    self:Refresh()
+end
+
+function JournalTab:BuildLeftColumn(panel)
+    local leftCol = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LeftCol", panel, CT_CONTROL)
+    leftCol:SetDimensions(335, 620)
+    leftCol:SetAnchor(TOPLEFT, panel, TOPLEFT, 12, 10)
+    self.leftCol = leftCol
+
+    local headerLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_QuestCount", leftCol, CT_LABEL)
+    headerLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 0)
+    if headerLabel.SetFont then headerLabel:SetFont("ZoFontHeader3") end
+    if headerLabel.SetColor then headerLabel:SetColor(0.91, 0.83, 0.63, 1) end
+    self.headerLabel = headerLabel
+
+    self.newBtn = CreateStyledButton(
+        PANEL_NAME .. "_NewBtn",
+        leftCol,
+        150,
+        28,
+        Addon.Locale:Get("BTN_NEW_QUEST"),
+        function()
+            self:OpenCreateEditor()
+        end
+    )
+    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 32)
+
+    self.importBtn = CreateStyledButton(
+        PANEL_NAME .. "_ImportBtn",
+        leftCol,
+        150,
+        28,
+        Addon.Locale:Get("BTN_IMPORT_CODE"),
+        function()
+            self:OpenImportView()
+        end
+    )
+    self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 160, 32)
+
+    local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
+    emptyLabel:SetDimensions(310, 80)
+    emptyLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 78)
+    if emptyLabel.SetFont then emptyLabel:SetFont("ZoFontGame") end
+    if emptyLabel.SetColor then emptyLabel:SetColor(0.75, 0.75, 0.75, 1) end
+    emptyLabel:SetHidden(true)
+    self.emptyLabel = emptyLabel
+
+    self.rowControls = {}
+    self.rowBindings = {}
+
+    for i = 1, MAX_VISIBLE_ROWS do
+        local rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_Row" .. i, leftCol, CT_BUTTON)
+        rowBtn:SetDimensions(315, 30)
+        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 72 + ((i - 1) * 34))
+        if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
+        local rowIndex = i
+        rowBtn:SetHandler("OnClicked", function()
+            local binding = self.rowBindings[rowIndex]
+            if binding and binding.questId then
+                if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
+                    PlaySound(SOUNDS.DEFAULT_CLICK)
+                end
+                self:SelectQuest(binding.questId)
+            end
+        end)
+        rowBtn:SetHidden(true)
+        self.rowControls[i] = rowBtn
+    end
+end
+
+function JournalTab:BuildRightColumn(panel)
+    local rightCol = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_RightCol", panel, CT_CONTROL)
+    rightCol:SetDimensions(560, 600)
+    rightCol:SetAnchor(TOPLEFT, panel, TOPLEFT, 375, 55)
+    self.rightCol = rightCol
+
+    self:BuildDetailPane(rightCol)
+    self:BuildEditorPane(rightCol)
+    self:BuildImportPane(rightCol)
+end
+
+function JournalTab:BuildDetailPane(parent)
+    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailPane", parent, CT_CONTROL)
+    pane:SetDimensions(550, 580)
+    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    self.detailPane = pane
+
+    local titleLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailTitle", pane, CT_LABEL)
+    titleLabel:SetDimensions(520, 34)
+    titleLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    if titleLabel.SetFont then titleLabel:SetFont("ZoFontWinH2") end
+    if titleLabel.SetColor then titleLabel:SetColor(0.95, 0.88, 0.65, 1) end
+    self.detailTitle = titleLabel
+
+    local statusLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailStatus", pane, CT_LABEL)
+    statusLabel:SetDimensions(520, 24)
+    statusLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 36)
+    if statusLabel.SetFont then statusLabel:SetFont("ZoFontGameBold") end
+    self.detailStatus = statusLabel
+
+    local locLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailLoc", pane, CT_LABEL)
+    locLabel:SetDimensions(520, 24)
+    locLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 60)
+    if locLabel.SetFont then locLabel:SetFont("ZoFontGame") end
+    if locLabel.SetColor then locLabel:SetColor(0.82, 0.82, 0.82, 1) end
+    self.detailLocation = locLabel
+
+    local descHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescHeader", pane, CT_LABEL)
+    descHeader:SetDimensions(520, 24)
+    descHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 96)
+    if descHeader.SetFont then descHeader:SetFont("ZoFontWinH4") end
+    if descHeader.SetColor then descHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    self.detailDescHeader = descHeader
+
+    local descBody = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescBody", pane, CT_LABEL)
+    descBody:SetDimensions(510, 120)
+    descBody:SetAnchor(TOPLEFT, pane, TOPLEFT, 10, 122)
+    if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
+    if descBody.SetColor then descBody:SetColor(0.85, 0.83, 0.76, 1) end
+    self.detailDescBody = descBody
+
+    local divider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDivider", pane, CT_TEXTURE)
+    divider:SetDimensions(512, 4)
+    divider:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 250)
+    if divider.SetTexture then
+        divider:SetTexture((Addon.Constants and Addon.Constants.UI and Addon.Constants.UI.DIVIDER_TEXTURE) or "EsoUI/Art/Quest/questJournal_divider.dds")
+    end
+
+    local objHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjHeader", pane, CT_LABEL)
+    objHeader:SetDimensions(520, 24)
+    objHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 264)
+    if objHeader.SetFont then objHeader:SetFont("ZoFontWinH3") end
+    if objHeader.SetColor then objHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    self.detailObjHeader = objHeader
+
+    local objText = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjText", pane, CT_LABEL)
+    objText:SetDimensions(510, 32)
+    objText:SetAnchor(TOPLEFT, pane, TOPLEFT, 12, 294)
+    if objText.SetFont then objText:SetFont("ZoFontWinH4") end
+    self.detailObjText = objText
+
+    -- Contenedor para mostrar y copiar el código de compartición
+    local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", pane, CT_LABEL)
+    shareHeader:SetDimensions(520, 22)
+    shareHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 342)
+    if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
+    if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    shareHeader:SetHidden(true)
+    self.shareHeader = shareHeader
+
+    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false)
+    shareBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 366)
+    shareBg:SetHidden(true)
+    self.shareBg = shareBg
+    self.shareEdit = shareEdit
+
+    -- Fila 1 de botones de acción
+    self.btnActivate = CreateStyledButton(PANEL_NAME .. "_BtnActivate", pane, 160, 32, "", function()
+        self:OnToggleActiveClicked()
+    end)
+    self.btnActivate:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 425)
+
+    self.btnShowOnMap = CreateStyledButton(PANEL_NAME .. "_BtnShowMap", pane, 160, 32, "", function()
+        local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        if q and Addon.WorldMapArea then
+            Addon.WorldMapArea:ShowQuestOnMap(q)
+        end
+    end)
+    self.btnShowOnMap:SetAnchor(TOPLEFT, pane, TOPLEFT, 172, 425)
+
+    self.btnShare = CreateStyledButton(PANEL_NAME .. "_BtnShare", pane, 160, 32, "", function()
+        self:OnShareClicked()
+    end)
+    self.btnShare:SetAnchor(TOPLEFT, pane, TOPLEFT, 344, 425)
+
+    -- Fila 2 de botones de acción
+    self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", pane, 160, 32, "", function()
+        self:OpenEditEditor(self.selectedQuestId)
+    end)
+    self.btnEdit:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 467)
+
+    self.btnReset = CreateStyledButton(PANEL_NAME .. "_BtnReset", pane, 160, 32, "", function()
+        if self.selectedQuestId and Addon.QuestRepository:ResetQuest(self.selectedQuestId) then
+            if Addon.Announcements then
+                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
+            end
+            self:Refresh()
+        end
+    end)
+    self.btnReset:SetAnchor(TOPLEFT, pane, TOPLEFT, 172, 467)
+
+    self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", pane, 160, 32, "", function()
+        if self.selectedQuestId and Addon.QuestRepository:DeleteQuest(self.selectedQuestId) then
+            self.selectedQuestId = nil
+            self.shareCodeVisible = false
+            if Addon.Announcements then
+                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
+            end
+            self:Refresh()
+        end
+    end)
+    self.btnDelete:SetAnchor(TOPLEFT, pane, TOPLEFT, 344, 467)
+end
+
+function JournalTab:BuildEditorPane(parent)
+    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EditorPane", parent, CT_CONTROL)
+    pane:SetDimensions(550, 580)
+    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    pane:SetHidden(true)
+    self.editorPane = pane
+
+    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EditorHeader", pane, CT_LABEL)
+    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    if header.SetFont then header:SetFont("ZoFontWinH2") end
+    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
+    self.editorHeader = header
+
+    local lblTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputTitle", pane, CT_LABEL)
+    lblTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 42)
+    if lblTitle.SetFont then lblTitle:SetFont("ZoFontGameBold") end
+    self.lblInputTitle = lblTitle
+
+    local titleBg, titleEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_TitleEdit", pane, 510, 34, 90, false)
+    titleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 66)
+    self.titleBg = titleBg
+    self.titleEdit = titleEdit
+
+    local lblDesc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputDesc", pane, CT_LABEL)
+    lblDesc:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 112)
+    if lblDesc.SetFont then lblDesc:SetFont("ZoFontGameBold") end
+    self.lblInputDesc = lblDesc
+
+    local descBg, descEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DescEdit", pane, 510, 96, 400, true)
+    descBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 136)
+    self.descBg = descBg
+    self.descEdit = descEdit
+
+    local lblTargetSec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetSec", pane, CT_LABEL)
+    lblTargetSec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 246)
+    if lblTargetSec.SetFont then lblTargetSec:SetFont("ZoFontGameBold") end
+    self.lblTargetSec = lblTargetSec
+
+    local lblCapturedTarget = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedTarget", pane, CT_LABEL)
+    lblCapturedTarget:SetDimensions(510, 44)
+    lblCapturedTarget:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 272)
+    if lblCapturedTarget.SetFont then lblCapturedTarget:SetFont("ZoFontGame") end
+    self.lblCapturedTarget = lblCapturedTarget
+
+    -- Selector de cantidad de bajas (1..N)
+    local lblKillCount = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblKillCount", pane, CT_LABEL)
+    lblKillCount:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 328)
+    if lblKillCount.SetFont then lblKillCount:SetFont("ZoFontGameBold") end
+    self.lblKillCount = lblKillCount
+
+    self.btnCountMinus = CreateStyledButton(PANEL_NAME .. "_BtnCountMinus", pane, 36, 30, "-", function()
+        self:AdjustDraftCount(-1)
+    end)
+    self.btnCountMinus:SetAnchor(TOPLEFT, pane, TOPLEFT, 190, 322)
+
+    local countBg, countEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_CountEdit", pane, 64, 30, 4, false)
+    countBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 232, 322)
+    self.countBg = countBg
+    self.countEdit = countEdit
+
+    self.btnCountPlus = CreateStyledButton(PANEL_NAME .. "_BtnCountPlus", pane, 36, 30, "+", function()
+        self:AdjustDraftCount(1)
+    end)
+    self.btnCountPlus:SetAnchor(TOPLEFT, pane, TOPLEFT, 302, 322)
+
+    -- Selector de radio del área de búsqueda
+    local lblAreaSize = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblAreaSize", pane, CT_LABEL)
+    lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 372)
+    if lblAreaSize.SetFont then lblAreaSize:SetFont("ZoFontGameBold") end
+    self.lblAreaSize = lblAreaSize
+
+    local radii = (Addon.Constants and Addon.Constants.AREA_RADIUS) or { SMALL = 0.045, MEDIUM = 0.075, LARGE = 0.115 }
+
+    self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", pane, 110, 30, "", function()
+        Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.SMALL })
+    end)
+    self.btnRadiusSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 398)
+
+    self.btnRadiusMedium = CreateStyledButton(PANEL_NAME .. "_BtnRadMedium", pane, 110, 30, "", function()
+        Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.MEDIUM })
+    end)
+    self.btnRadiusMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 120, 398)
+
+    self.btnRadiusLarge = CreateStyledButton(PANEL_NAME .. "_BtnRadLarge", pane, 110, 30, "", function()
+        Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.LARGE })
+    end)
+    self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 398)
+
+    self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, "", function()
+        self:OnSaveDraftClicked()
+    end)
+    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 455)
+
+    self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, "", function()
+        Addon.QuestRepository:ResetDraft()
+        self.viewMode = VIEW_MODE.DETAIL
+        self:Refresh()
+    end)
+    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 455)
+end
+
+function JournalTab:BuildImportPane(parent)
+    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ImportPane", parent, CT_CONTROL)
+    pane:SetDimensions(550, 580)
+    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    pane:SetHidden(true)
+    self.importPane = pane
+
+    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ImportHeader", pane, CT_LABEL)
+    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    if header.SetFont then header:SetFont("ZoFontWinH2") end
+    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
+    self.importHeader = header
+
+    local instr = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ImportInstr", pane, CT_LABEL)
+    instr:SetDimensions(510, 48)
+    instr:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 44)
+    if instr.SetFont then instr:SetFont("ZoFontGame") end
+    self.importInstr = instr
+
+    local codeBg, codeEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ImportCodeEdit", pane, 510, 80, 1024, true)
+    codeBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 96)
+    self.importCodeBg = codeBg
+    self.importCodeEdit = codeEdit
+
+    self.btnConfirmImport = CreateStyledButton(PANEL_NAME .. "_BtnConfirmImport", pane, 180, 36, "", function()
+        self:OnConfirmImportClicked()
+    end)
+    self.btnConfirmImport:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 196)
+
+    self.btnCancelImport = CreateStyledButton(PANEL_NAME .. "_BtnCancelImport", pane, 150, 36, "", function()
+        self.importCodeEdit:SetText("")
+        self.viewMode = VIEW_MODE.DETAIL
+        self:Refresh()
+    end)
+    self.btnCancelImport:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 196)
+end
+
+function JournalTab:IntegrateIntoQuestJournalModeBar()
+    local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
+    if not qj then return end
+
+    local tabDescriptor = (Addon.Constants and Addon.Constants.UI and Addon.Constants.UI.TAB_DESCRIPTOR) or "rpquest_custom_quests"
+    local tabCategoryName = "SI_RPQUEST_JOURNAL_TAB_TITLE"
+    if ZO_CreateStringId then
+        ZO_CreateStringId(tabCategoryName, Addon.Locale:Get("TAB_TITLE"))
+    else
+        _G[tabCategoryName] = Addon.Locale:Get("TAB_TITLE")
+    end
+    self.tabCategoryName = _G[tabCategoryName] or tabCategoryName
+    self.tabDescriptor = tabDescriptor
+
+    local uiConsts = (Addon.Constants and Addon.Constants.UI) or {}
+    local tabData = {
+        categoryName = self.tabCategoryName,
+        descriptor = tabDescriptor,
+        normal = uiConsts.ICON_TAB_UP or "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_up.dds",
+        pressed = uiConsts.ICON_TAB_DOWN or "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_down.dds",
+        highlight = uiConsts.ICON_TAB_OVER or "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_over.dds",
+        disabled = uiConsts.ICON_TAB_DISABLED or "EsoUI/Art/Journal/journal_quests_tabIcon_disabled.dds",
+        callback = function()
+            if qj.SetMode then
+                qj:SetMode(tabDescriptor)
+            end
+            self:Refresh()
+        end,
+    }
+
+    local function EnsureTabAdded()
+        if qj.tabs and not self.isTabAdded and self.fragment then
+            qj.tabs:Add(self.tabCategoryName, { self.fragment }, tabData)
+            self.isTabAdded = true
+        end
+    end
+
+    if qj.initializedTabs then
+        EnsureTabAdded()
+    end
+
+    if ZO_PostHook then
+        ZO_PostHook(qj, "OnShowing", function(qjSelf)
+            EnsureTabAdded()
+            if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
+                qjSelf.tabs:SelectFragment(self.tabCategoryName)
+                self:Refresh()
+            end
+            if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
+                qjSelf.tabs:UpdateButtons()
+            end
+        end)
+    else
+        local origOnShowing = qj.OnShowing
+        qj.OnShowing = function(qjSelf, ...)
+            if origOnShowing then
+                origOnShowing(qjSelf, ...)
+            end
+            EnsureTabAdded()
+            if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
+                qjSelf.tabs:SelectFragment(self.tabCategoryName)
+                self:Refresh()
+            end
+            if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
+                qjSelf.tabs:UpdateButtons()
+            end
+        end
+    end
+end
+
+function JournalTab:SelectQuest(questId)
+    self.selectedQuestId = questId
+    self.viewMode = VIEW_MODE.DETAIL
+    self.shareCodeVisible = false
+    self:Refresh()
+end
+
+function JournalTab:OpenCreateEditor()
+    local draft = Addon.QuestRepository:GetDraft()
+    if draft.editingQuestId then
+        Addon.QuestRepository:ResetDraft()
+        draft = Addon.QuestRepository:GetDraft()
+    end
+    self.titleEdit:SetText(draft.title or "")
+    self.descEdit:SetText(draft.description or "")
+    self.countEdit:SetText(tostring(draft.requiredCount or 1))
+    self.viewMode = VIEW_MODE.EDITOR
+    self:Refresh()
+end
+
+function JournalTab:OpenEditEditor(questId)
+    local draft = Addon.QuestRepository:LoadQuestIntoDraft(questId)
+    if not draft then return end
+    self.titleEdit:SetText(draft.title or "")
+    self.descEdit:SetText(draft.description or "")
+    self.countEdit:SetText(tostring(draft.requiredCount or 1))
+    self.viewMode = VIEW_MODE.EDITOR
+    self:Refresh()
+end
+
+function JournalTab:OpenImportView()
+    self.importCodeEdit:SetText("")
+    self.viewMode = VIEW_MODE.IMPORT
+    self:Refresh()
+    if self.importCodeEdit.TakeFocus then
+        self.importCodeEdit:TakeFocus()
+    end
+end
+
+function JournalTab:AdjustDraftCount(delta)
+    local currentText = self.countEdit:GetText()
+    local currentVal = tonumber(currentText) or Addon.QuestRepository:GetDraft().requiredCount or 1
+    local newVal = math.max(1, math.min(999, currentVal + delta))
+    self.countEdit:SetText(tostring(newVal))
+    Addon.QuestRepository:UpdateDraftFields({
+        title = self.titleEdit:GetText(),
+        description = self.descEdit:GetText(),
+        requiredCount = newVal,
+    })
+end
+
+function JournalTab:OnSaveDraftClicked()
+    local titleText = self.titleEdit:GetText()
+    local descText = self.descEdit:GetText()
+    local countVal = tonumber(self.countEdit:GetText()) or 1
+
+    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, countVal)
+    if not savedQuest then
+        if Addon.Announcements then
+            Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
+        end
+        return
+    end
+
+    self.titleEdit:SetText("")
+    self.descEdit:SetText("")
+    self.countEdit:SetText("1")
+    self.selectedQuestId = savedQuest.id
+    self.viewMode = VIEW_MODE.DETAIL
+
+    if Addon.Announcements then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
+    end
+    self:Refresh()
+end
+
+function JournalTab:OnConfirmImportClicked()
+    local rawCode = self.importCodeEdit:GetText()
+    local importedQuest, err = Addon.QuestRepository:ImportQuestFromCode(rawCode)
+    if not importedQuest then
+        if Addon.Announcements then
+            Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_INVALID_CODE"), true)
+        end
+        return
+    end
+
+    self.importCodeEdit:SetText("")
+    self.selectedQuestId = importedQuest.id
+    self.viewMode = VIEW_MODE.DETAIL
+
+    if Addon.Announcements then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_IMPORTED", importedQuest.title), false)
+    end
+    self:Refresh()
+end
+
+function JournalTab:OnToggleActiveClicked()
+    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not q then return end
+
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    if activeQuest and activeQuest.id == q.id then
+        Addon.QuestRepository:SetActiveQuest(nil)
+    else
+        if q.completed then
+            Addon.QuestRepository:ResetQuest(q.id)
+        else
+            Addon.QuestRepository:SetActiveQuest(q.id)
+        end
+    end
+    self:Refresh()
+end
+
+function JournalTab:OnShareClicked()
+    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not q then return end
+
+    local code = Addon.QuestRepository:ExportQuestToCode(q.id)
+    if not code then return end
+
+    self.shareCodeVisible = true
+    self:Refresh()
+
+    self.shareEdit:SetText(code)
+    if self.shareEdit.TakeFocus then
+        self.shareEdit:TakeFocus()
+    end
+    if self.shareEdit.SelectAll then
+        self.shareEdit:SelectAll()
+    end
+
+    if Addon.Announcements then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_SHARE_READY"), false)
+    end
+end
+
+function JournalTab:OpenTab()
+    if not self.isInitialized then
+        self:Initialize()
+    end
+
+    local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
+    if qj and qj.SetMode then
+        qj:SetMode(self.tabDescriptor or "rpquest_custom_quests")
+    end
+
+    if SCENE_MANAGER and SCENE_MANAGER.Show then
+        SCENE_MANAGER:Show("questJournal")
+    end
+
+    if qj and qj.tabs and qj.tabs.SelectFragment and self.tabCategoryName then
+        qj.tabs:SelectFragment(self.tabCategoryName)
+    elseif self.panel then
+        self.panel:SetHidden(false)
+    end
+
+    self:Refresh()
+end
+
+function JournalTab:ToggleTab()
+    if not self.isInitialized then
+        self:Initialize()
+    end
+
+    local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
+    local sceneShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
+
+    if sceneShowing and qj and qj.mode == (self.tabDescriptor or "rpquest_custom_quests") then
+        SCENE_MANAGER:Hide("questJournal")
+        if self.panel then
+            self.panel:SetHidden(true)
+        end
+    else
+        self:OpenTab()
+    end
+end
+
+function JournalTab:Refresh()
+    if not self.panel then return end
+
+    local allQuests = Addon.QuestRepository:GetAllQuests()
+    local activeAndAvail = Addon.QuestRepository:GetActiveAndAvailableQuests()
+    local completedQuests = Addon.QuestRepository:GetCompletedQuests()
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+
+    -- Asegurar selección por defecto si estamos en vista DETAIL
+    if self.viewMode == VIEW_MODE.DETAIL then
+        local currentSelected = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        if not currentSelected then
+            if activeQuest then
+                self.selectedQuestId = activeQuest.id
+            elseif allQuests[1] then
+                self.selectedQuestId = allQuests[1].id
+            else
+                self.selectedQuestId = nil
+            end
+        end
+    end
+
+    -- 1. Actualizar columna izquierda
+    self.headerLabel:SetText(Addon.Locale:Get("HEADER_QUEST_LIST", #allQuests))
+    self.newBtn:SetText(Addon.Locale:Get("BTN_NEW_QUEST"))
+    self.importBtn:SetText(Addon.Locale:Get("BTN_IMPORT_CODE"))
+
+    self.rowBindings = {}
+    if #allQuests == 0 then
+        self.emptyLabel:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
+        self.emptyLabel:SetHidden(false)
+        for i = 1, MAX_VISIBLE_ROWS do
+            self.rowControls[i]:SetHidden(true)
+        end
+    else
+        self.emptyLabel:SetHidden(true)
+        local displayRows = {}
+
+        if #activeAndAvail > 0 then
+            table.insert(displayRows, { isHeader = true, text = "|cE8D5A0— " .. Addon.Locale:Get("SECTION_ACTIVE_QUESTS") .. " —|r" })
+            for _, q in ipairs(activeAndAvail) do
+                local isAct = (activeQuest and activeQuest.id == q.id)
+                local prefix = isAct and "|c33FF33★ |r" or "   "
+                local selColor = (self.selectedQuestId == q.id) and "|cFFFFFF" or "|cC5C29E"
+                table.insert(displayRows, {
+                    isHeader = false,
+                    questId = q.id,
+                    text = prefix .. selColor .. (q.title or "") .. "|r",
+                })
+            end
+        end
+
+        if #completedQuests > 0 then
+            table.insert(displayRows, { isHeader = true, text = "|c88AAFF— " .. Addon.Locale:Get("SECTION_COMPLETED_QUESTS") .. " —|r" })
+            for _, q in ipairs(completedQuests) do
+                local selColor = (self.selectedQuestId == q.id) and "|cFFFFFF" or "|c8899AA"
+                table.insert(displayRows, {
+                    isHeader = false,
+                    questId = q.id,
+                    text = "|c00CCFF✓ |r" .. selColor .. (q.title or "") .. "|r",
+                })
+            end
+        end
+
+        for i = 1, MAX_VISIBLE_ROWS do
+            local rowCtrl = self.rowControls[i]
+            local rowData = displayRows[i]
+            if rowData then
+                rowCtrl:SetHidden(false)
+                rowCtrl:SetText(rowData.text)
+                rowCtrl:SetMouseEnabled(not rowData.isHeader)
+                self.rowBindings[i] = rowData
+            else
+                rowCtrl:SetHidden(true)
+            end
+        end
+    end
+
+    -- 2. Actualizar columna derecha según el modo de vista
+    if self.viewMode == VIEW_MODE.EDITOR then
+        self.detailPane:SetHidden(true)
+        self.importPane:SetHidden(true)
+        self.editorPane:SetHidden(false)
+        self:RefreshEditorPane()
+    elseif self.viewMode == VIEW_MODE.IMPORT then
+        self.detailPane:SetHidden(true)
+        self.editorPane:SetHidden(true)
+        self.importPane:SetHidden(false)
+        self:RefreshImportPane()
+    else
+        self.editorPane:SetHidden(true)
+        self.importPane:SetHidden(true)
+        self.detailPane:SetHidden(false)
+        self:RefreshDetailPane()
+    end
+end
+
+function JournalTab:RefreshDetailPane()
+    local selectedQuest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+
+    if not selectedQuest then
+        self.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
+        self.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
+        self.detailLocation:SetText("")
+        self.detailDescHeader:SetText("")
+        self.detailDescBody:SetText("")
+        self.detailObjHeader:SetText("")
+        self.detailObjText:SetText("")
+        self.shareHeader:SetHidden(true)
+        self.shareBg:SetHidden(true)
+        self.btnActivate:SetHidden(true)
+        self.btnShowOnMap:SetHidden(true)
+        self.btnShare:SetHidden(true)
+        self.btnEdit:SetHidden(true)
+        self.btnReset:SetHidden(true)
+        self.btnDelete:SetHidden(true)
+        return
+    end
+
+    self.detailTitle:SetText((selectedQuest.title or ""):upper())
+
+    local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
+    if isCurrentActive then
+        self.detailStatus:SetText(Addon.Locale:Get("STATUS_ACTIVE"))
+        self.btnActivate:SetText(Addon.Locale:Get("BTN_DEACTIVATE"))
+    elseif selectedQuest.completed then
+        self.detailStatus:SetText(Addon.Locale:Get("STATUS_COMPLETED"))
+        self.btnActivate:SetText(Addon.Locale:Get("BTN_ACTIVATE"))
+    else
+        self.detailStatus:SetText(Addon.Locale:Get("STATUS_AVAILABLE"))
+        self.btnActivate:SetText(Addon.Locale:Get("BTN_ACTIVATE"))
+    end
+
+    local locText = (selectedQuest.mapName and selectedQuest.mapName ~= "" and selectedQuest.mapName)
+        or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
+    self.detailLocation:SetText(Addon.Locale:Get("LABEL_LOCATION", locText))
+
+    self.detailDescHeader:SetText(Addon.Locale:Get("LABEL_DESCRIPTION_HEADER"))
+    local descText = (selectedQuest.description and selectedQuest.description ~= "" and selectedQuest.description)
+        or Addon.Locale:Get("LABEL_NO_DESCRIPTION")
+    self.detailDescBody:SetText(descText)
+
+    self.detailObjHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
+    local objLine = Addon.Locale:Get(
+        "OBJECTIVE_KILL_FORMAT",
+        selectedQuest.targetName or "",
+        selectedQuest.currentCount or 0,
+        selectedQuest.requiredCount or 1
+    )
+    if selectedQuest.completed then
+        objLine = objLine .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+    end
+    self.detailObjText:SetText(objLine)
+
+    if self.shareCodeVisible then
+        self.shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
+        self.shareHeader:SetHidden(false)
+        self.shareBg:SetHidden(false)
+    else
+        self.shareHeader:SetHidden(true)
+        self.shareBg:SetHidden(true)
+    end
+
+    self.btnActivate:SetHidden(false)
+    self.btnShowOnMap:SetText(Addon.Locale:Get("BTN_SHOW_ON_MAP"))
+    self.btnShowOnMap:SetHidden(false)
+    self.btnShare:SetText(Addon.Locale:Get("BTN_SHARE"))
+    self.btnShare:SetHidden(false)
+    self.btnEdit:SetText(Addon.Locale:Get("BTN_EDIT"))
+    self.btnEdit:SetHidden(false)
+    self.btnReset:SetText(Addon.Locale:Get("BTN_RESET"))
+    self.btnReset:SetHidden(false)
+    self.btnDelete:SetText(Addon.Locale:Get("BTN_DELETE"))
+    self.btnDelete:SetHidden(false)
+end
+
+function JournalTab:RefreshEditorPane()
+    local draft = Addon.QuestRepository:GetDraft()
+
+    if draft.editingQuestId then
+        self.editorHeader:SetText(Addon.Locale:Get("EDITOR_EDIT_TITLE"))
+    else
+        self.editorHeader:SetText(Addon.Locale:Get("EDITOR_CREATE_TITLE"))
+    end
+
+    self.lblInputTitle:SetText(Addon.Locale:Get("LABEL_INPUT_TITLE"))
+    self.lblInputDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
+    self.lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
+
+    if draft.targetName and draft.targetName ~= "" then
+        local locName = (draft.mapName and draft.mapName ~= "" and draft.mapName)
+            or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
+        self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_CAPTURED_FORMAT", draft.targetName, locName))
+    else
+        self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
+    end
+
+    self.lblKillCount:SetText(Addon.Locale:Get("LABEL_KILL_COUNT"))
+    if self.countEdit:GetText() == "" then
+        self.countEdit:SetText(tostring(draft.requiredCount or 1))
+    end
+
+    self.lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))
+    local radii = (Addon.Constants and Addon.Constants.AREA_RADIUS) or { SMALL = 0.045, MEDIUM = 0.075, LARGE = 0.115 }
+    local curRad = draft.areaRadius or radii.MEDIUM
+
+    local function FormatSelected(label, isSelected)
+        if isSelected then
+            return "|c33FF33[" .. label .. "]|r"
+        end
+        return label
+    end
+
+    self.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
+    self.btnRadiusMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_MEDIUM"), math.abs(curRad - radii.MEDIUM) < 0.005))
+    self.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
+
+    self.btnSaveEditor:SetText(Addon.Locale:Get("BTN_SAVE"))
+    self.btnCancelEditor:SetText(Addon.Locale:Get("BTN_CANCEL"))
+end
+
+function JournalTab:RefreshImportPane()
+    self.importHeader:SetText(Addon.Locale:Get("IMPORT_VIEW_TITLE"))
+    self.importInstr:SetText(Addon.Locale:Get("IMPORT_INSTRUCTIONS"))
+    self.btnConfirmImport:SetText(Addon.Locale:Get("BTN_CONFIRM_IMPORT"))
+    self.btnCancelImport:SetText(Addon.Locale:Get("BTN_CANCEL"))
+end
