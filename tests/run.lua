@@ -22,6 +22,7 @@ local mockState = {
     alerts = {},
     csaMessages = {},
     soundsPlayed = {},
+    isGrouped = false,
 }
 
 _G.RPQuestTestState = mockState
@@ -32,6 +33,12 @@ UNIT_REACTION_FRIENDLY = 3
 UNIT_REACTION_NPC_ALLY = 4
 UNIT_REACTION_PLAYER_ALLY = 5
 
+COMBAT_UNIT_TYPE_NONE = 0
+COMBAT_UNIT_TYPE_PLAYER = 1
+COMBAT_UNIT_TYPE_PLAYER_PET = 2
+COMBAT_UNIT_TYPE_GROUP = 3
+COMBAT_UNIT_TYPE_OTHER = 4
+COMBAT_UNIT_TYPE_PLAYER_COMPANION = 5
 ACTION_RESULT_DIED = 2260
 ACTION_RESULT_DIED_XP = 2262
 REGISTER_FILTER_COMBAT_RESULT = 2
@@ -124,6 +131,15 @@ GetUnitReaction = function(tag)
     if tag == "reticleover" then return mockState.reticleReaction end
     return UNIT_REACTION_HOSTILE
 end
+
+IsUnitGrouped = function(unitTag)
+    return mockState.isGrouped == true
+end
+
+HUD_SCENE = ZO_Scene:New("hud", SCENE_MANAGER)
+SCENE_MANAGER:AddScene(HUD_SCENE)
+HUD_UI_SCENE = ZO_Scene:New("hudui", SCENE_MANAGER)
+SCENE_MANAGER:AddScene(HUD_UI_SCENE)
 
 SetMapToPlayerLocation = function()
     return SET_MAP_RESULT_CURRENT_MAP_UNCHANGED
@@ -591,20 +607,50 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
     EVENT_MANAGER:FireEvent(
         EVENT_COMBAT_EVENT,
         ACTION_RESULT_DIED, false, "Ataque", 0, 0,
-        "Jugador", 1, "Cultista de Gusano^m", 2,
-        1500, 0, 0, false, 1, 2, 100
+        "Jugador", COMBAT_UNIT_TYPE_PLAYER, "Cultista de Gusano^m", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 1, 2001, 100
     )
     AssertEqual(q.currentCount, 1, "Kill count incremented to 1")
     AssertEqual(q.completed, false, "Not yet completed")
     AssertEqual(#mockState.csaMessages, 1, "1 CSA progress message emitted")
 
-    -- Disparar 2da muerte -> completa misión y oculta el área del mapa
+    -- Mismo targetUnitId con ACTION_RESULT_DIED_XP no debe duplicar
     EVENT_MANAGER:FireEvent(
         EVENT_COMBAT_EVENT,
         ACTION_RESULT_DIED_XP, false, "Ataque", 0, 0,
-        "Jugador", 1, "Cultista de Gusano", 2,
-        1500, 0, 0, false, 1, 2, 100
+        "Jugador", COMBAT_UNIT_TYPE_PLAYER, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 1, 2001, 100
     )
+    AssertEqual(q.currentCount, 1, "Duplicate death event for same targetUnitId is ignored")
+
+    -- Muerte causada por otro jugador ajeno (sin grupo) no cuenta
+    mockState.isGrouped = false
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED, false, "Ataque", 0, 0,
+        "Desconocido", COMBAT_UNIT_TYPE_OTHER, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 99, 2002, 100
+    )
+    AssertEqual(q.currentCount, 1, "Unrelated player kill does not count")
+
+    -- Muerte de miembro de grupo cuando NO se está en grupo no cuenta
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED, false, "Ataque", 0, 0,
+        "Compañero", COMBAT_UNIT_TYPE_GROUP, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 98, 2003, 100
+    )
+    AssertEqual(q.currentCount, 1, "Group unit kill ignored when solo")
+
+    -- En grupo, muerte de miembro del grupo (distinto targetUnitId) sí cuenta y completa
+    mockState.isGrouped = true
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED_XP, false, "Ataque", 0, 0,
+        "Compañero", COMBAT_UNIT_TYPE_GROUP, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 98, 2004, 100
+    )
+    mockState.isGrouped = false
     AssertTrue(q.completed, "Quest completed on second kill")
     AssertEqual(#mockState.csaMessages, 2, "CSA completion message emitted")
     AssertEqual(mockState.csaMessages[2].sound, SOUNDS.QUEST_COMPLETED, "Played QUEST_COMPLETED sound")
@@ -761,6 +807,45 @@ RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs +
     AssertEqual(draftMapSwitch.mapId, 0, "ClearDraftTargets resets mapId to 0")
     AssertEqual(draftMapSwitch.zoneId, 0, "ClearDraftTargets resets zoneId to 0")
     AssertEqual(draftMapSwitch.mapName, "", "ClearDraftTargets resets mapName to empty")
+end)
+
+RunTest("Bugfixes: DeleteQuest resets dangling draft, JournalTab scrolls >14 rows, HudTracker obeys scene fragment", function()
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.JournalTab:Initialize()
+    RPQuest.HudTracker:Initialize()
+
+    -- 1. DeleteQuest limpia editingQuestId si esa misión estaba en edición
+    mockState.reticleExists = true
+    mockState.reticleName = "Bandido"
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local q1 = RPQuest.QuestRepository:SaveDraft("Misión Uno", "Desc", 0.05)
+    RPQuest.JournalTab:OpenEditEditor(q1.id)
+    AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, q1.id, "Draft editing q1")
+    RPQuest.QuestRepository:DeleteQuest(q1.id)
+    AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, nil, "DeleteQuest clears dangling editingQuestId")
+
+    -- 2. HudTracker controlado por fragment según escena
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local qHud = RPQuest.QuestRepository:SaveDraft("Misión HUD", "Desc", 0.05)
+    SCENE_MANAGER:Show("hud")
+    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), false, "HudTracker visible on hud scene with active quest")
+    SCENE_MANAGER:Show("questJournal")
+    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), true, "HudTracker hidden when non-HUD scene is active")
+    SCENE_MANAGER:Show("hud")
+    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), false, "HudTracker visible again when returning to hud")
+    RPQuest.QuestRepository:DeleteQuest(qHud.id)
+
+    -- 3. JournalTab pagina/desplaza más allá de 14 filas
+    for i = 1, 16 do
+        RPQuest.TargetCapture:CaptureFromReticle()
+        RPQuest.QuestRepository:SaveDraft("Quest #" .. tostring(i), "", 0.05)
+    end
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.btnListNext:IsHidden(), false, "Scroll Next button shown when > 14 rows")
+    AssertEqual(RPQuest.JournalTab.listOffset, 0, "Initial listOffset is 0")
+    RPQuest.JournalTab:ScrollQuestList(2)
+    AssertEqual(RPQuest.JournalTab.listOffset, 2, "ScrollQuestList advances offset")
+    AssertEqual(RPQuest.JournalTab.rowBindings[1].questId, 4, "First visible row reflects scrolled offset")
 end)
 
 if failed > 0 then

@@ -199,8 +199,26 @@ ZO_SceneFragment = ZO_SceneFragment or ZO_CallbackObject:Subclass()
 function ZO_SceneFragment:Initialize()
     ZO_CallbackObject.Initialize(self)
     self._state = SCENE_FRAGMENT_HIDDEN
+    self._hiddenReasons = {}
+    self._sceneShowing = false
+end
+function ZO_SceneFragment:IsHidden()
+    return next(self._hiddenReasons) ~= nil
+end
+function ZO_SceneFragment:SetHiddenForReason(reason, hidden)
+    if hidden then
+        self._hiddenReasons[reason] = true
+    else
+        self._hiddenReasons[reason] = nil
+    end
+    self:Refresh()
 end
 function ZO_SceneFragment:Show()
+    self._sceneShowing = true
+    if self:IsHidden() then
+        self:Hide()
+        return
+    end
     self._state = SCENE_FRAGMENT_SHOWN
     self:FireCallbacks("StateChange", SCENE_FRAGMENT_HIDDEN, SCENE_FRAGMENT_SHOWN)
 end
@@ -209,7 +227,13 @@ function ZO_SceneFragment:Hide()
     self:FireCallbacks("StateChange", SCENE_FRAGMENT_SHOWN, SCENE_FRAGMENT_HIDDEN)
 end
 function ZO_SceneFragment:GetState() return self._state end
-function ZO_SceneFragment:Refresh() end
+function ZO_SceneFragment:Refresh()
+    if self._sceneShowing and not self:IsHidden() then
+        self:Show()
+    else
+        self:Hide()
+    end
+end
 
 ZO_FadeSceneFragment = ZO_FadeSceneFragment or ZO_SceneFragment:Subclass()
 function ZO_FadeSceneFragment:Initialize(control)
@@ -217,6 +241,11 @@ function ZO_FadeSceneFragment:Initialize(control)
     self.control = control
 end
 function ZO_FadeSceneFragment:Show()
+    self._sceneShowing = true
+    if self:IsHidden() then
+        self:Hide()
+        return
+    end
     if self.control and self.control.SetHidden then
         self.control:SetHidden(false)
     end
@@ -305,12 +334,18 @@ function SceneManagerClass:Show(name)
     end
     if self.currentScene and self.currentScene ~= scene then
         self.currentScene.state = SCENE_HIDDEN
-        for _, f in ipairs(self.currentScene.fragments) do f:Hide() end
+        for _, f in ipairs(self.currentScene.fragments) do
+            f._sceneShowing = false
+            f:Hide()
+        end
         self.currentScene:FireCallbacks("StateChange", SCENE_SHOWN, SCENE_HIDDEN)
     end
     self.currentScene = scene
     scene.state = SCENE_SHOWN
-    for _, f in ipairs(scene.fragments) do f:Show() end
+    for _, f in ipairs(scene.fragments) do
+        f._sceneShowing = true
+        f:Show()
+    end
     scene:FireCallbacks("StateChange", SCENE_HIDDEN, SCENE_SHOWN)
     self:FireCallbacks("SceneStateChange", scene, SCENE_HIDDEN, SCENE_SHOWN)
 end

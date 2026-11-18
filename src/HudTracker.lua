@@ -111,7 +111,6 @@ function HudTracker:Refresh()
         if self.fragment and self.fragment.SetHiddenForReason then
             self.fragment:SetHiddenForReason("NoActiveRPQuest", true)
         end
-        self.panel:SetHidden(true)
         return
     end
 
@@ -139,13 +138,4 @@ function HudTracker:Refresh()
     if self.fragment and self.fragment.SetHiddenForReason then
         self.fragment:SetHiddenForReason("NoActiveRPQuest", false)
     end
-
-    local hudShowing = true
-    if SCENE_MANAGER and SCENE_MANAGER.IsShowing then
-        local inHud = SCENE_MANAGER:IsShowing("hud") or SCENE_MANAGER:IsShowing("hudui")
-        if SCENE_MANAGER:GetCurrentScene() ~= nil then
-            hudShowing = inHud
-        end
-    end
-    self.panel:SetHidden(not hudShowing)
 end

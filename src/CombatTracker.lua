@@ -9,6 +9,19 @@ local CombatTracker = Addon.CombatTracker
 
 local LISTENER_DIED = "RPQuest_CombatTracker_Died"
 local LISTENER_DIED_XP = "RPQuest_CombatTracker_DiedXP"
+local MAX_RECENT_KILLED_UNITS = 32
+
+local function IsAllowedKillSource(sourceType)
+    if sourceType == COMBAT_UNIT_TYPE_PLAYER
+        or sourceType == COMBAT_UNIT_TYPE_PLAYER_PET
+        or sourceType == COMBAT_UNIT_TYPE_PLAYER_COMPANION then
+        return true
+    end
+    if sourceType == COMBAT_UNIT_TYPE_GROUP then
+        return IsUnitGrouped ~= nil and IsUnitGrouped("player")
+    end
+    return false
+end
 
 local function RegisterDeathFilter(listenerName, expectedResult, callback)
     EVENT_MANAGER:UnregisterForEvent(listenerName, EVENT_COMBAT_EVENT)
@@ -55,6 +68,8 @@ function CombatTracker:Initialize()
     if not EVENT_MANAGER or not EVENT_COMBAT_EVENT then return end
 
     self._isRegistered = false
+    self._recentKilledOrder = {}
+    self._recentKilledSet = {}
     if Addon.QuestRepository and not self._repoListenerAdded then
         Addon.QuestRepository:RegisterListener(function(eventType)
             if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" and eventType ~= "QUEST_PROGRESS" then
@@ -67,6 +82,22 @@ function CombatTracker:Initialize()
     self:UpdateRegistration()
 end
 
+function CombatTracker:MarkUnitKilled(targetUnitId)
+    if not targetUnitId or targetUnitId <= 0 then return end
+    self._recentKilledOrder = self._recentKilledOrder or {}
+    self._recentKilledSet = self._recentKilledSet or {}
+    if self._recentKilledSet[targetUnitId] then return end
+
+    table.insert(self._recentKilledOrder, targetUnitId)
+    self._recentKilledSet[targetUnitId] = true
+    if #self._recentKilledOrder > MAX_RECENT_KILLED_UNITS then
+        local oldest = table.remove(self._recentKilledOrder, 1)
+        if oldest then
+            self._recentKilledSet[oldest] = nil
+        end
+    end
+end
+
 function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, abilityGraphic,
                                      abilityActionSlotType, sourceName, sourceType, targetName,
                                      targetType, hitValue, powerType, damageType, log,
@@ -77,6 +108,14 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         or (ACTION_RESULT_DIED_XP and result == ACTION_RESULT_DIED_XP)
 
     if not isDeath then
+        return
+    end
+
+    if not IsAllowedKillSource(sourceType) then
+        return
+    end
+
+    if targetUnitId and targetUnitId > 0 and self._recentKilledSet and self._recentKilledSet[targetUnitId] then
         return
     end
 
@@ -93,6 +132,8 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
     if not recorded or not updatedQuest then
         return
     end
+
+    self:MarkUnitKilled(targetUnitId)
 
     if Addon.Announcements then
         if justCompleted then
