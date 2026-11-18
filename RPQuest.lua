@@ -12,10 +12,6 @@ Addon.name = Addon.Constants.METADATA.NAME
 Addon.Locale:Initialize()
 
 function Addon:Initialize()
-    if not Addon.Locale.activeLang then
-        Addon.Locale:Initialize()
-    end
-
     local defaults = Addon.QuestRepository:GetDefaults()
     local svName = Addon.Constants.SAVED_VARS.NAME
     local svVersion = Addon.Constants.SAVED_VARS.VERSION
@@ -34,16 +30,11 @@ function Addon:Initialize()
 end
 
 function Addon:OnCaptureTargetKeybind()
-    if Addon.TargetCapture then
-        return Addon.TargetCapture:CaptureFromReticle()
-    end
-    return nil
+    return Addon.TargetCapture:CaptureFromReticle()
 end
 
 function Addon:OnToggleJournalKeybind()
-    if Addon.JournalTab then
-        Addon.JournalTab:ToggleTab()
-    end
+    Addon.JournalTab:ToggleTab()
 end
 
 function Addon:HandleSlashCommand(args)
@@ -51,9 +42,7 @@ function Addon:HandleSlashCommand(args)
     if cmd == "capture" or cmd == "target" then
         self:OnCaptureTargetKeybind()
     elseif cmd == "map" then
-        if Addon.WorldMapArea then
-            Addon.WorldMapArea:ShowQuestOnMap()
-        end
+        Addon.WorldMapArea:ShowQuestOnMap()
     else
         self:OnToggleJournalKeybind()
     end

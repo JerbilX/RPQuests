@@ -872,6 +872,36 @@ RunTest("Bugfixes: DeleteQuest resets dangling draft, JournalTab scrolls >14 row
     AssertEqual(RPQuest.JournalTab.rowBindings[1].questId, 4, "First visible row reflects scrolled offset")
 end)
 
+RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borrado y ciclo _dirty", function()
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.JournalTab:Initialize()
+    mockState.reticleExists = true
+    mockState.reticleName = "Bandido"
+
+    -- 1. Título por defecto usa nextId y no colisiona tras borrar
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local qa = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local qb = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
+    RPQuest.QuestRepository:DeleteQuest(qa.id)
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local qc = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
+    AssertTrue(qb.title ~= qc.title, "Default title uses nextId and does not collide after deletion")
+
+    -- 2. btnActivate se reancla debajo de shareBg cuando shareCodeVisible=true
+    RPQuest.JournalTab:SelectQuest(qc.id)
+    AssertEqual(RPQuest.JournalTab.btnActivate._anchors[1].relTo, RPQuest.JournalTab.detailObjText, "btnActivate anchored to detailObjText when share hidden")
+    RPQuest.JournalTab:OnShareClicked()
+    AssertEqual(RPQuest.JournalTab.btnActivate._anchors[1].relTo, RPQuest.JournalTab.shareBg, "btnActivate anchored to shareBg when share visible")
+
+    -- 3. _dirty se marca cuando panel está oculto y se limpia al abrir
+    RPQuest.JournalTab.panel:SetHidden(true)
+    RPQuest.QuestRepository:SetActiveQuest(qb.id)
+    AssertEqual(RPQuest.JournalTab._dirty, true, "_dirty set while panel is hidden")
+    RPQuest.JournalTab:OpenTab()
+    AssertEqual(RPQuest.JournalTab._dirty, false, "_dirty cleared after OpenTab")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)

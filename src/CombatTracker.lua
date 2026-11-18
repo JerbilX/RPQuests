@@ -36,7 +36,7 @@ end
 function CombatTracker:UpdateRegistration()
     if not EVENT_MANAGER or not EVENT_COMBAT_EVENT then return end
 
-    local hasActiveQuest = (Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest() ~= nil)
+    local hasActiveQuest = (Addon.QuestRepository:GetActiveQuest() ~= nil)
     if not hasActiveQuest then
         if self._isRegistered then
             EVENT_MANAGER:UnregisterForEvent(LISTENER_DIED, EVENT_COMBAT_EVENT)
@@ -62,7 +62,7 @@ function CombatTracker:Initialize()
     self._isRegistered = false
     self._recentKilledOrder = {}
     self._recentKilledSet = {}
-    if Addon.QuestRepository and not self._repoListenerAdded then
+    if not self._repoListenerAdded then
         Addon.QuestRepository:RegisterListener(function(eventType)
             if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" and eventType ~= "QUEST_PROGRESS" then
                 self:UpdateRegistration()
@@ -111,18 +111,12 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         return
     end
 
-    local activeQuest, matchedTarget
-    if Addon.QuestRepository then
-        activeQuest, matchedTarget = Addon.QuestRepository:FindPendingTarget(targetName)
-    end
+    local activeQuest, matchedTarget = Addon.QuestRepository:FindPendingTarget(targetName)
     if not activeQuest or not matchedTarget then
         return
     end
 
-    local playerContext = nil
-    if Addon.TargetCapture and Addon.TargetCapture.GetPlayerMapContext then
-        playerContext = Addon.TargetCapture:GetPlayerMapContext()
-    end
+    local playerContext = Addon.TargetCapture:GetPlayerMapContext()
 
     local recorded, updatedQuest, justCompleted, finalTarget = Addon.QuestRepository:RecordTargetEliminated(
         targetName, playerContext, activeQuest, matchedTarget
@@ -133,11 +127,9 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
 
     self:MarkUnitKilled(targetUnitId)
 
-    if Addon.Announcements then
-        if justCompleted then
-            Addon.Announcements:AnnounceQuestCompleted(updatedQuest, finalTarget)
-        else
-            Addon.Announcements:AnnounceQuestProgress(updatedQuest, finalTarget)
-        end
+    if justCompleted then
+        Addon.Announcements:AnnounceQuestCompleted(updatedQuest, finalTarget)
+    else
+        Addon.Announcements:AnnounceQuestProgress(updatedQuest, finalTarget)
     end
 end
