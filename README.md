@@ -70,7 +70,6 @@ RPQuest/
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y coordenadas de mapa
 │   ├── CombatTracker.lua    # Seguimiento de bajas (EVENT_COMBAT_EVENT)
 │   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
-│   ├── HudTracker.lua       # Mini-tracker de misión activa en el HUD
 │   └── JournalTab.lua       # Pestaña e interfaz completa en el Diario de Misiones
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)
 └── tests/

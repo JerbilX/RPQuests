@@ -16,7 +16,6 @@ src/Announcements.lua
 src/TargetCapture.lua
 src/CombatTracker.lua
 src/WorldMapArea.lua
-src/HudTracker.lua
 src/JournalTab.lua
 RPQuest.lua
 Bindings.xml
