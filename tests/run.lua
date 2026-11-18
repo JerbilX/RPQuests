@@ -157,16 +157,88 @@ GetMapPlayerPosition = function(unitTag)
 end
 
 GetMapType = function()
-    return MAPTYPE_ZONE
+    return mockState.mapType or MAPTYPE_ZONE
 end
 
--- Load core modules under test
+local mockPinManager = {
+    _customPins = {},
+    _createdPins = {},
+    _nextPinId = 500,
+    AddCustomPin = function(self, pinTypeString, layoutCallback, resizeCallback, pinLayoutData, pinTooltipCreator)
+        self._nextPinId = self._nextPinId + 1
+        _G[pinTypeString] = self._nextPinId
+        self._customPins[self._nextPinId] = {
+            pinTypeString = pinTypeString,
+            layoutCallback = layoutCallback,
+            resizeCallback = resizeCallback,
+            pinLayoutData = pinLayoutData,
+            pinTooltipCreator = pinTooltipCreator,
+            enabled = false,
+        }
+    end,
+    SetCustomPinEnabled = function(self, pinTypeId, enabled)
+        if self._customPins[pinTypeId] then
+            self._customPins[pinTypeId].enabled = enabled
+        end
+    end,
+    RefreshCustomPins = function(self, optionalPinType)
+        self._createdPins = {}
+        for id, data in pairs(self._customPins) do
+            if (optionalPinType == nil or optionalPinType == id) and data.enabled and data.layoutCallback then
+                data.layoutCallback(self)
+            end
+        end
+    end,
+    CreatePin = function(self, pinTypeId, pinTag, xLoc, yLoc, radius)
+        local p = {
+            pinTypeId = pinTypeId,
+            pinTag = pinTag,
+            x = xLoc,
+            y = yLoc,
+            radius = radius,
+        }
+        table.insert(self._createdPins, p)
+        return p
+    end,
+}
+
+ZO_WorldMap_GetPinManager = function()
+    return mockPinManager
+end
+
+ZO_WorldMap_PanToNormalizedPosition = function(x, y)
+    mockState.lastPannedX = x
+    mockState.lastPannedY = y
+end
+
+CENTER_SCREEN_ANNOUNCE = {
+    CreateMessageParams = function(self, category, sound)
+        local p = { category = category, sound = sound }
+        function p:SetText(mainText, subText)
+            self.mainText = mainText
+            self.subText = subText
+        end
+        function p:SetCSAType(csaType)
+            self.csaType = csaType
+        end
+        return p
+    end,
+    AddMessageWithParams = function(self, params)
+        table.insert(mockState.csaMessages, params)
+    end,
+}
+
+-- Load core and gameplay modules under test
 dofile("src/Constants.lua")
 dofile("lang/en.lua")
 dofile("lang/es.lua")
 dofile("src/Locale.lua")
 dofile("src/ShareCodec.lua")
 dofile("src/QuestRepository.lua")
+dofile("src/Announcements.lua")
+dofile("src/TargetCapture.lua")
+dofile("src/CombatTracker.lua")
+dofile("src/WorldMapArea.lua")
 
 local passed = 0
 local failed = 0
@@ -370,6 +442,107 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
     AssertTrue(RPQuest.QuestRepository:DeleteQuest(imported.id), "Delete imported quest")
     AssertTrue(RPQuest.QuestRepository:DeleteQuest(quest.id), "Delete original quest")
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 0, "All quests deleted")
+end)
+
+-- ============================================================================
+-- 4. Tests de TargetCapture, CombatTracker, Announcements y WorldMapArea
+-- ============================================================================
+RunTest("TargetCapture validates reticle unit and captures map coordinates into draft", function()
+    mockState.language = "es"
+    RPQuest.Locale:Initialize("es")
+    RPQuest.QuestRepository:Initialize({})
+
+    -- Sin objetivo bajo retícula
+    mockState.reticleExists = false
+    local d1, _ = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(d1, nil, "Must reject empty reticle")
+
+    -- Objetivo es otro jugador
+    mockState.reticleExists = true
+    mockState.reticleIsPlayer = true
+    local d2, _ = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(d2, nil, "Must reject player unit")
+
+    -- Objetivo ya muerto
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = true
+    local d3, _ = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(d3, nil, "Must reject dead unit")
+
+    -- Objetivo NPC válido
+    mockState.reticleIsDead = false
+    mockState.reticleName = "Jefe Bandido^m"
+    mockState.mapId = 45
+    mockState.zoneId = 104
+    mockState.mapName = "Deshaan"
+    mockState.playerX = 0.3300
+    mockState.playerY = 0.7700
+
+    local draft = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertTrue(draft ~= nil, "Valid NPC must be captured into draft")
+    AssertEqual(draft.targetName, "Jefe Bandido", "Captured target name normalized")
+    AssertEqual(draft.mapId, 45, "Captured mapId matches")
+    AssertEqual(draft.mapName, "Deshaan", "Captured mapName matches")
+    AssertEqual(draft.targetX, 0.3300, "Captured targetX matches")
+    AssertEqual(draft.targetY, 0.7700, "Captured targetY matches")
+    AssertTrue(draft.areaCenterX ~= nil and draft.areaCenterY ~= nil, "Offset area center generated")
+end)
+
+RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, hidden when completed", function()
+    mockState.language = "es"
+    RPQuest.Locale:Initialize("es")
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.CombatTracker:Initialize()
+    RPQuest.WorldMapArea:Initialize()
+    mockState.csaMessages = {}
+
+    mockState.reticleExists = true
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = false
+    mockState.reticleName = "Cultista de Gusano"
+    mockState.mapId = 45
+    mockState.zoneId = 104
+    mockState.mapName = "Deshaan"
+    mockState.playerX = 0.50
+    mockState.playerY = 0.50
+
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local q = RPQuest.QuestRepository:SaveDraft("Amenaza del Culto", "Elimina a 2 cultistas.", 2, 0.08)
+    AssertTrue(q ~= nil, "Quest created")
+
+    -- En el mismo mapa (mapId 45) debe dibujarse 1 pin de área grande
+    RPQuest.WorldMapArea:RefreshPins()
+    AssertEqual(#mockPinManager._createdPins, 1, "Search area pin must be rendered on quest mapId")
+    AssertEqual(mockPinManager._createdPins[1].radius, 0.08, "Pin uses quest area radius")
+
+    -- En otro mapa (mapId 99) no debe dibujarse ningún pin
+    mockState.mapId = 99
+    RPQuest.WorldMapArea:RefreshPins()
+    AssertEqual(#mockPinManager._createdPins, 0, "No pin rendered on unrelated mapId")
+
+    -- Volver al mapa 45 y disparar EVENT_COMBAT_EVENT (1ra muerte)
+    mockState.mapId = 45
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED, false, "Ataque", 0, 0,
+        "Jugador", 1, "Cultista de Gusano^m", 2,
+        1500, 0, 0, false, 1, 2, 100
+    )
+    AssertEqual(q.currentCount, 1, "Kill count incremented to 1")
+    AssertEqual(q.completed, false, "Not yet completed")
+    AssertEqual(#mockState.csaMessages, 1, "1 CSA progress message emitted")
+
+    -- Disparar 2da muerte -> completa misión y oculta el área del mapa
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED_XP, false, "Ataque", 0, 0,
+        "Jugador", 1, "Cultista de Gusano", 2,
+        1500, 0, 0, false, 1, 2, 100
+    )
+    AssertTrue(q.completed, "Quest completed on second kill")
+    AssertEqual(#mockState.csaMessages, 2, "CSA completion message emitted")
+    AssertEqual(mockState.csaMessages[2].sound, SOUNDS.QUEST_COMPLETED, "Played QUEST_COMPLETED sound")
+    AssertEqual(#mockPinManager._createdPins, 0, "Search area pin automatically removed when quest completes")
 end)
 
 if failed > 0 then
