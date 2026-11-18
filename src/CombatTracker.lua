@@ -26,18 +26,10 @@ end
 local function RegisterDeathFilter(listenerName, expectedResult, callback)
     EVENT_MANAGER:UnregisterForEvent(listenerName, EVENT_COMBAT_EVENT)
     if not expectedResult then return end
-    EVENT_MANAGER:RegisterForEvent(listenerName, EVENT_COMBAT_EVENT, function(eventCode, result, ...)
-        if result == expectedResult then
-            callback(eventCode, result, ...)
-        end
-    end)
+    EVENT_MANAGER:RegisterForEvent(listenerName, EVENT_COMBAT_EVENT, callback)
     if EVENT_MANAGER.AddFilterForEvent then
-        if REGISTER_FILTER_COMBAT_RESULT then
-            EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_COMBAT_RESULT, expectedResult)
-        end
-        if REGISTER_FILTER_IS_ERROR then
-            EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_IS_ERROR, false)
-        end
+        EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_COMBAT_RESULT, expectedResult)
+        EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_IS_ERROR, false)
     end
 end
 
@@ -119,7 +111,11 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         return
     end
 
-    if not Addon.QuestRepository or not Addon.QuestRepository:FindPendingTarget(targetName) then
+    local activeQuest, matchedTarget
+    if Addon.QuestRepository then
+        activeQuest, matchedTarget = Addon.QuestRepository:FindPendingTarget(targetName)
+    end
+    if not activeQuest or not matchedTarget then
         return
     end
 
@@ -128,7 +124,9 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         playerContext = Addon.TargetCapture:GetPlayerMapContext()
     end
 
-    local recorded, updatedQuest, justCompleted, matchedTarget = Addon.QuestRepository:RecordTargetEliminated(targetName, playerContext)
+    local recorded, updatedQuest, justCompleted, finalTarget = Addon.QuestRepository:RecordTargetEliminated(
+        targetName, playerContext, activeQuest, matchedTarget
+    )
     if not recorded or not updatedQuest then
         return
     end
@@ -137,9 +135,9 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
 
     if Addon.Announcements then
         if justCompleted then
-            Addon.Announcements:AnnounceQuestCompleted(updatedQuest, matchedTarget)
+            Addon.Announcements:AnnounceQuestCompleted(updatedQuest, finalTarget)
         else
-            Addon.Announcements:AnnounceQuestProgress(updatedQuest, matchedTarget)
+            Addon.Announcements:AnnounceQuestProgress(updatedQuest, finalTarget)
         end
     end
 end

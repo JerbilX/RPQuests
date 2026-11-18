@@ -62,7 +62,6 @@ local function AreAllTargetsCompleted(targets)
 end
 
 local function CreateDefaultDraft()
-    local defaultRadius = (Addon.Constants and Addon.Constants.AREA_RADIUS and Addon.Constants.AREA_RADIUS.MEDIUM) or 0.075
     return {
         editingQuestId = nil,
         title = "",
@@ -76,7 +75,7 @@ local function CreateDefaultDraft()
         targetY = nil,
         areaCenterX = nil,
         areaCenterY = nil,
-        areaRadius = defaultRadius,
+        areaRadius = Addon.Constants.AREA_RADIUS.MEDIUM,
     }
 end
 
@@ -165,8 +164,8 @@ function QuestRepository:ComputeOffsetCenter(targetX, targetY, radius, randomAng
     local tx = Clamp(tonumber(targetX) or 0.5, 0.01, 0.99)
     local ty = Clamp(tonumber(targetY) or 0.5, 0.01, 0.99)
 
-    local minRatio = (Addon.Constants and Addon.Constants.AREA_OFFSET and Addon.Constants.AREA_OFFSET.MIN_RATIO) or 0.25
-    local maxRatio = (Addon.Constants and Addon.Constants.AREA_OFFSET and Addon.Constants.AREA_OFFSET.MAX_RATIO) or 0.65
+    local minRatio = Addon.Constants.AREA_OFFSET.MIN_RATIO
+    local maxRatio = Addon.Constants.AREA_OFFSET.MAX_RATIO
 
     local uAngle = (randomAngle01 ~= nil) and randomAngle01 or math.random()
     local uDist = (randomDist01 ~= nil) and randomDist01 or math.random()
@@ -335,7 +334,7 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
         draft.targetY = ty
     end
 
-    local radius = draft.areaRadius or ((Addon.Constants and Addon.Constants.AREA_RADIUS and Addon.Constants.AREA_RADIUS.MEDIUM) or 0.075)
+    local radius = draft.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM
     draft.areaRadius = radius
     draft.areaCenterX, draft.areaCenterY = self:ComputeOffsetCenter(draft.targetX, draft.targetY, radius)
 
@@ -610,8 +609,11 @@ function QuestRepository:FindPendingTarget(rawTargetName)
     return nil, nil
 end
 
-function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext)
-    local activeQuest, matchedTarget = self:FindPendingTarget(rawTargetName)
+function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, preMatchedQuest, preMatchedTarget)
+    local activeQuest, matchedTarget = preMatchedQuest, preMatchedTarget
+    if not activeQuest or not matchedTarget then
+        activeQuest, matchedTarget = self:FindPendingTarget(rawTargetName)
+    end
     if not activeQuest or not matchedTarget then
         return false, nil, false, nil
     end

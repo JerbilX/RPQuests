@@ -20,15 +20,15 @@ local function CreateStyledButton(name, parent, width, height, text, onClick)
     local btn = WINDOW_MANAGER:CreateControl(name, parent, CT_BUTTON)
     btn:SetDimensions(width, height)
     btn:SetMouseEnabled(true)
-    if btn.SetFont then btn:SetFont("ZoFontGameBold") end
-    if btn.SetNormalFontColor then btn:SetNormalFontColor(0.91, 0.83, 0.63, 1) end
-    if btn.SetMouseOverFontColor then btn:SetMouseOverFontColor(1, 1, 1, 1) end
+    btn:SetFont("ZoFontGameBold")
+    btn:SetNormalFontColor(0.91, 0.83, 0.63, 1)
+    btn:SetMouseOverFontColor(1, 1, 1, 1)
 
     local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", btn, CT_BACKDROP)
     bg:SetDimensions(width, height)
     bg:SetAnchor(TOPLEFT, btn, TOPLEFT, 0, 0)
-    if bg.SetCenterColor then bg:SetCenterColor(0.08, 0.08, 0.08, 0.78) end
-    if bg.SetEdgeColor then bg:SetEdgeColor(0.65, 0.56, 0.34, 0.85) end
+    bg:SetCenterColor(0.08, 0.08, 0.08, 0.78)
+    bg:SetEdgeColor(0.65, 0.56, 0.34, 0.85)
     btn._bg = bg
 
     btn:SetText(text or "")
@@ -45,51 +45,46 @@ local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, 
     local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", parent, CT_BACKDROP)
     bg:SetDimensions(width, height)
     bg:SetMouseEnabled(true)
-    if bg.SetCenterColor then bg:SetCenterColor(0.04, 0.04, 0.04, 0.82) end
-    if bg.SetEdgeColor then bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80) end
+    bg:SetCenterColor(0.04, 0.04, 0.04, 0.82)
+    bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
 
     local edit = WINDOW_MANAGER:CreateControl(name, bg, CT_EDITBOX)
     edit:SetDimensions(width - 12, height - 8)
     edit:SetAnchor(TOPLEFT, bg, TOPLEFT, 6, 4)
     edit:SetMouseEnabled(true)
-    if edit.SetEditEnabled then edit:SetEditEnabled(true) end
-    if edit.SetFont then edit:SetFont("ZoFontGame") end
-    if edit.SetColor then edit:SetColor(1, 1, 1, 1) end
-    if edit.SetMaxInputChars then edit:SetMaxInputChars(maxChars or 256) end
-    if isMultiLine then
-        if edit.SetMultiLine then edit:SetMultiLine(true) end
-        if edit.SetNewLineEnabled then edit:SetNewLineEnabled(true) end
-    else
-        if edit.SetMultiLine then edit:SetMultiLine(false) end
-        if edit.SetNewLineEnabled then edit:SetNewLineEnabled(false) end
-    end
+    edit:SetEditEnabled(true)
+    edit:SetFont("ZoFontGame")
+    edit:SetColor(1, 1, 1, 1)
+    edit:SetMaxInputChars(maxChars or 256)
+    edit:SetMultiLine(isMultiLine)
+    edit:SetNewLineEnabled(isMultiLine)
     edit:SetText("")
 
     local function FocusEditBox()
-        if edit.SetEditEnabled then edit:SetEditEnabled(true) end
-        if edit.TakeFocus then edit:TakeFocus() end
+        edit:SetEditEnabled(true)
+        edit:TakeFocus()
     end
 
     bg:SetHandler("OnMouseDown", FocusEditBox)
     edit:SetHandler("OnMouseDown", FocusEditBox)
     edit:SetHandler("OnEscape", function(ctrl)
-        if ctrl.LoseFocus then ctrl:LoseFocus() end
+        ctrl:LoseFocus()
     end)
     if not isMultiLine then
         edit:SetHandler("OnEnter", function(ctrl)
-            if ctrl.LoseFocus then ctrl:LoseFocus() end
+            ctrl:LoseFocus()
         end)
     end
     edit:SetHandler("OnFocusGained", function()
         edit._focused = true
-        if bg.SetEdgeColor then bg:SetEdgeColor(0.95, 0.85, 0.50, 1.0) end
+        bg:SetEdgeColor(0.95, 0.85, 0.50, 1.0)
         if PlaySound and SOUNDS and SOUNDS.EDIT_CLICK then
             PlaySound(SOUNDS.EDIT_CLICK)
         end
     end)
     edit:SetHandler("OnFocusLost", function()
         edit._focused = false
-        if bg.SetEdgeColor then bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80) end
+        bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
     end)
     if onTextChanged then
         edit:SetHandler("OnTextChanged", function(ctrl)
@@ -147,12 +142,18 @@ function JournalTab:Initialize()
                     self.viewMode = VIEW_MODE.EDITOR
                 end
             elseif eventType == "DRAFT_UPDATED" then
-                if self.viewMode == VIEW_MODE.EDITOR then
+                if self.viewMode == VIEW_MODE.EDITOR and not self.panel:IsHidden() then
                     self:RefreshEditorPane()
+                else
+                    self._dirty = true
                 end
                 return
             end
-            self:Refresh()
+            if self.panel:IsHidden() then
+                self._dirty = true
+            else
+                self:Refresh()
+            end
         end)
     end
 
@@ -312,9 +313,7 @@ function JournalTab:BuildDetailPane(parent)
     local divider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDivider", pane, CT_TEXTURE)
     divider:SetDimensions(512, 4)
     divider:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 250)
-    if divider.SetTexture then
-        divider:SetTexture((Addon.Constants and Addon.Constants.UI and Addon.Constants.UI.DIVIDER_TEXTURE) or "EsoUI/Art/Quest/questJournal_divider.dds")
-    end
+    divider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
 
     local objHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjHeader", pane, CT_LABEL)
     objHeader:SetDimensions(520, 24)
@@ -470,7 +469,7 @@ function JournalTab:BuildEditorPane(parent)
     if lblAreaSize.SetFont then lblAreaSize:SetFont("ZoFontGameBold") end
     self.lblAreaSize = lblAreaSize
 
-    local radii = (Addon.Constants and Addon.Constants.AREA_RADIUS) or { SMALL = 0.045, MEDIUM = 0.075, LARGE = 0.115 }
+    local radii = Addon.Constants.AREA_RADIUS
 
     self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", pane, 110, 30, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.SMALL })
@@ -543,24 +542,20 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
     local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
     if not qj then return end
 
-    local tabDescriptor = (Addon.Constants and Addon.Constants.UI and Addon.Constants.UI.TAB_DESCRIPTOR) or "rpquest_custom_quests"
+    local tabDescriptor = Addon.Constants.UI.TAB_DESCRIPTOR
     local tabCategoryName = "SI_RPQUEST_JOURNAL_TAB_TITLE"
-    if ZO_CreateStringId then
-        ZO_CreateStringId(tabCategoryName, Addon.Locale:Get("TAB_TITLE"))
-    else
-        _G[tabCategoryName] = Addon.Locale:Get("TAB_TITLE")
-    end
+    ZO_CreateStringId(tabCategoryName, Addon.Locale:Get("TAB_TITLE"))
     self.tabCategoryName = _G[tabCategoryName] or tabCategoryName
     self.tabDescriptor = tabDescriptor
 
-    local uiConsts = (Addon.Constants and Addon.Constants.UI) or {}
+    local uiConsts = Addon.Constants.UI
     local tabData = {
         categoryName = self.tabCategoryName,
         descriptor = tabDescriptor,
-        normal = uiConsts.ICON_TAB_UP or "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_up.dds",
-        pressed = uiConsts.ICON_TAB_DOWN or "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_down.dds",
-        highlight = uiConsts.ICON_TAB_OVER or "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_over.dds",
-        disabled = uiConsts.ICON_TAB_DISABLED or "EsoUI/Art/Journal/journal_quests_tabIcon_disabled.dds",
+        normal = uiConsts.ICON_TAB_UP,
+        pressed = uiConsts.ICON_TAB_DOWN,
+        highlight = uiConsts.ICON_TAB_OVER,
+        disabled = uiConsts.ICON_TAB_DISABLED,
         callback = function()
             if qj.SetMode then
                 qj:SetMode(tabDescriptor)
@@ -580,33 +575,16 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
         EnsureTabAdded()
     end
 
-    if ZO_PostHook then
-        ZO_PostHook(qj, "OnShowing", function(qjSelf)
-            EnsureTabAdded()
-            if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
-                qjSelf.tabs:SelectFragment(self.tabCategoryName)
-                self:Refresh()
-            end
-            if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
-                qjSelf.tabs:UpdateButtons()
-            end
-        end)
-    else
-        local origOnShowing = qj.OnShowing
-        qj.OnShowing = function(qjSelf, ...)
-            if origOnShowing then
-                origOnShowing(qjSelf, ...)
-            end
-            EnsureTabAdded()
-            if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
-                qjSelf.tabs:SelectFragment(self.tabCategoryName)
-                self:Refresh()
-            end
-            if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
-                qjSelf.tabs:UpdateButtons()
-            end
+    ZO_PostHook(qj, "OnShowing", function(qjSelf)
+        EnsureTabAdded()
+        if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
+            qjSelf.tabs:SelectFragment(self.tabCategoryName)
+            self:Refresh()
         end
-    end
+        if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
+            qjSelf.tabs:UpdateButtons()
+        end
+    end)
 end
 
 function JournalTab:SelectQuest(questId)
@@ -735,7 +713,7 @@ function JournalTab:OpenTab()
 
     local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
     if qj and qj.SetMode then
-        qj:SetMode(self.tabDescriptor or "rpquest_custom_quests")
+        qj:SetMode(self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR)
     end
 
     if SCENE_MANAGER and SCENE_MANAGER.Show then
@@ -759,7 +737,7 @@ function JournalTab:ToggleTab()
     local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
     local sceneShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
 
-    if sceneShowing and qj and qj.mode == (self.tabDescriptor or "rpquest_custom_quests") then
+    if sceneShowing and qj and qj.mode == (self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR) then
         SCENE_MANAGER:Hide("questJournal")
         if self.panel then
             self.panel:SetHidden(true)
@@ -773,9 +751,17 @@ function JournalTab:Refresh()
     if not self.panel then return end
 
     local allQuests = Addon.QuestRepository:GetAllQuests()
-    local activeAndAvail = Addon.QuestRepository:GetActiveAndAvailableQuests()
-    local completedQuests = Addon.QuestRepository:GetCompletedQuests()
+    local activeAndAvail = {}
+    local completedQuests = {}
+    for _, q in ipairs(allQuests) do
+        if q.completed then
+            table.insert(completedQuests, q)
+        else
+            table.insert(activeAndAvail, q)
+        end
+    end
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    self._dirty = false
 
     -- Asegurar selección por defecto si estamos en vista DETAIL
     if self.viewMode == VIEW_MODE.DETAIL then
@@ -1009,7 +995,7 @@ function JournalTab:RefreshEditorPane()
     end
 
     self.lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))
-    local radii = (Addon.Constants and Addon.Constants.AREA_RADIUS) or { SMALL = 0.045, MEDIUM = 0.075, LARGE = 0.115 }
+    local radii = Addon.Constants.AREA_RADIUS
     local curRad = draft.areaRadius or radii.MEDIUM
 
     local function FormatSelected(label, isSelected)
