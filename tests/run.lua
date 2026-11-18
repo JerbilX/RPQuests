@@ -408,7 +408,15 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
     RPQuest.Locale:Initialize("es")
     RPQuest.QuestRepository:Initialize({})
 
-    -- 1. Capturar objetivo en borrador
+    -- 1. Capturar objetivo en borrador (2 veces para inferir requiredCount = 2)
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Nigromante Oscuro^m",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.40,
+        targetY = 0.60,
+    })
     RPQuest.QuestRepository:SetDraftCapturedTarget({
         targetName = "Nigromante Oscuro^m",
         mapId = 32,
@@ -418,8 +426,8 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
         targetY = 0.60,
     })
 
-    -- 2. Guardar misión con 2 bajas requeridas
-    local quest, err = RPQuest.QuestRepository:SaveDraft("Purga en el Bosque", "Elimina a los nigromantes.", 2, 0.075)
+    -- 2. Guardar misión con 2 bajas requeridas inferidas
+    local quest, err = RPQuest.QuestRepository:SaveDraft("Purga en el Bosque", "Elimina a los nigromantes.", 0.075)
     AssertTrue(quest ~= nil, "Quest should be created: " .. tostring(err))
     AssertEqual(quest.targetName, "Nigromante Oscuro", "Gender suffix stripped")
     AssertEqual(quest.requiredCount, 2, "Required count is 2")
@@ -427,7 +435,7 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
 
     -- 3. Editar la misión
     RPQuest.QuestRepository:LoadQuestIntoDraft(quest.id)
-    local updated = RPQuest.QuestRepository:SaveDraft("Purga Real en el Bosque", "Nueva descripción", 2, 0.075)
+    local updated = RPQuest.QuestRepository:SaveDraft("Purga Real en el Bosque", "Nueva descripción", 0.075)
     AssertEqual(updated.title, "Purga Real en el Bosque", "Quest title updated in place")
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 1, "Still 1 quest after edit")
 
@@ -548,8 +556,25 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
     mockState.playerY = 0.50
 
     RPQuest.TargetCapture:CaptureFromReticle()
-    local q = RPQuest.QuestRepository:SaveDraft("Amenaza del Culto", "Elimina a 2 cultistas.", 2, 0.08)
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local q = RPQuest.QuestRepository:SaveDraft("Amenaza del Culto", "Elimina a 2 cultistas.", 0.08)
     AssertTrue(q ~= nil, "Quest created")
+
+    -- Verificar que una muerte de otro NPC no consulte el mapa innecesariamente
+    local mapCalls = 0
+    local origSetMap = SetMapToPlayerLocation
+    SetMapToPlayerLocation = function()
+        mapCalls = mapCalls + 1
+        return origSetMap()
+    end
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED, false, "Ataque", 0, 0,
+        "Jugador", 1, "Araña del Bosque", 2,
+        500, 0, 0, false, 1, 2, 100
+    )
+    AssertEqual(mapCalls, 0, "Unrelated NPC death must not invoke SetMapToPlayerLocation")
+    SetMapToPlayerLocation = origSetMap
 
     -- En el mismo mapa (mapId 45) debe dibujarse 1 pin de área grande
     RPQuest.WorldMapArea:RefreshPins()
@@ -650,6 +675,12 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars,
     RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
     RPQuest.JournalTab:OnConfirmImportClicked()
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
+
+    -- Verificar que salir de Edit mode seleccionando otra misión limpia editingQuestId
+    RPQuest.JournalTab:OpenEditEditor(active.id)
+    AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, active.id, "Draft has editingQuestId while in Edit mode")
+    RPQuest.JournalTab:SelectQuest(active.id)
+    AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, nil, "Selecting a quest in list clears orphaned editingQuestId")
 end)
 
 RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs + Create Quest button", function()
@@ -724,6 +755,12 @@ RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs +
     AssertEqual(draftMapSwitch.targets[1].name, "Guardia de Deshaan", "Only the new map target remains")
     AssertEqual(draftMapSwitch.targetX, 0.80, "Centroid X is strictly from the new map")
     AssertEqual(draftMapSwitch.targetY, 0.80, "Centroid Y is strictly from the new map")
+
+    -- Caso D: ClearDraftTargets limpia también metadatos del mapa
+    RPQuest.QuestRepository:ClearDraftTargets()
+    AssertEqual(draftMapSwitch.mapId, 0, "ClearDraftTargets resets mapId to 0")
+    AssertEqual(draftMapSwitch.zoneId, 0, "ClearDraftTargets resets zoneId to 0")
+    AssertEqual(draftMapSwitch.mapName, "", "ClearDraftTargets resets mapName to empty")
 end)
 
 if failed > 0 then

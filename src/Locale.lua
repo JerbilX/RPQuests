@@ -28,24 +28,11 @@ function Locale:Initialize(overrideLang)
     end
     self.activeLang = lang
 
-    if not self._stringsRegistered then
-        if ZO_CreateStringId then
-            ZO_CreateStringId("SI_KEYBINDINGS_CATEGORY_RPQUEST", self:Get("SI_KEYBINDINGS_CATEGORY_RPQUEST"))
-            ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET", self:Get("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET"))
-            ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL", self:Get("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL"))
-            self._stringsRegistered = true
-        elseif SafeAddString then
-            if SI_KEYBINDINGS_CATEGORY_RPQUEST then
-                SafeAddString(SI_KEYBINDINGS_CATEGORY_RPQUEST, self:Get("SI_KEYBINDINGS_CATEGORY_RPQUEST"), 1)
-            end
-            if SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET then
-                SafeAddString(SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET, self:Get("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET"), 1)
-            end
-            if SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL then
-                SafeAddString(SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL, self:Get("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL"), 1)
-            end
-            self._stringsRegistered = true
-        end
+    if not self._stringsRegistered and ZO_CreateStringId then
+        ZO_CreateStringId("SI_KEYBINDINGS_CATEGORY_RPQUEST", self:Get("SI_KEYBINDINGS_CATEGORY_RPQUEST"))
+        ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET", self:Get("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET"))
+        ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL", self:Get("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL"))
+        self._stringsRegistered = true
     end
 end
 

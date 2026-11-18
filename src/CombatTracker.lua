@@ -14,8 +14,9 @@ local function RegisterDeathFilter(listenerName, expectedResult, callback)
     EVENT_MANAGER:UnregisterForEvent(listenerName, EVENT_COMBAT_EVENT)
     if not expectedResult then return end
     EVENT_MANAGER:RegisterForEvent(listenerName, EVENT_COMBAT_EVENT, function(eventCode, result, ...)
-        if result ~= expectedResult then return end
-        callback(eventCode, result, ...)
+        if result == expectedResult then
+            callback(eventCode, result, ...)
+        end
     end)
     if EVENT_MANAGER.AddFilterForEvent then
         if REGISTER_FILTER_COMBAT_RESULT then
@@ -42,11 +43,11 @@ function CombatTracker:UpdateRegistration()
 
     if self._isRegistered then return end
 
-    local handler = function(...)
+    self._combatHandler = self._combatHandler or function(...)
         self:OnCombatEvent(...)
     end
-    RegisterDeathFilter(LISTENER_DIED, ACTION_RESULT_DIED, handler)
-    RegisterDeathFilter(LISTENER_DIED_XP, ACTION_RESULT_DIED_XP, handler)
+    RegisterDeathFilter(LISTENER_DIED, ACTION_RESULT_DIED, self._combatHandler)
+    RegisterDeathFilter(LISTENER_DIED_XP, ACTION_RESULT_DIED_XP, self._combatHandler)
     self._isRegistered = true
 end
 
@@ -55,8 +56,10 @@ function CombatTracker:Initialize()
 
     self._isRegistered = false
     if Addon.QuestRepository and not self._repoListenerAdded then
-        Addon.QuestRepository:RegisterListener(function()
-            self:UpdateRegistration()
+        Addon.QuestRepository:RegisterListener(function(eventType)
+            if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" and eventType ~= "QUEST_PROGRESS" then
+                self:UpdateRegistration()
+            end
         end)
         self._repoListenerAdded = true
     end
@@ -77,12 +80,7 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         return
     end
 
-    if type(targetName) ~= "string" or targetName == "" then
-        return
-    end
-
-    local activeQuest = Addon.QuestRepository and Addon.QuestRepository:GetActiveQuest()
-    if not activeQuest or activeQuest.completed then
+    if not Addon.QuestRepository or not Addon.QuestRepository:FindPendingTarget(targetName) then
         return
     end
 

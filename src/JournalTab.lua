@@ -136,12 +136,19 @@ function JournalTab:Initialize()
                     self.selectedQuestId = quest.id
                 end
                 self.viewMode = VIEW_MODE.DETAIL
+            elseif eventType == "QUEST_DELETED" then
+                if quest and self.selectedQuestId == quest.id then
+                    self.selectedQuestId = nil
+                end
+                self.shareCodeVisible = false
             elseif eventType == "DRAFT_TARGET_CAPTURED" then
                 if self.viewMode ~= VIEW_MODE.EDITOR then
                     self.viewMode = VIEW_MODE.EDITOR
                 end
-            elseif eventType == "DRAFT_UPDATED" and self.viewMode == VIEW_MODE.EDITOR then
-                self:RefreshEditorPane()
+            elseif eventType == "DRAFT_UPDATED" then
+                if self.viewMode == VIEW_MODE.EDITOR then
+                    self:RefreshEditorPane()
+                end
                 return
             end
             self:Refresh()
@@ -293,14 +300,14 @@ function JournalTab:BuildDetailPane(parent)
     -- Contenedor para mostrar y copiar el código de compartición
     local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", pane, CT_LABEL)
     shareHeader:SetDimensions(520, 22)
-    shareHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 342)
+    shareHeader:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 8)
     if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
     if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
     shareHeader:SetHidden(true)
     self.shareHeader = shareHeader
 
     local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false)
-    shareBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 366)
+    shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
     shareBg:SetHidden(true)
     self.shareBg = shareBg
     self.shareEdit = shareEdit
@@ -335,19 +342,15 @@ function JournalTab:BuildDetailPane(parent)
             if Addon.Announcements then
                 Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
             end
-            self:Refresh()
         end
     end)
     self.btnReset:SetAnchor(TOPLEFT, pane, TOPLEFT, 172, 467)
 
     self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", pane, 160, 32, "", function()
         if self.selectedQuestId and Addon.QuestRepository:DeleteQuest(self.selectedQuestId) then
-            self.selectedQuestId = nil
-            self.shareCodeVisible = false
             if Addon.Announcements then
                 Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
             end
-            self:Refresh()
         end
     end)
     self.btnDelete:SetAnchor(TOPLEFT, pane, TOPLEFT, 344, 467)
@@ -419,7 +422,6 @@ function JournalTab:BuildEditorPane(parent)
         if Addon.QuestRepository then
             Addon.QuestRepository:ClearDraftTargets()
         end
-        self:Refresh()
     end)
     self.btnClearTargets:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 242)
     self.btnClearTargets:SetHidden(true)
@@ -459,10 +461,10 @@ function JournalTab:BuildEditorPane(parent)
     self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 425)
 
     self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, "", function()
+        self.viewMode = VIEW_MODE.DETAIL
         Addon.QuestRepository:ResetDraft()
         self.titleEdit:SetText("")
         self.descEdit:SetText("")
-        self.viewMode = VIEW_MODE.DETAIL
         self:Refresh()
     end)
     self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 425)
@@ -576,6 +578,9 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
 end
 
 function JournalTab:SelectQuest(questId)
+    if Addon.QuestRepository and Addon.QuestRepository:GetDraft().editingQuestId then
+        Addon.QuestRepository:ResetDraft()
+    end
     self.selectedQuestId = questId
     self.viewMode = VIEW_MODE.DETAIL
     self.shareCodeVisible = false
@@ -604,6 +609,9 @@ function JournalTab:OpenEditEditor(questId)
 end
 
 function JournalTab:OpenImportView()
+    if Addon.QuestRepository and Addon.QuestRepository:GetDraft().editingQuestId then
+        Addon.QuestRepository:ResetDraft()
+    end
     self.importCodeEdit:SetText("")
     self.viewMode = VIEW_MODE.IMPORT
     self:Refresh()
@@ -626,13 +634,10 @@ function JournalTab:OnSaveDraftClicked()
 
     self.titleEdit:SetText("")
     self.descEdit:SetText("")
-    self.selectedQuestId = savedQuest.id
-    self.viewMode = VIEW_MODE.DETAIL
 
     if Addon.Announcements then
         Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
     end
-    self:Refresh()
 end
 
 function JournalTab:OnConfirmImportClicked()
@@ -646,13 +651,10 @@ function JournalTab:OnConfirmImportClicked()
     end
 
     self.importCodeEdit:SetText("")
-    self.selectedQuestId = importedQuest.id
-    self.viewMode = VIEW_MODE.DETAIL
 
     if Addon.Announcements then
         Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_IMPORTED", importedQuest.title), false)
     end
-    self:Refresh()
 end
 
 function JournalTab:OnToggleActiveClicked()
@@ -669,7 +671,6 @@ function JournalTab:OnToggleActiveClicked()
             Addon.QuestRepository:SetActiveQuest(q.id)
         end
     end
-    self:Refresh()
 end
 
 function JournalTab:OnShareClicked()
@@ -882,27 +883,14 @@ function JournalTab:RefreshDetailPane()
     self.detailObjHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     local targets = Addon.QuestRepository:EnsureQuestTargets(selectedQuest)
     local objLines = {}
-    if #targets > 0 then
-        for _, t in ipairs(targets) do
-            local line = Addon.Locale:Get(
-                "OBJECTIVE_KILL_FORMAT",
-                t.name or "",
-                t.currentCount or 0,
-                t.requiredCount or 1
-            )
-            if (t.currentCount or 0) >= (t.requiredCount or 1) then
-                line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
-            end
-            table.insert(objLines, line)
-        end
-    else
+    for _, t in ipairs(targets) do
         local line = Addon.Locale:Get(
             "OBJECTIVE_KILL_FORMAT",
-            selectedQuest.targetName or "",
-            selectedQuest.currentCount or 0,
-            selectedQuest.requiredCount or 1
+            t.name or "",
+            t.currentCount or 0,
+            t.requiredCount or 1
         )
-        if selectedQuest.completed then
+        if (t.currentCount or 0) >= (t.requiredCount or 1) then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
         end
         table.insert(objLines, line)

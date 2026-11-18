@@ -246,6 +246,9 @@ function QuestRepository:ClearDraftTargets()
     draft.targetName = ""
     draft.requiredCount = 1
     draft.lastCapturedDisplay = nil
+    draft.mapId = 0
+    draft.zoneId = 0
+    draft.mapName = ""
     draft.targetX = nil
     draft.targetY = nil
     draft.areaCenterX = nil
@@ -322,7 +325,7 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     local matchedEntry = nil
     local cleanKey = cleanName:lower()
     for _, entry in ipairs(draft.targets) do
-        if self:NormalizeName(entry.name):lower() == cleanKey then
+        if (entry.name or ""):lower() == cleanKey then
             matchedEntry = entry
             break
         end
@@ -374,7 +377,7 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return draft
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, requiredCountInput, areaRadiusInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput)
     local draft = self:GetDraft()
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
@@ -384,12 +387,6 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, requiredCountIn
     end
 
     self:EnsureQuestTargets(draft)
-
-    if requiredCountInput ~= nil and #draft.targets == 1 then
-        local overrideCount = math.max(1, math.min(999, math.floor(tonumber(requiredCountInput) or draft.targets[1].requiredCount or 1)))
-        draft.targets[1].requiredCount = overrideCount
-    end
-
     self:SyncQuestSummaryFields(draft)
 
     if #draft.targets == 0 or not draft.targetX or not draft.targetY then
@@ -498,28 +495,17 @@ function QuestRepository:ImportQuestFromCode(codeString)
     end
 
     local importedTargets = {}
-    if type(decoded.targets) == "table" and #decoded.targets > 0 then
-        for _, t in ipairs(decoded.targets) do
-            local cleanTName = self:NormalizeName(t.name)
-            if cleanTName ~= "" then
-                table.insert(importedTargets, {
-                    name = cleanTName,
-                    currentCount = 0,
-                    requiredCount = math.max(1, math.floor(tonumber(t.requiredCount) or 1)),
-                    targetX = decoded.targetX,
-                    targetY = decoded.targetY,
-                })
-            end
+    for _, t in ipairs(decoded.targets or {}) do
+        local cleanTName = self:NormalizeName(t.name)
+        if cleanTName ~= "" then
+            table.insert(importedTargets, {
+                name = cleanTName,
+                currentCount = 0,
+                requiredCount = math.max(1, math.floor(tonumber(t.requiredCount) or 1)),
+                targetX = decoded.targetX,
+                targetY = decoded.targetY,
+            })
         end
-    end
-    if #importedTargets == 0 then
-        table.insert(importedTargets, {
-            name = self:NormalizeName(decoded.targetName),
-            currentCount = 0,
-            requiredCount = math.max(1, math.floor(tonumber(decoded.requiredCount) or 1)),
-            targetX = decoded.targetX,
-            targetY = decoded.targetY,
-        })
     end
 
     local importedQuest = {
@@ -689,29 +675,30 @@ function QuestRepository:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneI
     return true
 end
 
-function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext)
+function QuestRepository:FindPendingTarget(rawTargetName)
     local activeQuest = self:GetActiveQuest()
     if not activeQuest or activeQuest.completed then
-        return false, nil, false, nil
+        return nil, nil
     end
-
-    self:EnsureQuestTargets(activeQuest)
 
     local cleanKilled = self:NormalizeName(rawTargetName):lower()
     if cleanKilled == "" then
-        return false, nil, false, nil
+        return nil, nil
     end
 
-    local matchedTarget = nil
+    self:EnsureQuestTargets(activeQuest)
     for _, entry in ipairs(activeQuest.targets) do
-        local cleanExpected = self:NormalizeName(entry.name):lower()
-        if cleanExpected == cleanKilled and (entry.currentCount or 0) < (entry.requiredCount or 1) then
-            matchedTarget = entry
-            break
+        if (entry.name or ""):lower() == cleanKilled and (entry.currentCount or 0) < (entry.requiredCount or 1) then
+            return activeQuest, entry
         end
     end
 
-    if not matchedTarget then
+    return nil, nil
+end
+
+function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext)
+    local activeQuest, matchedTarget = self:FindPendingTarget(rawTargetName)
+    if not activeQuest or not matchedTarget then
         return false, nil, false, nil
     end
 

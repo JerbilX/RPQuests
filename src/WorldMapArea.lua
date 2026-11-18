@@ -50,22 +50,12 @@ function WorldMapArea:Initialize()
                 local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", activeQuest.title or "")
                 tooltip:AddLine(headerText, "ZoFontWinH4", 0.91, 0.83, 0.63)
                 local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(activeQuest)) or {}
-                if #targets > 0 then
-                    for _, t in ipairs(targets) do
-                        local objText = Addon.Locale:Get(
-                            "MAP_TOOLTIP_OBJECTIVE",
-                            t.name or "",
-                            t.currentCount or 0,
-                            t.requiredCount or 1
-                        )
-                        tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
-                    end
-                else
+                for _, t in ipairs(targets) do
                     local objText = Addon.Locale:Get(
                         "MAP_TOOLTIP_OBJECTIVE",
-                        activeQuest.targetName or "",
-                        activeQuest.currentCount or 0,
-                        activeQuest.requiredCount or 1
+                        t.name or "",
+                        t.currentCount or 0,
+                        t.requiredCount or 1
                     )
                     tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
                 end
@@ -108,8 +98,10 @@ function WorldMapArea:Initialize()
     end
 
     if Addon.QuestRepository then
-        Addon.QuestRepository:RegisterListener(function()
-            self:RefreshPins()
+        Addon.QuestRepository:RegisterListener(function(eventType)
+            if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
+                self:RefreshPins()
+            end
         end)
     end
 

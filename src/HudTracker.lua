@@ -92,8 +92,10 @@ function HudTracker:Initialize()
     end
 
     if Addon.QuestRepository then
-        Addon.QuestRepository:RegisterListener(function()
-            self:Refresh()
+        Addon.QuestRepository:RegisterListener(function(eventType)
+            if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
+                self:Refresh()
+            end
         end)
     end
 
@@ -117,25 +119,18 @@ function HudTracker:Refresh()
 
     local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(activeQuest)) or {}
     local objLines = {}
-    if #targets > 0 then
-        for _, t in ipairs(targets) do
-            table.insert(objLines, Addon.Locale:Get(
-                "OBJECTIVE_KILL_FORMAT",
-                t.name or "",
-                t.currentCount or 0,
-                t.requiredCount or 1
-            ))
-        end
-    else
+    for _, t in ipairs(targets) do
         table.insert(objLines, Addon.Locale:Get(
             "OBJECTIVE_KILL_FORMAT",
-            activeQuest.targetName or "",
-            activeQuest.currentCount or 0,
-            activeQuest.requiredCount or 1
+            t.name or "",
+            t.currentCount or 0,
+            t.requiredCount or 1
         ))
     end
-    self.objectiveLabel:SetDimensions(280, math.max(22, #objLines * 20))
+    local objHeight = math.max(22, #objLines * 20)
+    self.objectiveLabel:SetDimensions(280, objHeight)
     self.objectiveLabel:SetText(table.concat(objLines, "\n"))
+    self.panel:SetDimensions(290, 46 + objHeight)
 
     local locName = (activeQuest.mapName and activeQuest.mapName ~= "" and activeQuest.mapName)
         or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
