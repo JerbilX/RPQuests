@@ -54,6 +54,7 @@ RPQuest.Locales["en"] = {
     LABEL_INPUT_TITLE = "Quest Title:",
     DEFAULT_QUEST_TITLE = "Custom Quest #%d",
     LABEL_INPUT_DESCRIPTION = "Description / Story:",
+    LABEL_INPUT_COMPLETION_MSG = "Completion Message (Optional):",
     LABEL_TARGET_SECTION = "Target (NPC) & Search Area:",
     TARGET_CAPTURED_FORMAT = "Target: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Aim at a living NPC and press the Capture keybind.|r",

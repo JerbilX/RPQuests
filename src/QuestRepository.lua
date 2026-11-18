@@ -66,6 +66,7 @@ local function CreateDefaultDraft()
         editingQuestId = nil,
         title = "",
         description = "",
+        completionMessage = "",
         targets = {},
         lastCapturedDisplay = nil,
         mapId = 0,
@@ -84,6 +85,7 @@ local function BuildQuestRecord(id, title, description, targets, data)
         id = id,
         title = title,
         description = description,
+        completionMessage = data.completionMessage or "",
         targets = targets,
         completed = false,
         mapId = data.mapId or 0,
@@ -236,6 +238,7 @@ function QuestRepository:LoadQuestIntoDraft(questId)
         editingQuestId = quest.id,
         title = quest.title or "",
         description = quest.description or "",
+        completionMessage = quest.completionMessage or "",
         targets = CloneTargetsList(quest.targets),
         lastCapturedDisplay = nil,
         mapId = quest.mapId or 0,
@@ -257,6 +260,7 @@ function QuestRepository:UpdateDraftFields(fields, silent)
 
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
+    if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
     if fields.areaRadius ~= nil then
         local newRadius = tonumber(fields.areaRadius) or draft.areaRadius
         if newRadius > 0 then
@@ -342,11 +346,12 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return draft
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput)
     local draft = self:GetDraft()
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
     if descriptionInput ~= nil then draft.description = tostring(descriptionInput) end
+    if completionMessageInput ~= nil then draft.completionMessage = tostring(completionMessageInput) end
     if areaRadiusInput ~= nil and tonumber(areaRadiusInput) and tonumber(areaRadiusInput) > 0 then
         draft.areaRadius = tonumber(areaRadiusInput)
     end
@@ -370,6 +375,8 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     end
 
     local cleanDesc = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local cleanCompMsg = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    draft.completionMessage = cleanCompMsg
 
     if existing then
         local prevProgress = {}
@@ -379,6 +386,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 
         existing.title = cleanTitle
         existing.description = cleanDesc
+        existing.completionMessage = cleanCompMsg
         existing.targets = CloneTargetsList(draft.targets, prevProgress)
         existing.mapId = draft.mapId or 0
         existing.zoneId = draft.zoneId or 0

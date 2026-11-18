@@ -202,6 +202,7 @@ function ShareCodec:EncodeQuest(quest)
         string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
         string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
         encodedTargets,
+        EscapeField(quest.completionMessage or ""),
     }
 
     local rawPayload = table.concat(fields, "|")
@@ -250,6 +251,7 @@ function ShareCodec:DecodeQuest(codeString)
     local areaCenterY = tonumber(fields[9])
     local areaRadius = tonumber(fields[10])
     local decodedTargets = DecodeTargetsList(fields[11])
+    local completionMessage = fields[12] and UnescapeField(fields[12]) or ""
 
     if not decodedTargets or #decodedTargets == 0 then
         return nil, "Invalid target data in code"
@@ -262,6 +264,7 @@ function ShareCodec:DecodeQuest(codeString)
     return {
         title = title,
         description = description,
+        completionMessage = completionMessage,
         targets = decodedTargets,
         mapId = math.floor(mapId or 0),
         zoneId = math.floor(zoneId or 0),

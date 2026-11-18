@@ -56,12 +56,10 @@ function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
     if not quest then return end
 
     local mainText = Addon.Locale:Get("CSA_QUEST_COMPLETED", quest.title or "")
-    local targets = quest.targets or {}
-    local target = (#targets == 1 and targets[1]) or matchedTarget or targets[1]
-    local subText = ""
-    if target and target.name then
-        subText = Addon.Locale:Get("OBJECTIVE_KILL_FORMAT", target.name, target.currentCount or 1, target.requiredCount or 1)
-    end
+    local customMsg = type(quest.completionMessage) == "string"
+        and quest.completionMessage:gsub("^%s+", ""):gsub("%s+$", "")
+        or ""
+    local subText = (customMsg ~= "") and customMsg or nil
     local soundId = SOUNDS and SOUNDS.QUEST_COMPLETED or nil
 
     if CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.CreateMessageParams and CENTER_SCREEN_ANNOUNCE.AddMessageWithParams then

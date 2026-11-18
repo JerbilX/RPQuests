@@ -84,6 +84,14 @@ function WorldMapArea:Initialize()
         end)
     end
 
+    if WORLD_MAP_SCENE and WORLD_MAP_SCENE.RegisterCallback then
+        WORLD_MAP_SCENE:RegisterCallback("StateChange", function(_, newState)
+            if newState == SCENE_SHOWING or newState == SCENE_SHOWN then
+                self:RefreshPins()
+            end
+        end)
+    end
+
     if EVENT_MANAGER then
         if EVENT_PLAYER_ACTIVATED then
             EVENT_MANAGER:RegisterForEvent(MAP_LISTENER_NAME, EVENT_PLAYER_ACTIVATED, function()

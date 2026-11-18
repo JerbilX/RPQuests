@@ -485,19 +485,41 @@ function JournalTab:BuildEditorPane(parent)
     end)
     self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 368)
 
+    local lblCompletionMsg = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputCompletionMsg", pane, CT_LABEL)
+    lblCompletionMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 412)
+    if lblCompletionMsg.SetFont then lblCompletionMsg:SetFont("ZoFontGameBold") end
+    lblCompletionMsg:SetText(Addon.Locale:Get("LABEL_INPUT_COMPLETION_MSG"))
+    self.lblInputCompletionMsg = lblCompletionMsg
+
+    local compBg, compEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_CompletionEdit",
+        pane,
+        510,
+        34,
+        140,
+        false,
+        function(val)
+            Addon.QuestRepository:UpdateDraftFields({ completionMessage = val }, true)
+        end
+    )
+    compBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 434)
+    self.completionBg = compBg
+    self.completionEdit = compEdit
+
     self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, Addon.Locale:Get("BTN_SAVE"), function()
         self:OnSaveDraftClicked()
     end)
-    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 425)
+    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 486)
 
     self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
         Addon.QuestRepository:ResetDraft()
         self.titleEdit:SetText("")
         self.descEdit:SetText("")
+        self.completionEdit:SetText("")
         self:Refresh()
     end)
-    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 425)
+    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 486)
 end
 
 function JournalTab:BuildImportPane(parent)
@@ -610,6 +632,7 @@ function JournalTab:OpenCreateEditor()
     end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
+    self.completionEdit:SetText(draft.completionMessage or "")
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
 end
@@ -619,6 +642,7 @@ function JournalTab:OpenEditEditor(questId)
     if not draft then return end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
+    self.completionEdit:SetText(draft.completionMessage or "")
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
 end
@@ -638,8 +662,9 @@ end
 function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
+    local compMsgText = self.completionEdit and self.completionEdit:GetText() or ""
 
-    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText)
+    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText)
     if not savedQuest then
         Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
         return
@@ -647,6 +672,9 @@ function JournalTab:OnSaveDraftClicked()
 
     self.titleEdit:SetText("")
     self.descEdit:SetText("")
+    if self.completionEdit then
+        self.completionEdit:SetText("")
+    end
 
     Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
 end
@@ -981,6 +1009,10 @@ function JournalTab:RefreshEditorPane()
     local draftDesc = draft.description or ""
     if not self.descEdit._focused and self.descEdit:GetText() ~= draftDesc then
         self.descEdit:SetText(draftDesc)
+    end
+    local draftCompMsg = draft.completionMessage or ""
+    if self.completionEdit and not self.completionEdit._focused and self.completionEdit:GetText() ~= draftCompMsg then
+        self.completionEdit:SetText(draftCompMsg)
     end
 
     local targets = draft.targets or {}
