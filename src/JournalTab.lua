@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -18,6 +19,7 @@ local VIEW_MODE = {
 local function CreateStyledButton(name, parent, width, height, text, onClick)
     local btn = WINDOW_MANAGER:CreateControl(name, parent, CT_BUTTON)
     btn:SetDimensions(width, height)
+    btn:SetMouseEnabled(true)
     if btn.SetFont then btn:SetFont("ZoFontGameBold") end
     if btn.SetNormalFontColor then btn:SetNormalFontColor(0.91, 0.83, 0.63, 1) end
     if btn.SetMouseOverFontColor then btn:SetMouseOverFontColor(1, 1, 1, 1) end
@@ -39,22 +41,61 @@ local function CreateStyledButton(name, parent, width, height, text, onClick)
     return btn
 end
 
-local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine)
+local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine, onTextChanged)
     local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", parent, CT_BACKDROP)
     bg:SetDimensions(width, height)
+    bg:SetMouseEnabled(true)
     if bg.SetCenterColor then bg:SetCenterColor(0.04, 0.04, 0.04, 0.82) end
     if bg.SetEdgeColor then bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80) end
 
     local edit = WINDOW_MANAGER:CreateControl(name, bg, CT_EDITBOX)
     edit:SetDimensions(width - 12, height - 8)
     edit:SetAnchor(TOPLEFT, bg, TOPLEFT, 6, 4)
+    edit:SetMouseEnabled(true)
+    if edit.SetEditEnabled then edit:SetEditEnabled(true) end
     if edit.SetFont then edit:SetFont("ZoFontGame") end
+    if edit.SetColor then edit:SetColor(1, 1, 1, 1) end
     if edit.SetMaxInputChars then edit:SetMaxInputChars(maxChars or 256) end
     if isMultiLine then
         if edit.SetMultiLine then edit:SetMultiLine(true) end
         if edit.SetNewLineEnabled then edit:SetNewLineEnabled(true) end
+    else
+        if edit.SetMultiLine then edit:SetMultiLine(false) end
+        if edit.SetNewLineEnabled then edit:SetNewLineEnabled(false) end
     end
     edit:SetText("")
+
+    local function FocusEditBox()
+        if edit.SetEditEnabled then edit:SetEditEnabled(true) end
+        if edit.TakeFocus then edit:TakeFocus() end
+    end
+
+    bg:SetHandler("OnMouseDown", FocusEditBox)
+    edit:SetHandler("OnMouseDown", FocusEditBox)
+    edit:SetHandler("OnEscape", function(ctrl)
+        if ctrl.LoseFocus then ctrl:LoseFocus() end
+    end)
+    if not isMultiLine then
+        edit:SetHandler("OnEnter", function(ctrl)
+            if ctrl.LoseFocus then ctrl:LoseFocus() end
+        end)
+    end
+    edit:SetHandler("OnFocusGained", function()
+        edit._focused = true
+        if bg.SetEdgeColor then bg:SetEdgeColor(0.95, 0.85, 0.50, 1.0) end
+        if PlaySound and SOUNDS and SOUNDS.EDIT_CLICK then
+            PlaySound(SOUNDS.EDIT_CLICK)
+        end
+    end)
+    edit:SetHandler("OnFocusLost", function()
+        edit._focused = false
+        if bg.SetEdgeColor then bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80) end
+    end)
+    if onTextChanged then
+        edit:SetHandler("OnTextChanged", function(ctrl)
+            onTextChanged(ctrl:GetText())
+        end)
+    end
 
     return bg, edit
 end
@@ -241,7 +282,7 @@ function JournalTab:BuildDetailPane(parent)
     self.detailObjHeader = objHeader
 
     local objText = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjText", pane, CT_LABEL)
-    objText:SetDimensions(510, 32)
+    objText:SetDimensions(510, 48)
     objText:SetAnchor(TOPLEFT, pane, TOPLEFT, 12, 294)
     if objText.SetFont then objText:SetFont("ZoFontWinH4") end
     self.detailObjText = objText
@@ -327,7 +368,19 @@ function JournalTab:BuildEditorPane(parent)
     if lblTitle.SetFont then lblTitle:SetFont("ZoFontGameBold") end
     self.lblInputTitle = lblTitle
 
-    local titleBg, titleEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_TitleEdit", pane, 510, 34, 90, false)
+    local titleBg, titleEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_TitleEdit",
+        pane,
+        510,
+        34,
+        90,
+        false,
+        function(val)
+            if Addon.QuestRepository then
+                Addon.QuestRepository:UpdateDraftFields({ title = val }, true)
+            end
+        end
+    )
     titleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 66)
     self.titleBg = titleBg
     self.titleEdit = titleEdit
@@ -337,7 +390,19 @@ function JournalTab:BuildEditorPane(parent)
     if lblDesc.SetFont then lblDesc:SetFont("ZoFontGameBold") end
     self.lblInputDesc = lblDesc
 
-    local descBg, descEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DescEdit", pane, 510, 96, 400, true)
+    local descBg, descEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_DescEdit",
+        pane,
+        510,
+        96,
+        400,
+        true,
+        function(val)
+            if Addon.QuestRepository then
+                Addon.QuestRepository:UpdateDraftFields({ description = val }, true)
+            end
+        end
+    )
     descBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 136)
     self.descBg = descBg
     self.descEdit = descEdit
@@ -347,36 +412,24 @@ function JournalTab:BuildEditorPane(parent)
     if lblTargetSec.SetFont then lblTargetSec:SetFont("ZoFontGameBold") end
     self.lblTargetSec = lblTargetSec
 
+    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", pane, 150, 26, "", function()
+        if Addon.QuestRepository then
+            Addon.QuestRepository:ClearDraftTargets()
+        end
+        self:Refresh()
+    end)
+    self.btnClearTargets:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 242)
+    self.btnClearTargets:SetHidden(true)
+
     local lblCapturedTarget = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedTarget", pane, CT_LABEL)
-    lblCapturedTarget:SetDimensions(510, 44)
-    lblCapturedTarget:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 272)
+    lblCapturedTarget:SetDimensions(510, 56)
+    lblCapturedTarget:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 274)
     if lblCapturedTarget.SetFont then lblCapturedTarget:SetFont("ZoFontGame") end
     self.lblCapturedTarget = lblCapturedTarget
 
-    -- Selector de cantidad de bajas (1..N)
-    local lblKillCount = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblKillCount", pane, CT_LABEL)
-    lblKillCount:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 328)
-    if lblKillCount.SetFont then lblKillCount:SetFont("ZoFontGameBold") end
-    self.lblKillCount = lblKillCount
-
-    self.btnCountMinus = CreateStyledButton(PANEL_NAME .. "_BtnCountMinus", pane, 36, 30, "-", function()
-        self:AdjustDraftCount(-1)
-    end)
-    self.btnCountMinus:SetAnchor(TOPLEFT, pane, TOPLEFT, 190, 322)
-
-    local countBg, countEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_CountEdit", pane, 64, 30, 4, false)
-    countBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 232, 322)
-    self.countBg = countBg
-    self.countEdit = countEdit
-
-    self.btnCountPlus = CreateStyledButton(PANEL_NAME .. "_BtnCountPlus", pane, 36, 30, "+", function()
-        self:AdjustDraftCount(1)
-    end)
-    self.btnCountPlus:SetAnchor(TOPLEFT, pane, TOPLEFT, 302, 322)
-
     -- Selector de radio del área de búsqueda
     local lblAreaSize = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblAreaSize", pane, CT_LABEL)
-    lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 372)
+    lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 342)
     if lblAreaSize.SetFont then lblAreaSize:SetFont("ZoFontGameBold") end
     self.lblAreaSize = lblAreaSize
 
@@ -385,29 +438,31 @@ function JournalTab:BuildEditorPane(parent)
     self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", pane, 110, 30, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.SMALL })
     end)
-    self.btnRadiusSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 398)
+    self.btnRadiusSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 368)
 
     self.btnRadiusMedium = CreateStyledButton(PANEL_NAME .. "_BtnRadMedium", pane, 110, 30, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.MEDIUM })
     end)
-    self.btnRadiusMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 120, 398)
+    self.btnRadiusMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 120, 368)
 
     self.btnRadiusLarge = CreateStyledButton(PANEL_NAME .. "_BtnRadLarge", pane, 110, 30, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.LARGE })
     end)
-    self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 398)
+    self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 368)
 
     self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, "", function()
         self:OnSaveDraftClicked()
     end)
-    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 455)
+    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 425)
 
     self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, "", function()
         Addon.QuestRepository:ResetDraft()
+        self.titleEdit:SetText("")
+        self.descEdit:SetText("")
         self.viewMode = VIEW_MODE.DETAIL
         self:Refresh()
     end)
-    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 455)
+    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 425)
 end
 
 function JournalTab:BuildImportPane(parent)
@@ -532,7 +587,6 @@ function JournalTab:OpenCreateEditor()
     end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
-    self.countEdit:SetText(tostring(draft.requiredCount or 1))
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
 end
@@ -542,7 +596,6 @@ function JournalTab:OpenEditEditor(questId)
     if not draft then return end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
-    self.countEdit:SetText(tostring(draft.requiredCount or 1))
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
 end
@@ -556,24 +609,11 @@ function JournalTab:OpenImportView()
     end
 end
 
-function JournalTab:AdjustDraftCount(delta)
-    local currentText = self.countEdit:GetText()
-    local currentVal = tonumber(currentText) or Addon.QuestRepository:GetDraft().requiredCount or 1
-    local newVal = math.max(1, math.min(999, currentVal + delta))
-    self.countEdit:SetText(tostring(newVal))
-    Addon.QuestRepository:UpdateDraftFields({
-        title = self.titleEdit:GetText(),
-        description = self.descEdit:GetText(),
-        requiredCount = newVal,
-    })
-end
-
 function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
-    local countVal = tonumber(self.countEdit:GetText()) or 1
 
-    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, countVal)
+    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText)
     if not savedQuest then
         if Addon.Announcements then
             Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
@@ -583,7 +623,6 @@ function JournalTab:OnSaveDraftClicked()
 
     self.titleEdit:SetText("")
     self.descEdit:SetText("")
-    self.countEdit:SetText("1")
     self.selectedQuestId = savedQuest.id
     self.viewMode = VIEW_MODE.DETAIL
 
@@ -838,16 +877,35 @@ function JournalTab:RefreshDetailPane()
     self.detailDescBody:SetText(descText)
 
     self.detailObjHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
-    local objLine = Addon.Locale:Get(
-        "OBJECTIVE_KILL_FORMAT",
-        selectedQuest.targetName or "",
-        selectedQuest.currentCount or 0,
-        selectedQuest.requiredCount or 1
-    )
-    if selectedQuest.completed then
-        objLine = objLine .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+    local targets = Addon.QuestRepository:EnsureQuestTargets(selectedQuest)
+    local objLines = {}
+    if #targets > 0 then
+        for _, t in ipairs(targets) do
+            local line = Addon.Locale:Get(
+                "OBJECTIVE_KILL_FORMAT",
+                t.name or "",
+                t.currentCount or 0,
+                t.requiredCount or 1
+            )
+            if (t.currentCount or 0) >= (t.requiredCount or 1) then
+                line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+            end
+            table.insert(objLines, line)
+        end
+    else
+        local line = Addon.Locale:Get(
+            "OBJECTIVE_KILL_FORMAT",
+            selectedQuest.targetName or "",
+            selectedQuest.currentCount or 0,
+            selectedQuest.requiredCount or 1
+        )
+        if selectedQuest.completed then
+            line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+        end
+        table.insert(objLines, line)
     end
-    self.detailObjText:SetText(objLine)
+    self.detailObjText:SetDimensions(510, math.max(32, #objLines * 24))
+    self.detailObjText:SetText(table.concat(objLines, "\n"))
 
     if self.shareCodeVisible then
         self.shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
@@ -884,17 +942,24 @@ function JournalTab:RefreshEditorPane()
     self.lblInputDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
     self.lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
 
-    if draft.targetName and draft.targetName ~= "" then
-        local locName = (draft.mapName and draft.mapName ~= "" and draft.mapName)
-            or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
-        self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_CAPTURED_FORMAT", draft.targetName, locName))
-    else
-        self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
+    if not self.titleEdit._focused and self.titleEdit:GetText() == "" and (draft.title or "") ~= "" then
+        self.titleEdit:SetText(draft.title)
+    end
+    if not self.descEdit._focused and self.descEdit:GetText() == "" and (draft.description or "") ~= "" then
+        self.descEdit:SetText(draft.description)
     end
 
-    self.lblKillCount:SetText(Addon.Locale:Get("LABEL_KILL_COUNT"))
-    if self.countEdit:GetText() == "" then
-        self.countEdit:SetText(tostring(draft.requiredCount or 1))
+    local targets = Addon.QuestRepository:EnsureQuestTargets(draft)
+    local summary = Addon.QuestRepository:FormatTargetsSummary(targets)
+    if summary ~= "" then
+        local locName = (draft.mapName and draft.mapName ~= "" and draft.mapName)
+            or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
+        self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_CAPTURED_FORMAT", summary, locName))
+        self.btnClearTargets:SetText(Addon.Locale:Get("BTN_CLEAR_TARGETS"))
+        self.btnClearTargets:SetHidden(false)
+    else
+        self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
+        self.btnClearTargets:SetHidden(true)
     end
 
     self.lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))

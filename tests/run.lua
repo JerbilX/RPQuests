@@ -618,7 +618,12 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars,
     RPQuest:OnCaptureTargetKeybind()
     RPQuest.JournalTab.titleEdit:SetText("Cacería Nocturna")
     RPQuest.JournalTab.descEdit:SetText("Derrota al vampiro en las ruinas.")
-    RPQuest.JournalTab.countEdit:SetText("1")
+    AssertEqual(RPQuest.JournalTab.countEdit, nil, "Manual countEdit must not exist in JournalTab")
+    AssertEqual(RPQuest.JournalTab.btnSaveEditor:GetText(), "Crear Misión", "Spanish button label is Crear Misión")
+    RPQuest.JournalTab.titleEdit:FireHandler("OnMouseDown")
+    AssertTrue(RPQuest.JournalTab.titleEdit._focused, "Clicking titleEdit focuses it for keyboard input")
+    RPQuest.JournalTab.descEdit:FireHandler("OnMouseDown")
+    AssertTrue(RPQuest.JournalTab.descEdit._focused, "Clicking descEdit focuses it for keyboard input")
     RPQuest.JournalTab:OnSaveDraftClicked()
 
     local active = RPQuest.QuestRepository:GetActiveQuest()
@@ -643,6 +648,62 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars,
     RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
     RPQuest.JournalTab:OnConfirmImportClicked()
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
+end)
+
+RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs + Create Quest button", function()
+    mockState.language = "en"
+    RPQuest.Locale:Initialize("en")
+    AssertEqual(RPQuest.Locale:Get("BTN_SAVE"), "Create Quest", "English create button label is Create Quest")
+
+    RPQuest.QuestRepository:Initialize({})
+    mockState.reticleExists = true
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = false
+    mockState.mapId = 32
+    mockState.zoneId = 381
+    mockState.mapName = "Auridon"
+    mockState.playerX = 0.50
+    mockState.playerY = 0.50
+
+    -- Caso A: Apuntar a un Imp 3 veces -> objetivo inferido: Imp x3
+    mockState.reticleName = "Imp"
+    RPQuest.TargetCapture:CaptureFromReticle()
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local draftImp = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(#draftImp.targets, 1, "Same NPC merges into 1 target entry")
+    AssertEqual(draftImp.targets[1].requiredCount, 3, "Imp captured 3 times requires 3 kills")
+    AssertEqual(RPQuest.QuestRepository:FormatTargetsSummary(draftImp.targets), "Imp x3", "Formatted summary is Imp x3")
+
+    local impQuest = RPQuest.QuestRepository:SaveDraft("Imp Hunt", "Clear the imps.")
+    AssertEqual(impQuest.requiredCount, 3, "Saved quest inferred requiredCount = 3 from reticle")
+
+    -- Caso B: Apuntar a dos NPCs con nombre distinto -> ambos son objetivos exclusivos
+    mockState.reticleName = "Lord Vane"
+    RPQuest.TargetCapture:CaptureFromReticle()
+    mockState.reticleName = "Lady Vane"
+    local draftDuo = RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(#draftDuo.targets, 2, "Two distinct named NPCs create 2 target entries")
+    AssertEqual(RPQuest.QuestRepository:FormatTargetsSummary(draftDuo.targets), "Lord Vane, Lady Vane", "Summary lists both named NPCs")
+
+    local duoQuest = RPQuest.QuestRepository:SaveDraft("Twin Assassination", "Eliminate both targets.")
+    AssertEqual(#duoQuest.targets, 2, "Saved quest has 2 distinct targets")
+
+    -- Matar a Lord Vane 2 veces no debe completar a Lady Vane
+    local r1, _, c1 = RPQuest.QuestRepository:RecordTargetEliminated("Lord Vane", { mapId = 32, zoneId = 381, x = 0.50, y = 0.50 })
+    AssertTrue(r1 and not c1, "Killing Lord Vane advances progress but does not complete quest")
+    local rDup = RPQuest.QuestRepository:RecordTargetEliminated("Lord Vane", { mapId = 32, zoneId = 381, x = 0.50, y = 0.50 })
+    AssertEqual(rDup, false, "Killing already completed named target again is ignored")
+
+    -- Matar a Lady Vane completa la misión
+    local r2, _, c2 = RPQuest.QuestRepository:RecordTargetEliminated("Lady Vane", { mapId = 32, zoneId = 381, x = 0.50, y = 0.50 })
+    AssertTrue(r2 and c2, "Killing second named target completes the quest")
+
+    -- Exportar e importar misión multi-objetivo conserva todos los objetivos
+    local code = RPQuest.QuestRepository:ExportQuestToCode(duoQuest.id)
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    AssertEqual(#imported.targets, 2, "Imported multi-target quest preserves both targets")
+    AssertEqual(imported.targets[1].name, "Lord Vane", "First imported target matches")
+    AssertEqual(imported.targets[2].name, "Lady Vane", "Second imported target matches")
 end)
 
 if failed > 0 then

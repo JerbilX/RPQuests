@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -25,10 +26,14 @@ function Announcements:ShowAlert(message, isError)
     end
 end
 
-function Announcements:AnnounceQuestProgress(quest)
+function Announcements:AnnounceQuestProgress(quest, matchedTarget)
     if not quest then return end
 
-    local text = Addon.Locale:Get("CSA_QUEST_PROGRESS", quest.targetName, quest.currentCount or 0, quest.requiredCount or 1)
+    local tName = (matchedTarget and matchedTarget.name) or quest.targetName or ""
+    local tCur = (matchedTarget and matchedTarget.currentCount) or quest.currentCount or 0
+    local tReq = (matchedTarget and matchedTarget.requiredCount) or quest.requiredCount or 1
+
+    local text = Addon.Locale:Get("CSA_QUEST_PROGRESS", tName, tCur, tReq)
     local soundId = SOUNDS and SOUNDS.QUEST_OBJECTIVE_INCREMENT or nil
 
     if CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.CreateMessageParams and CENTER_SCREEN_ANNOUNCE.AddMessageWithParams then

@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -44,16 +45,16 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         playerContext = Addon.TargetCapture:GetPlayerMapContext()
     end
 
-    local recorded, updatedQuest, justCompleted = Addon.QuestRepository:RecordTargetEliminated(targetName, playerContext)
+    local recorded, updatedQuest, justCompleted, matchedTarget = Addon.QuestRepository:RecordTargetEliminated(targetName, playerContext)
     if not recorded or not updatedQuest then
         return
     end
 
     if Addon.Announcements then
         if justCompleted then
-            Addon.Announcements:AnnounceQuestCompleted(updatedQuest)
+            Addon.Announcements:AnnounceQuestCompleted(updatedQuest, matchedTarget)
         else
-            Addon.Announcements:AnnounceQuestProgress(updatedQuest)
+            Addon.Announcements:AnnounceQuestProgress(updatedQuest, matchedTarget)
         end
     end
 end

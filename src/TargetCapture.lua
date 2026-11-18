@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -93,7 +94,8 @@ function TargetCapture:CaptureFromReticle()
 
     if draft and Addon.Announcements then
         local locText = (draft.mapName ~= "" and draft.mapName) or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
-        local msg = Addon.Locale:Get("ALERT_TARGET_CAPTURED", draft.targetName, locText)
+        local displayTarget = draft.lastCapturedDisplay or draft.targetName
+        local msg = Addon.Locale:Get("ALERT_TARGET_CAPTURED", displayTarget, locText)
         Addon.Announcements:ShowAlert(msg, false)
     end
 

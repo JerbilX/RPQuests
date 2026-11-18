@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
+-- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -113,12 +114,28 @@ function HudTracker:Refresh()
     end
 
     self.titleLabel:SetText(activeQuest.title or "")
-    self.objectiveLabel:SetText(Addon.Locale:Get(
-        "OBJECTIVE_KILL_FORMAT",
-        activeQuest.targetName or "",
-        activeQuest.currentCount or 0,
-        activeQuest.requiredCount or 1
-    ))
+
+    local targets = (Addon.QuestRepository and Addon.QuestRepository:EnsureQuestTargets(activeQuest)) or {}
+    local objLines = {}
+    if #targets > 0 then
+        for _, t in ipairs(targets) do
+            table.insert(objLines, Addon.Locale:Get(
+                "OBJECTIVE_KILL_FORMAT",
+                t.name or "",
+                t.currentCount or 0,
+                t.requiredCount or 1
+            ))
+        end
+    else
+        table.insert(objLines, Addon.Locale:Get(
+            "OBJECTIVE_KILL_FORMAT",
+            activeQuest.targetName or "",
+            activeQuest.currentCount or 0,
+            activeQuest.requiredCount or 1
+        ))
+    end
+    self.objectiveLabel:SetDimensions(280, math.max(22, #objLines * 20))
+    self.objectiveLabel:SetText(table.concat(objLines, "\n"))
 
     local locName = (activeQuest.mapName and activeQuest.mapName ~= "" and activeQuest.mapName)
         or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
