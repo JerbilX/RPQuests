@@ -468,9 +468,12 @@ RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Compl
     -- 2. Guardar misión con 2 bajas requeridas inferidas
     local quest, err = RPQuest.QuestRepository:SaveDraft("Purga en el Bosque", "Elimina a los nigromantes.", 0.075)
     AssertTrue(quest ~= nil, "Quest should be created: " .. tostring(err))
+    AssertEqual(quest.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Newly created quest has role=prepared")
     AssertEqual(quest.targets[1].name, "Nigromante Oscuro", "Gender suffix stripped")
     AssertEqual(quest.targets[1].requiredCount, 2, "Required count is 2")
-    AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, quest.id, "Newly created quest becomes active")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Newly created prepared quest does not auto-activate")
+    RPQuest.QuestRepository:SetActiveQuest(quest.id)
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, quest.id, "Prepared quest can be activated manually for local testing")
 
     -- 3. Editar la misión
     RPQuest.QuestRepository:LoadQuestIntoDraft(quest.id)
@@ -598,6 +601,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
     RPQuest.TargetCapture:CaptureFromReticle()
     local q = RPQuest.QuestRepository:SaveDraft("Amenaza del Culto", "Elimina a 2 cultistas.", 0.08)
     AssertTrue(q ~= nil, "Quest created")
+    RPQuest.QuestRepository:SetActiveQuest(q.id)
 
     -- Verificar que una muerte de otro NPC no consulte el mapa innecesariamente
     local mapCalls = 0
@@ -716,9 +720,16 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     AssertTrue(RPQuest.JournalTab.descEdit._focused, "Clicking descEdit focuses it for keyboard input")
     RPQuest.JournalTab:OnSaveDraftClicked()
 
+    local savedList = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+    AssertEqual(#savedList, 1, "Prepared quest saved from JournalTab")
+    local preparedQuest = savedList[1]
+    AssertEqual(preparedQuest.title, "Cacería Nocturna", "Saved title matches")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Prepared quest is not auto-activated on save")
+
+    -- Probar la misión manualmente desde En Preparación
+    RPQuest.JournalTab:OnToggleActiveClicked()
     local active = RPQuest.QuestRepository:GetActiveQuest()
-    AssertTrue(active ~= nil, "Quest saved and set active from JournalTab")
-    AssertEqual(active.title, "Cacería Nocturna", "Saved title matches")
+    AssertTrue(active ~= nil and active.id == preparedQuest.id, "Prepared quest activated for local testing via JournalTab")
 
     -- Probar botón Compartir en JournalTab (genera código y lo selecciona en shareEdit)
     RPQuest.JournalTab:OnShareClicked()
@@ -734,6 +745,7 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
 
     -- Verificar que salir de Edit mode seleccionando otra misión limpia editingQuestId
+    RPQuest.JournalTab:SetListRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
     RPQuest.JournalTab:OpenEditEditor(active.id)
     AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, active.id, "Draft has editingQuestId while in Edit mode")
     RPQuest.JournalTab:SelectQuest(active.id)
@@ -777,6 +789,7 @@ RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs +
 
     local duoQuest = RPQuest.QuestRepository:SaveDraft("Twin Assassination", "Eliminate both targets.")
     AssertEqual(#duoQuest.targets, 2, "Saved quest has 2 distinct targets")
+    RPQuest.QuestRepository:SetActiveQuest(duoQuest.id)
 
     -- Matar a Lord Vane 2 veces no debe completar a Lady Vane
     local r1, _, c1 = RPQuest.QuestRepository:RecordTargetEliminated("Lord Vane", { mapId = 32, zoneId = 381, x = 0.50, y = 0.50 })
@@ -875,6 +888,118 @@ RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borra
     AssertEqual(RPQuest.JournalTab._dirty, true, "_dirty set while panel is hidden")
     RPQuest.JournalTab:OpenTab()
     AssertEqual(RPQuest.JournalTab._dirty, false, "_dirty cleared after OpenTab")
+end)
+
+RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y bloqueo de edición en recibidas", function()
+    mockState.language = "es"
+    RPQuest.Locale:Initialize("es")
+
+    -- 1. Migración de misiones legacy sin campo role -> received
+    RPQuest.QuestRepository:Initialize({
+        nextId = 2,
+        quests = {
+            { id = 1, title = "Legacy", description = "", targets = { { name = "Imp", currentCount = 0, requiredCount = 1 } }, completed = false },
+        },
+    })
+    local legacy = RPQuest.QuestRepository:GetQuestById(1)
+    AssertEqual(legacy.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Legacy quest without role migrates to received")
+
+    RPQuest.JournalTab:Initialize()
+    mockState.reticleExists = true
+    mockState.reticleName = "Cultista"
+    mockState.mapId = 32
+    mockState.zoneId = 381
+    mockState.mapName = "Auridon"
+    mockState.playerX = 0.5
+    mockState.playerY = 0.5
+
+    -- 2. Crear misión nueva -> role=prepared, no se auto-activa, aparece en pestaña En Preparación
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local prep = RPQuest.QuestRepository:SaveDraft("Misión GM", "Para probar y enviar", 0.05)
+    AssertEqual(prep.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Created quest is prepared")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Created quest does not auto-activate")
+    AssertEqual(RPQuest.JournalTab.listRole, RPQuest.Constants.QUEST_ROLE.PREPARED, "JournalTab switches to prepared view on create")
+    AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), false, "Edit button visible for prepared quest")
+    AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Probar", "Activate button says Probar for prepared quest")
+
+    -- 3. Probar localmente y luego detener prueba
+    RPQuest.JournalTab:OnToggleActiveClicked()
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, prep.id, "Prepared quest activated for local testing")
+    AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Dejar de probar", "Activate button says Dejar de probar while testing")
+
+    -- 4. Compartir e importar -> misión recibida en Para Jugar sin botón Editar
+    local code = RPQuest.QuestRepository:ExportQuestToCode(prep.id)
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    AssertEqual(imported.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Imported quest has role=received")
+    AssertEqual(RPQuest.JournalTab.listRole, RPQuest.Constants.QUEST_ROLE.RECEIVED, "JournalTab switches to received view on import")
+    AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), true, "Edit button hidden for received quest")
+    AssertEqual(RPQuest.JournalTab.btnReset._anchors[1].relTo, RPQuest.JournalTab.btnActivate, "Reset button re-anchored under btnActivate when Edit is hidden")
+    AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Desactivar", "Imported quest is active so button says Desactivar")
+
+    local deniedDraft, deniedErr = RPQuest.QuestRepository:LoadQuestIntoDraft(imported.id)
+    AssertEqual(deniedDraft, nil, "LoadQuestIntoDraft rejects received quest")
+    AssertTrue(type(deniedErr) == "string" and deniedErr ~= "", "Rejection returns localized error message")
+end)
+
+RunTest("14. Mensaje de finalizacion editable y refresco de pin al editar radio y abrir mapa", function()
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.JournalTab:Initialize()
+    RPQuest.WorldMapArea:Initialize()
+
+    mockState.reticleExists = true
+    mockState.reticleName = "Oveja"
+    mockState.mapId = 45
+    mockState.zoneId = 104
+    mockState.mapName = "Deshaan"
+    mockState.playerX = 0.50
+    mockState.playerY = 0.50
+
+    -- 1. Crear misión con mensaje de finalización personalizado desde JournalTab
+    RPQuest.JournalTab:OpenCreateEditor()
+    RPQuest.TargetCapture:CaptureFromReticle()
+    RPQuest.JournalTab.titleEdit:SetText("Gran Cacería")
+    RPQuest.JournalTab.descEdit:SetText("Caza en el valle.")
+    RPQuest.JournalTab.completionEdit:SetText("¡Has limpiado el valle!")
+    RPQuest.JournalTab:OnSaveDraftClicked()
+
+    local q = RPQuest.QuestRepository:GetAllQuests()[1]
+    AssertEqual(q.completionMessage, "¡Has limpiado el valle!", "completionMessage saved from JournalTab")
+
+    -- 2. ShareCodec preserva completionMessage
+    local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+    AssertEqual(decoded.completionMessage, "¡Has limpiado el valle!", "ShareCodec preserves completionMessage")
+
+    -- 3. AnnounceQuestCompleted usa completionMessage en lugar de un único objetivo
+    local capturedSubText = nil
+    local origCSA = CENTER_SCREEN_ANNOUNCE
+    CENTER_SCREEN_ANNOUNCE = {
+        CreateMessageParams = function()
+            return {
+                SetText = function(_, _, sub) capturedSubText = sub end,
+                SetCSAType = function() end,
+            }
+        end,
+        AddMessageWithParams = function() end,
+    }
+    RPQuest.Announcements:AnnounceQuestCompleted(q)
+    AssertEqual(capturedSubText, "¡Has limpiado el valle!", "AnnounceQuestCompleted uses custom completionMessage")
+
+    -- Sin mensaje personalizado -> subText es nil (no muestra un único objetivo parcial)
+    RPQuest.Announcements:AnnounceQuestCompleted({ title = "Sin Msg", completionMessage = "", targets = { { name = "Tirusa", currentCount = 1, requiredCount = 1 } } })
+    AssertEqual(capturedSubText, nil, "AnnounceQuestCompleted omits subText when completionMessage is empty")
+    CENTER_SCREEN_ANNOUNCE = origCSA
+
+    -- 4. Editar radio de área, desactivar/reactivar y mostrar escena del mapa refresca el pin con el nuevo radio
+    RPQuest.JournalTab:OpenEditEditor(q.id)
+    RPQuest.QuestRepository:UpdateDraftFields({ areaRadius = RPQuest.Constants.AREA_RADIUS.LARGE })
+    RPQuest.JournalTab:OnSaveDraftClicked()
+    RPQuest.QuestRepository:SetActiveQuest(q.id)
+
+    -- Simular apertura del mapa mundial via WORLD_MAP_SCENE
+    SCENE_MANAGER:Show("worldMap")
+    AssertEqual(#mockPinManager._createdPins, 1, "WorldMapArea pin rendered after edit + reactivate + map open")
+    AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.LARGE, "WorldMapArea pin uses updated LARGE radius")
 end)
 
 if failed > 0 then

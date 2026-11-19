@@ -19,6 +19,10 @@ Addon.Constants = {
         PREFIX = "RPQ1",
         VERSION = 1,
     },
+    QUEST_ROLE = {
+        PREPARED = "prepared",
+        RECEIVED = "received",
+    },
     AREA_RADIUS = {
         SMALL = 0.045,
         MEDIUM = 0.075,

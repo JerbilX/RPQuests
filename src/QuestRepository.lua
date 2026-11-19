@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
+-- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -66,6 +67,7 @@ local function CreateDefaultDraft()
         editingQuestId = nil,
         title = "",
         description = "",
+        completionMessage = "",
         targets = {},
         lastCapturedDisplay = nil,
         mapId = 0,
@@ -79,13 +81,15 @@ local function CreateDefaultDraft()
     }
 end
 
-local function BuildQuestRecord(id, title, description, targets, data)
+local function BuildQuestRecord(id, title, description, targets, data, role)
     return {
         id = id,
         title = title,
         description = description,
+        completionMessage = data.completionMessage or "",
         targets = targets,
         completed = false,
+        role = role or Addon.Constants.QUEST_ROLE.RECEIVED,
         mapId = data.mapId or 0,
         zoneId = data.zoneId or 0,
         mapName = data.mapName or "",
@@ -137,8 +141,12 @@ function QuestRepository:Initialize(savedVars)
     else
         self.savedVars.draft.targets = self.savedVars.draft.targets or {}
     end
+    local roles = Addon.Constants.QUEST_ROLE
     for _, q in ipairs(self.savedVars.quests) do
         q.targets = q.targets or {}
+        if q.role ~= roles.PREPARED and q.role ~= roles.RECEIVED then
+            q.role = roles.RECEIVED
+        end
     end
     self._listeners = self._listeners or {}
 end
@@ -231,11 +239,15 @@ end
 function QuestRepository:LoadQuestIntoDraft(questId)
     local quest = self:GetQuestById(questId)
     if not quest then return nil end
+    if not self:IsPreparedQuest(quest) then
+        return nil, Addon.Locale:Get("ERR_CANNOT_EDIT_RECEIVED")
+    end
 
     self.savedVars.draft = {
         editingQuestId = quest.id,
         title = quest.title or "",
         description = quest.description or "",
+        completionMessage = quest.completionMessage or "",
         targets = CloneTargetsList(quest.targets),
         lastCapturedDisplay = nil,
         mapId = quest.mapId or 0,
@@ -257,6 +269,7 @@ function QuestRepository:UpdateDraftFields(fields, silent)
 
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
+    if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
     if fields.areaRadius ~= nil then
         local newRadius = tonumber(fields.areaRadius) or draft.areaRadius
         if newRadius > 0 then
@@ -342,11 +355,12 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return draft
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput)
     local draft = self:GetDraft()
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
     if descriptionInput ~= nil then draft.description = tostring(descriptionInput) end
+    if completionMessageInput ~= nil then draft.completionMessage = tostring(completionMessageInput) end
     if areaRadiusInput ~= nil and tonumber(areaRadiusInput) and tonumber(areaRadiusInput) > 0 then
         draft.areaRadius = tonumber(areaRadiusInput)
     end
@@ -370,6 +384,8 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     end
 
     local cleanDesc = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local cleanCompMsg = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    draft.completionMessage = cleanCompMsg
 
     if existing then
         local prevProgress = {}
@@ -379,6 +395,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 
         existing.title = cleanTitle
         existing.description = cleanDesc
+        existing.completionMessage = cleanCompMsg
         existing.targets = CloneTargetsList(draft.targets, prevProgress)
         existing.mapId = draft.mapId or 0
         existing.zoneId = draft.zoneId or 0
@@ -397,10 +414,16 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 
     self.savedVars.nextId = targetId + 1
 
-    local newQuest = BuildQuestRecord(targetId, cleanTitle, cleanDesc, CloneTargetsList(draft.targets), draft)
+    local newQuest = BuildQuestRecord(
+        targetId,
+        cleanTitle,
+        cleanDesc,
+        CloneTargetsList(draft.targets),
+        draft,
+        Addon.Constants.QUEST_ROLE.PREPARED
+    )
 
     table.insert(self.savedVars.quests, newQuest)
-    self.savedVars.activeQuestId = newQuest.id
 
     self:ResetDraft()
     self:NotifyListeners("QUEST_CREATED", newQuest)
@@ -435,7 +458,14 @@ function QuestRepository:ImportQuestFromCode(codeString)
         end
     end
 
-    local importedQuest = BuildQuestRecord(newId, cleanTitle, decoded.description or "", importedTargets, decoded)
+    local importedQuest = BuildQuestRecord(
+        newId,
+        cleanTitle,
+        decoded.description or "",
+        importedTargets,
+        decoded,
+        Addon.Constants.QUEST_ROLE.RECEIVED
+    )
 
     table.insert(self.savedVars.quests, importedQuest)
     self.savedVars.activeQuestId = importedQuest.id
@@ -452,9 +482,23 @@ function QuestRepository:ExportQuestToCode(questId)
     return Addon.ShareCodec:EncodeQuest(quest)
 end
 
+function QuestRepository:IsPreparedQuest(quest)
+    return quest ~= nil and quest.role == Addon.Constants.QUEST_ROLE.PREPARED
+end
+
 function QuestRepository:GetAllQuests()
     if not self.savedVars then return {} end
     return self.savedVars.quests or {}
+end
+
+function QuestRepository:GetQuestsByRole(role)
+    local result = {}
+    for _, q in ipairs(self:GetAllQuests()) do
+        if q.role == role then
+            table.insert(result, q)
+        end
+    end
+    return result
 end
 
 function QuestRepository:GetActiveAndAvailableQuests()
