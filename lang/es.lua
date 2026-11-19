@@ -13,14 +13,10 @@ RPQuest.Locales["es"] = {
     -- Tab & General
     TAB_TITLE = "Misiones Custom",
     HEADER_QUEST_LIST = "MISIONES CUSTOM (%d)",
-    TAB_PLAY_QUESTS = "Para Jugar (%d)",
-    TAB_PREPARE_QUESTS = "En Preparación (%d)",
-    SECTION_ACTIVE_QUESTS = "Activas / Disponibles",
-    SECTION_PREPARED_QUESTS = "En Preparación (Para Enviar)",
-    SECTION_COMPLETED_QUESTS = "Completadas",
-    EMPTY_QUEST_LIST = "No hay misiones creadas. Pulsa '+ Nueva' o 'Importar' para comenzar.",
-    EMPTY_PLAY_LIST = "No hay misiones para jugar. Pulsa 'Importar' para pegar un código.",
-    EMPTY_PREPARE_LIST = "No hay misiones en preparación. Pulsa '+ Nueva' para crear una.",
+    SECTION_ACTIVE_QUESTS = "MISIONES (%d)",
+    SECTION_PREPARED_QUESTS = "PREPARANDO (%d)",
+    SECTION_COMPLETED_QUESTS = "COMPLETADAS (%d)",
+    EMPTY_QUEST_LIST = "No hay misiones aún. Pulsa 'Importar' para recibir una o '+ Nueva' para crearla.",
 
     -- Buttons
     BTN_NEW_QUEST = "+ Nueva",
