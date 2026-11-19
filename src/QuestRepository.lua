@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
+-- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -80,7 +81,7 @@ local function CreateDefaultDraft()
     }
 end
 
-local function BuildQuestRecord(id, title, description, targets, data)
+local function BuildQuestRecord(id, title, description, targets, data, role)
     return {
         id = id,
         title = title,
@@ -88,6 +89,7 @@ local function BuildQuestRecord(id, title, description, targets, data)
         completionMessage = data.completionMessage or "",
         targets = targets,
         completed = false,
+        role = role or Addon.Constants.QUEST_ROLE.RECEIVED,
         mapId = data.mapId or 0,
         zoneId = data.zoneId or 0,
         mapName = data.mapName or "",
@@ -139,8 +141,12 @@ function QuestRepository:Initialize(savedVars)
     else
         self.savedVars.draft.targets = self.savedVars.draft.targets or {}
     end
+    local roles = Addon.Constants.QUEST_ROLE
     for _, q in ipairs(self.savedVars.quests) do
         q.targets = q.targets or {}
+        if q.role ~= roles.PREPARED and q.role ~= roles.RECEIVED then
+            q.role = roles.RECEIVED
+        end
     end
     self._listeners = self._listeners or {}
 end
@@ -233,6 +239,9 @@ end
 function QuestRepository:LoadQuestIntoDraft(questId)
     local quest = self:GetQuestById(questId)
     if not quest then return nil end
+    if not self:IsPreparedQuest(quest) then
+        return nil, Addon.Locale:Get("ERR_CANNOT_EDIT_RECEIVED")
+    end
 
     self.savedVars.draft = {
         editingQuestId = quest.id,
@@ -405,10 +414,16 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 
     self.savedVars.nextId = targetId + 1
 
-    local newQuest = BuildQuestRecord(targetId, cleanTitle, cleanDesc, CloneTargetsList(draft.targets), draft)
+    local newQuest = BuildQuestRecord(
+        targetId,
+        cleanTitle,
+        cleanDesc,
+        CloneTargetsList(draft.targets),
+        draft,
+        Addon.Constants.QUEST_ROLE.PREPARED
+    )
 
     table.insert(self.savedVars.quests, newQuest)
-    self.savedVars.activeQuestId = newQuest.id
 
     self:ResetDraft()
     self:NotifyListeners("QUEST_CREATED", newQuest)
@@ -443,7 +458,14 @@ function QuestRepository:ImportQuestFromCode(codeString)
         end
     end
 
-    local importedQuest = BuildQuestRecord(newId, cleanTitle, decoded.description or "", importedTargets, decoded)
+    local importedQuest = BuildQuestRecord(
+        newId,
+        cleanTitle,
+        decoded.description or "",
+        importedTargets,
+        decoded,
+        Addon.Constants.QUEST_ROLE.RECEIVED
+    )
 
     table.insert(self.savedVars.quests, importedQuest)
     self.savedVars.activeQuestId = importedQuest.id
@@ -460,9 +482,23 @@ function QuestRepository:ExportQuestToCode(questId)
     return Addon.ShareCodec:EncodeQuest(quest)
 end
 
+function QuestRepository:IsPreparedQuest(quest)
+    return quest ~= nil and quest.role == Addon.Constants.QUEST_ROLE.PREPARED
+end
+
 function QuestRepository:GetAllQuests()
     if not self.savedVars then return {} end
     return self.savedVars.quests or {}
+end
+
+function QuestRepository:GetQuestsByRole(role)
+    local result = {}
+    for _, q in ipairs(self:GetAllQuests()) do
+        if q.role == role then
+            table.insert(result, q)
+        end
+    end
+    return result
 end
 
 function QuestRepository:GetActiveAndAvailableQuests()

@@ -13,15 +13,22 @@ RPQuest.Locales["en"] = {
     -- Tab & General
     TAB_TITLE = "Custom Quests",
     HEADER_QUEST_LIST = "CUSTOM QUESTS (%d)",
+    TAB_PLAY_QUESTS = "To Play (%d)",
+    TAB_PREPARE_QUESTS = "Preparing (%d)",
     SECTION_ACTIVE_QUESTS = "Active / Available",
+    SECTION_PREPARED_QUESTS = "In Preparation (To Send)",
     SECTION_COMPLETED_QUESTS = "Completed",
     EMPTY_QUEST_LIST = "No custom quests yet. Click '+ New' or 'Import' to start.",
+    EMPTY_PLAY_LIST = "No quests to play. Click 'Import' to paste a quest code.",
+    EMPTY_PREPARE_LIST = "No quests in preparation. Click '+ New' to author one.",
 
     -- Buttons
     BTN_NEW_QUEST = "+ New",
     BTN_IMPORT_CODE = "Import",
     BTN_ACTIVATE = "Set Active",
     BTN_DEACTIVATE = "Untrack",
+    BTN_TEST_QUEST = "Test Quest",
+    BTN_STOP_TEST = "Stop Testing",
     BTN_SHOW_ON_MAP = "Show on Map",
     BTN_EDIT = "Edit",
     BTN_RESET = "Reset",
@@ -77,6 +84,7 @@ RPQuest.Locales["en"] = {
     ALERT_SHARE_READY = "RPQuest: Code selected! Press Ctrl+C to copy.",
     ERR_MISSING_TARGET = "Capture an NPC target with the reticle keybind before creating the quest.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
+    ERR_CANNOT_EDIT_RECEIVED = "Received quests cannot be edited.",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Quest Completed: %s",
 
