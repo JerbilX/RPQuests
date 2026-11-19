@@ -13,14 +13,10 @@ RPQuest.Locales["en"] = {
     -- Tab & General
     TAB_TITLE = "Custom Quests",
     HEADER_QUEST_LIST = "CUSTOM QUESTS (%d)",
-    TAB_PLAY_QUESTS = "To Play (%d)",
-    TAB_PREPARE_QUESTS = "Preparing (%d)",
-    SECTION_ACTIVE_QUESTS = "Active / Available",
-    SECTION_PREPARED_QUESTS = "In Preparation (To Send)",
-    SECTION_COMPLETED_QUESTS = "Completed",
-    EMPTY_QUEST_LIST = "No custom quests yet. Click '+ New' or 'Import' to start.",
-    EMPTY_PLAY_LIST = "No quests to play. Click 'Import' to paste a quest code.",
-    EMPTY_PREPARE_LIST = "No quests in preparation. Click '+ New' to author one.",
+    SECTION_ACTIVE_QUESTS = "QUESTS (%d)",
+    SECTION_PREPARED_QUESTS = "PREPARING (%d)",
+    SECTION_COMPLETED_QUESTS = "COMPLETED (%d)",
+    EMPTY_QUEST_LIST = "No custom quests yet. Click 'Import' to receive one or '+ New' to create one.",
 
     -- Buttons
     BTN_NEW_QUEST = "+ New",

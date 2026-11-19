@@ -32,7 +32,7 @@ Hasta ahora todas las misiones en `RPQuest` (tanto las creadas localmente por el
   * *Contra:* Ocupa espacio adicional en la barra superior nativa del Diario de ESO.
 
 ## Decisión Adoptada
-Opción elegida: **"Opción 1: Selector de 2 sub-vistas (`Para Jugar` / `En Preparación`) en la columna izquierda de `JournalTab`"**.
+Opción elegida: **Separación de roles en modelo de datos (`QUEST_ROLE`) + Árbol Colapsable Player-First en la columna izquierda de `JournalTab`** (evolución de la Opción 2 alineada con el `ZO_Tree` nativo de ESO).
 
 1. **Modelo de Datos (`src/Constants.lua` y `src/QuestRepository.lua`):**
    * Se incorpora el campo `role` en cada misión con valores `QUEST_ROLE.PREPARED` (`"prepared"`) y `QUEST_ROLE.RECEIVED` (`"received"`).
@@ -42,9 +42,13 @@ Opción elegida: **"Opción 1: Selector de 2 sub-vistas (`Para Jugar` / `En Prep
    * `LoadQuestIntoDraft(questId)` rechaza misiones `"received"` devolviendo `nil, ERR_CANNOT_EDIT_RECEIVED`.
    * `ShareCodec` (`RPQ1:...`) no cambia su payload: el rol es local al cliente.
 2. **Interfaz de Diario (`src/JournalTab.lua`):**
-   * La columna izquierda incorpora dos botones conmutadores con contador: **Para Jugar (`N`)** y **En Preparación (`M`)**.
-   * En **En Preparación**: el detalle muestra el botón de activación etiquetado como **Probar / Dejar de probar**, junto con **Ver en Mapa**, **Compartir**, **Editar**, **Reiniciar** y **Eliminar**.
-   * En **Para Jugar**: el detalle oculta el botón **Editar** y reancla **Reiniciar** y **Eliminar** para no dejar huecos visuales.
+   * La barra superior prioriza el flujo del jugador con **Importar** como acción principal y **+ Nueva** a su lado para el máster.
+   * La columna izquierda utiliza categorías colapsables con los iconos nativos de árbol de ESO (`tree_open_up.dds` / `tree_closed_up.dds`):
+     * **MISIONES (`N`)** (expandida por defecto): misiones recibidas e incompletas.
+     * **COMPLETADAS (`K`)** (colapsada por defecto, oculta si `K == 0`): misiones recibidas ya completadas.
+     * **PREPARANDO (`M`)** (colapsada por defecto, oculta si `M == 0`): misiones en preparación del máster; se expande automáticamente al crear una nueva misión.
+   * En **PREPARANDO**: el detalle muestra el botón de activación etiquetado como **Probar / Dejar de probar**, junto con **Ver en Mapa**, **Compartir**, **Editar**, **Reiniciar** y **Eliminar**.
+   * En **MISIONES / COMPLETADAS**: el detalle oculta el botón **Editar** y reancla **Reiniciar** y **Eliminar** para no dejar huecos visuales.
 
 ## Consecuencias
 * **Positivas:**

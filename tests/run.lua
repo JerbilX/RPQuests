@@ -745,7 +745,6 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
 
     -- Verificar que salir de Edit mode seleccionando otra misión limpia editingQuestId
-    RPQuest.JournalTab:SetListRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
     RPQuest.JournalTab:OpenEditEditor(active.id)
     AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, active.id, "Draft has editingQuestId while in Edit mode")
     RPQuest.JournalTab:SelectQuest(active.id)
@@ -905,6 +904,20 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     AssertEqual(legacy.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Legacy quest without role migrates to received")
 
     RPQuest.JournalTab:Initialize()
+    RPQuest.JournalTab.collapsedSections = { missions = false, completed = true, preparing = true }
+    RPQuest.JournalTab:Refresh()
+    -- Sin misiones en preparación, la sección PREPARANDO no aparece en el árbol
+    local hasPreparingHeader = false
+    for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+        if b.isHeader and b.sectionKey == "preparing" then
+            hasPreparingHeader = true
+        end
+    end
+    AssertEqual(hasPreparingHeader, false, "PREPARANDO section is hidden when empty")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "MISIONES section starts expanded")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "COMPLETADAS section starts collapsed")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "PREPARANDO section starts collapsed")
+
     mockState.reticleExists = true
     mockState.reticleName = "Cultista"
     mockState.mapId = 32
@@ -913,25 +926,44 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     mockState.playerX = 0.5
     mockState.playerY = 0.5
 
-    -- 2. Crear misión nueva -> role=prepared, no se auto-activa, aparece en pestaña En Preparación
+    -- 2. Crear misión nueva -> role=prepared, no se auto-activa, expande PREPARANDO
     RPQuest.TargetCapture:CaptureFromReticle()
     local prep = RPQuest.QuestRepository:SaveDraft("Misión GM", "Para probar y enviar", 0.05)
     AssertEqual(prep.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Created quest is prepared")
     AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Created quest does not auto-activate")
-    AssertEqual(RPQuest.JournalTab.listRole, RPQuest.Constants.QUEST_ROLE.PREPARED, "JournalTab switches to prepared view on create")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "JournalTab expands PREPARANDO on create")
     AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), false, "Edit button visible for prepared quest")
     AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Probar", "Activate button says Probar for prepared quest")
+
+    -- 2b. Colapsar y expandir sección PREPARANDO en el árbol
+    RPQuest.JournalTab:ToggleSection("preparing")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "ToggleSection collapses preparing")
+    local prepRowVisible = false
+    for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+        if b.questId == prep.id then prepRowVisible = true end
+    end
+    AssertEqual(prepRowVisible, false, "Collapsed section hides its quest rows")
+    RPQuest.JournalTab:ToggleSection("preparing")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection expands preparing again")
+
+    -- 2c. Mostrar en mapa una misión en preparación (aunque no esté activa)
+    RPQuest.WorldMapArea:Initialize()
+    RPQuest.WorldMapArea:ShowQuestOnMap(prep)
+    local pins = ZO_WorldMap_GetPinManager()._createdPins
+    AssertEqual(#pins, 1, "ShowQuestOnMap renders area pin for prepared quest even when inactive")
+    AssertEqual(pins[1].pinTag, prep.id, "Rendered preview pin belongs to prepared quest")
+    AssertEqual(pins[1].radius, 0.05, "Rendered preview pin uses prepared quest radius")
 
     -- 3. Probar localmente y luego detener prueba
     RPQuest.JournalTab:OnToggleActiveClicked()
     AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, prep.id, "Prepared quest activated for local testing")
     AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Dejar de probar", "Activate button says Dejar de probar while testing")
 
-    -- 4. Compartir e importar -> misión recibida en Para Jugar sin botón Editar
+    -- 4. Compartir e importar -> misión recibida en MISIONES sin botón Editar
     local code = RPQuest.QuestRepository:ExportQuestToCode(prep.id)
     local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
     AssertEqual(imported.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Imported quest has role=received")
-    AssertEqual(RPQuest.JournalTab.listRole, RPQuest.Constants.QUEST_ROLE.RECEIVED, "JournalTab switches to received view on import")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "JournalTab expands MISIONES on import")
     AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), true, "Edit button hidden for received quest")
     AssertEqual(RPQuest.JournalTab.btnReset._anchors[1].relTo, RPQuest.JournalTab.btnActivate, "Reset button re-anchored under btnActivate when Edit is hidden")
     AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Desactivar", "Imported quest is active so button says Desactivar")

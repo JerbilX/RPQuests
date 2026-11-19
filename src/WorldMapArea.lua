@@ -43,13 +43,15 @@ function WorldMapArea:Initialize()
 
     local pinTooltipCreator = {
         creator = function(pin)
-            local activeQuest = Addon.QuestRepository:GetActiveQuest()
-            if not activeQuest then return end
+            local questId = pin and pin.m_PinTag
+            local targetQuest = (questId and Addon.QuestRepository:GetQuestById(questId))
+                or Addon.QuestRepository:GetActiveQuest()
+            if not targetQuest then return end
             local tooltip = InformationTooltip
             if tooltip and tooltip.AddLine then
-                local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", activeQuest.title or "")
+                local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", targetQuest.title or "")
                 tooltip:AddLine(headerText, "ZoFontWinH4", 0.91, 0.83, 0.63)
-                local targets = activeQuest.targets or {}
+                local targets = targetQuest.targets or {}
                 for _, t in ipairs(targets) do
                     local objText = Addon.Locale:Get(
                         "MAP_TOOLTIP_OBJECTIVE",
@@ -88,6 +90,8 @@ function WorldMapArea:Initialize()
         WORLD_MAP_SCENE:RegisterCallback("StateChange", function(_, newState)
             if newState == SCENE_SHOWING or newState == SCENE_SHOWN then
                 self:RefreshPins()
+            elseif newState == SCENE_HIDDEN then
+                self.previewQuestId = nil
             end
         end)
     end
@@ -107,6 +111,9 @@ function WorldMapArea:Initialize()
 
     Addon.QuestRepository:RegisterListener(function(eventType)
         if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" then
+            if eventType == "ACTIVE_QUEST_CHANGED" or eventType == "QUEST_DELETED" then
+                self.previewQuestId = nil
+            end
             self:RefreshPins()
         end
     end)
@@ -151,17 +158,18 @@ function WorldMapArea:OnLayoutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.pinTypeId then return end
 
-    local activeQuest = Addon.QuestRepository:GetActiveQuest()
-    if not self:ShouldRenderOnCurrentMap(activeQuest) then
+    local targetQuest = (self.previewQuestId and Addon.QuestRepository:GetQuestById(self.previewQuestId))
+        or Addon.QuestRepository:GetActiveQuest()
+    if not self:ShouldRenderOnCurrentMap(targetQuest) then
         return
     end
 
     pManager:CreatePin(
         self.pinTypeId,
-        activeQuest.id,
-        activeQuest.areaCenterX,
-        activeQuest.areaCenterY,
-        activeQuest.areaRadius
+        targetQuest.id,
+        targetQuest.areaCenterX,
+        targetQuest.areaCenterY,
+        targetQuest.areaRadius
     )
 end
 
@@ -180,6 +188,8 @@ end
 function WorldMapArea:ShowQuestOnMap(quest)
     local targetQuest = quest or Addon.QuestRepository:GetActiveQuest()
     if not targetQuest then return false end
+
+    self.previewQuestId = targetQuest.id
 
     if MAIN_MENU_KEYBOARD and MAIN_MENU_KEYBOARD.ShowCategory and MENU_CATEGORY_MAP then
         MAIN_MENU_KEYBOARD:ShowCategory(MENU_CATEGORY_MAP)
