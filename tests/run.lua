@@ -1121,6 +1121,56 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
 end)
 
+RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.JournalTab:Initialize()
+    RPQuest.WorldMapArea:Initialize()
+
+    local mockPinManager = ZO_WorldMap_GetPinManager()
+    mockPinManager._createdPins = {}
+
+    mockState.reticleExists = true
+    mockState.reticleName = "Nigromante"
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = false
+    mockState.reticleAttackable = true
+    mockState.mapId = 45
+    mockState.zoneId = 104
+    mockState.mapName = "Deshaan"
+    mockState.playerX = 0.50
+    mockState.playerY = 0.50
+
+    -- 1. En creación (sin guardar), capturar objetivo muestra el pin en el mapa y habilita Ver en Mapa en el editor
+    RPQuest.JournalTab:OpenCreateEditor()
+    AssertEqual(RPQuest.JournalTab.btnShowMapEditor:IsHidden(), true, "ShowMapEditor hidden before target capture")
+    RPQuest.TargetCapture:CaptureFromReticle()
+    AssertEqual(RPQuest.JournalTab.btnShowMapEditor:IsHidden(), false, "ShowMapEditor visible after target capture")
+    AssertEqual(#mockPinManager._createdPins, 1, "Map pin rendered immediately during draft preparation")
+    AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft pin starts with MEDIUM radius")
+
+    -- 2. Cambiar radio en el editor antes de guardar actualiza el pin al instante
+    RPQuest.JournalTab.btnRadiusLarge:FireHandler("OnClicked")
+    AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed on radius change")
+    AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.LARGE, "Draft pin immediately reflects LARGE radius")
+
+    -- Guardar la misión preparada
+    RPQuest.JournalTab.titleEdit:SetText("Ritual en Deshaan")
+    RPQuest.JournalTab:OnSaveDraftClicked()
+    local q = RPQuest.QuestRepository:GetAllQuests()[1]
+    AssertEqual(q.areaRadius, RPQuest.Constants.AREA_RADIUS.LARGE, "Saved quest keeps LARGE radius")
+
+    -- 3. Abrir Editar y cambiar radio a SMALL refleja el nuevo tamaño en el mapa al instante (sin guardar todavía)
+    RPQuest.JournalTab:OpenEditEditor(q.id)
+    RPQuest.JournalTab.btnRadiusSmall:FireHandler("OnClicked")
+    AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed when editing quest radius")
+    AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "Edited draft pin immediately reflects SMALL radius")
+
+    -- 4. Pulsar Ver en Mapa desde el editor abre el mapa mostrando el pin editado
+    RPQuest.JournalTab.btnShowMapEditor:FireHandler("OnClicked")
+    AssertEqual(#mockPinManager._createdPins, 1, "ShowQuestOnMap from editor renders pin")
+    AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
