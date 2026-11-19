@@ -31,7 +31,6 @@ RPQuest.Locales["en"] = {
     BTN_SHARE = "Share Code",
     BTN_COMPLETION_CODE = "Delivery Code",
     BTN_VALIDATE_DELIVERY = "Validate Delivery",
-    BTN_CONFIRM_VALIDATE = "Validate",
     BTN_DELETE = "Delete",
     BTN_SAVE = "Create Quest",
     BTN_CLEAR_TARGETS = "Clear Targets",
@@ -52,6 +51,7 @@ RPQuest.Locales["en"] = {
     LABEL_OBJECTIVE_HEADER = "TASKS",
     OBJECTIVE_KILL_FORMAT = "• Eliminate %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completed)|r",
+    LABEL_CODE_BOX_HEADER = "CODE (Generate above or paste here to validate):",
     LABEL_SHARE_CODE_HEADER = "SHARE CODE (Press Ctrl+C to copy):",
     LABEL_COMPLETION_CODE_HEADER = "DELIVERY CODE (Press Ctrl+C to copy):",
 
@@ -71,10 +71,9 @@ RPQuest.Locales["en"] = {
     IMPORT_VIEW_TITLE = "IMPORT QUEST BY CODE",
     IMPORT_INSTRUCTIONS = "Paste the quest code (RPQ1:...) shared by another player below:",
 
-    -- Validate Delivery View
-    VALIDATE_VIEW_TITLE = "VALIDATE QUEST DELIVERY",
-    VALIDATE_INSTRUCTIONS = "Paste the delivery code (RPQC1:...) sent by the player for \"%s\":",
+    -- Validate Delivery (Inline)
     VALIDATE_RESULT_SUCCESS = "|c33FF33Valid delivery!|r Quest completed successfully by |cE8D5A0%s|r.",
+    VALIDATE_ERR_EMPTY = "|cFFAA33Paste a delivery code (RPQC1:...) into the text box first.|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444That is a quest share code (RPQ1), not a delivery code (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444This delivery code belongs to a different quest.|r",
     VALIDATE_ERR_NOT_COMPLETED = "|cFF4444The code does not indicate that the quest was completed.|r",

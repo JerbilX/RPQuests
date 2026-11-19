@@ -875,11 +875,11 @@ RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borra
     local qc = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
     AssertTrue(qb.title ~= qc.title, "Default title uses nextId and does not collide after deletion")
 
-    -- 2. btnActivate se reancla debajo de shareBg cuando shareCodeVisible=true
+    -- 2. Separador de código y cuadro único visibles en detalle de misión
     RPQuest.JournalTab:SelectQuest(qc.id)
-    AssertEqual(RPQuest.JournalTab.btnActivate._anchors[1].relTo, RPQuest.JournalTab.detailObjText, "btnActivate anchored to detailObjText when share hidden")
-    RPQuest.JournalTab:OnShareClicked()
-    AssertEqual(RPQuest.JournalTab.btnActivate._anchors[1].relTo, RPQuest.JournalTab.shareBg, "btnActivate anchored to shareBg when share visible")
+    AssertEqual(RPQuest.JournalTab.codeDivider:IsHidden(), false, "codeDivider visible when quest selected")
+    AssertEqual(RPQuest.JournalTab.shareBg:IsHidden(), false, "shareBg always visible in code section when quest selected")
+    AssertEqual(RPQuest.JournalTab.btnShare._anchors[1].relTo, RPQuest.JournalTab.codeDivider, "btnShare anchored below codeDivider")
 
     -- 3. _dirty se marca cuando panel está oculto y se limpia al abrir
     RPQuest.JournalTab.panel:SetHidden(true)
@@ -1111,9 +1111,12 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
 
     RPQuest.JournalTab:SelectQuest(masterQuest.id)
     AssertEqual(RPQuest.JournalTab.btnValidateDelivery:IsHidden(), false, "Validate delivery button visible for prepared quest")
-    RPQuest.JournalTab:OpenValidateView()
-    RPQuest.JournalTab.validateCodeEdit:SetText(completionCode)
-    RPQuest.JournalTab:OnConfirmValidateClicked()
+    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), "", "shareEdit cleared when switching quest")
+    RPQuest.JournalTab:OnValidateDeliveryClicked()
+    local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
+    AssertEqual(emptyMsg, RPQuest.Locale:Get("VALIDATE_ERR_EMPTY"), "Validate UI prompts when code box is empty")
+    RPQuest.JournalTab.shareEdit:SetText(completionCode)
+    RPQuest.JournalTab:OnValidateDeliveryClicked()
     local msg = RPQuest.JournalTab.validateResultLabel:GetText()
     AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
 end)
