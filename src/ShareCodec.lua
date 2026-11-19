@@ -103,6 +103,50 @@ local function ComputeChecksum16(data)
     return string.format("%04X", combined)
 end
 
+local function ComputeSignature32(data)
+    local h1 = 0x811C
+    local h2 = 0x9DC5
+    for i = 1, #data do
+        local b = string.byte(data, i)
+        h1 = ((h1 * 33) + b + i) % 65521
+        h2 = ((h2 * 131) + b + (i * 7)) % 65521
+    end
+    return string.format("%04X%04X", h1, h2)
+end
+
+local function BuildQuestPayloadString(quest)
+    if type(quest) ~= "table" then
+        return nil, "Invalid quest table"
+    end
+
+    local targets = quest.targets
+    if type(targets) ~= "table" or #targets == 0 then
+        return nil, "Invalid quest table"
+    end
+
+    local encodedTargets = EncodeTargetsList(targets)
+    if encodedTargets == "" then
+        return nil, "Invalid quest table"
+    end
+
+    local fields = {
+        EscapeField(quest.title or ""),
+        EscapeField(quest.description or ""),
+        tostring(math.floor(tonumber(quest.mapId) or 0)),
+        tostring(math.floor(tonumber(quest.zoneId) or 0)),
+        EscapeField(quest.mapName or ""),
+        string.format("%.4f", tonumber(quest.targetX) or 0.5),
+        string.format("%.4f", tonumber(quest.targetY) or 0.5),
+        string.format("%.4f", tonumber(quest.areaCenterX) or 0.5),
+        string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
+        string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
+        encodedTargets,
+        EscapeField(quest.completionMessage or ""),
+    }
+
+    return table.concat(fields, "|")
+end
+
 local function Base64UrlEncode(input)
     local out = {}
     local len = #input
@@ -175,37 +219,12 @@ local function Base64UrlDecode(encoded)
 end
 
 function ShareCodec:EncodeQuest(quest)
-    if type(quest) ~= "table" then
-        return nil, "Invalid quest table"
-    end
-
-    local targets = quest.targets
-    if type(targets) ~= "table" or #targets == 0 then
-        return nil, "Invalid quest table"
-    end
-
-    local encodedTargets = EncodeTargetsList(targets)
-    if encodedTargets == "" then
-        return nil, "Invalid quest table"
+    local rawPayload, err = BuildQuestPayloadString(quest)
+    if not rawPayload then
+        return nil, err
     end
 
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
-    local fields = {
-        EscapeField(quest.title or ""),
-        EscapeField(quest.description or ""),
-        tostring(math.floor(tonumber(quest.mapId) or 0)),
-        tostring(math.floor(tonumber(quest.zoneId) or 0)),
-        EscapeField(quest.mapName or ""),
-        string.format("%.4f", tonumber(quest.targetX) or 0.5),
-        string.format("%.4f", tonumber(quest.targetY) or 0.5),
-        string.format("%.4f", tonumber(quest.areaCenterX) or 0.5),
-        string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
-        string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
-        encodedTargets,
-        EscapeField(quest.completionMessage or ""),
-    }
-
-    local rawPayload = table.concat(fields, "|")
     local checksum = ComputeChecksum16(rawPayload)
     local encodedPayload = Base64UrlEncode(rawPayload)
 
@@ -275,4 +294,123 @@ function ShareCodec:DecodeQuest(codeString)
         areaCenterY = areaCenterY,
         areaRadius = areaRadius,
     }
+end
+
+function ShareCodec:ComputeQuestSignature(quest)
+    local rawPayload, err = BuildQuestPayloadString(quest)
+    if not rawPayload then
+        return nil, err
+    end
+    return ComputeSignature32(rawPayload)
+end
+
+function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
+    if type(quest) ~= "table" or not quest.completed then
+        return nil, "Quest is not completed"
+    end
+
+    if type(characterName) ~= "string" then
+        return nil, "Invalid character name"
+    end
+    local cleanName = characterName:gsub("^%s+", ""):gsub("%s+$", "")
+    if cleanName == "" then
+        return nil, "Invalid character name"
+    end
+
+    local signature, err = self:ComputeQuestSignature(quest)
+    if not signature then
+        return nil, err
+    end
+
+    local ts = math.max(0, math.floor(tonumber(completedAt) or 0))
+    local rawPayload = table.concat({
+        signature,
+        EscapeField(cleanName),
+        "1",
+        tostring(ts),
+    }, "|")
+
+    local prefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
+    local checksum = ComputeChecksum16(rawPayload)
+    local encodedPayload = Base64UrlEncode(rawPayload)
+
+    return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
+end
+
+function ShareCodec:DecodeCompletion(codeString)
+    if type(codeString) ~= "string" then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
+    local questPrefix = Addon.Constants.SHARE_CODEC.PREFIX
+    local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
+
+    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
+    if not pfx or not checksum or #checksum ~= 4 or not encodedPayload then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    if pfx == questPrefix then
+        return nil, "VALIDATE_ERR_NOT_COMPLETION_CODE"
+    end
+    if pfx ~= compPrefix then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    local rawPayload = Base64UrlDecode(encodedPayload)
+    if not rawPayload then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    local expectedChecksum = ComputeChecksum16(rawPayload)
+    if checksum:upper() ~= expectedChecksum:upper() then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    local fields = SplitByChar(rawPayload, "|")
+    if #fields < 3 then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    local questSignature = fields[1]
+    local characterName = UnescapeField(fields[2])
+    local completed = (fields[3] == "1")
+    local completedAt = tonumber(fields[4]) or 0
+
+    if not questSignature or not string.match(questSignature, "^[0-9A-Fa-f]+$") or #questSignature ~= 8 then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+    if not characterName or characterName == "" then
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+
+    return {
+        questSignature = questSignature:upper(),
+        characterName = characterName,
+        completed = completed,
+        completedAt = math.max(0, math.floor(completedAt)),
+    }
+end
+
+function ShareCodec:ValidateCompletionForQuest(quest, codeString)
+    local expectedSignature, sigErr = self:ComputeQuestSignature(quest)
+    if not expectedSignature then
+        return false, "VALIDATE_ERR_INVALID_CODE", sigErr
+    end
+
+    local decoded, errKey = self:DecodeCompletion(codeString)
+    if not decoded then
+        return false, errKey
+    end
+
+    if not decoded.completed then
+        return false, "VALIDATE_ERR_NOT_COMPLETED"
+    end
+
+    if decoded.questSignature ~= expectedSignature then
+        return false, "VALIDATE_ERR_WRONG_QUEST"
+    end
+
+    return true, decoded
 end

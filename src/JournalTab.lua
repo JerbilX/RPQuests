@@ -15,6 +15,7 @@ local VIEW_MODE = {
     DETAIL = "DETAIL",
     EDITOR = "EDITOR",
     IMPORT = "IMPORT",
+    VALIDATE = "VALIDATE",
 }
 
 local function CreateStyledButton(name, parent, width, height, text, onClick)
@@ -297,6 +298,7 @@ function JournalTab:BuildRightColumn(panel)
     self:BuildDetailPane(rightCol)
     self:BuildEditorPane(rightCol)
     self:BuildImportPane(rightCol)
+    self:BuildValidatePane(rightCol)
 end
 
 function JournalTab:BuildDetailPane(parent)
@@ -413,6 +415,18 @@ function JournalTab:BuildDetailPane(parent)
         end
     end)
     self.btnDelete:SetAnchor(TOPLEFT, self.btnReset, TOPRIGHT, 12, 0)
+
+    self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", pane, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
+        self:OnCompletionCodeClicked()
+    end)
+    self.btnCompletionCode:SetAnchor(TOPLEFT, self.btnDelete, TOPRIGHT, 12, 0)
+    self.btnCompletionCode:SetHidden(true)
+
+    self.btnValidateDelivery = CreateStyledButton(PANEL_NAME .. "_BtnValidateDelivery", pane, 160, 32, Addon.Locale:Get("BTN_VALIDATE_DELIVERY"), function()
+        self:OpenValidateView()
+    end)
+    self.btnValidateDelivery:SetAnchor(TOPLEFT, self.btnEdit, BOTTOMLEFT, 0, 10)
+    self.btnValidateDelivery:SetHidden(true)
 end
 
 function JournalTab:BuildEditorPane(parent)
@@ -588,6 +602,52 @@ function JournalTab:BuildImportPane(parent)
     self.btnCancelImport:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 196)
 end
 
+function JournalTab:BuildValidatePane(parent)
+    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidatePane", parent, CT_CONTROL)
+    pane:SetDimensions(550, 580)
+    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    pane:SetHidden(true)
+    self.validatePane = pane
+
+    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", pane, CT_LABEL)
+    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    if header.SetFont then header:SetFont("ZoFontWinH2") end
+    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
+    header:SetText(Addon.Locale:Get("VALIDATE_VIEW_TITLE"))
+    self.validateHeader = header
+
+    local instr = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateInstr", pane, CT_LABEL)
+    instr:SetDimensions(510, 48)
+    instr:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 44)
+    if instr.SetFont then instr:SetFont("ZoFontGame") end
+    self.validateInstr = instr
+
+    local codeBg, codeEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ValidateCodeEdit", pane, 510, 80, 1024, true)
+    codeBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 96)
+    self.validateCodeBg = codeBg
+    self.validateCodeEdit = codeEdit
+
+    self.btnConfirmValidate = CreateStyledButton(PANEL_NAME .. "_BtnConfirmValidate", pane, 180, 36, Addon.Locale:Get("BTN_CONFIRM_VALIDATE"), function()
+        self:OnConfirmValidateClicked()
+    end)
+    self.btnConfirmValidate:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 196)
+
+    self.btnCancelValidate = CreateStyledButton(PANEL_NAME .. "_BtnCancelValidate", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
+        self.validateCodeEdit:SetText("")
+        self.validateResultLabel:SetText("")
+        self.viewMode = VIEW_MODE.DETAIL
+        self:Refresh()
+    end)
+    self.btnCancelValidate:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 196)
+
+    local resultLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateResult", pane, CT_LABEL)
+    resultLabel:SetDimensions(510, 72)
+    resultLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 252)
+    if resultLabel.SetFont then resultLabel:SetFont("ZoFontWinH4") end
+    resultLabel:SetText("")
+    self.validateResultLabel = resultLabel
+end
+
 function JournalTab:IntegrateIntoQuestJournalModeBar()
     local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
     if not qj then return end
@@ -747,16 +807,12 @@ function JournalTab:OnToggleActiveClicked()
     end
 end
 
-function JournalTab:OnShareClicked()
-    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-    if not q then return end
-
-    local code = Addon.QuestRepository:ExportQuestToCode(q.id)
-    if not code then return end
-
+function JournalTab:ShowCodeInDetailBox(headerKey, code, alertKey)
+    self.shareCodeHeaderKey = headerKey
     self.shareCodeVisible = true
     self:Refresh()
 
+    self.shareHeader:SetText(Addon.Locale:Get(headerKey))
     self.shareEdit:SetText(code)
     if self.shareEdit.TakeFocus then
         self.shareEdit:TakeFocus()
@@ -765,7 +821,54 @@ function JournalTab:OnShareClicked()
         self.shareEdit:SelectAll()
     end
 
-    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_SHARE_READY"), false)
+    Addon.Announcements:ShowAlert(Addon.Locale:Get(alertKey), false)
+end
+
+function JournalTab:OnShareClicked()
+    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not q then return end
+
+    local code = Addon.QuestRepository:ExportQuestToCode(q.id)
+    if not code then return end
+
+    self:ShowCodeInDetailBox("LABEL_SHARE_CODE_HEADER", code, "ALERT_SHARE_READY")
+end
+
+function JournalTab:OnCompletionCodeClicked()
+    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not q or not q.completed then return end
+
+    local code = Addon.QuestRepository:ExportCompletionCode(q.id)
+    if not code then return end
+
+    self:ShowCodeInDetailBox("LABEL_COMPLETION_CODE_HEADER", code, "ALERT_COMPLETION_CODE_READY")
+end
+
+function JournalTab:OpenValidateView()
+    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not q then return end
+
+    self.validateInstr:SetText(Addon.Locale:Get("VALIDATE_INSTRUCTIONS", q.title or ""))
+    self.validateCodeEdit:SetText("")
+    self.validateResultLabel:SetText("")
+    self.viewMode = VIEW_MODE.VALIDATE
+    self:Refresh()
+    if self.validateCodeEdit.TakeFocus then
+        self.validateCodeEdit:TakeFocus()
+    end
+end
+
+function JournalTab:OnConfirmValidateClicked()
+    if not self.selectedQuestId then return end
+    local rawCode = self.validateCodeEdit:GetText()
+    local isValid, resultOrErrKey = Addon.QuestRepository:ValidateCompletionCode(self.selectedQuestId, rawCode)
+
+    if isValid and type(resultOrErrKey) == "table" then
+        self.validateResultLabel:SetText(Addon.Locale:Get("VALIDATE_RESULT_SUCCESS", resultOrErrKey.characterName or ""))
+    else
+        local errKey = type(resultOrErrKey) == "string" and resultOrErrKey or "VALIDATE_ERR_INVALID_CODE"
+        self.validateResultLabel:SetText(Addon.Locale:Get(errKey))
+    end
 end
 
 function JournalTab:OpenTab()
@@ -949,15 +1052,23 @@ function JournalTab:Refresh()
     if self.viewMode == VIEW_MODE.EDITOR then
         self.detailPane:SetHidden(true)
         self.importPane:SetHidden(true)
+        self.validatePane:SetHidden(true)
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
     elseif self.viewMode == VIEW_MODE.IMPORT then
         self.detailPane:SetHidden(true)
         self.editorPane:SetHidden(true)
+        self.validatePane:SetHidden(true)
         self.importPane:SetHidden(false)
+    elseif self.viewMode == VIEW_MODE.VALIDATE then
+        self.detailPane:SetHidden(true)
+        self.editorPane:SetHidden(true)
+        self.importPane:SetHidden(true)
+        self.validatePane:SetHidden(false)
     else
         self.editorPane:SetHidden(true)
         self.importPane:SetHidden(true)
+        self.validatePane:SetHidden(true)
         self.detailPane:SetHidden(false)
         self:RefreshDetailPane(selectedQuest, activeQuest)
     end
@@ -983,6 +1094,8 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
         self.btnDelete:SetHidden(true)
+        self.btnCompletionCode:SetHidden(true)
+        self.btnValidateDelivery:SetHidden(true)
         return
     end
 
@@ -1033,6 +1146,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
 
     self.btnActivate:ClearAnchors()
     if self.shareCodeVisible then
+        self.shareHeader:SetText(Addon.Locale:Get(self.shareCodeHeaderKey or "LABEL_SHARE_CODE_HEADER"))
         self.shareHeader:SetHidden(false)
         self.shareBg:SetHidden(false)
         self.btnActivate:SetAnchor(TOPLEFT, self.shareBg, BOTTOMLEFT, 0, 14)
@@ -1049,9 +1163,13 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     if isPrepared then
         self.btnEdit:SetHidden(false)
         self.btnReset:SetAnchor(TOPLEFT, self.btnEdit, TOPRIGHT, 12, 0)
+        self.btnCompletionCode:SetHidden(true)
+        self.btnValidateDelivery:SetHidden(false)
     else
         self.btnEdit:SetHidden(true)
         self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
+        self.btnValidateDelivery:SetHidden(true)
+        self.btnCompletionCode:SetHidden(not selectedQuest.completed)
     end
     self.btnReset:SetHidden(false)
     self.btnDelete:SetHidden(false)
