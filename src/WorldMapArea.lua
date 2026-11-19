@@ -29,10 +29,54 @@ local function GetWorldMapPinManager()
     return nil
 end
 
-local function PanWorldMapToNormalizedPosition(x, y)
-    local fn = _G["ZO_WorldMap_PanToNormalizedPosition"]
-    if type(fn) == "function" then
-        fn(x, y)
+local function RegisterMapSceneCallbacks(self, scene)
+    if not scene or not scene.RegisterCallback then
+        return
+    end
+    scene:RegisterCallback("StateChange", function(_, newState)
+        if newState == SCENE_SHOWING then
+            self:RefreshPins()
+        elseif newState == SCENE_SHOWN then
+            self:RefreshPins()
+            if zo_callLater then
+                zo_callLater(function()
+                    self:RefreshPins()
+                end, 50)
+            end
+        elseif newState == SCENE_HIDDEN then
+            self.previewQuestId = nil
+        end
+    end)
+end
+
+local function SetWorldMapToId(mapId)
+    if not mapId or mapId <= 0 then
+        return
+    end
+    if WORLD_MAP_MANAGER and WORLD_MAP_MANAGER.SetMapById then
+        WORLD_MAP_MANAGER:SetMapById(mapId)
+        return
+    end
+    if SetMapToMapId then
+        local res = SetMapToMapId(mapId)
+        if res == SET_MAP_RESULT_MAP_CHANGED and CALLBACK_MANAGER and CALLBACK_MANAGER.FireCallbacks then
+            CALLBACK_MANAGER:FireCallbacks("OnWorldMapChanged")
+        end
+    end
+end
+
+local function OpenWorldMapScene()
+    local isShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing
+        and (SCENE_MANAGER:IsShowing("worldMap") or SCENE_MANAGER:IsShowing("gamepad_worldMap"))
+    if isShowing then
+        return
+    end
+    if IsInGamepadPreferredMode and IsInGamepadPreferredMode() and SCENE_MANAGER and SCENE_MANAGER.Push then
+        SCENE_MANAGER:Push("gamepad_worldMap")
+    elseif MAIN_MENU_KEYBOARD and MAIN_MENU_KEYBOARD.ShowCategory and MENU_CATEGORY_MAP then
+        MAIN_MENU_KEYBOARD:ShowCategory(MENU_CATEGORY_MAP)
+    elseif SCENE_MANAGER and SCENE_MANAGER.Show then
+        SCENE_MANAGER:Show("worldMap")
     end
 end
 
@@ -104,17 +148,13 @@ function WorldMapArea:Initialize()
         CALLBACK_MANAGER:RegisterCallback("OnWorldMapChanged", function()
             self:RefreshPins()
         end)
-    end
-
-    if WORLD_MAP_SCENE and WORLD_MAP_SCENE.RegisterCallback then
-        WORLD_MAP_SCENE:RegisterCallback("StateChange", function(_, newState)
-            if newState == SCENE_SHOWING or newState == SCENE_SHOWN then
-                self:RefreshPins()
-            elseif newState == SCENE_HIDDEN then
-                self.previewQuestId = nil
-            end
+        CALLBACK_MANAGER:RegisterCallback("OnWorldMapModeChanged", function()
+            self:RefreshPins()
         end)
     end
+
+    RegisterMapSceneCallbacks(self, WORLD_MAP_SCENE)
+    RegisterMapSceneCallbacks(self, GAMEPAD_WORLD_MAP_SCENE)
 
     if EVENT_MANAGER then
         if EVENT_PLAYER_ACTIVATED then
@@ -227,33 +267,30 @@ function WorldMapArea:RefreshPins()
     end
 end
 
+local function PanWorldMapToNormalizedPosition(x, y)
+    local fn = _G["ZO_WorldMap_PanToNormalizedPosition"]
+    if type(fn) == "function" then
+        fn(x, y)
+    end
+end
+
 function WorldMapArea:ShowQuestOnMap(quest)
     local targetQuest = quest or Addon.QuestRepository:GetActiveQuest()
     if not targetQuest then return false end
 
     self.previewQuestId = targetQuest.id or targetQuest.editingQuestId or DRAFT_PIN_TAG
 
-    if MAIN_MENU_KEYBOARD and MAIN_MENU_KEYBOARD.ShowCategory and MENU_CATEGORY_MAP then
-        MAIN_MENU_KEYBOARD:ShowCategory(MENU_CATEGORY_MAP)
-    elseif SCENE_MANAGER and SCENE_MANAGER.Show then
-        SCENE_MANAGER:Show("worldMap")
-    end
-
-    local refreshedByCallback = false
-    if SetMapToMapId and targetQuest.mapId and targetQuest.mapId > 0 then
-        local res = SetMapToMapId(targetQuest.mapId)
-        if res == SET_MAP_RESULT_MAP_CHANGED and CALLBACK_MANAGER and CALLBACK_MANAGER.FireCallbacks then
-            CALLBACK_MANAGER:FireCallbacks("OnWorldMapChanged")
-            refreshedByCallback = true
-        end
-    end
-
-    if not refreshedByCallback then
-        self:RefreshPins()
-    end
+    SetWorldMapToId(targetQuest.mapId)
+    OpenWorldMapScene()
+    self:RefreshPins()
 
     if targetQuest.areaCenterX and targetQuest.areaCenterY then
         PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+        if zo_callLater then
+            zo_callLater(function()
+                PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+            end, 50)
+        end
     end
 
     return true
