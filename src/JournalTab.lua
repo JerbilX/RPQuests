@@ -573,6 +573,15 @@ function JournalTab:BuildEditorPane(parent)
         self:Refresh()
     end)
     self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 486)
+
+    self.btnShowMapEditor = CreateStyledButton(PANEL_NAME .. "_BtnShowMapEditor", pane, 155, 36, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
+        local draft = Addon.QuestRepository:GetDraft()
+        if draft and draft.mapId and draft.mapId > 0 then
+            Addon.WorldMapArea:ShowQuestOnMap(draft)
+        end
+    end)
+    self.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 486)
+    self.btnShowMapEditor:SetHidden(true)
 end
 
 function JournalTab:BuildImportPane(parent)
@@ -1156,6 +1165,11 @@ function JournalTab:RefreshEditorPane()
     else
         self.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
         self.btnClearTargets:SetHidden(true)
+    end
+
+    if self.btnShowMapEditor then
+        local hasDraftArea = summary ~= "" and draft.mapId and draft.mapId > 0 and draft.areaCenterX and draft.areaCenterY
+        self.btnShowMapEditor:SetHidden(not hasDraftArea)
     end
 
     local radii = Addon.Constants.AREA_RADIUS
