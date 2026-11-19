@@ -21,7 +21,6 @@ function Addon:Initialize()
     Addon.QuestRepository:Initialize(savedVars)
     Addon.CombatTracker:Initialize()
     Addon.WorldMapArea:Initialize()
-    Addon.HudTracker:Initialize()
     Addon.JournalTab:Initialize()
 
     SLASH_COMMANDS["/rpquest"] = function(args)

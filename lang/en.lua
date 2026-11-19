@@ -88,8 +88,7 @@ RPQuest.Locales["en"] = {
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Quest Completed: %s",
 
-    -- Map & HUD Tracker
+    -- Map
     MAP_TOOLTIP_HEADER = "RPQuest: %s",
     MAP_TOOLTIP_OBJECTIVE = "Search Area: Eliminate %s (%d/%d)",
-    HUD_TRACKER_HEADER = "RPQuest",
 }

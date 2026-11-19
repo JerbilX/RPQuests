@@ -312,7 +312,6 @@ dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
 dofile("src/CombatTracker.lua")
 dofile("src/WorldMapArea.lua")
-dofile("src/HudTracker.lua")
 dofile("src/JournalTab.lua")
 dofile("RPQuest.lua")
 
@@ -686,21 +685,15 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
 end)
 
 -- ============================================================================
--- 5. Tests de HudTracker, JournalTab y Ciclo de Vida EVENT_ADD_ON_LOADED
+-- 5. Tests de JournalTab y Ciclo de Vida EVENT_ADD_ON_LOADED
 -- ============================================================================
-RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars, JournalTab and HudTracker", function()
+RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars and JournalTab", function()
     mockState.language = "es"
     EVENT_MANAGER:FireEvent(EVENT_ADD_ON_LOADED, "RPQuest")
 
     AssertTrue(RPQuest.savedVars ~= nil, "Character SavedVars initialized")
     AssertTrue(RPQuest.JournalTab.isInitialized, "JournalTab initialized")
-    AssertTrue(RPQuest.HudTracker.isInitialized, "HudTracker initialized")
     AssertTrue(RPQuest.JournalTab.isTabAdded, "Custom Quests tab registered in QUEST_JOURNAL_KEYBOARD.tabs")
-
-    -- Sin misión activa, el HUD Tracker está oculto
-    SCENE_MANAGER:Show("hud")
-    RPQuest.HudTracker:Refresh()
-    AssertTrue(RPQuest.HudTracker.panel:IsHidden(), "HudTracker hidden when no active quest")
 
     -- Crear una misión desde la UI del Editor en la pestaña del Diario
     RPQuest.JournalTab:OpenCreateEditor()
@@ -737,12 +730,6 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars,
     RPQuest.JournalTab:OnToggleActiveClicked()
     local active = RPQuest.QuestRepository:GetActiveQuest()
     AssertTrue(active ~= nil and active.id == preparedQuest.id, "Prepared quest activated for local testing via JournalTab")
-
-    -- Con misión activa en escena HUD, el HudTracker se muestra con título y objetivo
-    SCENE_MANAGER:Show("hud")
-    RPQuest.HudTracker:Refresh()
-    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), false, "HudTracker shown for active quest")
-    AssertEqual(RPQuest.HudTracker.titleLabel:GetText(), "Cacería Nocturna", "HudTracker title updated")
 
     -- Probar botón Compartir en JournalTab (genera código y lo selecciona en shareEdit)
     RPQuest.JournalTab:OnShareClicked()
@@ -846,10 +833,9 @@ RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs +
     AssertEqual(draftMapSwitch.mapName, "", "ClearDraftTargets resets mapName to empty")
 end)
 
-RunTest("Bugfixes: DeleteQuest resets dangling draft, JournalTab scrolls >14 rows, HudTracker obeys scene fragment", function()
+RunTest("Bugfixes: DeleteQuest resets dangling draft and JournalTab scrolls >14 rows", function()
     RPQuest.QuestRepository:Initialize({})
     RPQuest.JournalTab:Initialize()
-    RPQuest.HudTracker:Initialize()
 
     -- 1. DeleteQuest limpia editingQuestId si esa misión estaba en edición
     mockState.reticleExists = true
@@ -861,19 +847,7 @@ RunTest("Bugfixes: DeleteQuest resets dangling draft, JournalTab scrolls >14 row
     RPQuest.QuestRepository:DeleteQuest(q1.id)
     AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, nil, "DeleteQuest clears dangling editingQuestId")
 
-    -- 2. HudTracker controlado por fragment según escena
-    RPQuest.TargetCapture:CaptureFromReticle()
-    local qHud = RPQuest.QuestRepository:SaveDraft("Misión HUD", "Desc", 0.05)
-    RPQuest.QuestRepository:SetActiveQuest(qHud.id)
-    SCENE_MANAGER:Show("hud")
-    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), false, "HudTracker visible on hud scene with active quest")
-    SCENE_MANAGER:Show("questJournal")
-    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), true, "HudTracker hidden when non-HUD scene is active")
-    SCENE_MANAGER:Show("hud")
-    AssertEqual(RPQuest.HudTracker.panel:IsHidden(), false, "HudTracker visible again when returning to hud")
-    RPQuest.QuestRepository:DeleteQuest(qHud.id)
-
-    -- 3. JournalTab pagina/desplaza más allá de 14 filas
+    -- 2. JournalTab pagina/desplaza más allá de 14 filas
     for i = 1, 16 do
         RPQuest.TargetCapture:CaptureFromReticle()
         RPQuest.QuestRepository:SaveDraft("Quest #" .. tostring(i), "", 0.05)
@@ -883,7 +857,7 @@ RunTest("Bugfixes: DeleteQuest resets dangling draft, JournalTab scrolls >14 row
     AssertEqual(RPQuest.JournalTab.listOffset, 0, "Initial listOffset is 0")
     RPQuest.JournalTab:ScrollQuestList(2)
     AssertEqual(RPQuest.JournalTab.listOffset, 2, "ScrollQuestList advances offset")
-    AssertEqual(RPQuest.JournalTab.rowBindings[1].questId, 4, "First visible row reflects scrolled offset")
+    AssertEqual(RPQuest.JournalTab.rowBindings[1].questId, 3, "First visible row reflects scrolled offset")
 end)
 
 RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borrado y ciclo _dirty", function()
