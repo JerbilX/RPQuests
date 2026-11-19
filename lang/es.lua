@@ -53,6 +53,7 @@ RPQuest.Locales["es"] = {
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completado)|r",
     LABEL_CODE_BOX_HEADER = "CÓDIGO (Genera arriba o pega aquí para validar):",
     LABEL_SHARE_CODE_HEADER = "CÓDIGO PARA COMPARTIR (Pulsa Ctrl+C para copiar):",
+    LABEL_VALIDATE_BOX_HEADER = "VALIDAR ENTREGA (Pega debajo el código RPQC1):",
     LABEL_COMPLETION_CODE_HEADER = "CÓDIGO DE ENTREGA (Pulsa Ctrl+C para copiar):",
 
     -- Editor View (Create / Edit)
