@@ -946,6 +946,14 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     RPQuest.JournalTab:ToggleSection("preparing")
     AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection expands preparing again")
 
+    -- 2c. Mostrar en mapa una misión en preparación (aunque no esté activa)
+    RPQuest.WorldMapArea:Initialize()
+    RPQuest.WorldMapArea:ShowQuestOnMap(prep)
+    local pins = ZO_WorldMap_GetPinManager()._createdPins
+    AssertEqual(#pins, 1, "ShowQuestOnMap renders area pin for prepared quest even when inactive")
+    AssertEqual(pins[1].pinTag, prep.id, "Rendered preview pin belongs to prepared quest")
+    AssertEqual(pins[1].radius, 0.05, "Rendered preview pin uses prepared quest radius")
+
     -- 3. Probar localmente y luego detener prueba
     RPQuest.JournalTab:OnToggleActiveClicked()
     AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, prep.id, "Prepared quest activated for local testing")
