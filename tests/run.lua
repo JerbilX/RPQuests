@@ -696,6 +696,7 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     AssertTrue(RPQuest.JournalTab.isTabAdded, "Custom Quests tab registered in QUEST_JOURNAL_KEYBOARD.tabs")
 
     -- Crear una misión desde la UI del Editor en la pestaña del Diario
+    RPQuest.JournalTab:OpenTab()
     RPQuest.JournalTab:OpenCreateEditor()
     AssertEqual(RPQuest.JournalTab.editorPane:IsHidden(), false, "Editor pane is visible")
 
@@ -731,11 +732,13 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     local active = RPQuest.QuestRepository:GetActiveQuest()
     AssertTrue(active ~= nil and active.id == preparedQuest.id, "Prepared quest activated for local testing via JournalTab")
 
-    -- Probar botón Compartir en JournalTab (genera código y lo selecciona en shareEdit)
-    RPQuest.JournalTab:OnShareClicked()
+    -- Código para compartir siempre visible en shareEdit al seleccionar/crear la misión
     local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ1:", "Share edit box populated with RPQ1 code")
-    AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selected all text for Ctrl+C")
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ1:", "Share edit box auto-populated with RPQ1 code")
+    AssertEqual(RPQuest.JournalTab.btnShare, nil, "Share button removed in favor of always-visible share box")
+    RPQuest.JournalTab.shareEdit._selectedAll = false
+    RPQuest.JournalTab.shareEdit:FireHandler("OnFocusGained")
+    AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selects all text when focused")
 
     -- Probar vista Importar en JournalTab
     RPQuest.JournalTab:OpenImportView()
@@ -875,11 +878,12 @@ RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borra
     local qc = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
     AssertTrue(qb.title ~= qc.title, "Default title uses nextId and does not collide after deletion")
 
-    -- 2. Separador de código y cuadro único visibles en detalle de misión
+    -- 2. Separador de código, cuadro de compartir y cuadro de validación visibles en detalle de misión
     RPQuest.JournalTab:SelectQuest(qc.id)
     AssertEqual(RPQuest.JournalTab.codeDivider:IsHidden(), false, "codeDivider visible when quest selected")
     AssertEqual(RPQuest.JournalTab.shareBg:IsHidden(), false, "shareBg always visible in code section when quest selected")
-    AssertEqual(RPQuest.JournalTab.btnShare._anchors[1].relTo, RPQuest.JournalTab.codeDivider, "btnShare anchored below codeDivider")
+    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "validateBg visible for prepared quest")
+    AssertEqual(RPQuest.JournalTab.shareHeader._anchors[1].relTo, RPQuest.JournalTab.codeDivider, "shareHeader anchored below codeDivider")
 
     -- 3. _dirty se marca cuando panel está oculto y se limpia al abrir
     RPQuest.JournalTab.panel:SetHidden(true)
@@ -1106,19 +1110,23 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     -- Flujo UI en JournalTab: jugador copia entrega y Master la valida
     RPQuest.JournalTab:SelectQuest(playerQuest.id)
     AssertEqual(RPQuest.JournalTab.btnCompletionCode:IsHidden(), false, "Completion code button visible for completed received quest")
+    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
     RPQuest.JournalTab:OnCompletionCodeClicked()
     AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), completionCode, "JournalTab puts RPQC1 code into shareEdit")
 
     RPQuest.JournalTab:SelectQuest(masterQuest.id)
     AssertEqual(RPQuest.JournalTab.btnValidateDelivery:IsHidden(), false, "Validate delivery button visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), "", "shareEdit cleared when switching quest")
+    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ1:", "shareEdit auto-populated with RPQ1 code for prepared quest")
+    AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
-    AssertEqual(emptyMsg, RPQuest.Locale:Get("VALIDATE_ERR_EMPTY"), "Validate UI prompts when code box is empty")
-    RPQuest.JournalTab.shareEdit:SetText(completionCode)
+    AssertEqual(emptyMsg, RPQuest.Locale:Get("VALIDATE_ERR_EMPTY"), "Validate UI prompts when validate box is empty (ignores shareEdit)")
+    RPQuest.JournalTab.validateEdit:SetText(completionCode)
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local msg = RPQuest.JournalTab.validateResultLabel:GetText()
     AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ1:", "shareEdit still preserves RPQ1 code after validation")
 end)
 
 RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
