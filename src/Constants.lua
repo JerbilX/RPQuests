@@ -17,6 +17,7 @@ Addon.Constants = {
     },
     SHARE_CODEC = {
         PREFIX = "RPQ1",
+        COMPLETION_PREFIX = "RPQC1",
         VERSION = 1,
     },
     QUEST_ROLE = {

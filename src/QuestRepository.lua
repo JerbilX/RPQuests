@@ -482,6 +482,30 @@ function QuestRepository:ExportQuestToCode(questId)
     return Addon.ShareCodec:EncodeQuest(quest)
 end
 
+function QuestRepository:ExportCompletionCode(questId)
+    local quest = self:GetQuestById(questId)
+    if not quest or not quest.completed then
+        return nil, "Quest is not completed"
+    end
+
+    local rawName = GetUnitName and GetUnitName("player") or ""
+    local charName = rawName
+    if zo_strformat and rawName ~= "" then
+        charName = zo_strformat("<<C:1>>", rawName)
+    end
+    local ts = GetTimeStamp and GetTimeStamp() or 0
+
+    return Addon.ShareCodec:EncodeCompletion(quest, charName, ts)
+end
+
+function QuestRepository:ValidateCompletionCode(questId, codeString)
+    local quest = self:GetQuestById(questId)
+    if not quest then
+        return false, "VALIDATE_ERR_INVALID_CODE"
+    end
+    return Addon.ShareCodec:ValidateCompletionForQuest(quest, codeString)
+end
+
 function QuestRepository:IsPreparedQuest(quest)
     return quest ~= nil and quest.role == Addon.Constants.QUEST_ROLE.PREPARED
 end

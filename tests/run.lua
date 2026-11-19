@@ -1034,6 +1034,90 @@ RunTest("14. Mensaje de finalizacion editable y refresco de pin al editar radio 
     AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.LARGE, "WorldMapArea pin uses updated LARGE radius")
 end)
 
+RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.JournalTab:Initialize()
+    mockState.reticleExists = true
+    mockState.reticleName = "Capitán Pirata^m"
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = false
+    mockState.reticleAttackable = true
+    mockState.mapId = 32
+    mockState.zoneId = 381
+    mockState.mapName = "Auridon"
+    mockState.playerX = 0.42
+    mockState.playerY = 0.61
+
+    -- Master crea una misión en preparación
+    RPQuest.TargetCapture:CaptureFromReticle()
+    RPQuest.QuestRepository:UpdateDraftFields({
+        title = "Cacería del Capitán",
+        description = "Elimina al capitán pirata.",
+    })
+    local masterQuest = RPQuest.QuestRepository:SaveDraft()
+    AssertTrue(masterQuest ~= nil, "Master quest saved")
+
+    -- No se puede generar código de entrega si no está completada
+    local noCode = RPQuest.QuestRepository:ExportCompletionCode(masterQuest.id)
+    AssertEqual(noCode, nil, "Cannot export completion code for incomplete quest")
+
+    -- Master exporta RPQ1 y otro jugador la importa y completa
+    local shareCode = RPQuest.QuestRepository:ExportQuestToCode(masterQuest.id)
+    local playerQuest = RPQuest.QuestRepository:ImportQuestFromCode(shareCode)
+    AssertTrue(playerQuest ~= nil, "Player imported quest")
+
+    RPQuest.QuestRepository:SetActiveQuest(playerQuest.id)
+    RPQuest.QuestRepository:RecordTargetEliminated("Capitán Pirata", {
+        mapId = 32,
+        zoneId = 381,
+        x = 0.42,
+        y = 0.61,
+    })
+    local updatedPlayerQuest = RPQuest.QuestRepository:GetQuestById(playerQuest.id)
+    AssertTrue(updatedPlayerQuest.completed, "Player quest completed")
+
+    -- Jugador genera código de entrega RPQC1
+    local completionCode = RPQuest.QuestRepository:ExportCompletionCode(playerQuest.id)
+    AssertTrue(type(completionCode) == "string" and completionCode:match("^RPQC1:") ~= nil, "Completion code has RPQC1 prefix")
+
+    -- Master valida el código contra su misión en preparación
+    local ok, result = RPQuest.QuestRepository:ValidateCompletionCode(masterQuest.id, completionCode)
+    AssertTrue(ok, "Completion code validates against master prepared quest")
+    AssertEqual(result.characterName, "Jugador", "Completion code preserves characterName")
+
+    -- Rechaza un código RPQ1 como si fuera entrega
+    local okQuestCode, errQuestCode = RPQuest.QuestRepository:ValidateCompletionCode(masterQuest.id, shareCode)
+    AssertEqual(okQuestCode, false, "RPQ1 code rejected in delivery validator")
+    AssertEqual(errQuestCode, "VALIDATE_ERR_NOT_COMPLETION_CODE", "Specific error returned for RPQ1 code")
+
+    -- Rechaza un código corrupto
+    local okBad, errBad = RPQuest.QuestRepository:ValidateCompletionCode(masterQuest.id, completionCode .. "X")
+    AssertEqual(okBad, false, "Corrupted RPQC1 code rejected")
+    AssertEqual(errBad, "VALIDATE_ERR_INVALID_CODE", "Specific error returned for corrupted code")
+
+    -- Rechaza un código de otra misión distinta
+    RPQuest.TargetCapture:CaptureFromReticle()
+    RPQuest.QuestRepository:UpdateDraftFields({ title = "Otra Misión Distinta" })
+    local otherMasterQuest = RPQuest.QuestRepository:SaveDraft()
+    local okWrong, errWrong = RPQuest.QuestRepository:ValidateCompletionCode(otherMasterQuest.id, completionCode)
+    AssertEqual(okWrong, false, "RPQC1 from another quest rejected")
+    AssertEqual(errWrong, "VALIDATE_ERR_WRONG_QUEST", "Specific error returned for wrong quest")
+
+    -- Flujo UI en JournalTab: jugador copia entrega y Master la valida
+    RPQuest.JournalTab:SelectQuest(playerQuest.id)
+    AssertEqual(RPQuest.JournalTab.btnCompletionCode:IsHidden(), false, "Completion code button visible for completed received quest")
+    RPQuest.JournalTab:OnCompletionCodeClicked()
+    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), completionCode, "JournalTab puts RPQC1 code into shareEdit")
+
+    RPQuest.JournalTab:SelectQuest(masterQuest.id)
+    AssertEqual(RPQuest.JournalTab.btnValidateDelivery:IsHidden(), false, "Validate delivery button visible for prepared quest")
+    RPQuest.JournalTab:OpenValidateView()
+    RPQuest.JournalTab.validateCodeEdit:SetText(completionCode)
+    RPQuest.JournalTab:OnConfirmValidateClicked()
+    local msg = RPQuest.JournalTab.validateResultLabel:GetText()
+    AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
