@@ -1179,6 +1179,79 @@ RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al 
     AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
 end)
 
+RunTest("17. ShowQuestOnMap cambia de zona con WORLD_MAP_MANAGER y abrir con M muestra pin activo", function()
+    local sv = {}
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.WorldMapArea:Initialize()
+
+    local mockPinManager = ZO_WorldMap_GetPinManager()
+    mockPinManager._createdPins = {}
+
+    -- Crear misión en Stonefalls (mapId = 27) y activarla
+    mockState.reticleExists = true
+    mockState.reticleName = "Cultista"
+    mockState.reticleIsPlayer = false
+    mockState.reticleIsDead = false
+    mockState.reticleAttackable = true
+    mockState.mapId = 27
+    mockState.zoneId = 41
+    mockState.mapName = "Stonefalls"
+    mockState.playerX = 0.62
+    mockState.playerY = 0.38
+
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local stonefallsQuest = RPQuest.QuestRepository:SaveDraft("Misión en Stonefalls", "Desc", RPQuest.Constants.AREA_RADIUS.MEDIUM)
+    RPQuest.QuestRepository:SetActiveQuest(stonefallsQuest.id)
+
+    -- Jugador viaja a Deshaan (mapId = 45) y el mapa está cerrado
+    SCENE_MANAGER:Hide("worldMap")
+    mockState.mapId = 45
+    mockState.zoneId = 104
+    mockState.mapName = "Deshaan"
+    mockPinManager._createdPins = {}
+    mockState.lastPannedX = nil
+    mockState.lastPannedY = nil
+
+    local callOrder = {}
+    local origSceneShow = SCENE_MANAGER.Show
+    SCENE_MANAGER.Show = function(self, sceneName)
+        table.insert(callOrder, "ShowScene:" .. tostring(sceneName))
+        return origSceneShow(self, sceneName)
+    end
+
+    local setMapByIdCalledWith = nil
+    WORLD_MAP_MANAGER = {
+        SetMapById = function(self, mapId)
+            table.insert(callOrder, "SetMapById")
+            setMapByIdCalledWith = mapId
+            SetMapToMapId(mapId)
+        end,
+    }
+
+    -- 1. Show on Map desde Deshaan debe cambiar el mapa a Stonefalls ANTES de abrir la escena
+    local shown = RPQuest.WorldMapArea:ShowQuestOnMap(stonefallsQuest)
+    AssertEqual(shown, true, "ShowQuestOnMap returns true")
+    AssertEqual(setMapByIdCalledWith, 27, "WORLD_MAP_MANAGER:SetMapById called with Stonefalls mapId")
+    AssertEqual(callOrder[1], "SetMapById", "SetMapById called before opening world map")
+    AssertEqual(callOrder[2], "ShowScene:worldMap", "World map opened after SetMapById")
+    AssertEqual(mockState.mapId, 27, "Current mapId switched to Stonefalls")
+    AssertEqual(#mockPinManager._createdPins, 1, "Stonefalls quest pin rendered when viewing from Deshaan")
+    AssertEqual(mockState.lastPannedX, stonefallsQuest.areaCenterX, "Map panned to quest areaCenterX")
+    AssertEqual(mockState.lastPannedY, stonefallsQuest.areaCenterY, "Map panned to quest areaCenterY")
+
+    -- Restaurar mocks globales
+    SCENE_MANAGER.Show = origSceneShow
+    WORLD_MAP_MANAGER = nil
+
+    -- 2. Cerrar el mapa y abrirlo por fuera con M en Stonefalls debe mostrar la marca activa
+    SCENE_MANAGER:Hide("worldMap")
+    mockPinManager._createdPins = {}
+    mockState.mapId = 27
+    SCENE_MANAGER:Show("worldMap")
+    RPQuest.WorldMapArea:RefreshPins()
+    AssertEqual(#mockPinManager._createdPins, 1, "Opening map with M renders active quest pin")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
