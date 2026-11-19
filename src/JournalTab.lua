@@ -15,7 +15,6 @@ local VIEW_MODE = {
     DETAIL = "DETAIL",
     EDITOR = "EDITOR",
     IMPORT = "IMPORT",
-    VALIDATE = "VALIDATE",
 }
 
 local function CreateStyledButton(name, parent, width, height, text, onClick)
@@ -109,7 +108,7 @@ function JournalTab:Initialize()
         preparing = true,
     }
     self.selectedQuestId = nil
-    self.shareCodeVisible = false
+    self.shareCodeHeaderKey = nil
     self.listOffset = 0
 
     local panel = WINDOW_MANAGER:CreateControl(PANEL_NAME, GuiRoot, CT_TOPLEVELCONTROL)
@@ -157,7 +156,9 @@ function JournalTab:Initialize()
             if quest and self.selectedQuestId == quest.id then
                 self.selectedQuestId = nil
             end
-            self.shareCodeVisible = false
+            self.shareCodeHeaderKey = nil
+            if self.shareEdit then self.shareEdit:SetText("") end
+            if self.validateResultLabel then self.validateResultLabel:SetText("") end
         elseif eventType == "DRAFT_TARGET_CAPTURED" then
             if self.viewMode ~= VIEW_MODE.EDITOR then
                 self.viewMode = VIEW_MODE.EDITOR
@@ -298,12 +299,11 @@ function JournalTab:BuildRightColumn(panel)
     self:BuildDetailPane(rightCol)
     self:BuildEditorPane(rightCol)
     self:BuildImportPane(rightCol)
-    self:BuildValidatePane(rightCol)
 end
 
 function JournalTab:BuildDetailPane(parent)
     local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailPane", parent, CT_CONTROL)
-    pane:SetDimensions(550, 580)
+    pane:SetDimensions(550, 620)
     pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
     self.detailPane = pane
 
@@ -361,27 +361,11 @@ function JournalTab:BuildDetailPane(parent)
     if objText.SetFont then objText:SetFont("ZoFontWinH4") end
     self.detailObjText = objText
 
-    -- Contenedor para mostrar y copiar el código de compartición
-    local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", pane, CT_LABEL)
-    shareHeader:SetDimensions(520, 22)
-    shareHeader:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 8)
-    if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
-    if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
-    shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
-    shareHeader:SetHidden(true)
-    self.shareHeader = shareHeader
-
-    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false)
-    shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
-    shareBg:SetHidden(true)
-    self.shareBg = shareBg
-    self.shareEdit = shareEdit
-
-    -- Fila 1 de botones de acción (anclada dinámicamente debajo de objetivos o código de compartición)
+    -- Grupo 1: Botones de acción de la misión
     self.btnActivate = CreateStyledButton(PANEL_NAME .. "_BtnActivate", pane, 160, 32, "", function()
         self:OnToggleActiveClicked()
     end)
-    self.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 18)
+    self.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 16)
 
     self.btnShowOnMap = CreateStyledButton(PANEL_NAME .. "_BtnShowMap", pane, 160, 32, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
         local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
@@ -391,12 +375,6 @@ function JournalTab:BuildDetailPane(parent)
     end)
     self.btnShowOnMap:SetAnchor(TOPLEFT, self.btnActivate, TOPRIGHT, 12, 0)
 
-    self.btnShare = CreateStyledButton(PANEL_NAME .. "_BtnShare", pane, 160, 32, Addon.Locale:Get("BTN_SHARE"), function()
-        self:OnShareClicked()
-    end)
-    self.btnShare:SetAnchor(TOPLEFT, self.btnShowOnMap, TOPRIGHT, 12, 0)
-
-    -- Fila 2 de botones de acción
     self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", pane, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
         self:OpenEditEditor(self.selectedQuestId)
     end)
@@ -416,17 +394,51 @@ function JournalTab:BuildDetailPane(parent)
     end)
     self.btnDelete:SetAnchor(TOPLEFT, self.btnReset, TOPRIGHT, 12, 0)
 
+    -- Separador horizontal entre botones de misión y sección de códigos
+    local codeDivider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_CodeDivider", pane, CT_TEXTURE)
+    codeDivider:SetDimensions(512, 4)
+    codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 54)
+    codeDivider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
+    self.codeDivider = codeDivider
+
+    -- Grupo 2: Botones de manejo de códigos (compartir / entregar / validar)
+    self.btnShare = CreateStyledButton(PANEL_NAME .. "_BtnShare", pane, 160, 32, Addon.Locale:Get("BTN_SHARE"), function()
+        self:OnShareClicked()
+    end)
+    self.btnShare:SetAnchor(TOPLEFT, codeDivider, BOTTOMLEFT, 0, 10)
+
     self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", pane, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
         self:OnCompletionCodeClicked()
     end)
-    self.btnCompletionCode:SetAnchor(TOPLEFT, self.btnDelete, TOPRIGHT, 12, 0)
+    self.btnCompletionCode:SetAnchor(TOPLEFT, self.btnShare, TOPRIGHT, 12, 0)
     self.btnCompletionCode:SetHidden(true)
 
     self.btnValidateDelivery = CreateStyledButton(PANEL_NAME .. "_BtnValidateDelivery", pane, 160, 32, Addon.Locale:Get("BTN_VALIDATE_DELIVERY"), function()
-        self:OpenValidateView()
+        self:OnValidateDeliveryClicked()
     end)
-    self.btnValidateDelivery:SetAnchor(TOPLEFT, self.btnEdit, BOTTOMLEFT, 0, 10)
+    self.btnValidateDelivery:SetAnchor(TOPLEFT, self.btnShare, TOPRIGHT, 12, 0)
     self.btnValidateDelivery:SetHidden(true)
+
+    -- Cuadro único para mostrar/copiar códigos generados y pegar códigos de entrega a validar
+    local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", pane, CT_LABEL)
+    shareHeader:SetDimensions(520, 22)
+    shareHeader:SetAnchor(TOPLEFT, self.btnShare, BOTTOMLEFT, 0, 12)
+    if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
+    if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    shareHeader:SetText(Addon.Locale:Get("LABEL_CODE_BOX_HEADER"))
+    self.shareHeader = shareHeader
+
+    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false)
+    shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
+    self.shareBg = shareBg
+    self.shareEdit = shareEdit
+
+    local resultLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateResult", pane, CT_LABEL)
+    resultLabel:SetDimensions(510, 44)
+    resultLabel:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 6)
+    if resultLabel.SetFont then resultLabel:SetFont("ZoFontGame") end
+    resultLabel:SetText("")
+    self.validateResultLabel = resultLabel
 end
 
 function JournalTab:BuildEditorPane(parent)
@@ -602,52 +614,6 @@ function JournalTab:BuildImportPane(parent)
     self.btnCancelImport:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 196)
 end
 
-function JournalTab:BuildValidatePane(parent)
-    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidatePane", parent, CT_CONTROL)
-    pane:SetDimensions(550, 580)
-    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
-    pane:SetHidden(true)
-    self.validatePane = pane
-
-    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", pane, CT_LABEL)
-    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
-    if header.SetFont then header:SetFont("ZoFontWinH2") end
-    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
-    header:SetText(Addon.Locale:Get("VALIDATE_VIEW_TITLE"))
-    self.validateHeader = header
-
-    local instr = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateInstr", pane, CT_LABEL)
-    instr:SetDimensions(510, 48)
-    instr:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 44)
-    if instr.SetFont then instr:SetFont("ZoFontGame") end
-    self.validateInstr = instr
-
-    local codeBg, codeEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ValidateCodeEdit", pane, 510, 80, 1024, true)
-    codeBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 96)
-    self.validateCodeBg = codeBg
-    self.validateCodeEdit = codeEdit
-
-    self.btnConfirmValidate = CreateStyledButton(PANEL_NAME .. "_BtnConfirmValidate", pane, 180, 36, Addon.Locale:Get("BTN_CONFIRM_VALIDATE"), function()
-        self:OnConfirmValidateClicked()
-    end)
-    self.btnConfirmValidate:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 196)
-
-    self.btnCancelValidate = CreateStyledButton(PANEL_NAME .. "_BtnCancelValidate", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
-        self.validateCodeEdit:SetText("")
-        self.validateResultLabel:SetText("")
-        self.viewMode = VIEW_MODE.DETAIL
-        self:Refresh()
-    end)
-    self.btnCancelValidate:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 196)
-
-    local resultLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateResult", pane, CT_LABEL)
-    resultLabel:SetDimensions(510, 72)
-    resultLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 252)
-    if resultLabel.SetFont then resultLabel:SetFont("ZoFontWinH4") end
-    resultLabel:SetText("")
-    self.validateResultLabel = resultLabel
-end
-
 function JournalTab:IntegrateIntoQuestJournalModeBar()
     local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
     if not qj then return end
@@ -707,7 +673,9 @@ function JournalTab:SelectQuest(questId)
     end
     self.selectedQuestId = questId
     self.viewMode = VIEW_MODE.DETAIL
-    self.shareCodeVisible = false
+    self.shareCodeHeaderKey = nil
+    if self.shareEdit then self.shareEdit:SetText("") end
+    if self.validateResultLabel then self.validateResultLabel:SetText("") end
     self:Refresh()
 end
 
@@ -809,11 +777,11 @@ end
 
 function JournalTab:ShowCodeInDetailBox(headerKey, code, alertKey)
     self.shareCodeHeaderKey = headerKey
-    self.shareCodeVisible = true
-    self:Refresh()
-
     self.shareHeader:SetText(Addon.Locale:Get(headerKey))
     self.shareEdit:SetText(code)
+    if self.validateResultLabel then
+        self.validateResultLabel:SetText("")
+    end
     if self.shareEdit.TakeFocus then
         self.shareEdit:TakeFocus()
     end
@@ -844,25 +812,18 @@ function JournalTab:OnCompletionCodeClicked()
     self:ShowCodeInDetailBox("LABEL_COMPLETION_CODE_HEADER", code, "ALERT_COMPLETION_CODE_READY")
 end
 
-function JournalTab:OpenValidateView()
-    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-    if not q then return end
-
-    self.validateInstr:SetText(Addon.Locale:Get("VALIDATE_INSTRUCTIONS", q.title or ""))
-    self.validateCodeEdit:SetText("")
-    self.validateResultLabel:SetText("")
-    self.viewMode = VIEW_MODE.VALIDATE
-    self:Refresh()
-    if self.validateCodeEdit.TakeFocus then
-        self.validateCodeEdit:TakeFocus()
-    end
-end
-
-function JournalTab:OnConfirmValidateClicked()
+function JournalTab:OnValidateDeliveryClicked()
     if not self.selectedQuestId then return end
-    local rawCode = self.validateCodeEdit:GetText()
-    local isValid, resultOrErrKey = Addon.QuestRepository:ValidateCompletionCode(self.selectedQuestId, rawCode)
+    local rawCode = (self.shareEdit and self.shareEdit:GetText()) or ""
+    if rawCode:match("^%s*$") then
+        self.validateResultLabel:SetText(Addon.Locale:Get("VALIDATE_ERR_EMPTY"))
+        if self.shareEdit and self.shareEdit.TakeFocus then
+            self.shareEdit:TakeFocus()
+        end
+        return
+    end
 
+    local isValid, resultOrErrKey = Addon.QuestRepository:ValidateCompletionCode(self.selectedQuestId, rawCode)
     if isValid and type(resultOrErrKey) == "table" then
         self.validateResultLabel:SetText(Addon.Locale:Get("VALIDATE_RESULT_SUCCESS", resultOrErrKey.characterName or ""))
     else
@@ -1052,23 +1013,15 @@ function JournalTab:Refresh()
     if self.viewMode == VIEW_MODE.EDITOR then
         self.detailPane:SetHidden(true)
         self.importPane:SetHidden(true)
-        self.validatePane:SetHidden(true)
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
     elseif self.viewMode == VIEW_MODE.IMPORT then
         self.detailPane:SetHidden(true)
         self.editorPane:SetHidden(true)
-        self.validatePane:SetHidden(true)
         self.importPane:SetHidden(false)
-    elseif self.viewMode == VIEW_MODE.VALIDATE then
-        self.detailPane:SetHidden(true)
-        self.editorPane:SetHidden(true)
-        self.importPane:SetHidden(true)
-        self.validatePane:SetHidden(false)
     else
         self.editorPane:SetHidden(true)
         self.importPane:SetHidden(true)
-        self.validatePane:SetHidden(true)
         self.detailPane:SetHidden(false)
         self:RefreshDetailPane(selectedQuest, activeQuest)
     end
@@ -1086,8 +1039,10 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.detailDescBody:SetText("")
         self.detailObjHeader:SetHidden(true)
         self.detailObjText:SetText("")
+        self.codeDivider:SetHidden(true)
         self.shareHeader:SetHidden(true)
         self.shareBg:SetHidden(true)
+        self.validateResultLabel:SetHidden(true)
         self.btnActivate:SetHidden(true)
         self.btnShowOnMap:SetHidden(true)
         self.btnShare:SetHidden(true)
@@ -1144,17 +1099,11 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.detailObjText:SetDimensions(510, math.max(32, #objLines * 24))
     self.detailObjText:SetText(table.concat(objLines, "\n"))
 
-    self.btnActivate:ClearAnchors()
-    if self.shareCodeVisible then
-        self.shareHeader:SetText(Addon.Locale:Get(self.shareCodeHeaderKey or "LABEL_SHARE_CODE_HEADER"))
-        self.shareHeader:SetHidden(false)
-        self.shareBg:SetHidden(false)
-        self.btnActivate:SetAnchor(TOPLEFT, self.shareBg, BOTTOMLEFT, 0, 14)
-    else
-        self.shareHeader:SetHidden(true)
-        self.shareBg:SetHidden(true)
-        self.btnActivate:SetAnchor(TOPLEFT, self.detailObjText, BOTTOMLEFT, -12, 18)
-    end
+    self.codeDivider:SetHidden(false)
+    self.shareHeader:SetText(Addon.Locale:Get(self.shareCodeHeaderKey or "LABEL_CODE_BOX_HEADER"))
+    self.shareHeader:SetHidden(false)
+    self.shareBg:SetHidden(false)
+    self.validateResultLabel:SetHidden(false)
 
     self.btnActivate:SetHidden(false)
     self.btnShowOnMap:SetHidden(false)

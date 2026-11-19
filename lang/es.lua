@@ -31,7 +31,6 @@ RPQuest.Locales["es"] = {
     BTN_SHARE = "Compartir",
     BTN_COMPLETION_CODE = "Código Entrega",
     BTN_VALIDATE_DELIVERY = "Validar Entrega",
-    BTN_CONFIRM_VALIDATE = "Validar",
     BTN_DELETE = "Eliminar",
     BTN_SAVE = "Crear Misión",
     BTN_CLEAR_TARGETS = "Limpiar Objetivos",
@@ -52,6 +51,7 @@ RPQuest.Locales["es"] = {
     LABEL_OBJECTIVE_HEADER = "OBJETIVOS",
     OBJECTIVE_KILL_FORMAT = "• Eliminar a %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completado)|r",
+    LABEL_CODE_BOX_HEADER = "CÓDIGO (Genera arriba o pega aquí para validar):",
     LABEL_SHARE_CODE_HEADER = "CÓDIGO PARA COMPARTIR (Pulsa Ctrl+C para copiar):",
     LABEL_COMPLETION_CODE_HEADER = "CÓDIGO DE ENTREGA (Pulsa Ctrl+C para copiar):",
 
@@ -71,10 +71,9 @@ RPQuest.Locales["es"] = {
     IMPORT_VIEW_TITLE = "IMPORTAR MISIÓN POR CÓDIGO",
     IMPORT_INSTRUCTIONS = "Pega debajo el código de misión (RPQ1:...) compartido por otro jugador:",
 
-    -- Validate Delivery View
-    VALIDATE_VIEW_TITLE = "VALIDAR ENTREGA DE MISIÓN",
-    VALIDATE_INSTRUCTIONS = "Pega debajo el código de entrega (RPQC1:...) enviado por el jugador para \"%s\":",
+    -- Validate Delivery (Inline)
     VALIDATE_RESULT_SUCCESS = "|c33FF33¡Entrega válida!|r Misión completada con éxito por |cE8D5A0%s|r.",
+    VALIDATE_ERR_EMPTY = "|cFFAA33Pega primero el código de entrega (RPQC1:...) en el cuadro de texto.|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444Ese es un código de misión (RPQ1), no un código de entrega (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444Este código de entrega pertenece a otra misión distinta.|r",
     VALIDATE_ERR_NOT_COMPLETED = "|cFF4444El código no indica que la misión haya sido completada.|r",
