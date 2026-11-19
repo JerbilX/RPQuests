@@ -61,6 +61,7 @@ RPQuest.Locales["es"] = {
     LABEL_INPUT_TITLE = "Título de la Misión:",
     DEFAULT_QUEST_TITLE = "Misión Custom #%d",
     LABEL_INPUT_DESCRIPTION = "Descripción / Trasfondo:",
+    LABEL_INPUT_COMPLETION_MSG = "Mensaje al Completar (Opcional):",
     LABEL_TARGET_SECTION = "Objetivo (NPC) y Área de Búsqueda:",
     TARGET_CAPTURED_FORMAT = "Objetivo: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Apunta a un NPC vivo y pulsa la tecla de captura.|r",

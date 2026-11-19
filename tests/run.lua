@@ -967,6 +967,67 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     AssertTrue(type(deniedErr) == "string" and deniedErr ~= "", "Rejection returns localized error message")
 end)
 
+RunTest("14. Mensaje de finalizacion editable y refresco de pin al editar radio y abrir mapa", function()
+    RPQuest.QuestRepository:Initialize({})
+    RPQuest.JournalTab:Initialize()
+    RPQuest.WorldMapArea:Initialize()
+
+    mockState.reticleExists = true
+    mockState.reticleName = "Oveja"
+    mockState.mapId = 45
+    mockState.zoneId = 104
+    mockState.mapName = "Deshaan"
+    mockState.playerX = 0.50
+    mockState.playerY = 0.50
+
+    -- 1. Crear misión con mensaje de finalización personalizado desde JournalTab
+    RPQuest.JournalTab:OpenCreateEditor()
+    RPQuest.TargetCapture:CaptureFromReticle()
+    RPQuest.JournalTab.titleEdit:SetText("Gran Cacería")
+    RPQuest.JournalTab.descEdit:SetText("Caza en el valle.")
+    RPQuest.JournalTab.completionEdit:SetText("¡Has limpiado el valle!")
+    RPQuest.JournalTab:OnSaveDraftClicked()
+
+    local q = RPQuest.QuestRepository:GetAllQuests()[1]
+    AssertEqual(q.completionMessage, "¡Has limpiado el valle!", "completionMessage saved from JournalTab")
+
+    -- 2. ShareCodec preserva completionMessage
+    local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+    AssertEqual(decoded.completionMessage, "¡Has limpiado el valle!", "ShareCodec preserves completionMessage")
+
+    -- 3. AnnounceQuestCompleted usa completionMessage en lugar de un único objetivo
+    local capturedSubText = nil
+    local origCSA = CENTER_SCREEN_ANNOUNCE
+    CENTER_SCREEN_ANNOUNCE = {
+        CreateMessageParams = function()
+            return {
+                SetText = function(_, _, sub) capturedSubText = sub end,
+                SetCSAType = function() end,
+            }
+        end,
+        AddMessageWithParams = function() end,
+    }
+    RPQuest.Announcements:AnnounceQuestCompleted(q)
+    AssertEqual(capturedSubText, "¡Has limpiado el valle!", "AnnounceQuestCompleted uses custom completionMessage")
+
+    -- Sin mensaje personalizado -> subText es nil (no muestra un único objetivo parcial)
+    RPQuest.Announcements:AnnounceQuestCompleted({ title = "Sin Msg", completionMessage = "", targets = { { name = "Tirusa", currentCount = 1, requiredCount = 1 } } })
+    AssertEqual(capturedSubText, nil, "AnnounceQuestCompleted omits subText when completionMessage is empty")
+    CENTER_SCREEN_ANNOUNCE = origCSA
+
+    -- 4. Editar radio de área, desactivar/reactivar y mostrar escena del mapa refresca el pin con el nuevo radio
+    RPQuest.JournalTab:OpenEditEditor(q.id)
+    RPQuest.QuestRepository:UpdateDraftFields({ areaRadius = RPQuest.Constants.AREA_RADIUS.LARGE })
+    RPQuest.JournalTab:OnSaveDraftClicked()
+    RPQuest.QuestRepository:SetActiveQuest(q.id)
+
+    -- Simular apertura del mapa mundial via WORLD_MAP_SCENE
+    SCENE_MANAGER:Show("worldMap")
+    AssertEqual(#mockPinManager._createdPins, 1, "WorldMapArea pin rendered after edit + reactivate + map open")
+    AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.LARGE, "WorldMapArea pin uses updated LARGE radius")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
