@@ -353,6 +353,42 @@ function QuestRepository:ClearDraftDiscoveries()
     return draft
 end
 
+function QuestRepository:UpdateDraftDiscoveryPoint(index, fields, silent)
+    local draft = self:GetDraft()
+    local point = draft.discoveries and draft.discoveries[index]
+    if not point or type(fields) ~= "table" then
+        return nil
+    end
+    if fields.message ~= nil then
+        point.message = tostring(fields.message)
+    end
+    if fields.radius ~= nil then
+        local r = tonumber(fields.radius)
+        if r and r >= 100 then
+            point.radius = math.floor(r)
+        end
+    end
+    if not silent then
+        self:NotifyListeners("DRAFT_UPDATED", draft)
+    end
+    return point
+end
+
+function QuestRepository:RemoveDraftDiscoveryPoint(index)
+    local draft = self:GetDraft()
+    if not draft.discoveries or not draft.discoveries[index] then
+        return nil
+    end
+    table.remove(draft.discoveries, index)
+    if #draft.discoveries == 0 and #(draft.targets or {}) == 0 then
+        draft.mapId = 0
+        draft.zoneId = 0
+        draft.mapName = ""
+    end
+    self:NotifyListeners("DRAFT_UPDATED", draft)
+    return draft
+end
+
 function QuestRepository:LoadQuestIntoDraft(questId)
     local quest = self:GetQuestById(questId)
     if not quest then return nil end

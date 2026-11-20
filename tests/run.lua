@@ -1494,6 +1494,19 @@ RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map
     AssertTrue(draft2 ~= nil, "Second discovery point captured")
     AssertEqual(cnt2, 2, "Draft has 2 discovery points")
 
+    -- 1b. Edit and remove individual discovery points in draft
+    local editedPt = RPQuest.QuestRepository:UpdateDraftDiscoveryPoint(1, {
+        message = "Notas un olor particular que viene del norte",
+        radius = 800,
+    })
+    AssertTrue(editedPt ~= nil, "Discovery point #1 updated in draft")
+    AssertEqual(draft2.discoveries[1].radius, 800, "Discovery point #1 radius updated")
+    RPQuest.TargetCapture:CaptureDiscoveryPoint("Punto temporal", 800)
+    AssertEqual(#draft2.discoveries, 3, "Temporary discovery point #3 added")
+    RPQuest.QuestRepository:RemoveDraftDiscoveryPoint(3)
+    AssertEqual(#draft2.discoveries, 2, "Temporary discovery point #3 removed individually")
+    RPQuest.QuestRepository:UpdateDraftDiscoveryPoint(1, { radius = 1000 })
+
     -- 2. Save discovery-only quest (0 combat targets)
     local saved = RPQuest.QuestRepository:SaveDraft("Rastreo en Auridon", "Sigue las pistas")
     AssertTrue(saved ~= nil, "Discovery-only quest saved successfully")
