@@ -57,21 +57,27 @@ function DiscoveryTracker:UpdatePollingState()
 end
 
 function DiscoveryTracker:OnUpdateTick()
-    if not GetUnitWorldPosition then return end
+    if not self._isPolling or not GetUnitWorldPosition then return end
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    if not Addon.QuestRepository:HasPendingDiscoveries(activeQuest) then
+        self:UpdatePollingState()
+        return
+    end
     local zoneId, worldX, worldY, worldZ = GetUnitWorldPosition("player")
     if not zoneId or zoneId == 0 or not worldX or not worldZ then
         return
     end
-    self:EvaluatePlayerPosition(zoneId, worldX, worldY or 0, worldZ)
+    self:EvaluatePlayerPosition(zoneId, worldX, worldY or 0, worldZ, activeQuest)
 end
 
-function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, worldY, worldZ)
-    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, worldY, worldZ, preloadedQuest)
+    local activeQuest = preloadedQuest or Addon.QuestRepository:GetActiveQuest()
     if not Addon.QuestRepository:HasPendingDiscoveries(activeQuest) then
         self:UpdatePollingState()
         return false
     end
 
+    local defaultRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM
     local triggeredAny = false
     for idx, point in ipairs(activeQuest.discoveries) do
         if not point.discovered and point.worldX and point.worldZ then
@@ -79,9 +85,8 @@ function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, worldY, worldZ)
             if zoneMatches then
                 local dx = worldX - point.worldX
                 local dz = worldZ - point.worldZ
-                local dist = math.sqrt((dx * dx) + (dz * dz))
-                local radius = point.radius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
-                if dist <= radius then
+                local radius = point.radius or defaultRadius
+                if ((dx * dx) + (dz * dz)) <= (radius * radius) then
                     local ok, quest, isCompleted, triggeredPoint = Addon.QuestRepository:MarkDiscoveryTriggered(activeQuest.id, idx)
                     if ok and triggeredPoint then
                         triggeredAny = true
@@ -96,6 +101,8 @@ function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, worldY, worldZ)
         end
     end
 
-    self:UpdatePollingState()
+    if triggeredAny then
+        self:UpdatePollingState()
+    end
     return triggeredAny
 end
