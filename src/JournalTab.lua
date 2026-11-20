@@ -330,6 +330,7 @@ function JournalTab:BuildRightColumn(panel)
     local rightCol = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_RightCol", panel, CT_CONTROL)
     rightCol:SetDimensions(550, 600)
     rightCol:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -33, 60)
+    rightCol:SetAnchor(BOTTOMRIGHT, panel, BOTTOMRIGHT, -33, -25)
     self.rightCol = rightCol
 
     self:BuildDetailPane(rightCol)
@@ -341,6 +342,7 @@ function JournalTab:BuildDetailPane(parent)
     local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailPane", parent, CT_CONTROL)
     pane:SetDimensions(550, 600)
     pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    pane:SetAnchor(BOTTOMRIGHT, parent, BOTTOMRIGHT, 0, 0)
     self.detailPane = pane
 
     local scrollContainer = WINDOW_MANAGER.CreateControlFromVirtual
@@ -350,6 +352,7 @@ function JournalTab:BuildDetailPane(parent)
     if scrollContainer then
         scrollContainer:SetDimensions(550, 565)
         scrollContainer:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+        scrollContainer:SetAnchor(BOTTOMRIGHT, pane, BOTTOMRIGHT, 0, -5)
         local scrollChild = scrollContainer.GetNamedChild and scrollContainer:GetNamedChild("ScrollChild")
         if scrollChild then
             scrollChild:SetDimensions(526, 650)
@@ -430,12 +433,43 @@ function JournalTab:BuildDetailPane(parent)
     end)
     self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
 
-    self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", contentParent, 160, 32, Addon.Locale:Get("BTN_DELETE"), function()
-        if self.selectedQuestId and Addon.QuestRepository:DeleteQuest(self.selectedQuestId) then
-            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
-        end
-    end)
-    self.btnDelete:SetAnchor(TOPLEFT, self.btnReset, TOPRIGHT, 12, 0)
+    if ESO_Dialogs and not ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
+        ESO_Dialogs["RPQUEST_ABANDON_QUEST"] = {
+            title = {
+                text = SI_PROMPT_TITLE_ABANDON_QUEST,
+            },
+            mainText = {
+                text = SI_CONFIRM_ABANDON_QUEST,
+            },
+            buttons = {
+                {
+                    text = SI_ABANDON_QUEST_CONFIRM,
+                    callback = function(dialog)
+                        local qId = dialog and dialog.data and dialog.data.questId
+                        if qId and Addon.QuestRepository:DeleteQuest(qId) then
+                            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
+                        end
+                    end,
+                },
+                {
+                    text = SI_DIALOG_CANCEL,
+                },
+            },
+        }
+    end
+
+    self.abandonQuestDescriptor = {
+        name = (GetString and SI_QUEST_JOURNAL_ABANDON) and GetString(SI_QUEST_JOURNAL_ABANDON) or Addon.Locale:Get("BTN_DELETE"),
+        keybind = "UI_SHORTCUT_NEGATIVE",
+        callback = function()
+            if self.selectedQuestId then
+                self:ConfirmAbandonQuest(self.selectedQuestId)
+            end
+        end,
+        visible = function()
+            return self.viewMode == VIEW_MODE.DETAIL and self.selectedQuestId ~= nil
+        end,
+    }
 
     -- Keybind nativo [M] Show On Map (igual al Quest Journal vanilla)
     self.showOnMapDescriptor = {
@@ -454,6 +488,7 @@ function JournalTab:BuildDetailPane(parent)
     }
     self.keybindStripDescriptor = {
         alignment = KEYBIND_STRIP_ALIGN_CENTER or 1,
+        self.abandonQuestDescriptor,
         self.showOnMapDescriptor,
     }
 
@@ -466,7 +501,7 @@ function JournalTab:BuildDetailPane(parent)
     if showOnMapBtn.SetKeybindButtonDescriptor then
         showOnMapBtn:SetKeybindButtonDescriptor(self.showOnMapDescriptor)
     end
-    showOnMapBtn:SetAnchor(TOPLEFT, pane, BOTTOMLEFT, 0, -25)
+    showOnMapBtn:SetAnchor(TOPLEFT, pane, BOTTOMLEFT, 0, 0)
     self.showOnMapKeybindButton = showOnMapBtn
 
     -- Separador horizontal entre botones de misión y sección de códigos
@@ -499,17 +534,11 @@ function JournalTab:BuildDetailPane(parent)
     deliveryHeader:SetHidden(true)
     self.deliveryHeader = deliveryHeader
 
-    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", contentParent, 340, 32, 4096, false, nil, true, true)
+    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", contentParent, 510, 32, 4096, false, nil, true, true)
     deliveryBg:SetAnchor(TOPLEFT, deliveryHeader, BOTTOMLEFT, 0, 2)
     deliveryBg:SetHidden(true)
     self.deliveryBg = deliveryBg
     self.deliveryEdit = deliveryEdit
-
-    self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", contentParent, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
-        self:OnCompletionCodeClicked()
-    end)
-    self.btnCompletionCode:SetAnchor(TOPLEFT, deliveryBg, TOPRIGHT, 10, 0)
-    self.btnCompletionCode:SetHidden(true)
 
     local validateHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", contentParent, CT_LABEL)
     validateHeader:SetDimensions(520, 20)
@@ -954,8 +983,36 @@ function JournalTab:OpenCreateEditor()
     self:Refresh()
 end
 
+local function GetQuestSectionKey(quest)
+    if not quest then return nil end
+    if Addon.QuestRepository:IsPreparedQuest(quest) then
+        return "preparing"
+    elseif quest.completed then
+        return "completed"
+    end
+    return "missions"
+end
+
+function JournalTab:IsSectionLockedExpanded(sectionKey)
+    if not sectionKey then return false end
+    if self.selectedQuestId then
+        local selected = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        if GetQuestSectionKey(selected) == sectionKey then
+            return true
+        end
+    end
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    if activeQuest and GetQuestSectionKey(activeQuest) == sectionKey then
+        return true
+    end
+    return false
+end
+
 function JournalTab:ToggleSection(sectionKey)
     if not sectionKey or not self.collapsedSections then return end
+    if not self.collapsedSections[sectionKey] and self:IsSectionLockedExpanded(sectionKey) then
+        return
+    end
     self.collapsedSections[sectionKey] = not self.collapsedSections[sectionKey]
     self.listOffset = 0
     self:RefreshQuestList()
@@ -1040,24 +1097,20 @@ function JournalTab:OnToggleActiveClicked()
     end
 end
 
-function JournalTab:OnCompletionCodeClicked()
-    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-    if not q or not q.completed then return end
+function JournalTab:ConfirmAbandonQuest(questId)
+    local q = Addon.QuestRepository:GetQuestById(questId)
+    if not q then return false end
 
-    local code = Addon.QuestRepository:ExportCompletionCode(q.id)
-    if not code then return end
-
-    SetReadOnlyEditText(self.deliveryEdit, code)
-    if self.deliveryEdit then
-        if self.deliveryEdit.TakeFocus then
-            self.deliveryEdit:TakeFocus()
-        end
-        if self.deliveryEdit.SelectAll then
-            self.deliveryEdit:SelectAll()
-        end
+    if ESO_Dialogs and ZO_Dialogs_ShowDialog and ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
+        ZO_Dialogs_ShowDialog("RPQUEST_ABANDON_QUEST", { questId = questId }, { mainTextParams = { q.title or "" } })
+        return true
     end
 
-    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_COMPLETION_CODE_READY"), false)
+    if Addon.QuestRepository:DeleteQuest(questId) then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
+        return true
+    end
+    return false
 end
 
 function JournalTab:OnValidateDeliveryClicked()
@@ -1171,7 +1224,8 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
 
     local function AppendSection(sectionKey, localeKey, quests, isCompleted)
         if #quests == 0 then return end
-        local isCollapsed = self.collapsedSections and self.collapsedSections[sectionKey]
+        local isLocked = self:IsSectionLockedExpanded(sectionKey)
+        local isCollapsed = (not isLocked) and self.collapsedSections and self.collapsedSections[sectionKey]
         local arrowTex = isCollapsed and "/esoui/art/buttons/tree_closed_up.dds" or "/esoui/art/buttons/tree_open_up.dds"
         local headerColor = isCollapsed and "|cC5C29E" or "|cFFFFFF"
         table.insert(displayRows, {
@@ -1314,8 +1368,6 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(true) end
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
-        self.btnDelete:SetHidden(true)
-        self.btnCompletionCode:SetHidden(true)
         self.btnValidateDelivery:SetHidden(true)
         if KEYBIND_STRIP and self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
@@ -1392,8 +1444,17 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         table.insert(objLines, "|t16:16:/esoui/art/miscellaneous/bullet.dds|t " .. Addon.Locale:Get(stealthKey))
     end
     local visibleLineCount = #objLines
-    self.detailObjText:SetDimensions(495, math.min(120, math.max(32, visibleLineCount * 24)))
+    self.detailObjText:SetDimensions(495, 0)
     self.detailObjText:SetText(table.concat(objLines, "\n"))
+    local textHeight = self.detailObjText.GetTextHeight and self.detailObjText:GetTextHeight()
+    local objHeight = textHeight and (textHeight + 16) or (visibleLineCount * 24)
+    self.detailObjText:SetDimensions(495, math.max(32, objHeight))
+    if self.detailScroll and self.detailScroll.GetNamedChild then
+        local scrollChild = self.detailScroll:GetNamedChild("ScrollChild")
+        if scrollChild and scrollChild.SetDimensions then
+            scrollChild:SetDimensions(526, math.max(650, 540 + objHeight))
+        end
+    end
 
     self.codeDivider:SetHidden(false)
     local shareCode = Addon.QuestRepository:ExportQuestToCode(selectedQuest.id) or ""
@@ -1404,36 +1465,46 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.shareHeader:SetHidden(false)
     self.shareBg:SetHidden(false)
 
-    self.btnActivate:SetHidden(false)
     if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(false) end
     self.btnReset:ClearAnchors()
+    self.codeDivider:ClearAnchors()
     if isPrepared then
+        self.btnActivate:SetHidden(false)
         self.btnEdit:SetHidden(false)
         self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
+        self.btnReset:SetHidden(false)
+        self.codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 48)
         self.deliveryHeader:SetHidden(true)
         self.deliveryBg:SetHidden(true)
-        self.btnCompletionCode:SetHidden(true)
         self.validateHeader:SetHidden(false)
         self.validateBg:SetHidden(false)
         self.btnValidateDelivery:SetHidden(false)
         self.validateResultLabel:SetHidden(false)
     else
+        local showCompletion = selectedQuest.completed and true or false
+        self.btnActivate:SetHidden(showCompletion)
         self.btnEdit:SetHidden(true)
-        self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 8)
+        self.btnReset:SetHidden(true)
+        if showCompletion then
+            self.codeDivider:SetAnchor(TOPLEFT, self.detailObjText, BOTTOMLEFT, -25, 16)
+        else
+            self.codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 14)
+        end
         self.validateHeader:SetHidden(true)
         self.validateBg:SetHidden(true)
         self.btnValidateDelivery:SetHidden(true)
         self.validateResultLabel:SetHidden(true)
-        local showCompletion = selectedQuest.completed and true or false
         self.deliveryHeader:SetHidden(not showCompletion)
         self.deliveryBg:SetHidden(not showCompletion)
-        self.btnCompletionCode:SetHidden(not showCompletion)
-        if not showCompletion then
+        if showCompletion then
+            local deliveryCode = Addon.QuestRepository:ExportCompletionCode(selectedQuest.id) or ""
+            if not self.deliveryEdit._focused and self.deliveryEdit:GetText() ~= deliveryCode then
+                SetReadOnlyEditText(self.deliveryEdit, deliveryCode)
+            end
+        else
             SetReadOnlyEditText(self.deliveryEdit, "")
         end
     end
-    self.btnReset:SetHidden(false)
-    self.btnDelete:SetHidden(false)
     if KEYBIND_STRIP and self.keybindStripDescriptor then
         KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
     end

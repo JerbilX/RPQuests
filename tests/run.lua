@@ -967,9 +967,12 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), false, "Edit button visible for prepared quest")
     AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Probar", "Activate button says Probar for prepared quest")
 
-    -- 2b. Colapsar y expandir sección PREPARANDO en el árbol
+    -- 2b. Sección con item seleccionado no se colapsa; sin item seleccionado/activo sí colapsa y expande
     RPQuest.JournalTab:ToggleSection("preparing")
-    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "ToggleSection collapses preparing")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "Section with selected quest stays expanded")
+    RPQuest.JournalTab:SelectQuest(nil)
+    RPQuest.JournalTab:ToggleSection("preparing")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "ToggleSection collapses preparing when no item is selected/active")
     local prepRowVisible = false
     for _, b in pairs(RPQuest.JournalTab.rowBindings) do
         if b.questId == prep.id then prepRowVisible = true end
@@ -977,6 +980,7 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     AssertEqual(prepRowVisible, false, "Collapsed section hides its quest rows")
     RPQuest.JournalTab:ToggleSection("preparing")
     AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection expands preparing again")
+    RPQuest.JournalTab:SelectQuest(prep.id)
 
     -- 2c. Mostrar en mapa una misión en preparación (aunque no esté activa)
     RPQuest.WorldMapArea:Initialize()
@@ -997,7 +1001,7 @@ RunTest("13. Separación de roles: En Preparación vs Para Jugar, prueba local y
     AssertEqual(imported.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Imported quest has role=received")
     AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "JournalTab expands MISIONES on import")
     AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), true, "Edit button hidden for received quest")
-    AssertEqual(RPQuest.JournalTab.btnReset._anchors[1].relTo, RPQuest.JournalTab.btnActivate, "Reset button re-anchored under btnActivate when Edit is hidden")
+    AssertEqual(RPQuest.JournalTab.btnReset:IsHidden(), true, "Reset button hidden for received quest")
     AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Desactivar", "Imported quest is active so button says Desactivar")
 
     local deniedDraft, deniedErr = RPQuest.QuestRepository:LoadQuestIntoDraft(imported.id)
@@ -1135,16 +1139,25 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(okWrong, false, "RPQC1 from another quest rejected")
     AssertEqual(errWrong, "VALIDATE_ERR_WRONG_QUEST", "Specific error returned for wrong quest")
 
-    -- Flujo UI en JournalTab: jugador copia entrega en su propio textbox y Master la valida
+    -- Flujo UI en JournalTab: delivery code se genera automáticamente al completarse la misión
     RPQuest.JournalTab:SelectQuest(playerQuest.id)
-    AssertEqual(RPQuest.JournalTab.btnCompletionCode:IsHidden(), false, "Completion code button visible for completed received quest")
+    AssertEqual(RPQuest.JournalTab.btnCompletionCode, nil, "On-demand completion code button removed")
+    AssertEqual(RPQuest.JournalTab.btnActivate:IsHidden(), true, "Set Active button hidden for completed player quest")
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
     local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
     AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ1:", "shareEdit populated with RPQ1 code for received quest")
-    RPQuest.JournalTab:OnCompletionCodeClicked()
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab puts RPQC1 code into deliveryEdit")
+    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab auto-populates RPQC1 code into deliveryEdit")
     AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
+
+    -- Keybind X Abandon presente en keybindStripDescriptor
+    AssertTrue(RPQuest.JournalTab.abandonQuestDescriptor ~= nil, "Abandon quest keybind descriptor exists")
+    AssertEqual(RPQuest.JournalTab.abandonQuestDescriptor.keybind, "UI_SHORTCUT_NEGATIVE", "Abandon uses UI_SHORTCUT_NEGATIVE")
+
+    -- Sección con misión seleccionada/activa no puede colapsarse (comportamiento vanilla)
+    RPQuest.JournalTab.collapsedSections.completed = false
+    RPQuest.JournalTab:ToggleSection("completed")
+    AssertEqual(RPQuest.JournalTab.collapsedSections.completed, false, "Section with selected quest cannot be collapsed")
 
     -- Los textbox de código generado son readonly (revierten ediciones del usuario)
     RPQuest.JournalTab.shareEdit:SetText("MODIFIED")
