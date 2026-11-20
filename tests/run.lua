@@ -1699,13 +1699,16 @@ RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjec
     local mockBodyLabel = { SetText = function(_, txt) bodyTextValue = txt end }
     local mockControl = { GetNamedChild = function(_, name) if name == "TargetAreaBodyText" then return mockBodyLabel end end }
 
-    local MockInteraction = {}
-    function MockInteraction:PopulateChatterOption(controlID, optionIndex, optionText, optionType)
+    local MockInteraction = { optionControls = {} }
+    function MockInteraction:PopulateChatterOption(controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore)
+        local ctrl = { chosenBefore = chosenBefore, SetColor = function(c, r, g, b, a) c._color = { r, g, b, a } end }
+        self.optionControls[controlID] = ctrl
         table.insert(populatedOptions, {
             controlID = controlID,
             optionIndex = optionIndex,
             optionText = optionText,
             optionType = optionType,
+            chosenBefore = chosenBefore,
         })
     end
     function MockInteraction:FinalizeChatterOptions(optionCount)
@@ -1731,14 +1734,22 @@ RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjec
     local finalCount = MockInteraction:PopulateChatterOptions(1)
     AssertEqual(finalCount, 3, "Injected 1 option before CHATTER_GOODBYE (total 3)")
     AssertEqual(finalizedCount, 3, "FinalizeChatterOptions received updated count 3")
-    AssertEqual(populatedOptions[2].optionText, "Preguntar por el sello roto", "Injected option text uses shared clue")
+    AssertEqual(populatedOptions[2].optionText, "el sello roto", "Injected option text uses exact player dialogue text")
     AssertEqual(type(populatedOptions[2].optionIndex), "function", "Injected optionIndex is a Lua callback function")
     AssertEqual(populatedOptions[3].optionType, CHATTER_GOODBYE, "CHATTER_GOODBYE remains last option")
 
-    -- Clicking injected option updates NPC body text without calling SelectChatterOption
+    -- Clicking injected option updates NPC body text without calling SelectChatterOption and grays out option
+    AssertEqual(populatedOptions[2].chosenBefore, false, "Option starts unseen (chosenBefore=false)")
     populatedOptions[2].optionIndex()
     AssertEqual(bodyTextValue, "Dejó una nota bajo la mesa 4~5; busca allí.", "NPC response shown in TargetAreaBodyText")
     AssertEqual(selectChatterCalled, false, "SelectChatterOption is never called for RPQuest dialogue")
+    AssertEqual(MockInteraction.optionControls[2].chosenBefore, true, "Clicked option marked chosenBefore=true")
+    AssertTrue(MockInteraction.optionControls[2]._color ~= nil, "Clicked option color updated to disabled/seen gray")
+
+    -- Re-opening dialogue with same NPC keeps chosenBefore=true
+    populatedOptions = {}
+    MockInteraction:PopulateChatterOptions(1)
+    AssertEqual(populatedOptions[2].chosenBefore, true, "Re-opened dialogue preserves chosenBefore=true")
 
     -- Non-matching NPC: native options untouched
     currentInteractName = "Mendigo Aleatorio"

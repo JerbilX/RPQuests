@@ -1611,20 +1611,22 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         local stealthKey = selectedQuest.wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
         table.insert(objLines, "|t16:16:/esoui/art/miscellaneous/bullet.dds|t " .. Addon.Locale:Get(stealthKey))
     end
-    local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
-    if selectedQuest.clue and selectedQuest.clue ~= "" then
-        local clueLine = Addon.Locale:Get("DIALOGUE_DETAIL_CLUE_FORMAT", selectedQuest.clue):gsub("^•%s*", bullet)
-        table.insert(objLines, clueLine)
-    end
-    local dialogues = selectedQuest.dialogues or {}
-    if #dialogues > 0 then
-        local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
-        local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)
-        table.insert(objLines, dlgLine)
-    end
-    if selectedQuest.hideMapArea then
-        local mapHiddenLine = Addon.Locale:Get("DIALOGUE_DETAIL_MAP_HIDDEN"):gsub("^•%s*", bullet)
-        table.insert(objLines, mapHiddenLine)
+    if isPrepared then
+        local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
+        if selectedQuest.clue and selectedQuest.clue ~= "" then
+            local clueLine = Addon.Locale:Get("DIALOGUE_DETAIL_CLUE_FORMAT", selectedQuest.clue):gsub("^•%s*", bullet)
+            table.insert(objLines, clueLine)
+        end
+        local dialogues = selectedQuest.dialogues or {}
+        if #dialogues > 0 then
+            local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+            local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)
+            table.insert(objLines, dlgLine)
+        end
+        if selectedQuest.hideMapArea then
+            local mapHiddenLine = Addon.Locale:Get("DIALOGUE_DETAIL_MAP_HIDDEN"):gsub("^•%s*", bullet)
+            table.insert(objLines, mapHiddenLine)
+        end
     end
     local visibleLineCount = #objLines
     self.detailObjText:SetDimensions(495, 0)

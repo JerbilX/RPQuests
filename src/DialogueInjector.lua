@@ -7,6 +7,25 @@ Addon.DialogueInjector = {}
 local DialogueInjector = Addon.DialogueInjector
 
 local LISTENER_NAME = "RPQuest_DialogueInjector"
+local seenDialogues = {}
+
+local function GetSeenDialogueKey(match)
+    if not match then return nil end
+    return tostring(match.questId or 0) .. ":" .. tostring(match.npcName or ""):lower()
+end
+
+local function ApplySeenOptionColor(interaction, controlID)
+    local optionControl = interaction and interaction.optionControls and interaction.optionControls[controlID]
+    if not optionControl then return end
+    optionControl.chosenBefore = true
+    if optionControl.SetColor then
+        if GetInterfaceColor and INTERFACE_COLOR_TYPE_GENERAL and INTERFACE_GENERAL_COLOR_DISABLED then
+            optionControl:SetColor(GetInterfaceColor(INTERFACE_COLOR_TYPE_GENERAL, INTERFACE_GENERAL_COLOR_DISABLED))
+        else
+            optionControl:SetColor(0.5, 0.5, 0.5, 1)
+        end
+    end
+end
 
 local function GetCurrentPlayerZoneId()
     if GetUnitWorldPosition then
@@ -97,20 +116,27 @@ local function HookInteractionClass(cls)
             state.injected = true
             if controlID and controlID < maxOptions then
                 local match = state.match
-                local injectedText = Addon.Locale:Get("DIALOGUE_OPTION_FORMAT", match.clue)
+                local injectedText = match.clue
                 local responseText = match.response
+                local seenKey = GetSeenDialogueKey(match)
+                local wasChosenBefore = (seenKey and seenDialogues[seenKey]) == true
+                local injectedControlID = controlID
                 local callback = function()
+                    if seenKey then
+                        seenDialogues[seenKey] = true
+                    end
                     DisplayDialogueResponse(interactionSelf, responseText)
+                    ApplySeenOptionColor(interactionSelf, injectedControlID)
                 end
                 origPopulateOption(
                     interactionSelf,
-                    controlID,
+                    injectedControlID,
                     callback,
                     injectedText,
                     CHATTER_TALK_CHOICE,
                     nil,
                     false,
-                    false,
+                    wasChosenBefore,
                     importantOptions
                 )
                 state.offset = 1
