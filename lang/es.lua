@@ -11,8 +11,8 @@ RPQuest.Locales["es"] = {
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Abrir / Cerrar Pestaña de Misiones Custom",
 
     -- Tab & General
-    TAB_TITLE = "Misiones Custom",
-    HEADER_QUEST_LIST = "MISIONES CUSTOM (%d)",
+    TAB_TITLE = "RPQuests",
+    HEADER_QUEST_LIST = "RPQuests: %d",
     SECTION_ACTIVE_QUESTS = "MISIONES (%d)",
     SECTION_PREPARED_QUESTS = "PREPARANDO (%d)",
     SECTION_COMPLETED_QUESTS = "COMPLETADAS (%d)",
