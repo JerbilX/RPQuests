@@ -643,10 +643,16 @@ function JournalTab:BuildEditorPane(parent)
     self.completionBg = compBg
     self.completionEdit = compEdit
 
+    self.btnRequireUndetected = CreateStyledButton(PANEL_NAME .. "_BtnRequireUndetected", pane, 280, 28, Addon.Locale:Get("OPT_REQUIRE_UNDETECTED"), function()
+        local d = Addon.QuestRepository:GetDraft()
+        Addon.QuestRepository:UpdateDraftFields({ requireUndetected = not (d and d.requireUndetected) })
+    end)
+    self.btnRequireUndetected:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 478)
+
     self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, Addon.Locale:Get("BTN_SAVE"), function()
         self:OnSaveDraftClicked()
     end)
-    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 486)
+    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 516)
 
     self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
@@ -656,7 +662,7 @@ function JournalTab:BuildEditorPane(parent)
         self.completionEdit:SetText("")
         self:Refresh()
     end)
-    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 486)
+    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 516)
 
     self.btnShowMapEditor = CreateStyledButton(PANEL_NAME .. "_BtnShowMapEditor", pane, 155, 36, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
         local draft = Addon.QuestRepository:GetDraft()
@@ -664,7 +670,7 @@ function JournalTab:BuildEditorPane(parent)
             Addon.WorldMapArea:ShowQuestOnMap(draft)
         end
     end)
-    self.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 486)
+    self.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 516)
     self.btnShowMapEditor:SetHidden(true)
 end
 
@@ -914,7 +920,13 @@ function JournalTab:OnValidateDeliveryClicked()
 
     local isValid, resultOrErrKey = Addon.QuestRepository:ValidateCompletionCode(self.selectedQuestId, rawCode)
     if isValid and type(resultOrErrKey) == "table" then
-        self.validateResultLabel:SetText(Addon.Locale:Get("VALIDATE_RESULT_SUCCESS", resultOrErrKey.characterName or ""))
+        local msg = Addon.Locale:Get("VALIDATE_RESULT_SUCCESS", resultOrErrKey.characterName or "")
+        if resultOrErrKey.wasDetected == true then
+            msg = msg .. Addon.Locale:Get("VALIDATE_STEALTH_DETECTED")
+        elseif resultOrErrKey.wasDetected == false then
+            msg = msg .. Addon.Locale:Get("VALIDATE_STEALTH_UNDETECTED")
+        end
+        self.validateResultLabel:SetText(msg)
     else
         local errKey = type(resultOrErrKey) == "string" and resultOrErrKey or "VALIDATE_ERR_INVALID_CODE"
         self.validateResultLabel:SetText(Addon.Locale:Get(errKey))
@@ -1207,8 +1219,12 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     if totalTargets > maxVisibleObjLines then
         objLines[maxVisibleObjLines] = string.format("... (+%d)", totalTargets - limit)
     end
+    if selectedQuest.requireUndetected then
+        local stealthKey = selectedQuest.wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
+        table.insert(objLines, "|t16:16:/esoui/art/miscellaneous/bullet.dds|t " .. Addon.Locale:Get(stealthKey))
+    end
     local visibleLineCount = #objLines
-    self.detailObjText:SetDimensions(495, math.min(96, math.max(32, visibleLineCount * 24)))
+    self.detailObjText:SetDimensions(495, math.min(120, math.max(32, visibleLineCount * 24)))
     self.detailObjText:SetText(table.concat(objLines, "\n"))
 
     self.codeDivider:SetHidden(false)
@@ -1307,4 +1323,9 @@ function JournalTab:RefreshEditorPane()
     self.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
     self.btnRadiusMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_MEDIUM"), math.abs(curRad - radii.MEDIUM) < 0.005))
     self.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
+
+    if self.btnRequireUndetected then
+        local key = draft.requireUndetected and "OPT_REQUIRE_UNDETECTED_ACTIVE" or "OPT_REQUIRE_UNDETECTED"
+        self.btnRequireUndetected:SetText(Addon.Locale:Get(key))
+    end
 end

@@ -78,6 +78,7 @@ local function CreateDefaultDraft()
         areaCenterX = nil,
         areaCenterY = nil,
         areaRadius = Addon.Constants.AREA_RADIUS.MEDIUM,
+        requireUndetected = false,
     }
 end
 
@@ -98,6 +99,8 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         areaCenterX = data.areaCenterX,
         areaCenterY = data.areaCenterY,
         areaRadius = data.areaRadius,
+        requireUndetected = data.requireUndetected and true or false,
+        wasDetected = false,
     }
 end
 
@@ -268,6 +271,7 @@ function QuestRepository:LoadQuestIntoDraft(questId)
         areaCenterX = quest.areaCenterX,
         areaCenterY = quest.areaCenterY,
         areaRadius = quest.areaRadius or 0.075,
+        requireUndetected = quest.requireUndetected and true or false,
     }
     self:NotifyListeners("DRAFT_UPDATED", self.savedVars.draft)
     return self.savedVars.draft
@@ -280,6 +284,7 @@ function QuestRepository:UpdateDraftFields(fields, silent)
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
     if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
+    if fields.requireUndetected ~= nil then draft.requireUndetected = (fields.requireUndetected == true) end
     if fields.areaRadius ~= nil then
         local newRadius = tonumber(fields.areaRadius) or draft.areaRadius
         if newRadius > 0 then
@@ -365,12 +370,13 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return draft
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput)
     local draft = self:GetDraft()
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
     if descriptionInput ~= nil then draft.description = tostring(descriptionInput) end
     if completionMessageInput ~= nil then draft.completionMessage = tostring(completionMessageInput) end
+    if requireUndetectedInput ~= nil then draft.requireUndetected = (requireUndetectedInput == true) end
     if areaRadiusInput ~= nil and tonumber(areaRadiusInput) and tonumber(areaRadiusInput) > 0 then
         draft.areaRadius = tonumber(areaRadiusInput)
     end
@@ -415,6 +421,11 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         existing.areaCenterX = draft.areaCenterX
         existing.areaCenterY = draft.areaCenterY
         existing.areaRadius = draft.areaRadius
+        local reqUndetected = draft.requireUndetected and true or false
+        existing.requireUndetected = reqUndetected
+        if not reqUndetected then
+            existing.wasDetected = false
+        end
         existing.completed = AreAllTargetsCompleted(existing.targets)
 
         if self._shareCodeCache then
@@ -632,6 +643,7 @@ function QuestRepository:ResetQuest(questId)
         t.currentCount = 0
     end
     q.completed = false
+    q.wasDetected = false
     self.savedVars.activeQuestId = q.id
     self:InvalidateActiveTargetCache()
     self:NotifyListeners("QUEST_RESET", q)
@@ -772,4 +784,28 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
     end
 
     return true, activeQuest, activeQuest.completed, matchedTarget
+end
+
+function QuestRepository:RecordPlayerDetected(playerContext)
+    local activeQuest = self:GetActiveQuest()
+    if not activeQuest or activeQuest.completed or not activeQuest.requireUndetected or activeQuest.wasDetected then
+        return false, nil
+    end
+
+    if type(playerContext) == "table" then
+        local inArea = self:IsPlayerInsideQuestArea(
+            activeQuest,
+            playerContext.mapId,
+            playerContext.zoneId,
+            playerContext.x,
+            playerContext.y
+        )
+        if not inArea then
+            return false, nil
+        end
+    end
+
+    activeQuest.wasDetected = true
+    self:NotifyListeners("QUEST_DETECTED", activeQuest)
+    return true, activeQuest
 end

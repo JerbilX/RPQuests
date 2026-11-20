@@ -152,6 +152,7 @@ local function BuildQuestPayloadString(quest)
         string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
         encodedTargets,
         EscapeField(quest.completionMessage or ""),
+        quest.requireUndetected and "1" or "0",
     }
 
     return table.concat(fields, "|")
@@ -294,6 +295,7 @@ function ShareCodec:DecodeQuest(codeString)
     local areaRadius = tonumber(fields[10])
     local decodedTargets = DecodeTargetsList(fields[11])
     local completionMessage = fields[12] and UnescapeField(fields[12]) or ""
+    local requireUndetected = (fields[13] == "1")
 
     if not decodedTargets or #decodedTargets == 0 then
         return nil, "Invalid target data in code"
@@ -316,6 +318,7 @@ function ShareCodec:DecodeQuest(codeString)
         areaCenterX = areaCenterX,
         areaCenterY = areaCenterY,
         areaRadius = areaRadius,
+        requireUndetected = requireUndetected,
     }
 end
 
@@ -346,11 +349,16 @@ function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
     end
 
     local ts = math.max(0, math.floor(tonumber(completedAt) or 0))
+    local stealthFlag = ""
+    if quest.requireUndetected then
+        stealthFlag = quest.wasDetected and "1" or "0"
+    end
     local rawPayload = table.concat({
         signature,
         EscapeField(cleanName),
         "1",
         tostring(ts),
+        stealthFlag,
     }, "|")
 
     local prefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
@@ -400,6 +408,12 @@ function ShareCodec:DecodeCompletion(codeString)
     local characterName = UnescapeField(fields[2])
     local completed = (fields[3] == "1")
     local completedAt = tonumber(fields[4]) or 0
+    local wasDetected = nil
+    if fields[5] == "1" then
+        wasDetected = true
+    elseif fields[5] == "0" then
+        wasDetected = false
+    end
 
     if not questSignature or not string.match(questSignature, "^[0-9A-Fa-f]+$") or #questSignature ~= 8 then
         return nil, "VALIDATE_ERR_INVALID_CODE"
@@ -413,6 +427,7 @@ function ShareCodec:DecodeCompletion(codeString)
         characterName = characterName,
         completed = completed,
         completedAt = math.max(0, math.floor(completedAt)),
+        wasDetected = wasDetected,
     }
 end
 
