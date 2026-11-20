@@ -15,6 +15,7 @@ src/QuestRepository.lua
 src/Announcements.lua
 src/TargetCapture.lua
 src/CombatTracker.lua
+src/DiscoveryTracker.lua
 src/WorldMapArea.lua
 src/JournalTab.lua
 RPQuest.lua

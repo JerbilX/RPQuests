@@ -33,6 +33,12 @@ Addon.Constants = {
         MIN_RATIO = 0.25,
         MAX_RATIO = 0.65,
     },
+    DISCOVERY_RADIUS = {
+        SMALL = 800,
+        MEDIUM = 1500,
+        LARGE = 3000,
+    },
+    DISCOVERY_POLL_INTERVAL_MS = 750,
     UI = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",
         TAB_DESCRIPTOR = "rpquest_custom_quests",

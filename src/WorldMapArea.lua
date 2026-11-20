@@ -172,7 +172,7 @@ function WorldMapArea:Initialize()
     end
 
     Addon.QuestRepository:RegisterListener(function(eventType)
-        if eventType == "QUEST_PROGRESS" then
+        if eventType == "QUEST_PROGRESS" or eventType == "DISCOVERY_TRIGGERED" then
             return
         end
         if eventType == "ACTIVE_QUEST_CHANGED" or eventType == "QUEST_DELETED" then

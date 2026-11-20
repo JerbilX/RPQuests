@@ -99,3 +99,53 @@ function TargetCapture:CaptureFromReticle()
 
     return draft
 end
+
+function TargetCapture:CaptureDiscoveryPoint(customMessage, customRadius)
+    if not GetUnitWorldPosition then
+        local err = Addon.Locale:Get("ALERT_DISCOVERY_INVALID_POS")
+        Addon.Announcements:ShowAlert(err, true)
+        return nil, err
+    end
+
+    local zoneId, worldX, worldY, worldZ = GetUnitWorldPosition("player")
+    if not zoneId or zoneId == 0 or not worldX or not worldZ then
+        local err = Addon.Locale:Get("ALERT_DISCOVERY_INVALID_POS")
+        Addon.Announcements:ShowAlert(err, true)
+        return nil, err
+    end
+
+    local ctx = self:GetPlayerMapContext(true)
+    local draft = Addon.QuestRepository:GetDraft()
+    local rawMsg = customMessage
+    if type(rawMsg) ~= "string" or rawMsg == "" then
+        rawMsg = draft.discoveryMessage or ""
+    end
+    local cleanMsg = rawMsg:gsub("^%s+", ""):gsub("%s+$", "")
+    if cleanMsg == "" then
+        local nextIdx = #(draft.discoveries or {}) + 1
+        cleanMsg = Addon.Locale:Get("DEFAULT_DISCOVERY_MSG", nextIdx)
+    end
+
+    local radius = tonumber(customRadius) or draft.discoveryRadius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+    local updatedDraft, count = Addon.QuestRepository:AddDraftDiscoveryPoint({
+        zoneId = zoneId,
+        worldX = worldX,
+        worldY = worldY or 0,
+        worldZ = worldZ,
+        mapId = ctx.mapId,
+        mapName = ctx.mapName,
+        x = ctx.x,
+        y = ctx.y,
+        radius = radius,
+        message = cleanMsg,
+    })
+
+    if updatedDraft then
+        local locText = (ctx.mapName ~= "" and ctx.mapName) or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
+        local radiusMeters = math.floor(radius / 100)
+        local alertMsg = Addon.Locale:Get("ALERT_DISCOVERY_CAPTURED", count or 1, locText, radiusMeters)
+        Addon.Announcements:ShowAlert(alertMsg, false)
+    end
+
+    return updatedDraft, count
+end

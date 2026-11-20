@@ -20,6 +20,7 @@ function Addon:Initialize()
 
     Addon.QuestRepository:Initialize(savedVars)
     Addon.CombatTracker:Initialize()
+    Addon.DiscoveryTracker:Initialize()
     Addon.WorldMapArea:Initialize()
     Addon.JournalTab:Initialize()
 
@@ -32,6 +33,10 @@ function Addon:OnCaptureTargetKeybind()
     return Addon.TargetCapture:CaptureFromReticle()
 end
 
+function Addon:OnCaptureDiscoveryKeybind()
+    return Addon.TargetCapture:CaptureDiscoveryPoint()
+end
+
 function Addon:OnToggleJournalKeybind()
     Addon.JournalTab:ToggleTab()
 end
@@ -40,6 +45,8 @@ function Addon:HandleSlashCommand(args)
     local cmd = (type(args) == "string" and args:gsub("^%s+", ""):gsub("%s+$", ""):lower()) or ""
     if cmd == "capture" or cmd == "target" then
         self:OnCaptureTargetKeybind()
+    elseif cmd == "discovery" or cmd == "point" then
+        self:OnCaptureDiscoveryKeybind()
     elseif cmd == "map" then
         Addon.WorldMapArea:ShowQuestOnMap()
     else

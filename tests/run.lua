@@ -13,6 +13,9 @@ local mockState = {
     mapName = "Auridon",
     playerX = 0.4200,
     playerY = 0.6100,
+    worldX = 10000,
+    worldY = 500,
+    worldZ = 20000,
     reticleExists = true,
     reticleName = "Capitán Pirata^m",
     reticleIsPlayer = false,
@@ -21,6 +24,7 @@ local mockState = {
     reticleReaction = 2,
     alerts = {},
     csaMessages = {},
+    chatMessages = {},
     soundsPlayed = {},
     isGrouped = false,
 }
@@ -186,6 +190,26 @@ GetMapPlayerPosition = function(unitTag)
     return mockState.playerX, mockState.playerY, 0, true, false
 end
 
+GetUnitWorldPosition = function(unitTag)
+    return mockState.zoneId, mockState.worldX, mockState.worldY, mockState.worldZ
+end
+
+CHAT_SYSTEM = {
+    AddMessage = function(self, msg)
+        table.insert(mockState.chatMessages, msg)
+    end,
+}
+
+if EVENT_MANAGER then
+    EVENT_MANAGER._updates = EVENT_MANAGER._updates or {}
+    EVENT_MANAGER.RegisterForUpdate = EVENT_MANAGER.RegisterForUpdate or function(self, name, intervalMs, callback)
+        self._updates[name] = { intervalMs = intervalMs, callback = callback }
+    end
+    EVENT_MANAGER.UnregisterForUpdate = EVENT_MANAGER.UnregisterForUpdate or function(self, name)
+        self._updates[name] = nil
+    end
+end
+
 GetMapType = function()
     return mockState.mapType or MAPTYPE_ZONE
 end
@@ -314,6 +338,7 @@ dofile("src/QuestRepository.lua")
 dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
 dofile("src/CombatTracker.lua")
+dofile("src/DiscoveryTracker.lua")
 dofile("src/WorldMapArea.lua")
 dofile("src/JournalTab.lua")
 dofile("RPQuest.lua")
@@ -1446,6 +1471,113 @@ RunTest("Undetected (stealth) quest option, Justice events, area check, and comp
     RPQuest.QuestRepository:ResetQuest(imported.id)
     RPQuest.CombatTracker:OnJusticeInfamyUpdated(EVENT_JUSTICE_INFAMY_UPDATED, 0, 50, 0, 1)
     AssertEqual(imported.wasDetected, true, "Infamy increase inside quest area marks wasDetected = true")
+end)
+
+RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map pins, mixed quest", function()
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetActiveQuest(nil)
+    RPQuest.DiscoveryTracker:UpdatePollingState()
+    mockState.zoneId = 381
+    mockState.mapId = 32
+    mockState.worldX = 10000
+    mockState.worldY = 500
+    mockState.worldZ = 20000
+
+    -- 1. Capture 2 discovery points in-situ without combat targets
+    local draft1, cnt1 = RPQuest.TargetCapture:CaptureDiscoveryPoint("Notas un olor particular que viene del norte", 1000)
+    AssertTrue(draft1 ~= nil, "First discovery point captured")
+    AssertEqual(cnt1, 1, "Draft has 1 discovery point")
+
+    mockState.worldX = 15000
+    mockState.worldZ = 25000
+    local draft2, cnt2 = RPQuest.TargetCapture:CaptureDiscoveryPoint("Escuchas un ruido de ovejas que viene del noreste", 1500)
+    AssertTrue(draft2 ~= nil, "Second discovery point captured")
+    AssertEqual(cnt2, 2, "Draft has 2 discovery points")
+
+    -- 2. Save discovery-only quest (0 combat targets)
+    local saved = RPQuest.QuestRepository:SaveDraft("Rastreo en Auridon", "Sigue las pistas")
+    AssertTrue(saved ~= nil, "Discovery-only quest saved successfully")
+    AssertEqual(#saved.targets, 0, "Discovery-only quest has 0 combat targets")
+    AssertEqual(#saved.discoveries, 2, "Discovery-only quest has 2 discovery points")
+    AssertEqual(RPQuest.DiscoveryTracker._isPolling, false, "Polling inactive when prepared quest is not active")
+
+    -- 3. ShareCodec roundtrip preserves discoveries and resets discovered=false
+    local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ1:", "ShareCodec encodes discovery-only quest")
+
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    AssertTrue(imported ~= nil, "ShareCodec decodes and imports discovery-only quest")
+    AssertEqual(#imported.discoveries, 2, "Imported quest preserves 2 discovery points")
+    AssertEqual(imported.discoveries[1].message, "Notas un olor particular que viene del norte", "Discovery #1 message preserved")
+    AssertEqual(imported.discoveries[2].radius, 1500, "Discovery #2 radius preserved")
+    AssertEqual(imported.discoveries[1].discovered, false, "Imported discovery #1 starts undiscovered")
+
+    -- 4. No map pins are rendered for discovery-only quests
+    RPQuest.WorldMapArea:RefreshPins()
+    AssertEqual(#mockPinManager._createdPins, 0, "No map pins created for hidden discovery points")
+
+    -- 5. Polling activates when imported quest is active
+    AssertEqual(RPQuest.DiscoveryTracker._isPolling, true, "Polling active when active quest has pending discoveries")
+
+    -- 6. Wrong zone or outside radius does NOT trigger
+    local triggeredWrongZone = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(999, 10000, 500, 20000)
+    AssertEqual(triggeredWrongZone, false, "Wrong zoneId does not trigger discovery")
+
+    local triggeredFar = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 12000, 500, 20000)
+    AssertEqual(triggeredFar, false, "Outside radius (2000 > 1000) does not trigger discovery")
+
+    -- 7. Entering radius of point #1 triggers it once (CSA + Chat)
+    mockState.csaMessages = {}
+    mockState.chatMessages = {}
+    local triggered1 = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 10500, 500, 20500)
+    AssertEqual(triggered1, true, "Inside radius triggers discovery #1")
+    AssertEqual(imported.discoveries[1].discovered, true, "Discovery #1 marked discovered = true")
+    AssertEqual(imported.completed, false, "Quest not completed until discovery #2 is also found")
+    AssertEqual(#mockState.csaMessages, 1, "CSA shown for discovery #1")
+    AssertEqual(#mockState.chatMessages, 1, "Chat message shown for discovery #1")
+
+    -- Re-evaluating at same position does NOT re-trigger
+    local triggeredRepeat = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 10500, 500, 20500)
+    AssertEqual(triggeredRepeat, false, "Already discovered point does not re-trigger")
+    AssertEqual(#mockState.csaMessages, 1, "No duplicate CSA on repeat tick")
+
+    -- 8. Entering radius of point #2 completes the quest and stops polling
+    local triggered2 = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 15000, 500, 25000)
+    AssertEqual(triggered2, true, "Inside radius triggers discovery #2")
+    AssertEqual(imported.completed, true, "Quest completed after all discoveries found")
+    AssertEqual(RPQuest.DiscoveryTracker._isPolling, false, "Polling stops automatically once quest is completed")
+
+    -- 9. ResetQuest resets discoveries and re-enables polling
+    RPQuest.QuestRepository:ResetQuest(imported.id)
+    AssertEqual(imported.discoveries[1].discovered, false, "ResetQuest resets discovery #1")
+    AssertEqual(imported.discoveries[2].discovered, false, "ResetQuest resets discovery #2")
+    AssertEqual(RPQuest.DiscoveryTracker._isPolling, true, "Polling re-enabled after ResetQuest")
+
+    -- 10. Mixed quest (combat target + discovery point) requires BOTH
+    RPQuest.QuestRepository:ResetDraft()
+    mockState.reticleExists = true
+    mockState.reticleName = "Bandido"
+    mockState.worldX = 20000
+    mockState.worldZ = 30000
+    RPQuest.TargetCapture:CaptureFromReticle()
+    RPQuest.TargetCapture:CaptureDiscoveryPoint("Encuentras el campamento oculto", 1200)
+    local mixedPrepared = RPQuest.QuestRepository:SaveDraft("Misión Mixta", "Investiga y elimina")
+    local mixedCode = RPQuest.QuestRepository:ExportQuestToCode(mixedPrepared.id)
+    local mixed = RPQuest.QuestRepository:ImportQuestFromCode(mixedCode)
+    AssertTrue(mixed ~= nil, "Mixed quest imported")
+
+    local killOk, _, killCompleted = RPQuest.QuestRepository:RecordTargetEliminated("Bandido", {
+        mapId = 32,
+        zoneId = 381,
+        x = mixed.areaCenterX,
+        y = mixed.areaCenterY,
+    })
+    AssertEqual(killOk, true, "Mixed quest target eliminated")
+    AssertEqual(killCompleted, false, "Mixed quest not completed until discovery point is also reached")
+
+    local discOk = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 20000, 500, 30000)
+    AssertEqual(discOk, true, "Mixed quest discovery triggered")
+    AssertEqual(mixed.completed, true, "Mixed quest completed once both target and discovery are done")
 end)
 
 if failed > 0 then

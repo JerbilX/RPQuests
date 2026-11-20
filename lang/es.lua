@@ -8,6 +8,7 @@ RPQuest.Locales["es"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Misiones Personalizadas",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Seleccionar Objetivo bajo Retícula (NPC)",
+    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Capturar Punto de Descubrimiento Oculto Aquí",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Abrir / Cerrar Pestaña de Misiones Custom",
 
     -- Tab & General
@@ -39,6 +40,11 @@ RPQuest.Locales["es"] = {
     BTN_RADIUS_SMALL = "Pequeña",
     BTN_RADIUS_MEDIUM = "Mediana",
     BTN_RADIUS_LARGE = "Grande",
+    BTN_CAPTURE_DISCOVERY = "+ Punto Aquí",
+    BTN_CLEAR_DISCOVERIES = "Limpiar Puntos",
+    BTN_DISCOVERY_RAD_SMALL = "8m",
+    BTN_DISCOVERY_RAD_MEDIUM = "15m",
+    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_ACTIVE = "Estado: |c33FF33Activa (En Seguimiento)|r",
@@ -69,6 +75,14 @@ RPQuest.Locales["es"] = {
     TARGET_CAPTURED_FORMAT = "Objetivo: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Apunta a un NPC vivo y pulsa la tecla de captura.|r",
     LABEL_AREA_SIZE = "Tamaño del área en el mapa:",
+    LABEL_DISCOVERY_SECTION = "Puntos de Descubrimiento Ocultos (Opcional):",
+    LABEL_DISCOVERY_MSG = "Mensaje narrativo al llegar:",
+    DISCOVERY_NONE_CAPTURED = "|cAAAAAA0 puntos de descubrimiento agregados.|r",
+    DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d punto(s) de descubrimiento|r: %s",
+    DEFAULT_DISCOVERY_MSG = "Notas algo inusual en este lugar (#%d).",
+    DISCOVERY_CLUE_FORMAT = "• Pista: %s",
+    DISCOVERY_HIDDEN_PROGRESS = "• Pistas ocultas descubiertas: %d / %d",
+    DISCOVERY_PREPARED_SUMMARY = "• Puntos de descubrimiento ocultos: %d configurados",
     OPT_REQUIRE_UNDETECTED = "[ ] No ser detectado (Opcional)",
     OPT_REQUIRE_UNDETECTED_ACTIVE = "|c33FF33[X] No ser detectado (Opcional)|r",
 
@@ -92,6 +106,8 @@ RPQuest.Locales["es"] = {
     ALERT_INVALID_TARGET_DEAD = "RPQuest: El objetivo bajo la retícula ya está muerto.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: El objetivo seleccionado no es atacable.",
     ALERT_TARGET_CAPTURED = "RPQuest: Objetivo capturado -> %s (%s)",
+    ALERT_DISCOVERY_CAPTURED = "RPQuest: Punto de descubrimiento #%d agregado (%s, %dm)",
+    ALERT_DISCOVERY_INVALID_POS = "RPQuest: No se pudo obtener la posición mundial del personaje.",
     ALERT_QUEST_SAVED = "RPQuest: Misión creada -> %s",
     ALERT_QUEST_DELETED = "RPQuest: Misión eliminada.",
     ALERT_QUEST_RESET = "RPQuest: Progreso de la misión reiniciado.",
@@ -99,7 +115,7 @@ RPQuest.Locales["es"] = {
     ALERT_SHARE_READY = "RPQuest: ¡Código seleccionado! Pulsa Ctrl+C para copiarlo.",
     ALERT_COMPLETION_CODE_READY = "RPQuest: ¡Código de entrega listo! Pulsa Ctrl+C para copiarlo.",
     ALERT_STEALTH_DETECTED = "RPQuest: ¡Has sido detectado! (Registrado en el estado de la misión)",
-    ERR_MISSING_TARGET = "Captura primero al menos un objetivo NPC con la tecla bajo la retícula.",
+    ERR_MISSING_TARGET = "Captura al menos un objetivo NPC o agrega un punto de descubrimiento antes de crear la misión.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
     ERR_CANNOT_EDIT_RECEIVED = "Las misiones recibidas para jugar no se pueden editar.",
     CSA_QUEST_PROGRESS = "%s: %d / %d",

@@ -2,6 +2,7 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
+-- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -62,6 +63,33 @@ local function AreAllTargetsCompleted(targets)
     return true
 end
 
+local function AreAllDiscoveriesCompleted(discoveries)
+    if type(discoveries) ~= "table" or #discoveries == 0 then
+        return false
+    end
+    for _, d in ipairs(discoveries) do
+        if not d.discovered then
+            return false
+        end
+    end
+    return true
+end
+
+local function AreAllObjectivesCompleted(targets, discoveries)
+    local hasTargets = type(targets) == "table" and #targets > 0
+    local hasDiscoveries = type(discoveries) == "table" and #discoveries > 0
+    if not hasTargets and not hasDiscoveries then
+        return false
+    end
+    if hasTargets and not AreAllTargetsCompleted(targets) then
+        return false
+    end
+    if hasDiscoveries and not AreAllDiscoveriesCompleted(discoveries) then
+        return false
+    end
+    return true
+end
+
 local function CreateDefaultDraft()
     return {
         editingQuestId = nil,
@@ -69,6 +97,9 @@ local function CreateDefaultDraft()
         description = "",
         completionMessage = "",
         targets = {},
+        discoveries = {},
+        discoveryRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM,
+        discoveryMessage = "",
         lastCapturedDisplay = nil,
         mapId = 0,
         zoneId = 0,
@@ -89,6 +120,7 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         description = description,
         completionMessage = data.completionMessage or "",
         targets = targets,
+        discoveries = data.discoveries or {},
         completed = false,
         role = role or Addon.Constants.QUEST_ROLE.RECEIVED,
         mapId = data.mapId or 0,
@@ -102,6 +134,29 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         requireUndetected = data.requireUndetected and true or false,
         wasDetected = false,
     }
+end
+
+local function CloneDiscoveriesList(discoveries, preserveDiscovered)
+    local out = {}
+    if type(discoveries) ~= "table" then return out end
+    local defaultRad = Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+    for _, d in ipairs(discoveries) do
+        if type(d) == "table" and d.worldX and d.worldZ then
+            table.insert(out, {
+                zoneId = math.floor(tonumber(d.zoneId) or 0),
+                worldX = tonumber(d.worldX) or 0,
+                worldY = tonumber(d.worldY) or 0,
+                worldZ = tonumber(d.worldZ) or 0,
+                mapId = math.floor(tonumber(d.mapId) or 0),
+                x = tonumber(d.x),
+                y = tonumber(d.y),
+                radius = math.max(100, math.floor(tonumber(d.radius) or defaultRad)),
+                message = type(d.message) == "string" and d.message or "",
+                discovered = preserveDiscovered and (d.discovered == true) or false,
+            })
+        end
+    end
+    return out
 end
 
 local function CloneTargetsList(targets, existingTargetsByName)
@@ -143,6 +198,7 @@ function QuestRepository:Initialize(savedVars)
         self.savedVars.draft = CreateDefaultDraft()
     else
         self.savedVars.draft.targets = self.savedVars.draft.targets or {}
+        self.savedVars.draft.discoveries = self.savedVars.draft.discoveries or {}
     end
     self._questById = {}
     self._shareCodeCache = {}
@@ -222,6 +278,7 @@ function QuestRepository:GetDraft()
         self:Initialize()
     end
     self.savedVars.draft.targets = self.savedVars.draft.targets or {}
+    self.savedVars.draft.discoveries = self.savedVars.draft.discoveries or {}
     return self.savedVars.draft
 end
 
@@ -238,13 +295,60 @@ function QuestRepository:ClearDraftTargets()
     local draft = self:GetDraft()
     draft.targets = {}
     draft.lastCapturedDisplay = nil
-    draft.mapId = 0
-    draft.zoneId = 0
-    draft.mapName = ""
     draft.targetX = nil
     draft.targetY = nil
     draft.areaCenterX = nil
     draft.areaCenterY = nil
+    if #draft.discoveries == 0 then
+        draft.mapId = 0
+        draft.zoneId = 0
+        draft.mapName = ""
+    end
+    self:NotifyListeners("DRAFT_UPDATED", draft)
+    return draft
+end
+
+function QuestRepository:AddDraftDiscoveryPoint(data)
+    if type(data) ~= "table" or not data.worldX or not data.worldZ then
+        return nil
+    end
+    local draft = self:GetDraft()
+    draft.discoveries = draft.discoveries or {}
+    local defaultRad = draft.discoveryRadius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+    local point = {
+        zoneId = math.floor(tonumber(data.zoneId) or 0),
+        worldX = tonumber(data.worldX) or 0,
+        worldY = tonumber(data.worldY) or 0,
+        worldZ = tonumber(data.worldZ) or 0,
+        mapId = math.floor(tonumber(data.mapId) or 0),
+        x = tonumber(data.x),
+        y = tonumber(data.y),
+        radius = math.max(100, math.floor(tonumber(data.radius) or defaultRad)),
+        message = type(data.message) == "string" and data.message or "",
+        discovered = false,
+    }
+    table.insert(draft.discoveries, point)
+    if (not draft.mapId or draft.mapId == 0) and point.mapId > 0 then
+        draft.mapId = point.mapId
+    end
+    if (not draft.zoneId or draft.zoneId == 0) and point.zoneId > 0 then
+        draft.zoneId = point.zoneId
+    end
+    if (not draft.mapName or draft.mapName == "") and type(data.mapName) == "string" and data.mapName ~= "" then
+        draft.mapName = data.mapName
+    end
+    self:NotifyListeners("DRAFT_UPDATED", draft)
+    return draft, #draft.discoveries
+end
+
+function QuestRepository:ClearDraftDiscoveries()
+    local draft = self:GetDraft()
+    draft.discoveries = {}
+    if #(draft.targets or {}) == 0 then
+        draft.mapId = 0
+        draft.zoneId = 0
+        draft.mapName = ""
+    end
     self:NotifyListeners("DRAFT_UPDATED", draft)
     return draft
 end
@@ -262,6 +366,9 @@ function QuestRepository:LoadQuestIntoDraft(questId)
         description = quest.description or "",
         completionMessage = quest.completionMessage or "",
         targets = CloneTargetsList(quest.targets),
+        discoveries = CloneDiscoveriesList(quest.discoveries, false),
+        discoveryRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM,
+        discoveryMessage = "",
         lastCapturedDisplay = nil,
         mapId = quest.mapId or 0,
         zoneId = quest.zoneId or 0,
@@ -284,6 +391,13 @@ function QuestRepository:UpdateDraftFields(fields, silent)
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
     if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
+    if fields.discoveryMessage ~= nil then draft.discoveryMessage = tostring(fields.discoveryMessage) end
+    if fields.discoveryRadius ~= nil then
+        local newDiscRadius = tonumber(fields.discoveryRadius)
+        if newDiscRadius and newDiscRadius >= 100 then
+            draft.discoveryRadius = math.floor(newDiscRadius)
+        end
+    end
     if fields.requireUndetected ~= nil then draft.requireUndetected = (fields.requireUndetected == true) end
     if fields.areaRadius ~= nil then
         local newRadius = tonumber(fields.areaRadius) or draft.areaRadius
@@ -382,12 +496,16 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     end
 
     draft.targets = draft.targets or {}
+    draft.discoveries = draft.discoveries or {}
 
-    if #draft.targets == 0 or not draft.targetX or not draft.targetY then
+    local hasTargets = #draft.targets > 0 and draft.targetX and draft.targetY
+    local hasDiscoveries = #draft.discoveries > 0
+
+    if not hasTargets and not hasDiscoveries then
         return nil, Addon.Locale:Get("ERR_MISSING_TARGET")
     end
 
-    if not draft.areaCenterX or not draft.areaCenterY then
+    if hasTargets and (not draft.areaCenterX or not draft.areaCenterY) then
         draft.areaCenterX, draft.areaCenterY = self:ComputeOffsetCenter(draft.targetX, draft.targetY, draft.areaRadius)
     end
 
@@ -413,6 +531,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         existing.description = cleanDesc
         existing.completionMessage = cleanCompMsg
         existing.targets = CloneTargetsList(draft.targets, prevProgress)
+        existing.discoveries = CloneDiscoveriesList(draft.discoveries, false)
         existing.mapId = draft.mapId or 0
         existing.zoneId = draft.zoneId or 0
         existing.mapName = draft.mapName or ""
@@ -426,7 +545,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         if not reqUndetected then
             existing.wasDetected = false
         end
-        existing.completed = AreAllTargetsCompleted(existing.targets)
+        existing.completed = AreAllObjectivesCompleted(existing.targets, existing.discoveries)
 
         if self._shareCodeCache then
             self._shareCodeCache[existing.id] = nil
@@ -442,12 +561,26 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 
     self.savedVars.nextId = targetId + 1
 
+    local questData = {
+        completionMessage = draft.completionMessage,
+        discoveries = CloneDiscoveriesList(draft.discoveries, false),
+        mapId = draft.mapId,
+        zoneId = draft.zoneId,
+        mapName = draft.mapName,
+        targetX = draft.targetX,
+        targetY = draft.targetY,
+        areaCenterX = draft.areaCenterX,
+        areaCenterY = draft.areaCenterY,
+        areaRadius = draft.areaRadius,
+        requireUndetected = draft.requireUndetected,
+    }
+
     local newQuest = BuildQuestRecord(
         targetId,
         cleanTitle,
         cleanDesc,
         CloneTargetsList(draft.targets),
-        draft,
+        questData,
         Addon.Constants.QUEST_ROLE.PREPARED
     )
 
@@ -488,6 +621,8 @@ function QuestRepository:ImportQuestFromCode(codeString)
             })
         end
     end
+
+    decoded.discoveries = CloneDiscoveriesList(decoded.discoveries, false)
 
     local importedQuest = BuildQuestRecord(
         newId,
@@ -642,6 +777,9 @@ function QuestRepository:ResetQuest(questId)
     for _, t in ipairs(q.targets or {}) do
         t.currentCount = 0
     end
+    for _, d in ipairs(q.discoveries or {}) do
+        d.discovered = false
+    end
     q.completed = false
     q.wasDetected = false
     self.savedVars.activeQuestId = q.id
@@ -773,7 +911,7 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
 
     matchedTarget.currentCount = math.min(matchedTarget.requiredCount or 1, (matchedTarget.currentCount or 0) + 1)
 
-    if AreAllTargetsCompleted(activeQuest.targets) then
+    if AreAllObjectivesCompleted(activeQuest.targets, activeQuest.discoveries) then
         activeQuest.completed = true
         if self.savedVars.activeQuestId == activeQuest.id then
             self.savedVars.activeQuestId = nil
@@ -784,6 +922,45 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
     end
 
     return true, activeQuest, activeQuest.completed, matchedTarget
+end
+
+function QuestRepository:HasPendingDiscoveries(quest)
+    if not quest or quest.completed or type(quest.discoveries) ~= "table" then
+        return false
+    end
+    for _, d in ipairs(quest.discoveries) do
+        if not d.discovered then
+            return true
+        end
+    end
+    return false
+end
+
+function QuestRepository:MarkDiscoveryTriggered(questId, discoveryIndex)
+    local quest = self:GetQuestById(questId)
+    if not quest or quest.completed or type(quest.discoveries) ~= "table" then
+        return false, nil, false, nil
+    end
+    local point = quest.discoveries[discoveryIndex]
+    if not point or point.discovered then
+        return false, nil, false, nil
+    end
+
+    point.discovered = true
+
+    if AreAllObjectivesCompleted(quest.targets, quest.discoveries) then
+        quest.completed = true
+        if self.savedVars.activeQuestId == quest.id then
+            self.savedVars.activeQuestId = nil
+        end
+        self:InvalidateActiveTargetCache()
+        self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
+        self:NotifyListeners("QUEST_COMPLETED", quest)
+    else
+        self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
+    end
+
+    return true, quest, quest.completed, point
 end
 
 function QuestRepository:RecordPlayerDetected(playerContext)
