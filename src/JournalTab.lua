@@ -215,7 +215,7 @@ end
 function JournalTab:BuildLeftColumn(panel)
     local leftCol = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LeftCol", panel, CT_CONTROL)
     leftCol:SetDimensions(335, 620)
-    leftCol:SetAnchor(TOPLEFT, panel, TOPLEFT, 12, 10)
+    leftCol:SetAnchor(TOPLEFT, panel, TOPLEFT, 5, 7)
     leftCol:SetMouseEnabled(true)
     leftCol:SetHandler("OnMouseWheel", function(_, delta)
         self:ScrollQuestList(-delta)
@@ -225,20 +225,20 @@ function JournalTab:BuildLeftColumn(panel)
     local headerLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_QuestCount", leftCol, CT_LABEL)
     headerLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 0)
     if headerLabel.SetFont then headerLabel:SetFont("ZoFontHeader3") end
-    if headerLabel.SetColor then headerLabel:SetColor(0.91, 0.83, 0.63, 1) end
+    if headerLabel.SetColor then headerLabel:SetColor(0.77, 0.76, 0.62, 1) end
     self.headerLabel = headerLabel
 
     self.importBtn = CreateStyledButton(
         PANEL_NAME .. "_ImportBtn",
         leftCol,
-        175,
+        165,
         28,
         Addon.Locale:Get("BTN_IMPORT_CODE"),
         function()
             self:OpenImportView()
         end
     )
-    self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 32)
+    self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 34)
 
     self.newBtn = CreateStyledButton(
         PANEL_NAME .. "_NewBtn",
@@ -250,7 +250,7 @@ function JournalTab:BuildLeftColumn(panel)
             self:OpenCreateEditor()
         end
     )
-    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 185, 32)
+    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 179, 34)
 
     local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
     emptyLabel:SetDimensions(310, 80)
@@ -265,9 +265,15 @@ function JournalTab:BuildLeftColumn(panel)
 
     for i = 1, MAX_VISIBLE_ROWS do
         local rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_Row" .. i, leftCol, CT_BUTTON)
-        rowBtn:SetDimensions(315, 30)
-        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 70 + ((i - 1) * 32))
+        rowBtn:SetDimensions(320, 28)
+        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 72 + ((i - 1) * 30))
         if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
+        if rowBtn.SetHorizontalAlignment and TEXT_ALIGN_LEFT then
+            rowBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+        end
+        if rowBtn.SetVerticalAlignment and TEXT_ALIGN_CENTER then
+            rowBtn:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+        end
         local rowIndex = i
         rowBtn:SetHandler("OnClicked", function()
             local binding = self.rowBindings[rowIndex]
@@ -322,8 +328,8 @@ end
 
 function JournalTab:BuildRightColumn(panel)
     local rightCol = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_RightCol", panel, CT_CONTROL)
-    rightCol:SetDimensions(560, 600)
-    rightCol:SetAnchor(TOPLEFT, panel, TOPLEFT, 375, 55)
+    rightCol:SetDimensions(550, 600)
+    rightCol:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -33, 60)
     self.rightCol = rightCol
 
     self:BuildDetailPane(rightCol)
@@ -333,90 +339,81 @@ end
 
 function JournalTab:BuildDetailPane(parent)
     local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailPane", parent, CT_CONTROL)
-    pane:SetDimensions(550, 620)
+    pane:SetDimensions(550, 600)
     pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
     self.detailPane = pane
 
     local titleLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailTitle", pane, CT_LABEL)
-    titleLabel:SetDimensions(520, 30)
+    titleLabel:SetDimensions(500, 34)
     titleLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
     if titleLabel.SetFont then titleLabel:SetFont("ZoFontWinH2") end
-    if titleLabel.SetColor then titleLabel:SetColor(0.95, 0.88, 0.65, 1) end
+    if titleLabel.SetColor then titleLabel:SetColor(1, 1, 1, 1) end
+    if titleLabel.SetModifyTextType and TEXT_MODIFY_TYPE_UPPERCASE then
+        titleLabel:SetModifyTextType(TEXT_MODIFY_TYPE_UPPERCASE)
+    end
     self.detailTitle = titleLabel
 
     local statusLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailStatus", pane, CT_LABEL)
-    statusLabel:SetDimensions(520, 22)
-    statusLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 32)
-    if statusLabel.SetFont then statusLabel:SetFont("ZoFontGameBold") end
+    statusLabel:SetDimensions(500, 22)
+    statusLabel:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 0, 5)
+    if statusLabel.SetFont then statusLabel:SetFont("ZoFontWinH4") end
     self.detailStatus = statusLabel
 
     local locLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailLoc", pane, CT_LABEL)
-    locLabel:SetDimensions(520, 22)
-    locLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 54)
-    if locLabel.SetFont then locLabel:SetFont("ZoFontGame") end
-    if locLabel.SetColor then locLabel:SetColor(0.82, 0.82, 0.82, 1) end
+    locLabel:SetDimensions(500, 22)
+    locLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
+    if locLabel.SetFont then locLabel:SetFont("ZoFontWinH4") end
+    if locLabel.SetColor then locLabel:SetColor(0.77, 0.76, 0.62, 1) end
     self.detailLocation = locLabel
 
-    local descHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescHeader", pane, CT_LABEL)
-    descHeader:SetDimensions(520, 22)
-    descHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 84)
-    if descHeader.SetFont then descHeader:SetFont("ZoFontWinH4") end
-    if descHeader.SetColor then descHeader:SetColor(0.91, 0.83, 0.63, 1) end
-    descHeader:SetText(Addon.Locale:Get("LABEL_DESCRIPTION_HEADER"))
-    self.detailDescHeader = descHeader
-
     local descBody = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescBody", pane, CT_LABEL)
-    descBody:SetDimensions(510, 104)
-    descBody:SetAnchor(TOPLEFT, pane, TOPLEFT, 10, 108)
+    descBody:SetDimensions(495, 104)
+    descBody:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 25, 54)
     if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
-    if descBody.SetColor then descBody:SetColor(0.85, 0.83, 0.76, 1) end
+    if descBody.SetColor then descBody:SetColor(0.77, 0.76, 0.62, 1) end
     if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
     self.detailDescBody = descBody
 
     local divider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDivider", pane, CT_TEXTURE)
     divider:SetDimensions(512, 4)
-    divider:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 220)
+    divider:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 210)
     divider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
 
     local objHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjHeader", pane, CT_LABEL)
-    objHeader:SetDimensions(520, 22)
-    objHeader:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 230)
+    objHeader:SetDimensions(500, 24)
+    objHeader:SetAnchor(TOPLEFT, divider, BOTTOMLEFT, 0, 10)
     if objHeader.SetFont then objHeader:SetFont("ZoFontWinH3") end
-    if objHeader.SetColor then objHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    if objHeader.SetColor then objHeader:SetColor(1, 1, 1, 1) end
+    if objHeader.SetModifyTextType and TEXT_MODIFY_TYPE_UPPERCASE then
+        objHeader:SetModifyTextType(TEXT_MODIFY_TYPE_UPPERCASE)
+    end
     objHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     self.detailObjHeader = objHeader
 
     local objText = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjText", pane, CT_LABEL)
-    objText:SetDimensions(510, 48)
-    objText:SetAnchor(TOPLEFT, pane, TOPLEFT, 12, 256)
+    objText:SetDimensions(495, 48)
+    objText:SetAnchor(TOPLEFT, objHeader, BOTTOMLEFT, 25, 10)
     if objText.SetFont then objText:SetFont("ZoFontWinH4") end
+    if objText.SetColor then objText:SetColor(1, 1, 1, 1) end
     self.detailObjText = objText
 
     -- Grupo 1: Botones de acción de la misión
     self.btnActivate = CreateStyledButton(PANEL_NAME .. "_BtnActivate", pane, 160, 32, "", function()
         self:OnToggleActiveClicked()
     end)
-    self.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -12, 12)
-
-    self.btnShowOnMap = CreateStyledButton(PANEL_NAME .. "_BtnShowMap", pane, 160, 32, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
-        local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-        if q then
-            Addon.WorldMapArea:ShowQuestOnMap(q)
-        end
-    end)
-    self.btnShowOnMap:SetAnchor(TOPLEFT, self.btnActivate, TOPRIGHT, 12, 0)
+    self.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -25, 16)
 
     self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", pane, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
         self:OpenEditEditor(self.selectedQuestId)
     end)
-    self.btnEdit:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 8)
+    self.btnEdit:SetAnchor(TOPLEFT, self.btnActivate, TOPRIGHT, 12, 0)
 
     self.btnReset = CreateStyledButton(PANEL_NAME .. "_BtnReset", pane, 160, 32, Addon.Locale:Get("BTN_RESET"), function()
         if self.selectedQuestId and Addon.QuestRepository:ResetQuest(self.selectedQuestId) then
             Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
         end
     end)
-    self.btnReset:SetAnchor(TOPLEFT, self.btnEdit, TOPRIGHT, 12, 0)
+    self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
 
     self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", pane, 160, 32, Addon.Locale:Get("BTN_DELETE"), function()
         if self.selectedQuestId and Addon.QuestRepository:DeleteQuest(self.selectedQuestId) then
@@ -424,6 +421,38 @@ function JournalTab:BuildDetailPane(parent)
         end
     end)
     self.btnDelete:SetAnchor(TOPLEFT, self.btnReset, TOPRIGHT, 12, 0)
+
+    -- Keybind nativo [M] Show On Map (igual al Quest Journal vanilla)
+    self.showOnMapDescriptor = {
+        name = (GetString and SI_QUEST_JOURNAL_SHOW_ON_MAP) and GetString(SI_QUEST_JOURNAL_SHOW_ON_MAP) or Addon.Locale:Get("BTN_SHOW_ON_MAP"),
+        keybind = "UI_SHORTCUT_SHOW_QUEST_ON_MAP",
+        ethereal = true,
+        callback = function()
+            local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+            if q then
+                Addon.WorldMapArea:ShowQuestOnMap(q)
+            end
+        end,
+        visible = function()
+            return self.viewMode == VIEW_MODE.DETAIL and self.selectedQuestId ~= nil
+        end,
+    }
+    self.keybindStripDescriptor = {
+        alignment = KEYBIND_STRIP_ALIGN_CENTER or 1,
+        self.showOnMapDescriptor,
+    }
+
+    local showOnMapBtn = WINDOW_MANAGER.CreateControlFromVirtual
+        and WINDOW_MANAGER:CreateControlFromVirtual(PANEL_NAME .. "_ShowOnMap", pane, "ZO_KeybindButton")
+        or WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShowOnMap", pane, CT_CONTROL)
+    if ApplyTemplateToControl then
+        ApplyTemplateToControl(showOnMapBtn, "ZO_KeybindButton_Keyboard_Template")
+    end
+    if showOnMapBtn.SetKeybindButtonDescriptor then
+        showOnMapBtn:SetKeybindButtonDescriptor(self.showOnMapDescriptor)
+    end
+    showOnMapBtn:SetAnchor(TOPLEFT, pane, BOTTOMLEFT, 0, -25)
+    self.showOnMapKeybindButton = showOnMapBtn
 
     -- Separador horizontal entre botones de misión y sección de códigos
     local codeDivider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_CodeDivider", pane, CT_TEXTURE)
@@ -708,7 +737,7 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
 
     local function EnsureTabAdded()
         if qj.tabs and not self.isTabAdded and self.fragment then
-            qj.tabs:Add(self.tabCategoryName, { self.fragment }, tabData)
+            qj.tabs:Add(self.tabCategoryName, { self.fragment }, tabData, self.keybindStripDescriptor)
             self.isTabAdded = true
         end
     end
@@ -975,14 +1004,15 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     self.emptyLabel:SetHidden(true)
     local displayRows = {}
 
-    local function AppendSection(sectionKey, localeKey, quests, headerColor, isCompleted)
+    local function AppendSection(sectionKey, localeKey, quests, isCompleted)
         if #quests == 0 then return end
         local isCollapsed = self.collapsedSections and self.collapsedSections[sectionKey]
         local arrowTex = isCollapsed and "/esoui/art/buttons/tree_closed_up.dds" or "/esoui/art/buttons/tree_open_up.dds"
+        local headerColor = isCollapsed and "|cC5C29E" or "|cFFFFFF"
         table.insert(displayRows, {
             isHeader = true,
             sectionKey = sectionKey,
-            text = string.format("|t16:16:%s|t %s%s|r", arrowTex, headerColor, Addon.Locale:Get(localeKey, #quests)),
+            text = string.format("|t28:28:%s|t %s%s|r", arrowTex, headerColor, Addon.Locale:Get(localeKey, #quests)),
         })
         if isCollapsed then return end
 
@@ -991,11 +1021,11 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
             local prefix
             local selColor
             if isCompleted then
-                prefix = "   |c00CCFF✓ |r"
+                prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
                 selColor = isSelected and "|cFFFFFF" or "|c8899AA"
             else
                 local isAct = (activeQuest and activeQuest.id == q.id)
-                prefix = isAct and "   |c33FF33★ |r" or "      "
+                prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
                 selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
             end
             table.insert(displayRows, {
@@ -1006,9 +1036,9 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
         end
     end
 
-    AppendSection("missions", "SECTION_ACTIVE_QUESTS", activeMissions, "|cE8D5A0", false)
-    AppendSection("completed", "SECTION_COMPLETED_QUESTS", completedMissions, "|c88AAFF", true)
-    AppendSection("preparing", "SECTION_PREPARED_QUESTS", preparingMissions, "|cD8B878", false)
+    AppendSection("missions", "SECTION_ACTIVE_QUESTS", activeMissions, false)
+    AppendSection("completed", "SECTION_COMPLETED_QUESTS", completedMissions, true)
+    AppendSection("preparing", "SECTION_PREPARED_QUESTS", preparingMissions, false)
 
     local maxOffset = math.max(0, #displayRows - MAX_VISIBLE_ROWS)
     self._maxListOffset = maxOffset
@@ -1019,6 +1049,9 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
         local rowData = displayRows[self.listOffset + i]
         if rowData then
             rowCtrl:SetHidden(false)
+            if rowCtrl.SetFont then
+                rowCtrl:SetFont(rowData.isHeader and "ZoFontHeader3" or "ZoFontHeader")
+            end
             rowCtrl:SetText(rowData.text)
             rowCtrl:SetMouseEnabled(true)
             self.rowBindings[i] = rowData
@@ -1075,10 +1108,16 @@ function JournalTab:Refresh()
         self.importPane:SetHidden(true)
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
+        if KEYBIND_STRIP and self.keybindStripDescriptor then
+            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+        end
     elseif self.viewMode == VIEW_MODE.IMPORT then
         self.detailPane:SetHidden(true)
         self.editorPane:SetHidden(true)
         self.importPane:SetHidden(false)
+        if KEYBIND_STRIP and self.keybindStripDescriptor then
+            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+        end
     else
         self.editorPane:SetHidden(true)
         self.importPane:SetHidden(true)
@@ -1095,7 +1134,6 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
         self.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
         self.detailLocation:SetText("")
-        self.detailDescHeader:SetHidden(true)
         self.detailDescBody:SetText("")
         self.detailObjHeader:SetHidden(true)
         self.detailObjText:SetText("")
@@ -1108,16 +1146,18 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.validateBg:SetHidden(true)
         self.validateResultLabel:SetHidden(true)
         self.btnActivate:SetHidden(true)
-        self.btnShowOnMap:SetHidden(true)
+        if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(true) end
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
         self.btnDelete:SetHidden(true)
         self.btnCompletionCode:SetHidden(true)
         self.btnValidateDelivery:SetHidden(true)
+        if KEYBIND_STRIP and self.keybindStripDescriptor then
+            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+        end
         return
     end
 
-    self.detailDescHeader:SetHidden(false)
     self.detailObjHeader:SetHidden(false)
     self.detailTitle:SetText((selectedQuest.title or ""):upper())
 
@@ -1158,6 +1198,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
             t.currentCount or 0,
             t.requiredCount or 1
         )
+        line = line:gsub("^•%s*", "|t16:16:/esoui/art/miscellaneous/bullet.dds|t ")
         if (t.currentCount or 0) >= (t.requiredCount or 1) then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
         end
@@ -1167,7 +1208,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         objLines[maxVisibleObjLines] = string.format("... (+%d)", totalTargets - limit)
     end
     local visibleLineCount = #objLines
-    self.detailObjText:SetDimensions(510, math.min(96, math.max(32, visibleLineCount * 24)))
+    self.detailObjText:SetDimensions(495, math.min(96, math.max(32, visibleLineCount * 24)))
     self.detailObjText:SetText(table.concat(objLines, "\n"))
 
     self.codeDivider:SetHidden(false)
@@ -1180,11 +1221,11 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.shareBg:SetHidden(false)
 
     self.btnActivate:SetHidden(false)
-    self.btnShowOnMap:SetHidden(false)
+    if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(false) end
     self.btnReset:ClearAnchors()
     if isPrepared then
         self.btnEdit:SetHidden(false)
-        self.btnReset:SetAnchor(TOPLEFT, self.btnEdit, TOPRIGHT, 12, 0)
+        self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
         self.deliveryHeader:SetHidden(true)
         self.deliveryBg:SetHidden(true)
         self.btnCompletionCode:SetHidden(true)
@@ -1209,6 +1250,9 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     end
     self.btnReset:SetHidden(false)
     self.btnDelete:SetHidden(false)
+    if KEYBIND_STRIP and self.keybindStripDescriptor then
+        KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+    end
 end
 
 function JournalTab:RefreshEditorPane()
