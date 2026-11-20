@@ -141,14 +141,24 @@ function QuestRepository:Initialize(savedVars)
     else
         self.savedVars.draft.targets = self.savedVars.draft.targets or {}
     end
+    self._questById = {}
+    self._shareCodeCache = {}
+    self._activeTargetCache = nil
     local roles = Addon.Constants.QUEST_ROLE
     for _, q in ipairs(self.savedVars.quests) do
         q.targets = q.targets or {}
         if q.role ~= roles.PREPARED and q.role ~= roles.RECEIVED then
             q.role = roles.RECEIVED
         end
+        if q.id then
+            self._questById[q.id] = q
+        end
     end
     self._listeners = self._listeners or {}
+end
+
+function QuestRepository:InvalidateActiveTargetCache()
+    self._activeTargetCache = nil
 end
 
 function QuestRepository:RegisterListener(callback)
@@ -407,6 +417,13 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         existing.areaRadius = draft.areaRadius
         existing.completed = AreAllTargetsCompleted(existing.targets)
 
+        if self._shareCodeCache then
+            self._shareCodeCache[existing.id] = nil
+        end
+        if self._activeTargetCache and self._activeTargetCache.questId == existing.id then
+            self:InvalidateActiveTargetCache()
+        end
+
         self:ResetDraft()
         self:NotifyListeners("QUEST_UPDATED", existing)
         return existing
@@ -424,6 +441,9 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     )
 
     table.insert(self.savedVars.quests, newQuest)
+    if self._questById then
+        self._questById[newQuest.id] = newQuest
+    end
 
     self:ResetDraft()
     self:NotifyListeners("QUEST_CREATED", newQuest)
@@ -468,7 +488,11 @@ function QuestRepository:ImportQuestFromCode(codeString)
     )
 
     table.insert(self.savedVars.quests, importedQuest)
+    if self._questById then
+        self._questById[importedQuest.id] = importedQuest
+    end
     self.savedVars.activeQuestId = importedQuest.id
+    self:InvalidateActiveTargetCache()
 
     self:NotifyListeners("QUEST_IMPORTED", importedQuest)
     return importedQuest
@@ -479,7 +503,16 @@ function QuestRepository:ExportQuestToCode(questId)
     if not quest then
         return nil
     end
-    return Addon.ShareCodec:EncodeQuest(quest)
+    self._shareCodeCache = self._shareCodeCache or {}
+    local cached = self._shareCodeCache[questId]
+    if cached then
+        return cached
+    end
+    local code, err = Addon.ShareCodec:EncodeQuest(quest)
+    if code then
+        self._shareCodeCache[questId] = code
+    end
+    return code, err
 end
 
 function QuestRepository:ExportCompletionCode(questId)
@@ -547,8 +580,14 @@ end
 
 function QuestRepository:GetQuestById(questId)
     if not questId then return nil end
+    if self._questById and self._questById[questId] then
+        return self._questById[questId]
+    end
     for _, q in ipairs(self:GetAllQuests()) do
         if q.id == questId then
+            if self._questById then
+                self._questById[questId] = q
+            end
             return q
         end
     end
@@ -569,6 +608,7 @@ end
 function QuestRepository:SetActiveQuest(questId)
     if questId == nil then
         self.savedVars.activeQuestId = nil
+        self:InvalidateActiveTargetCache()
         self:NotifyListeners("ACTIVE_QUEST_CHANGED", nil)
         return true
     end
@@ -579,6 +619,7 @@ function QuestRepository:SetActiveQuest(questId)
     end
 
     self.savedVars.activeQuestId = q.id
+    self:InvalidateActiveTargetCache()
     self:NotifyListeners("ACTIVE_QUEST_CHANGED", q)
     return true
 end
@@ -592,6 +633,7 @@ function QuestRepository:ResetQuest(questId)
     end
     q.completed = false
     self.savedVars.activeQuestId = q.id
+    self:InvalidateActiveTargetCache()
     self:NotifyListeners("QUEST_RESET", q)
     return true
 end
@@ -602,11 +644,18 @@ function QuestRepository:DeleteQuest(questId)
         if q.id == questId then
             local wasActive = (self.savedVars.activeQuestId == questId)
             table.remove(self.savedVars.quests, i)
+            if self._questById then
+                self._questById[questId] = nil
+            end
+            if self._shareCodeCache then
+                self._shareCodeCache[questId] = nil
+            end
             if self.savedVars.draft and self.savedVars.draft.editingQuestId == questId then
                 self:ResetDraft()
             end
             if wasActive then
                 self.savedVars.activeQuestId = nil
+                self:InvalidateActiveTargetCache()
                 local nextAvailable = self:GetActiveAndAvailableQuests()[1]
                 if nextAvailable then
                     self.savedVars.activeQuestId = nextAvailable.id
@@ -650,6 +699,10 @@ function QuestRepository:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneI
 end
 
 function QuestRepository:FindPendingTarget(rawTargetName)
+    if type(rawTargetName) ~= "string" or rawTargetName == "" then
+        return nil, nil
+    end
+
     local activeQuest = self:GetActiveQuest()
     if not activeQuest or activeQuest.completed then
         return nil, nil
@@ -660,10 +713,25 @@ function QuestRepository:FindPendingTarget(rawTargetName)
         return nil, nil
     end
 
-    for _, entry in ipairs(activeQuest.targets or {}) do
-        if (entry.name or ""):lower() == cleanKilled and (entry.currentCount or 0) < (entry.requiredCount or 1) then
-            return activeQuest, entry
+    local cache = self._activeTargetCache
+    if not cache or cache.questId ~= activeQuest.id then
+        local byLowerName = {}
+        for _, entry in ipairs(activeQuest.targets or {}) do
+            local key = (entry.name or ""):lower()
+            if key ~= "" and not byLowerName[key] then
+                byLowerName[key] = entry
+            end
         end
+        cache = {
+            questId = activeQuest.id,
+            byLowerName = byLowerName,
+        }
+        self._activeTargetCache = cache
+    end
+
+    local matched = cache.byLowerName[cleanKilled]
+    if matched and (matched.currentCount or 0) < (matched.requiredCount or 1) then
+        return activeQuest, matched
     end
 
     return nil, nil

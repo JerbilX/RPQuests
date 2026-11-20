@@ -62,6 +62,7 @@ function CombatTracker:Initialize()
     self._isRegistered = false
     self._recentKilledOrder = {}
     self._recentKilledSet = {}
+    self._recentKilledCursor = 0
     if not self._repoListenerAdded then
         Addon.QuestRepository:RegisterListener(function(eventType)
             if eventType ~= "DRAFT_UPDATED" and eventType ~= "DRAFT_TARGET_CAPTURED" and eventType ~= "QUEST_PROGRESS" then
@@ -80,14 +81,14 @@ function CombatTracker:MarkUnitKilled(targetUnitId)
     self._recentKilledSet = self._recentKilledSet or {}
     if self._recentKilledSet[targetUnitId] then return end
 
-    table.insert(self._recentKilledOrder, targetUnitId)
-    self._recentKilledSet[targetUnitId] = true
-    if #self._recentKilledOrder > MAX_RECENT_KILLED_UNITS then
-        local oldest = table.remove(self._recentKilledOrder, 1)
-        if oldest then
-            self._recentKilledSet[oldest] = nil
-        end
+    local cursor = ((self._recentKilledCursor or 0) % MAX_RECENT_KILLED_UNITS) + 1
+    self._recentKilledCursor = cursor
+    local evicted = self._recentKilledOrder[cursor]
+    if evicted then
+        self._recentKilledSet[evicted] = nil
     end
+    self._recentKilledOrder[cursor] = targetUnitId
+    self._recentKilledSet[targetUnitId] = true
 end
 
 function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, abilityGraphic,

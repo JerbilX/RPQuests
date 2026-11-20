@@ -367,10 +367,11 @@ function JournalTab:BuildDetailPane(parent)
     self.detailLocation = locLabel
 
     local descBody = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescBody", pane, CT_LABEL)
-    descBody:SetDimensions(495, 110)
+    descBody:SetDimensions(495, 104)
     descBody:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 25, 54)
     if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
     if descBody.SetColor then descBody:SetColor(0.77, 0.76, 0.62, 1) end
+    if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
     self.detailDescBody = descBody
 
     local divider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDivider", pane, CT_TEXTURE)
@@ -456,34 +457,34 @@ function JournalTab:BuildDetailPane(parent)
     -- Separador horizontal entre botones de misión y sección de códigos
     local codeDivider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_CodeDivider", pane, CT_TEXTURE)
     codeDivider:SetDimensions(512, 4)
-    codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 54)
+    codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 48)
     codeDivider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
     self.codeDivider = codeDivider
 
     -- Grupo 2: Código para compartir siempre visible y sección de entrega/validación
     local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", pane, CT_LABEL)
-    shareHeader:SetDimensions(520, 22)
-    shareHeader:SetAnchor(TOPLEFT, codeDivider, BOTTOMLEFT, 0, 10)
+    shareHeader:SetDimensions(520, 20)
+    shareHeader:SetAnchor(TOPLEFT, codeDivider, BOTTOMLEFT, 0, 8)
     if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
     if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
     shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     self.shareHeader = shareHeader
 
-    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false, nil, true, true)
+    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 32, 4096, false, nil, true, true)
     shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
     self.shareBg = shareBg
     self.shareEdit = shareEdit
 
     local deliveryHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DeliveryHeader", pane, CT_LABEL)
-    deliveryHeader:SetDimensions(520, 22)
-    deliveryHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 10)
+    deliveryHeader:SetDimensions(520, 20)
+    deliveryHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 8)
     if deliveryHeader.SetFont then deliveryHeader:SetFont("ZoFontGameBold") end
     if deliveryHeader.SetColor then deliveryHeader:SetColor(0.91, 0.83, 0.63, 1) end
     deliveryHeader:SetText(Addon.Locale:Get("LABEL_COMPLETION_CODE_HEADER"))
     deliveryHeader:SetHidden(true)
     self.deliveryHeader = deliveryHeader
 
-    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", pane, 340, 34, 1024, false, nil, true, true)
+    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", pane, 340, 32, 4096, false, nil, true, true)
     deliveryBg:SetAnchor(TOPLEFT, deliveryHeader, BOTTOMLEFT, 0, 2)
     deliveryBg:SetHidden(true)
     self.deliveryBg = deliveryBg
@@ -492,19 +493,19 @@ function JournalTab:BuildDetailPane(parent)
     self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", pane, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
         self:OnCompletionCodeClicked()
     end)
-    self.btnCompletionCode:SetAnchor(TOPLEFT, deliveryBg, TOPRIGHT, 10, 1)
+    self.btnCompletionCode:SetAnchor(TOPLEFT, deliveryBg, TOPRIGHT, 10, 0)
     self.btnCompletionCode:SetHidden(true)
 
     local validateHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", pane, CT_LABEL)
-    validateHeader:SetDimensions(520, 22)
-    validateHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 10)
+    validateHeader:SetDimensions(520, 20)
+    validateHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 8)
     if validateHeader.SetFont then validateHeader:SetFont("ZoFontGameBold") end
     if validateHeader.SetColor then validateHeader:SetColor(0.91, 0.83, 0.63, 1) end
     validateHeader:SetText(Addon.Locale:Get("LABEL_VALIDATE_BOX_HEADER"))
     validateHeader:SetHidden(true)
     self.validateHeader = validateHeader
 
-    local validateBg, validateEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ValidateEdit", pane, 340, 34, 1024, false)
+    local validateBg, validateEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ValidateEdit", pane, 340, 32, 4096, false)
     validateBg:SetAnchor(TOPLEFT, validateHeader, BOTTOMLEFT, 0, 2)
     validateBg:SetHidden(true)
     self.validateBg = validateBg
@@ -513,12 +514,12 @@ function JournalTab:BuildDetailPane(parent)
     self.btnValidateDelivery = CreateStyledButton(PANEL_NAME .. "_BtnValidateDelivery", pane, 160, 32, Addon.Locale:Get("BTN_VALIDATE_DELIVERY"), function()
         self:OnValidateDeliveryClicked()
     end)
-    self.btnValidateDelivery:SetAnchor(TOPLEFT, validateBg, TOPRIGHT, 10, 1)
+    self.btnValidateDelivery:SetAnchor(TOPLEFT, validateBg, TOPRIGHT, 10, 0)
     self.btnValidateDelivery:SetHidden(true)
 
     local resultLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateResult", pane, CT_LABEL)
-    resultLabel:SetDimensions(510, 44)
-    resultLabel:SetAnchor(TOPLEFT, validateBg, BOTTOMLEFT, 0, 6)
+    resultLabel:SetDimensions(510, 38)
+    resultLabel:SetAnchor(TOPLEFT, validateBg, BOTTOMLEFT, 0, 4)
     if resultLabel.SetFont then resultLabel:SetFont("ZoFontGame") end
     resultLabel:SetText("")
     self.validateResultLabel = resultLabel
@@ -688,7 +689,7 @@ function JournalTab:BuildImportPane(parent)
     instr:SetText(Addon.Locale:Get("IMPORT_INSTRUCTIONS"))
     self.importInstr = instr
 
-    local codeBg, codeEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ImportCodeEdit", pane, 510, 80, 1024, true)
+    local codeBg, codeEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ImportCodeEdit", pane, 510, 80, 4096, true)
     codeBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 96)
     self.importCodeBg = codeBg
     self.importCodeEdit = codeEdit
@@ -1186,7 +1187,11 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
 
     local targets = selectedQuest.targets or {}
     local objLines = {}
-    for _, t in ipairs(targets) do
+    local maxVisibleObjLines = 4
+    local totalTargets = #targets
+    local limit = (totalTargets > maxVisibleObjLines) and (maxVisibleObjLines - 1) or totalTargets
+    for i = 1, limit do
+        local t = targets[i]
         local line = Addon.Locale:Get(
             "OBJECTIVE_KILL_FORMAT",
             t.name or "",
@@ -1197,9 +1202,13 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         if (t.currentCount or 0) >= (t.requiredCount or 1) then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
         end
-        table.insert(objLines, line)
+        objLines[i] = line
     end
-    self.detailObjText:SetDimensions(495, math.max(32, #objLines * 24))
+    if totalTargets > maxVisibleObjLines then
+        objLines[maxVisibleObjLines] = string.format("... (+%d)", totalTargets - limit)
+    end
+    local visibleLineCount = #objLines
+    self.detailObjText:SetDimensions(495, math.min(96, math.max(32, visibleLineCount * 24)))
     self.detailObjText:SetText(table.concat(objLines, "\n"))
 
     self.codeDivider:SetHidden(false)
@@ -1226,7 +1235,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.validateResultLabel:SetHidden(false)
     else
         self.btnEdit:SetHidden(true)
-        self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
+        self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 8)
         self.validateHeader:SetHidden(true)
         self.validateBg:SetHidden(true)
         self.btnValidateDelivery:SetHidden(true)
