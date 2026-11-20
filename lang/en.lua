@@ -51,6 +51,8 @@ RPQuest.Locales["en"] = {
     LABEL_OBJECTIVE_HEADER = "TASKS",
     OBJECTIVE_KILL_FORMAT = "• Eliminate %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completed)|r",
+    STEALTH_STATUS_UNDETECTED = "Stealth: |c33FF33Undetected|r",
+    STEALTH_STATUS_DETECTED = "Stealth: |cFFAA33Detected|r",
     LABEL_CODE_BOX_HEADER = "CODE (Generate above or paste here to validate):",
     LABEL_SHARE_CODE_HEADER = "SHARE CODE (Press Ctrl+C to copy):",
     LABEL_VALIDATE_BOX_HEADER = "VALIDATE DELIVERY (Paste RPQC1 code below):",
@@ -67,6 +69,8 @@ RPQuest.Locales["en"] = {
     TARGET_CAPTURED_FORMAT = "Target: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Aim at a living NPC and press the Capture keybind.|r",
     LABEL_AREA_SIZE = "Map Search Area Size:",
+    OPT_REQUIRE_UNDETECTED = "[ ] Undetected (Optional)",
+    OPT_REQUIRE_UNDETECTED_ACTIVE = "|c33FF33[X] Undetected (Optional)|r",
 
     -- Import View
     IMPORT_VIEW_TITLE = "IMPORT QUEST BY CODE",
@@ -74,6 +78,8 @@ RPQuest.Locales["en"] = {
 
     -- Validate Delivery (Inline)
     VALIDATE_RESULT_SUCCESS = "|c33FF33Valid delivery!|r Quest completed successfully by |cE8D5A0%s|r.",
+    VALIDATE_STEALTH_UNDETECTED = "\nStealth: |c33FF33Undetected|r",
+    VALIDATE_STEALTH_DETECTED = "\nStealth: |cFFAA33Detected|r",
     VALIDATE_ERR_EMPTY = "|cFFAA33Paste a delivery code (RPQC1:...) into the text box first.|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444That is a quest share code (RPQ1), not a delivery code (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444This delivery code belongs to a different quest.|r",
@@ -92,6 +98,7 @@ RPQuest.Locales["en"] = {
     ALERT_QUEST_IMPORTED = "RPQuest: Quest imported -> %s",
     ALERT_SHARE_READY = "RPQuest: Code selected! Press Ctrl+C to copy.",
     ALERT_COMPLETION_CODE_READY = "RPQuest: Delivery code ready! Press Ctrl+C to copy.",
+    ALERT_STEALTH_DETECTED = "RPQuest: You were detected! (Recorded on quest status)",
     ERR_MISSING_TARGET = "Capture an NPC target with the reticle keybind before creating the quest.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
     ERR_CANNOT_EDIT_RECEIVED = "Received quests cannot be edited.",

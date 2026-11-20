@@ -45,6 +45,9 @@ REGISTER_FILTER_COMBAT_RESULT = 2
 REGISTER_FILTER_IS_ERROR = 5
 EVENT_COMBAT_EVENT = 131103
 EVENT_ZONE_CHANGED = 131072
+EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED = 131200
+EVENT_JUSTICE_INFAMY_UPDATED = 131201
+EVENT_JUSTICE_PICKPOCKET_FAILED = 131202
 UI_ALERT_CATEGORY_ALERT = 0
 UI_ALERT_CATEGORY_ERROR = 1
 CSA_CATEGORY_LARGE_TEXT = 1
@@ -1344,6 +1347,105 @@ RunTest("18. Issue 47: Deep optimization, overflow caps, deferred map pins and O
     end
     AssertEqual(RPQuest.CombatTracker._recentKilledSet[1], nil, "Oldest unit evicted from 32-slot ring buffer")
     AssertEqual(RPQuest.CombatTracker._recentKilledSet[40], true, "Newest unit retained in ring buffer")
+end)
+
+RunTest("Undetected (stealth) quest option, Justice events, area check, and completion code", function()
+    RPQuest.QuestRepository:ResetDraft()
+    mockState.mapId = 32
+    mockState.zoneId = 381
+    mockState.mapName = "Auridon"
+    mockState.playerX = 0.42
+    mockState.playerY = 0.61
+
+    -- 1. Toggle in editor + SaveDraft
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Guardia de Sombra",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.42,
+        targetY = 0.61,
+    })
+    RPQuest.QuestRepository:UpdateDraftFields({ requireUndetected = true })
+    RPQuest.JournalTab:RefreshEditorPane()
+    AssertTrue(RPQuest.JournalTab.btnRequireUndetected:GetText():find("%[X%]") ~= nil, "Editor toggle shows [X] when requireUndetected is true")
+
+    local prepared = RPQuest.QuestRepository:SaveDraft("Contrato de Sigilo", "Sin testigos.", nil, "Trabajo limpio.")
+    AssertTrue(prepared ~= nil, "Saved stealth quest")
+    AssertEqual(prepared.requireUndetected, true, "Prepared quest has requireUndetected = true")
+    AssertEqual(prepared.wasDetected, false, "Prepared quest starts with wasDetected = false")
+
+    -- 2. ShareCodec preserves requireUndetected
+    local shareCode = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(shareCode)
+    AssertTrue(imported ~= nil, "Imported stealth quest")
+    AssertEqual(imported.requireUndetected, true, "Imported quest preserves requireUndetected = true")
+    AssertEqual(imported.wasDetected, false, "Imported quest starts with wasDetected = false")
+    AssertEqual(RPQuest.CombatTracker._isJusticeRegistered, true, "Justice events registered for active undetected quest")
+
+    -- 3. Justice events outside quest area do NOT trigger detection
+    mockState.mapId = 999
+    mockState.zoneId = 999
+    RPQuest.CombatTracker:OnJusticeBountyUpdated(EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED, 0, 150, false)
+    AssertEqual(imported.wasDetected, false, "Bounty outside quest area does not mark detected")
+
+    -- 4. Initialization / non-increasing bounty inside area do NOT trigger detection
+    mockState.mapId = 32
+    mockState.zoneId = 381
+    mockState.playerX = imported.areaCenterX
+    mockState.playerY = imported.areaCenterY
+    RPQuest.CombatTracker:OnJusticeBountyUpdated(EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED, 0, 150, true)
+    AssertEqual(imported.wasDetected, false, "isInitialize bounty event does not mark detected")
+    RPQuest.CombatTracker:OnJusticeInfamyUpdated(EVENT_JUSTICE_INFAMY_UPDATED, 100, 100, 1, 1)
+    AssertEqual(imported.wasDetected, false, "Non-increasing infamy does not mark detected")
+
+    -- 5. Justice bounty increase inside quest area marks wasDetected = true without blocking quest
+    mockState.alerts = {}
+    RPQuest.CombatTracker:OnJusticeBountyUpdated(EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED, 0, 200, false)
+    AssertEqual(imported.wasDetected, true, "Bounty increase inside quest area marks wasDetected = true")
+    AssertEqual(imported.completed, false, "Detection does not fail or complete the quest")
+    AssertEqual(#mockState.alerts, 1, "Player receives informative alert on detection")
+    AssertEqual(RPQuest.CombatTracker._isJusticeRegistered, false, "Justice events unregistered once detected")
+
+    -- 6. Quest can still be completed and completion code includes wasDetected = true
+    local recorded, _, justCompleted = RPQuest.QuestRepository:RecordTargetEliminated("Guardia de Sombra", {
+        mapId = 32,
+        zoneId = 381,
+        x = imported.areaCenterX,
+        y = imported.areaCenterY,
+    })
+    AssertEqual(recorded, true, "Target elimination still succeeds after detection")
+    AssertEqual(justCompleted, true, "Quest still completes normally after detection")
+
+    local compCodeDetected = RPQuest.QuestRepository:ExportCompletionCode(imported.id)
+    local okDet, decodedDet = RPQuest.QuestRepository:ValidateCompletionCode(prepared.id, compCodeDetected)
+    AssertEqual(okDet, true, "Completion code with detection is still valid")
+    AssertEqual(decodedDet.wasDetected, true, "Completion code records wasDetected = true")
+
+    -- 7. ResetQuest clears wasDetected and completing cleanly records wasDetected = false
+    RPQuest.QuestRepository:ResetQuest(imported.id)
+    AssertEqual(imported.wasDetected, false, "ResetQuest clears wasDetected")
+    AssertEqual(RPQuest.CombatTracker._isJusticeRegistered, true, "Justice events re-registered after ResetQuest")
+
+    RPQuest.QuestRepository:RecordTargetEliminated("Guardia de Sombra", {
+        mapId = 32,
+        zoneId = 381,
+        x = imported.areaCenterX,
+        y = imported.areaCenterY,
+    })
+    local compCodeClean = RPQuest.QuestRepository:ExportCompletionCode(imported.id)
+    local okClean, decodedClean = RPQuest.QuestRepository:ValidateCompletionCode(prepared.id, compCodeClean)
+    AssertEqual(okClean, true, "Completion code without detection is valid")
+    AssertEqual(decodedClean.wasDetected, false, "Completion code records wasDetected = false")
+
+    -- 8. Pickpocket failed & Infamy increase also trigger detection
+    RPQuest.QuestRepository:ResetQuest(imported.id)
+    RPQuest.CombatTracker:OnJusticePickpocketFailed(EVENT_JUSTICE_PICKPOCKET_FAILED)
+    AssertEqual(imported.wasDetected, true, "Pickpocket failed inside quest area marks wasDetected = true")
+
+    RPQuest.QuestRepository:ResetQuest(imported.id)
+    RPQuest.CombatTracker:OnJusticeInfamyUpdated(EVENT_JUSTICE_INFAMY_UPDATED, 0, 50, 0, 1)
+    AssertEqual(imported.wasDetected, true, "Infamy increase inside quest area marks wasDetected = true")
 end)
 
 if failed > 0 then

@@ -51,6 +51,8 @@ RPQuest.Locales["es"] = {
     LABEL_OBJECTIVE_HEADER = "OBJETIVOS",
     OBJECTIVE_KILL_FORMAT = "• Eliminar a %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completado)|r",
+    STEALTH_STATUS_UNDETECTED = "Sigilo: |c33FF33No detectado|r",
+    STEALTH_STATUS_DETECTED = "Sigilo: |cFFAA33Detectado|r",
     LABEL_CODE_BOX_HEADER = "CÓDIGO (Genera arriba o pega aquí para validar):",
     LABEL_SHARE_CODE_HEADER = "CÓDIGO PARA COMPARTIR (Pulsa Ctrl+C para copiar):",
     LABEL_VALIDATE_BOX_HEADER = "VALIDAR ENTREGA (Pega debajo el código RPQC1):",
@@ -67,6 +69,8 @@ RPQuest.Locales["es"] = {
     TARGET_CAPTURED_FORMAT = "Objetivo: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Apunta a un NPC vivo y pulsa la tecla de captura.|r",
     LABEL_AREA_SIZE = "Tamaño del área en el mapa:",
+    OPT_REQUIRE_UNDETECTED = "[ ] No ser detectado (Opcional)",
+    OPT_REQUIRE_UNDETECTED_ACTIVE = "|c33FF33[X] No ser detectado (Opcional)|r",
 
     -- Import View
     IMPORT_VIEW_TITLE = "IMPORTAR MISIÓN POR CÓDIGO",
@@ -74,6 +78,8 @@ RPQuest.Locales["es"] = {
 
     -- Validate Delivery (Inline)
     VALIDATE_RESULT_SUCCESS = "|c33FF33¡Entrega válida!|r Misión completada con éxito por |cE8D5A0%s|r.",
+    VALIDATE_STEALTH_UNDETECTED = "\nSigilo: |c33FF33No detectado|r",
+    VALIDATE_STEALTH_DETECTED = "\nSigilo: |cFFAA33Detectado|r",
     VALIDATE_ERR_EMPTY = "|cFFAA33Pega primero el código de entrega (RPQC1:...) en el cuadro de texto.|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444Ese es un código de misión (RPQ1), no un código de entrega (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444Este código de entrega pertenece a otra misión distinta.|r",
@@ -92,6 +98,7 @@ RPQuest.Locales["es"] = {
     ALERT_QUEST_IMPORTED = "RPQuest: Misión importada -> %s",
     ALERT_SHARE_READY = "RPQuest: ¡Código seleccionado! Pulsa Ctrl+C para copiarlo.",
     ALERT_COMPLETION_CODE_READY = "RPQuest: ¡Código de entrega listo! Pulsa Ctrl+C para copiarlo.",
+    ALERT_STEALTH_DETECTED = "RPQuest: ¡Has sido detectado! (Registrado en el estado de la misión)",
     ERR_MISSING_TARGET = "Captura primero al menos un objetivo NPC con la tecla bajo la retícula.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
     ERR_CANNOT_EDIT_RECEIVED = "Las misiones recibidas para jugar no se pueden editar.",

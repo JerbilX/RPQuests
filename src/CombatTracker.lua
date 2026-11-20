@@ -9,6 +9,9 @@ local CombatTracker = Addon.CombatTracker
 
 local LISTENER_DIED = "RPQuest_CombatTracker_Died"
 local LISTENER_DIED_XP = "RPQuest_CombatTracker_DiedXP"
+local LISTENER_JUSTICE_BOUNTY = "RPQuest_Justice_Bounty"
+local LISTENER_JUSTICE_INFAMY = "RPQuest_Justice_Infamy"
+local LISTENER_JUSTICE_PICKPOCKET = "RPQuest_Justice_Pickpocket"
 local MAX_RECENT_KILLED_UNITS = 32
 
 local function IsAllowedKillSource(sourceType)
@@ -33,10 +36,61 @@ local function RegisterDeathFilter(listenerName, expectedResult, callback)
     end
 end
 
+function CombatTracker:UpdateJusticeRegistration(activeQuest)
+    if not EVENT_MANAGER then return end
+
+    local shouldTrack = (activeQuest ~= nil)
+        and not activeQuest.completed
+        and (activeQuest.requireUndetected == true)
+        and not activeQuest.wasDetected
+
+    if not shouldTrack then
+        if self._isJusticeRegistered then
+            if EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED then
+                EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_BOUNTY, EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED)
+            end
+            if EVENT_JUSTICE_INFAMY_UPDATED then
+                EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_INFAMY, EVENT_JUSTICE_INFAMY_UPDATED)
+            end
+            if EVENT_JUSTICE_PICKPOCKET_FAILED then
+                EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_PICKPOCKET, EVENT_JUSTICE_PICKPOCKET_FAILED)
+            end
+            self._isJusticeRegistered = false
+        end
+        return
+    end
+
+    if self._isJusticeRegistered then return end
+
+    self._bountyHandler = self._bountyHandler or function(eventCode, oldBounty, newBounty, isInitialize)
+        self:OnJusticeBountyUpdated(eventCode, oldBounty, newBounty, isInitialize)
+    end
+    self._infamyHandler = self._infamyHandler or function(eventCode, oldInfamy, newInfamy, oldInfamyLevel, newInfamyLevel)
+        self:OnJusticeInfamyUpdated(eventCode, oldInfamy, newInfamy, oldInfamyLevel, newInfamyLevel)
+    end
+    self._pickpocketHandler = self._pickpocketHandler or function(eventCode)
+        self:OnJusticePickpocketFailed(eventCode)
+    end
+
+    if EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED then
+        EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_BOUNTY, EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED, self._bountyHandler)
+    end
+    if EVENT_JUSTICE_INFAMY_UPDATED then
+        EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_INFAMY, EVENT_JUSTICE_INFAMY_UPDATED, self._infamyHandler)
+    end
+    if EVENT_JUSTICE_PICKPOCKET_FAILED then
+        EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_PICKPOCKET, EVENT_JUSTICE_PICKPOCKET_FAILED, self._pickpocketHandler)
+    end
+    self._isJusticeRegistered = true
+end
+
 function CombatTracker:UpdateRegistration()
     if not EVENT_MANAGER or not EVENT_COMBAT_EVENT then return end
 
-    local hasActiveQuest = (Addon.QuestRepository:GetActiveQuest() ~= nil)
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    self:UpdateJusticeRegistration(activeQuest)
+
+    local hasActiveQuest = (activeQuest ~= nil)
     if not hasActiveQuest then
         if self._isRegistered then
             EVENT_MANAGER:UnregisterForEvent(LISTENER_DIED, EVENT_COMBAT_EVENT)
@@ -60,6 +114,7 @@ function CombatTracker:Initialize()
     if not EVENT_MANAGER or not EVENT_COMBAT_EVENT then return end
 
     self._isRegistered = false
+    self._isJusticeRegistered = false
     self._recentKilledOrder = {}
     self._recentKilledSet = {}
     self._recentKilledCursor = 0
@@ -133,4 +188,31 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
     else
         Addon.Announcements:AnnounceQuestProgress(updatedQuest, finalTarget)
     end
+end
+
+function CombatTracker:HandleJusticeViolation()
+    local playerContext = Addon.TargetCapture:GetPlayerMapContext()
+    local recorded, updatedQuest = Addon.QuestRepository:RecordPlayerDetected(playerContext)
+    if recorded and updatedQuest then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_STEALTH_DETECTED"), true)
+    end
+end
+
+function CombatTracker:OnJusticeBountyUpdated(eventCode, oldBounty, newBounty, isInitialize)
+    if isInitialize then return end
+    if type(newBounty) ~= "number" or type(oldBounty) ~= "number" or newBounty <= oldBounty then
+        return
+    end
+    self:HandleJusticeViolation()
+end
+
+function CombatTracker:OnJusticeInfamyUpdated(eventCode, oldInfamy, newInfamy, oldInfamyLevel, newInfamyLevel)
+    if type(newInfamy) ~= "number" or type(oldInfamy) ~= "number" or newInfamy <= oldInfamy then
+        return
+    end
+    self:HandleJusticeViolation()
+end
+
+function CombatTracker:OnJusticePickpocketFailed(eventCode)
+    self:HandleJusticeViolation()
 end
