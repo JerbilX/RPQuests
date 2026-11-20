@@ -21,6 +21,7 @@ function Addon:Initialize()
     Addon.QuestRepository:Initialize(savedVars)
     Addon.CombatTracker:Initialize()
     Addon.DiscoveryTracker:Initialize()
+    Addon.DialogueInjector:Initialize()
     Addon.WorldMapArea:Initialize()
     Addon.JournalTab:Initialize()
 

@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
+-- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -158,6 +159,50 @@ local function DecodeDiscoveriesList(rawDiscoveries)
     return discoveries
 end
 
+local function EncodeDialoguesList(dialogues)
+    if type(dialogues) ~= "table" or #dialogues == 0 then
+        return ""
+    end
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local items = {}
+    for _, d in ipairs(dialogues) do
+        if #items >= maxNpcs then break end
+        if type(d) == "table" and type(d.npcName) == "string" and d.npcName ~= "" then
+            local parts = {
+                EscapeField(d.npcName),
+                tostring(math.floor(tonumber(d.zoneId) or 0)),
+                EscapeField(d.response or ""),
+            }
+            table.insert(items, table.concat(parts, "~"))
+        end
+    end
+    return table.concat(items, ";")
+end
+
+local function DecodeDialoguesList(rawDialogues)
+    if type(rawDialogues) ~= "string" or rawDialogues == "" then
+        return {}
+    end
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local entries = SplitByChar(rawDialogues, ";")
+    local dialogues = {}
+    for _, item in ipairs(entries) do
+        if #dialogues >= maxNpcs then break end
+        if item ~= "" then
+            local kv = SplitByChar(item, "~")
+            local npcName = UnescapeField(kv[1] or "")
+            if npcName ~= "" then
+                table.insert(dialogues, {
+                    npcName = npcName,
+                    zoneId = math.floor(tonumber(kv[2]) or 0),
+                    response = UnescapeField(kv[3] or ""),
+                })
+            end
+        end
+    end
+    return dialogues
+end
+
 local function ComputeChecksum16(data)
     local sum1 = 0x5A
     local sum2 = 0xA5
@@ -210,6 +255,9 @@ local function BuildQuestPayloadString(quest)
         EscapeField(quest.completionMessage or ""),
         quest.requireUndetected and "1" or "0",
         encodedDiscoveries,
+        EscapeField(quest.clue or ""),
+        quest.hideMapArea and "1" or "0",
+        EncodeDialoguesList(quest.dialogues),
     }
 
     return table.concat(fields, "|")
@@ -319,9 +367,10 @@ function ShareCodec:DecodeQuest(codeString)
 
     local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
+    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
 
     local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
-    if not pfx or pfx ~= prefix or not checksum or #checksum ~= 4 or not encodedPayload then
+    if not pfx or (pfx ~= prefix and pfx ~= legacyPrefix) or not checksum or #checksum ~= 4 or not encodedPayload then
         return nil, "Invalid code format"
     end
 
@@ -354,6 +403,9 @@ function ShareCodec:DecodeQuest(codeString)
     local completionMessage = fields[12] and UnescapeField(fields[12]) or ""
     local requireUndetected = (fields[13] == "1")
     local decodedDiscoveries = fields[14] and DecodeDiscoveriesList(fields[14]) or {}
+    local clue = fields[15] and UnescapeField(fields[15]) or ""
+    local hideMapArea = (fields[16] == "1")
+    local decodedDialogues = fields[17] and DecodeDialoguesList(fields[17]) or {}
 
     if #decodedTargets == 0 and #decodedDiscoveries == 0 then
         return nil, "Invalid target data in code"
@@ -366,9 +418,11 @@ function ShareCodec:DecodeQuest(codeString)
     return {
         title = title,
         description = description,
+        clue = clue,
         completionMessage = completionMessage,
         targets = decodedTargets,
         discoveries = decodedDiscoveries,
+        dialogues = decodedDialogues,
         mapId = math.floor(mapId or 0),
         zoneId = math.floor(zoneId or 0),
         mapName = mapName,
@@ -377,6 +431,7 @@ function ShareCodec:DecodeQuest(codeString)
         areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
         areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
         areaRadius = areaRadius or 0.075,
+        hideMapArea = hideMapArea,
         requireUndetected = requireUndetected,
     }
 end
@@ -434,6 +489,7 @@ function ShareCodec:DecodeCompletion(codeString)
 
     local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local questPrefix = Addon.Constants.SHARE_CODEC.PREFIX
+    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
     local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
 
     local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
@@ -441,7 +497,7 @@ function ShareCodec:DecodeCompletion(codeString)
         return nil, "VALIDATE_ERR_INVALID_CODE"
     end
 
-    if pfx == questPrefix then
+    if pfx == questPrefix or pfx == legacyPrefix then
         return nil, "VALIDATE_ERR_NOT_COMPLETION_CODE"
     end
     if pfx ~= compPrefix then
