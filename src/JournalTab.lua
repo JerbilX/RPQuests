@@ -42,7 +42,16 @@ local function CreateStyledButton(name, parent, width, height, text, onClick)
     return btn
 end
 
-local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine, onTextChanged, selectAllOnFocus)
+local function SetReadOnlyEditText(edit, text)
+    if not edit then return end
+    local value = text or ""
+    edit._readOnlyValue = value
+    edit._readOnlySyncing = true
+    edit:SetText(value)
+    edit._readOnlySyncing = false
+end
+
+local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine, onTextChanged, selectAllOnFocus, isReadOnly)
     local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", parent, CT_BACKDROP)
     bg:SetDimensions(width, height)
     bg:SetMouseEnabled(true)
@@ -62,6 +71,8 @@ local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, 
     if selectAllOnFocus and edit.SetSelectAllOnFocus then
         edit:SetSelectAllOnFocus(true)
     end
+    edit._isReadOnly = isReadOnly and true or false
+    edit._readOnlyValue = ""
     edit:SetText("")
 
     local function FocusEditBox()
@@ -93,7 +104,20 @@ local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, 
         edit._focused = false
         bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
     end)
-    if onTextChanged then
+    if isReadOnly then
+        edit:SetHandler("OnTextChanged", function(ctrl)
+            if ctrl._readOnlySyncing then return end
+            local expected = ctrl._readOnlyValue or ""
+            if ctrl:GetText() ~= expected then
+                ctrl._readOnlySyncing = true
+                ctrl:SetText(expected)
+                if selectAllOnFocus and ctrl.SelectAll then
+                    ctrl:SelectAll()
+                end
+                ctrl._readOnlySyncing = false
+            end
+        end)
+    elseif onTextChanged then
         edit:SetHandler("OnTextChanged", function(ctrl)
             onTextChanged(ctrl:GetText())
         end)
@@ -114,7 +138,6 @@ function JournalTab:Initialize()
         preparing = true,
     }
     self.selectedQuestId = nil
-    self.shareCodeHeaderKey = nil
     self.listOffset = 0
 
     local panel = WINDOW_MANAGER:CreateControl(PANEL_NAME, GuiRoot, CT_TOPLEVELCONTROL)
@@ -162,8 +185,8 @@ function JournalTab:Initialize()
             if quest and self.selectedQuestId == quest.id then
                 self.selectedQuestId = nil
             end
-            self.shareCodeHeaderKey = nil
-            if self.shareEdit then self.shareEdit:SetText("") end
+            SetReadOnlyEditText(self.shareEdit, "")
+            SetReadOnlyEditText(self.deliveryEdit, "")
             if self.validateEdit then self.validateEdit:SetText("") end
             if self.validateResultLabel then self.validateResultLabel:SetText("") end
         elseif eventType == "DRAFT_TARGET_CAPTURED" then
@@ -417,15 +440,30 @@ function JournalTab:BuildDetailPane(parent)
     shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     self.shareHeader = shareHeader
 
-    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false, nil, true)
+    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 34, 1024, false, nil, true, true)
     shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
     self.shareBg = shareBg
     self.shareEdit = shareEdit
 
+    local deliveryHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DeliveryHeader", pane, CT_LABEL)
+    deliveryHeader:SetDimensions(520, 22)
+    deliveryHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 10)
+    if deliveryHeader.SetFont then deliveryHeader:SetFont("ZoFontGameBold") end
+    if deliveryHeader.SetColor then deliveryHeader:SetColor(0.91, 0.83, 0.63, 1) end
+    deliveryHeader:SetText(Addon.Locale:Get("LABEL_COMPLETION_CODE_HEADER"))
+    deliveryHeader:SetHidden(true)
+    self.deliveryHeader = deliveryHeader
+
+    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", pane, 340, 34, 1024, false, nil, true, true)
+    deliveryBg:SetAnchor(TOPLEFT, deliveryHeader, BOTTOMLEFT, 0, 2)
+    deliveryBg:SetHidden(true)
+    self.deliveryBg = deliveryBg
+    self.deliveryEdit = deliveryEdit
+
     self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", pane, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
         self:OnCompletionCodeClicked()
     end)
-    self.btnCompletionCode:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 10)
+    self.btnCompletionCode:SetAnchor(TOPLEFT, deliveryBg, TOPRIGHT, 10, 1)
     self.btnCompletionCode:SetHidden(true)
 
     local validateHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", pane, CT_LABEL)
@@ -698,11 +736,15 @@ function JournalTab:SelectQuest(questId)
     end
     self.selectedQuestId = questId
     self.viewMode = VIEW_MODE.DETAIL
-    self.shareCodeHeaderKey = nil
     if self.shareEdit then
         if self.shareEdit.LoseFocus then self.shareEdit:LoseFocus() end
         self.shareEdit._focused = false
-        self.shareEdit:SetText("")
+        SetReadOnlyEditText(self.shareEdit, "")
+    end
+    if self.deliveryEdit then
+        if self.deliveryEdit.LoseFocus then self.deliveryEdit:LoseFocus() end
+        self.deliveryEdit._focused = false
+        SetReadOnlyEditText(self.deliveryEdit, "")
     end
     if self.validateEdit then
         if self.validateEdit.LoseFocus then self.validateEdit:LoseFocus() end
@@ -809,23 +851,6 @@ function JournalTab:OnToggleActiveClicked()
     end
 end
 
-function JournalTab:ShowCodeInDetailBox(headerKey, code, alertKey)
-    self.shareCodeHeaderKey = headerKey
-    self.shareHeader:SetText(Addon.Locale:Get(headerKey))
-    self.shareEdit:SetText(code)
-    if self.validateResultLabel then
-        self.validateResultLabel:SetText("")
-    end
-    if self.shareEdit.TakeFocus then
-        self.shareEdit:TakeFocus()
-    end
-    if self.shareEdit.SelectAll then
-        self.shareEdit:SelectAll()
-    end
-
-    Addon.Announcements:ShowAlert(Addon.Locale:Get(alertKey), false)
-end
-
 function JournalTab:OnCompletionCodeClicked()
     local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
     if not q or not q.completed then return end
@@ -833,7 +858,17 @@ function JournalTab:OnCompletionCodeClicked()
     local code = Addon.QuestRepository:ExportCompletionCode(q.id)
     if not code then return end
 
-    self:ShowCodeInDetailBox("LABEL_COMPLETION_CODE_HEADER", code, "ALERT_COMPLETION_CODE_READY")
+    SetReadOnlyEditText(self.deliveryEdit, code)
+    if self.deliveryEdit then
+        if self.deliveryEdit.TakeFocus then
+            self.deliveryEdit:TakeFocus()
+        end
+        if self.deliveryEdit.SelectAll then
+            self.deliveryEdit:SelectAll()
+        end
+    end
+
+    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_COMPLETION_CODE_READY"), false)
 end
 
 function JournalTab:OnValidateDeliveryClicked()
@@ -1066,6 +1101,8 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.codeDivider:SetHidden(true)
         self.shareHeader:SetHidden(true)
         self.shareBg:SetHidden(true)
+        self.deliveryHeader:SetHidden(true)
+        self.deliveryBg:SetHidden(true)
         self.validateHeader:SetHidden(true)
         self.validateBg:SetHidden(true)
         self.validateResultLabel:SetHidden(true)
@@ -1125,14 +1162,11 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.detailObjText:SetText(table.concat(objLines, "\n"))
 
     self.codeDivider:SetHidden(false)
-    if isPrepared or self.shareCodeHeaderKey ~= "LABEL_COMPLETION_CODE_HEADER" then
-        self.shareCodeHeaderKey = "LABEL_SHARE_CODE_HEADER"
-        local shareCode = Addon.QuestRepository:ExportQuestToCode(selectedQuest.id) or ""
-        if not self.shareEdit._focused and self.shareEdit:GetText() ~= shareCode then
-            self.shareEdit:SetText(shareCode)
-        end
+    local shareCode = Addon.QuestRepository:ExportQuestToCode(selectedQuest.id) or ""
+    if not self.shareEdit._focused and self.shareEdit:GetText() ~= shareCode then
+        SetReadOnlyEditText(self.shareEdit, shareCode)
     end
-    self.shareHeader:SetText(Addon.Locale:Get(self.shareCodeHeaderKey or "LABEL_SHARE_CODE_HEADER"))
+    self.shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     self.shareHeader:SetHidden(false)
     self.shareBg:SetHidden(false)
 
@@ -1142,6 +1176,8 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     if isPrepared then
         self.btnEdit:SetHidden(false)
         self.btnReset:SetAnchor(TOPLEFT, self.btnEdit, TOPRIGHT, 12, 0)
+        self.deliveryHeader:SetHidden(true)
+        self.deliveryBg:SetHidden(true)
         self.btnCompletionCode:SetHidden(true)
         self.validateHeader:SetHidden(false)
         self.validateBg:SetHidden(false)
@@ -1154,7 +1190,13 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.validateBg:SetHidden(true)
         self.btnValidateDelivery:SetHidden(true)
         self.validateResultLabel:SetHidden(true)
-        self.btnCompletionCode:SetHidden(not selectedQuest.completed)
+        local showCompletion = selectedQuest.completed and true or false
+        self.deliveryHeader:SetHidden(not showCompletion)
+        self.deliveryBg:SetHidden(not showCompletion)
+        self.btnCompletionCode:SetHidden(not showCompletion)
+        if not showCompletion then
+            SetReadOnlyEditText(self.deliveryEdit, "")
+        end
     end
     self.btnReset:SetHidden(false)
     self.btnDelete:SetHidden(false)
