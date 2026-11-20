@@ -78,8 +78,8 @@ RPQuest.Locales["es"] = {
 
     -- Validate Delivery (Inline)
     VALIDATE_RESULT_SUCCESS = "|c33FF33¡Entrega válida!|r Misión completada con éxito por |cE8D5A0%s|r.",
-    VALIDATE_STEALTH_UNDETECTED = " Sigilo: |c33FF33No detectado|r.",
-    VALIDATE_STEALTH_DETECTED = " Sigilo: |cFFAA33Detectado|r.",
+    VALIDATE_STEALTH_UNDETECTED = "\nSigilo: |c33FF33No detectado|r",
+    VALIDATE_STEALTH_DETECTED = "\nSigilo: |cFFAA33Detectado|r",
     VALIDATE_ERR_EMPTY = "|cFFAA33Pega primero el código de entrega (RPQC1:...) en el cuadro de texto.|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444Ese es un código de misión (RPQ1), no un código de entrega (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444Este código de entrega pertenece a otra misión distinta.|r",

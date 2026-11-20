@@ -78,8 +78,8 @@ RPQuest.Locales["en"] = {
 
     -- Validate Delivery (Inline)
     VALIDATE_RESULT_SUCCESS = "|c33FF33Valid delivery!|r Quest completed successfully by |cE8D5A0%s|r.",
-    VALIDATE_STEALTH_UNDETECTED = " Stealth: |c33FF33Undetected|r.",
-    VALIDATE_STEALTH_DETECTED = " Stealth: |cFFAA33Detected|r.",
+    VALIDATE_STEALTH_UNDETECTED = "\nStealth: |c33FF33Undetected|r",
+    VALIDATE_STEALTH_DETECTED = "\nStealth: |cFFAA33Detected|r",
     VALIDATE_ERR_EMPTY = "|cFFAA33Paste a delivery code (RPQC1:...) into the text box first.|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444That is a quest share code (RPQ1), not a delivery code (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444This delivery code belongs to a different quest.|r",

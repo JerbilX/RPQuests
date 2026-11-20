@@ -343,9 +343,24 @@ function JournalTab:BuildDetailPane(parent)
     pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
     self.detailPane = pane
 
-    local titleLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailTitle", pane, CT_LABEL)
+    local scrollContainer = WINDOW_MANAGER.CreateControlFromVirtual
+        and WINDOW_MANAGER:CreateControlFromVirtual(PANEL_NAME .. "_DetailScroll", pane, "ZO_ScrollContainer")
+        or nil
+    local contentParent = pane
+    if scrollContainer then
+        scrollContainer:SetDimensions(550, 565)
+        scrollContainer:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+        local scrollChild = scrollContainer.GetNamedChild and scrollContainer:GetNamedChild("ScrollChild")
+        if scrollChild then
+            scrollChild:SetDimensions(526, 650)
+            contentParent = scrollChild
+        end
+        self.detailScroll = scrollContainer
+    end
+
+    local titleLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailTitle", contentParent, CT_LABEL)
     titleLabel:SetDimensions(500, 34)
-    titleLabel:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    titleLabel:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 0)
     if titleLabel.SetFont then titleLabel:SetFont("ZoFontWinH2") end
     if titleLabel.SetColor then titleLabel:SetColor(1, 1, 1, 1) end
     if titleLabel.SetModifyTextType and TEXT_MODIFY_TYPE_UPPERCASE then
@@ -353,20 +368,20 @@ function JournalTab:BuildDetailPane(parent)
     end
     self.detailTitle = titleLabel
 
-    local statusLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailStatus", pane, CT_LABEL)
+    local statusLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailStatus", contentParent, CT_LABEL)
     statusLabel:SetDimensions(500, 22)
     statusLabel:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 0, 5)
     if statusLabel.SetFont then statusLabel:SetFont("ZoFontWinH4") end
     self.detailStatus = statusLabel
 
-    local locLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailLoc", pane, CT_LABEL)
+    local locLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailLoc", contentParent, CT_LABEL)
     locLabel:SetDimensions(500, 22)
     locLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
     if locLabel.SetFont then locLabel:SetFont("ZoFontWinH4") end
     if locLabel.SetColor then locLabel:SetColor(0.77, 0.76, 0.62, 1) end
     self.detailLocation = locLabel
 
-    local descBody = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescBody", pane, CT_LABEL)
+    local descBody = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDescBody", contentParent, CT_LABEL)
     descBody:SetDimensions(495, 104)
     descBody:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 25, 54)
     if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
@@ -374,12 +389,12 @@ function JournalTab:BuildDetailPane(parent)
     if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
     self.detailDescBody = descBody
 
-    local divider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDivider", pane, CT_TEXTURE)
+    local divider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailDivider", contentParent, CT_TEXTURE)
     divider:SetDimensions(512, 4)
-    divider:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 210)
+    divider:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 210)
     divider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
 
-    local objHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjHeader", pane, CT_LABEL)
+    local objHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjHeader", contentParent, CT_LABEL)
     objHeader:SetDimensions(500, 24)
     objHeader:SetAnchor(TOPLEFT, divider, BOTTOMLEFT, 0, 10)
     if objHeader.SetFont then objHeader:SetFont("ZoFontWinH3") end
@@ -390,7 +405,7 @@ function JournalTab:BuildDetailPane(parent)
     objHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     self.detailObjHeader = objHeader
 
-    local objText = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjText", pane, CT_LABEL)
+    local objText = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DetailObjText", contentParent, CT_LABEL)
     objText:SetDimensions(495, 48)
     objText:SetAnchor(TOPLEFT, objHeader, BOTTOMLEFT, 25, 10)
     if objText.SetFont then objText:SetFont("ZoFontWinH4") end
@@ -398,24 +413,24 @@ function JournalTab:BuildDetailPane(parent)
     self.detailObjText = objText
 
     -- Grupo 1: Botones de acción de la misión
-    self.btnActivate = CreateStyledButton(PANEL_NAME .. "_BtnActivate", pane, 160, 32, "", function()
+    self.btnActivate = CreateStyledButton(PANEL_NAME .. "_BtnActivate", contentParent, 160, 32, "", function()
         self:OnToggleActiveClicked()
     end)
     self.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -25, 16)
 
-    self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", pane, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
+    self.btnEdit = CreateStyledButton(PANEL_NAME .. "_BtnEdit", contentParent, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
         self:OpenEditEditor(self.selectedQuestId)
     end)
     self.btnEdit:SetAnchor(TOPLEFT, self.btnActivate, TOPRIGHT, 12, 0)
 
-    self.btnReset = CreateStyledButton(PANEL_NAME .. "_BtnReset", pane, 160, 32, Addon.Locale:Get("BTN_RESET"), function()
+    self.btnReset = CreateStyledButton(PANEL_NAME .. "_BtnReset", contentParent, 160, 32, Addon.Locale:Get("BTN_RESET"), function()
         if self.selectedQuestId and Addon.QuestRepository:ResetQuest(self.selectedQuestId) then
             Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
         end
     end)
     self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
 
-    self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", pane, 160, 32, Addon.Locale:Get("BTN_DELETE"), function()
+    self.btnDelete = CreateStyledButton(PANEL_NAME .. "_BtnDelete", contentParent, 160, 32, Addon.Locale:Get("BTN_DELETE"), function()
         if self.selectedQuestId and Addon.QuestRepository:DeleteQuest(self.selectedQuestId) then
             Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
         end
@@ -455,14 +470,14 @@ function JournalTab:BuildDetailPane(parent)
     self.showOnMapKeybindButton = showOnMapBtn
 
     -- Separador horizontal entre botones de misión y sección de códigos
-    local codeDivider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_CodeDivider", pane, CT_TEXTURE)
+    local codeDivider = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_CodeDivider", contentParent, CT_TEXTURE)
     codeDivider:SetDimensions(512, 4)
     codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 48)
     codeDivider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
     self.codeDivider = codeDivider
 
     -- Grupo 2: Código para compartir siempre visible y sección de entrega/validación
-    local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", pane, CT_LABEL)
+    local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", contentParent, CT_LABEL)
     shareHeader:SetDimensions(520, 20)
     shareHeader:SetAnchor(TOPLEFT, codeDivider, BOTTOMLEFT, 0, 8)
     if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
@@ -470,12 +485,12 @@ function JournalTab:BuildDetailPane(parent)
     shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     self.shareHeader = shareHeader
 
-    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", pane, 510, 32, 4096, false, nil, true, true)
+    local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", contentParent, 510, 32, 4096, false, nil, true, true)
     shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
     self.shareBg = shareBg
     self.shareEdit = shareEdit
 
-    local deliveryHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DeliveryHeader", pane, CT_LABEL)
+    local deliveryHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_DeliveryHeader", contentParent, CT_LABEL)
     deliveryHeader:SetDimensions(520, 20)
     deliveryHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 8)
     if deliveryHeader.SetFont then deliveryHeader:SetFont("ZoFontGameBold") end
@@ -484,19 +499,19 @@ function JournalTab:BuildDetailPane(parent)
     deliveryHeader:SetHidden(true)
     self.deliveryHeader = deliveryHeader
 
-    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", pane, 340, 32, 4096, false, nil, true, true)
+    local deliveryBg, deliveryEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_DeliveryEdit", contentParent, 340, 32, 4096, false, nil, true, true)
     deliveryBg:SetAnchor(TOPLEFT, deliveryHeader, BOTTOMLEFT, 0, 2)
     deliveryBg:SetHidden(true)
     self.deliveryBg = deliveryBg
     self.deliveryEdit = deliveryEdit
 
-    self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", pane, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
+    self.btnCompletionCode = CreateStyledButton(PANEL_NAME .. "_BtnCompletionCode", contentParent, 160, 32, Addon.Locale:Get("BTN_COMPLETION_CODE"), function()
         self:OnCompletionCodeClicked()
     end)
     self.btnCompletionCode:SetAnchor(TOPLEFT, deliveryBg, TOPRIGHT, 10, 0)
     self.btnCompletionCode:SetHidden(true)
 
-    local validateHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", pane, CT_LABEL)
+    local validateHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", contentParent, CT_LABEL)
     validateHeader:SetDimensions(520, 20)
     validateHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 8)
     if validateHeader.SetFont then validateHeader:SetFont("ZoFontGameBold") end
@@ -505,22 +520,25 @@ function JournalTab:BuildDetailPane(parent)
     validateHeader:SetHidden(true)
     self.validateHeader = validateHeader
 
-    local validateBg, validateEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ValidateEdit", pane, 340, 32, 4096, false)
+    local validateBg, validateEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ValidateEdit", contentParent, 340, 32, 4096, false)
     validateBg:SetAnchor(TOPLEFT, validateHeader, BOTTOMLEFT, 0, 2)
     validateBg:SetHidden(true)
     self.validateBg = validateBg
     self.validateEdit = validateEdit
 
-    self.btnValidateDelivery = CreateStyledButton(PANEL_NAME .. "_BtnValidateDelivery", pane, 160, 32, Addon.Locale:Get("BTN_VALIDATE_DELIVERY"), function()
+    self.btnValidateDelivery = CreateStyledButton(PANEL_NAME .. "_BtnValidateDelivery", contentParent, 160, 32, Addon.Locale:Get("BTN_VALIDATE_DELIVERY"), function()
         self:OnValidateDeliveryClicked()
     end)
     self.btnValidateDelivery:SetAnchor(TOPLEFT, validateBg, TOPRIGHT, 10, 0)
     self.btnValidateDelivery:SetHidden(true)
 
-    local resultLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateResult", pane, CT_LABEL)
-    resultLabel:SetDimensions(510, 38)
+    local resultLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateResult", contentParent, CT_LABEL)
+    resultLabel:SetDimensions(510, 56)
     resultLabel:SetAnchor(TOPLEFT, validateBg, BOTTOMLEFT, 0, 4)
     if resultLabel.SetFont then resultLabel:SetFont("ZoFontGame") end
+    if resultLabel.SetVerticalAlignment and TEXT_ALIGN_TOP then
+        resultLabel:SetVerticalAlignment(TEXT_ALIGN_TOP)
+    end
     resultLabel:SetText("")
     self.validateResultLabel = resultLabel
 end
@@ -772,6 +790,9 @@ function JournalTab:SelectQuest(questId)
     end
     self.selectedQuestId = questId
     self.viewMode = VIEW_MODE.DETAIL
+    if self.detailScroll and self.detailScroll.scroll and self.detailScroll.scroll.SetVerticalScroll then
+        self.detailScroll.scroll:SetVerticalScroll(0)
+    end
     if self.shareEdit then
         if self.shareEdit.LoseFocus then self.shareEdit:LoseFocus() end
         self.shareEdit._focused = false
