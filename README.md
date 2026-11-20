@@ -1,87 +1,123 @@
 # RPQuest
 
-Addon nativo para **The Elder Scrolls Online** (`APIVersion: 101051`) que permite crear, completar y compartir **misiones personalizadas (Roleplay / Custom Quests)** sin depender de ninguna librería externa.
+[![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
+![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
+[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
+
+**English** | [Español](README.es.md)
+
+A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersion: 101051`) that lets you create, play, complete, and share **custom Roleplay quests** directly inside ESO's native UI.
 
 ---
 
-## Características Principales
+## Key Features
 
-- **Pestaña propia en el Diario Nativo (`J`):** Integrada directamente en la barra superior de modos del Diario de Misiones (`ZO_QuestJournal_Keyboard`).
-- **Creación y Edición Completa (`Create Quest`):**
-  - Define **Título**, **Descripción / Historia** y **Tamaño del área de búsqueda** (`Pequeña`, `Mediana`, `Grande`).
-- **Objetivos y Cantidades Inferidos bajo Retícula (`Keybind`):**
-  - Apunta a cualquier NPC vivo y presiona la tecla asignada en *Controles -> RPQuest*:
-    - Si apuntas y capturas a distintos NPCs con nombre, todos quedan registrados como objetivos exclusivos de la misión.
-    - Si apuntas y capturas a un mismo tipo de NPC varias veces (ej. `Imp` 3 veces), se acumula automáticamente como `Imp x3`.
-- **Marca de Área de Búsqueda en el Mapa Mundial (`M`):**
-  - Cuando tienes una misión custom activa, se dibuja en el mapa un círculo amplio de exploración (usando el shader circular nativo `ZO_PinBlob`) desplazado con un **offset aleatorio fijo** respecto a la posición exacta del NPC. Así el objetivo siempre se encuentra dentro del círculo, pero nunca en su centro exacto.
-  - Al completar o desactivar la misión, el círculo desaparece automáticamente del mapa.
-- **Detección en Combate y Avisos Nativos:**
-  - Al eliminar al objetivo dentro del área/zona de la misión, avanza el contador con aviso central en pantalla (`CENTER_SCREEN_ANNOUNCE`) y sonido oficial de misión completada (`SOUNDS.QUEST_COMPLETED`).
-- **Mini-Tracker en el HUD:**
-  - Muestra la misión custom activa en el margen derecho de la pantalla durante el juego (clic izquierdo abre el Diario; clic derecho abre el área en el Mapa).
-- **Compartición por Código (`RPQ1:...`):**
-  - Genera un código compacto con suma de verificación (`CRC16`) listo para copiar (`Ctrl+C`) y pasar a otro jugador para que lo importe desde la misma pestaña.
-- **Persistencia por Personaje:**
-  - Cada personaje gestiona su propia lista de misiones y progreso mediante `ZO_SavedVars:NewCharacterIdSettings`.
-- **Localización Configurable (`lang/`):**
-  - Detecta automáticamente el idioma del cliente (`es` Castellano / `en` Inglés) con fallback determinista y arquitectura extensible mediante archivos adicionales en `lang/`.
+- **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with separate **Prepared** (authored) and **Received** (active/playable) quest lists.
+- **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually.
+- **Hidden Discovery Points:** Capture in-world exploration coordinates (`Keybind` or `/rpquest discovery`) with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
+- **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
+- **World Map Search Area (`M`):** Displays an approximate search circle (`ZO_PinBlob`) on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
+- **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
+- **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
+- **Code Sharing & Completion Proof (`RPQ1` / `RPQC1`):**
+  - Export any prepared quest as a compact, CRC16-verified share code (`RPQ1:...`) for other players to import.
+  - Completed quests generate a delivery validation code (`RPQC1:...`) to prove completion back to the Quest Master.
+- **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
 
 ---
 
-## Requisitos y Dependencias
+## Installation
 
-- **Librerías externas:** Ninguna (`Zero-Dependency`).
-- **SavedVariables:** `RPQuest_SavedVariables`
+1. Download the latest release archive (or clone this repository).
+2. Extract the `RPQuest` folder into your ESO AddOns directory:
+   - **Windows:** `Documents\Elder Scrolls Online\live\AddOns\RPQuest\`
+   - **macOS:** `~/Documents/Elder Scrolls Online/live/AddOns/RPQuest/`
+   - **Linux (Steam/Proton):** `<SteamLibrary>/steamapps/compatdata/306130/pfx/drive_c/users/steamuser/Documents/Elder Scrolls Online/live/AddOns/RPQuest/`
+3. Verify that `RPQuest.txt` is located directly inside `AddOns/RPQuest/RPQuest.txt`.
+4. Launch ESO and enable **RPQuest** in the **Add-Ons** menu. No external libraries are required.
 
 ---
 
-## Controles y Comandos Slash (`SLASH_COMMANDS`)
+## Quick Start
 
-### Atajos de Teclado (`Ajustes -> Controles -> RPQuest`)
-- **Seleccionar Objetivo bajo Retícula (NPC):** Captura el NPC vivo al que estás apuntando para el borrador de la misión.
-- **Abrir / Cerrar Pestaña de Misiones Custom:** Abre directamente el Diario en la pestaña de `RPQuest`.
+1. **Create a Quest (Quest Master):**
+   - Open the Quest Journal (`J`) and switch to the **RPQuest** tab (or type `/rpquest`).
+   - Click **Create Quest**, set a **Title**, **Description / Lore**, and **Search Area** size (`Small`, `Medium`, `Large`), and optionally toggle **Do not be detected**.
+   - In the world, aim at NPCs and press your **Capture Target** keybind (or `/rpquest capture`), or stand at a location and press **Capture Discovery Point** (or `/rpquest discovery`).
+2. **Share with Players:**
+   - Select your prepared quest and copy its `RPQ1:...` share code.
+   - Players paste that code into the **Import** field in their **RPQuest** tab.
+3. **Play & Verify:**
+   - Activate the received quest to show the HUD mini-tracker and World Map search area.
+   - Once all objectives are completed, copy the generated `RPQC1:...` delivery code to confirm completion.
 
-### Comandos de Chat
-| Comando | Argumentos | Descripción |
+---
+
+## Controls & Slash Commands
+
+### Keybinds (`Settings -> Controls -> RPQuest`)
+| Action | Description |
+| :--- | :--- |
+| **Capture Target under Reticle** | Captures the living NPC currently under your reticle into the quest draft. |
+| **Capture Discovery Point** | Captures your current character position as a hidden discovery objective. |
+| **Toggle Custom Quests Tab** | Opens or closes the Quest Journal directly on the **RPQuest** tab. |
+
+### Slash Commands
+| Command | Arguments | Description |
 | :--- | :--- | :--- |
-| `/rpquest` | *(ninguno)* | Abre o cierra la pestaña de Misiones Custom en el Diario. |
-| `/rpquest` | `capture` / `target` | Captura el NPC actualmente apuntado con la retícula. |
-| `/rpquest` | `map` | Abre el Mapa Mundial centrado en el área de búsqueda de la misión activa. |
+| `/rpquest` | *(none)* | Opens or closes the **RPQuest** tab in the Quest Journal. |
+| `/rpquest` | `capture` / `target` | Captures the NPC currently aimed at under the reticle. |
+| `/rpquest` | `discovery` / `point` | Captures your current position as a hidden discovery point. |
+| `/rpquest` | `map` | Opens the World Map centered on the active quest's search area. |
 
 ---
 
-## Estructura del Proyecto
+## Requirements & Compatibility
+
+- **Game Version:** The Elder Scrolls Online (`APIVersion: 101051`)
+- **External Libraries:** None (`Zero-Dependency`)
+- **SavedVariables:** `RPQuest_SavedVariables` (per character)
+- **Supported Languages:** English (`en`), Spanish (`es`)
+
+---
+
+## Project Structure & Development
 
 ```text
 RPQuest/
-├── RPQuest.txt              # Manifiesto oficial para ESO
-├── RPQuest.lua              # Punto de entrada y ciclo EVENT_ADD_ON_LOADED
-├── Bindings.xml             # Definición de atajos de teclado nativos
+├── RPQuest.txt              # Official ESO add-on manifest
+├── RPQuest.lua              # Entry point & EVENT_ADD_ON_LOADED lifecycle
+├── Bindings.xml             # Native keybind definitions
 ├── lang/
-│   ├── en.lua               # Diccionario en Inglés (Base / Fallback)
-│   └── es.lua               # Diccionario en Castellano
+│   ├── en.lua               # English strings (Base / Fallback)
+│   └── es.lua               # Spanish strings
 ├── src/
-│   ├── Constants.lua        # Constantes, radios y metadatos
-│   ├── Locale.lua           # Selector de idioma del cliente e i18n
-│   ├── ShareCodec.lua       # Codificador/decodificador RPQ1 con CRC16
-│   ├── QuestRepository.lua  # CRUD por personaje y cálculo de offset del círculo
-│   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
-│   ├── TargetCapture.lua    # Captura de NPC bajo retícula y coordenadas de mapa
-│   ├── CombatTracker.lua    # Seguimiento de bajas (EVENT_COMBAT_EVENT)
-│   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
-│   └── JournalTab.lua       # Pestaña e interfaz completa en el Diario de Misiones
-├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)
+│   ├── Constants.lua        # Constants, radii, and metadata
+│   ├── Locale.lua           # Client language selector & i18n
+│   ├── ShareCodec.lua       # RPQ1 / RPQC1 codec with CRC16 checksum
+│   ├── QuestRepository.lua  # Per-character CRUD & search area offset logic
+│   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
+│   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
+│   ├── CombatTracker.lua    # Kill & stealth tracking (EVENT_COMBAT_EVENT)
+│   ├── DiscoveryTracker.lua # Hidden discovery proximity polling
+│   ├── WorldMapArea.lua     # Native search circle on ZO_WorldMap
+│   └── JournalTab.lua       # Native Quest Journal tab & HUD mini-tracker
+├── docs/adr/                # Architecture Decision Records (MADR)
 └── tests/
-    ├── run.lua              # Suite de pruebas unitarias herméticas (LuaJIT)
-    └── mocks/               # Mocks de EsoUI
+    ├── run.lua              # Hermetic unit test suite (LuaJIT)
+    └── mocks/               # EsoUI mocks
+```
+
+### Running Tests
+```bash
+luajit tests/run.lua
 ```
 
 ---
 
-## Desarrollo y Verificación
+## License
 
-Ejecutar la suite de pruebas unitarias:
-```bash
-luajit tests/run.lua
-```
+This project is licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE) for details.
