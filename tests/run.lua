@@ -1780,6 +1780,47 @@ RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjec
     AssertEqual(errComp, "VALIDATE_ERR_NOT_COMPLETION_CODE", "RPQ1 rejected with VALIDATE_ERR_NOT_COMPLETION_CODE")
 end)
 
+RunTest("Editor Accordion Sections: default state, toggle layout, and auto-expand on edit", function()
+    RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+    RPQuest.JournalTab:Initialize()
+    RPQuest.JournalTab:OpenTab()
+    RPQuest.JournalTab:OpenCreateEditor()
+
+    local sections = RPQuest.JournalTab.editorSectionsByKey
+    AssertTrue(sections ~= nil, "editorSectionsByKey initialized")
+    AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed")
+    AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed")
+    AssertEqual(sections.dialogue.body:IsHidden(), true, "Dialogue section starts collapsed")
+    AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed")
+
+    local yCollapsed = sections.dialogue.divider._anchors[1].y
+    RPQuest.JournalTab:ToggleEditorSection("discovery")
+    AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery section expands on toggle")
+    local yExpanded = sections.dialogue.divider._anchors[1].y
+    AssertTrue(yExpanded > yCollapsed, "Subsequent section Y offset increases when discovery accordion expands")
+
+    RPQuest.JournalTab:ToggleEditorSection("discovery")
+    AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section collapses on second toggle")
+
+    -- Save a quest with options configured and verify OpenEditEditor keeps all accordions collapsed by default
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.50,
+        targetY = 0.50,
+    })
+    RPQuest.QuestRepository:UpdateDraftFields({ requireUndetected = true })
+    local q = RPQuest.QuestRepository:SaveDraft("Misión Acordeón", "Prueba.", nil, "Listo.")
+    AssertTrue(q ~= nil, "Quest saved for edit accordion test")
+
+    RPQuest.JournalTab:OpenEditEditor(q.id)
+    AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed on edit")
+    AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed on edit")
+    AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed on edit")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
