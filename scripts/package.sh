@@ -14,6 +14,7 @@ if [[ ! -f "$MANIFEST_FILE" ]]; then
 fi
 
 # Auto-compute AddOnVersion (monotonically increasing integer from git commit count)
+# and Version from exact SemVer tag (e.g. v1.0.0 -> 1.0.0), falling back to manifest Version.
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   ADDON_VERSION="$(git rev-list --count HEAD)"
   EXACT_TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
@@ -22,10 +23,9 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   else
     LATEST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
     if [[ -n "$LATEST_TAG" ]]; then
-      DISPLAY_VERSION="${LATEST_TAG#v}-dev.${ADDON_VERSION}"
+      DISPLAY_VERSION="${LATEST_TAG#v}"
     else
-      BASE_VER="$(awk -F': *' '/^## Version:/{print $2; exit}' "$MANIFEST_FILE" | tr -d '\r')"
-      DISPLAY_VERSION="${BASE_VER:-1.0.0}-dev.${ADDON_VERSION}"
+      DISPLAY_VERSION="$(awk -F': *' '/^## Version:/{print $2; exit}' "$MANIFEST_FILE" | tr -d '\r')"
     fi
   fi
 else
@@ -62,7 +62,7 @@ done < "${TARGET_DIR}/${MANIFEST_FILE}"
 OUT_ZIP="${DIST_DIR}/${ADDON_NAME}-${DISPLAY_VERSION}.zip"
 
 mkdir -p "$DIST_DIR"
-rm -f "${DIST_DIR}/${ADDON_NAME}.zip" "$OUT_ZIP"
+rm -f "${DIST_DIR}/${ADDON_NAME}"*.zip
 
 (
   cd "$STAGE_DIR"
