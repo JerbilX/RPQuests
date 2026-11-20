@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
+-- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -187,7 +188,7 @@ function WorldMapArea:Initialize()
 end
 
 function WorldMapArea:ShouldRenderOnCurrentMap(quest)
-    if not quest or quest.completed then
+    if not quest or quest.completed or quest.hideMapArea then
         return false
     end
 

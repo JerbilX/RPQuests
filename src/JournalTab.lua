@@ -1,6 +1,8 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
+-- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
+-- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -196,7 +198,7 @@ function JournalTab:Initialize()
             if self.viewMode ~= VIEW_MODE.EDITOR then
                 self.viewMode = VIEW_MODE.EDITOR
             end
-        elseif eventType == "DRAFT_UPDATED" then
+        elseif eventType == "DRAFT_UPDATED" or eventType == "LAST_NPC_UPDATED" then
             if self.viewMode == VIEW_MODE.EDITOR and not self.panel:IsHidden() then
                 self:RefreshEditorPane()
             else
@@ -582,15 +584,29 @@ function JournalTab:BuildEditorPane(parent)
     if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
     self.editorHeader = header
 
-    local lblTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputTitle", pane, CT_LABEL)
-    lblTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 36)
+    local formParent = pane
+    local scrollContainer = WINDOW_MANAGER.CreateControlFromVirtual
+        and WINDOW_MANAGER:CreateControlFromVirtual(PANEL_NAME .. "_EditorScroll", pane, "ZO_ScrollContainer")
+    if scrollContainer then
+        scrollContainer:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 32)
+        scrollContainer:SetDimensions(550, 474)
+        local scrollChild = scrollContainer.GetNamedChild and scrollContainer:GetNamedChild("ScrollChild")
+        if scrollChild then
+            scrollChild:SetDimensions(526, 770)
+            formParent = scrollChild
+        end
+        self.editorScroll = scrollContainer
+    end
+
+    local lblTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputTitle", formParent, CT_LABEL)
+    lblTitle:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 0)
     if lblTitle.SetFont then lblTitle:SetFont("ZoFontGameBold") end
     lblTitle:SetText(Addon.Locale:Get("LABEL_INPUT_TITLE"))
     self.lblInputTitle = lblTitle
 
     local titleBg, titleEdit = CreateEditBoxWithBackdrop(
         PANEL_NAME .. "_TitleEdit",
-        pane,
+        formParent,
         510,
         30,
         90,
@@ -599,19 +615,19 @@ function JournalTab:BuildEditorPane(parent)
             Addon.QuestRepository:UpdateDraftFields({ title = val }, true)
         end
     )
-    titleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 56)
+    titleBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 20)
     self.titleBg = titleBg
     self.titleEdit = titleEdit
 
-    local lblDesc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputDesc", pane, CT_LABEL)
-    lblDesc:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 92)
+    local lblDesc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputDesc", formParent, CT_LABEL)
+    lblDesc:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 56)
     if lblDesc.SetFont then lblDesc:SetFont("ZoFontGameBold") end
     lblDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
     self.lblInputDesc = lblDesc
 
     local descBg, descEdit = CreateEditBoxWithBackdrop(
         PANEL_NAME .. "_DescEdit",
-        pane,
+        formParent,
         510,
         70,
         400,
@@ -620,60 +636,66 @@ function JournalTab:BuildEditorPane(parent)
             Addon.QuestRepository:UpdateDraftFields({ description = val }, true)
         end
     )
-    descBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 112)
+    descBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 76)
     self.descBg = descBg
     self.descEdit = descEdit
 
-    local lblTargetSec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetSec", pane, CT_LABEL)
-    lblTargetSec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 190)
+    local lblTargetSec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetSec", formParent, CT_LABEL)
+    lblTargetSec:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 154)
     if lblTargetSec.SetFont then lblTargetSec:SetFont("ZoFontGameBold") end
     lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
     self.lblTargetSec = lblTargetSec
 
-    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", pane, 150, 24, Addon.Locale:Get("BTN_CLEAR_TARGETS"), function()
+    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", formParent, 150, 24, Addon.Locale:Get("BTN_CLEAR_TARGETS"), function()
         Addon.QuestRepository:ClearDraftTargets()
     end)
-    self.btnClearTargets:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 186)
+    self.btnClearTargets:SetAnchor(TOPLEFT, formParent, TOPLEFT, 360, 150)
     self.btnClearTargets:SetHidden(true)
 
-    local lblCapturedTarget = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedTarget", pane, CT_LABEL)
+    local lblCapturedTarget = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedTarget", formParent, CT_LABEL)
     lblCapturedTarget:SetDimensions(510, 32)
-    lblCapturedTarget:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 214)
+    lblCapturedTarget:SetAnchor(TOPLEFT, formParent, TOPLEFT, 6, 178)
     if lblCapturedTarget.SetFont then lblCapturedTarget:SetFont("ZoFontGame") end
     self.lblCapturedTarget = lblCapturedTarget
 
     -- Selector de radio del área de búsqueda
-    local lblAreaSize = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblAreaSize", pane, CT_LABEL)
-    lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 250)
+    local lblAreaSize = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblAreaSize", formParent, CT_LABEL)
+    lblAreaSize:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 214)
     if lblAreaSize.SetFont then lblAreaSize:SetFont("ZoFontGameBold") end
     lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))
     self.lblAreaSize = lblAreaSize
 
     local radii = Addon.Constants.AREA_RADIUS
 
-    self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", pane, 110, 24, "", function()
+    self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", formParent, 110, 24, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.SMALL })
     end)
-    self.btnRadiusSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 270)
+    self.btnRadiusSmall:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 234)
 
-    self.btnRadiusMedium = CreateStyledButton(PANEL_NAME .. "_BtnRadMedium", pane, 110, 24, "", function()
+    self.btnRadiusMedium = CreateStyledButton(PANEL_NAME .. "_BtnRadMedium", formParent, 110, 24, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.MEDIUM })
     end)
-    self.btnRadiusMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 120, 270)
+    self.btnRadiusMedium:SetAnchor(TOPLEFT, formParent, TOPLEFT, 120, 234)
 
-    self.btnRadiusLarge = CreateStyledButton(PANEL_NAME .. "_BtnRadLarge", pane, 110, 24, "", function()
+    self.btnRadiusLarge = CreateStyledButton(PANEL_NAME .. "_BtnRadLarge", formParent, 110, 24, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.LARGE })
     end)
-    self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 270)
+    self.btnRadiusLarge:SetAnchor(TOPLEFT, formParent, TOPLEFT, 240, 234)
+
+    self.btnHideMapArea = CreateStyledButton(PANEL_NAME .. "_BtnHideMapArea", formParent, 280, 26, Addon.Locale:Get("OPT_HIDE_MAP_AREA"), function()
+        local d = Addon.QuestRepository:GetDraft()
+        Addon.QuestRepository:UpdateDraftFields({ hideMapArea = not (d and d.hideMapArea) })
+    end)
+    self.btnHideMapArea:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 264)
 
     -- Sección de Puntos de Descubrimiento Ocultos
-    local lblDiscoverySec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDiscoverySec", pane, CT_LABEL)
-    lblDiscoverySec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 302)
+    local lblDiscoverySec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDiscoverySec", formParent, CT_LABEL)
+    lblDiscoverySec:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 298)
     if lblDiscoverySec.SetFont then lblDiscoverySec:SetFont("ZoFontGameBold") end
     lblDiscoverySec:SetText(Addon.Locale:Get("LABEL_DISCOVERY_SECTION"))
     self.lblDiscoverySec = lblDiscoverySec
 
-    self.btnCaptureDiscovery = CreateStyledButton(PANEL_NAME .. "_BtnCaptureDiscovery", pane, 110, 24, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
+    self.btnCaptureDiscovery = CreateStyledButton(PANEL_NAME .. "_BtnCaptureDiscovery", formParent, 110, 24, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
         local draft = Addon.QuestRepository:GetDraft()
         local hasExisting = #(draft.discoveries or {}) > 0
         local msgText = (not hasExisting and self.discoveryMsgEdit) and self.discoveryMsgEdit:GetText() or nil
@@ -684,13 +706,13 @@ function JournalTab:BuildEditorPane(parent)
             self:RefreshEditorPane()
         end
     end)
-    self.btnCaptureDiscovery:SetAnchor(TOPLEFT, pane, TOPLEFT, 294, 298)
+    self.btnCaptureDiscovery:SetAnchor(TOPLEFT, formParent, TOPLEFT, 294, 294)
 
-    self.btnClearDiscoveries = CreateStyledButton(PANEL_NAME .. "_BtnClearDiscoveries", pane, 100, 24, Addon.Locale:Get("BTN_CLEAR_DISCOVERIES"), function()
+    self.btnClearDiscoveries = CreateStyledButton(PANEL_NAME .. "_BtnClearDiscoveries", formParent, 100, 24, Addon.Locale:Get("BTN_CLEAR_DISCOVERIES"), function()
         self.selectedDiscoveryIndex = nil
         Addon.QuestRepository:ClearDraftDiscoveries()
     end)
-    self.btnClearDiscoveries:SetAnchor(TOPLEFT, pane, TOPLEFT, 410, 298)
+    self.btnClearDiscoveries:SetAnchor(TOPLEFT, formParent, TOPLEFT, 410, 294)
     self.btnClearDiscoveries:SetHidden(true)
 
     local function SetSelectedDiscoveryRadius(radius)
@@ -704,22 +726,22 @@ function JournalTab:BuildEditorPane(parent)
     end
 
     local discRadii = Addon.Constants.DISCOVERY_RADIUS
-    self.btnDiscRadSmall = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadSmall", pane, 68, 22, "", function()
+    self.btnDiscRadSmall = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadSmall", formParent, 68, 22, "", function()
         SetSelectedDiscoveryRadius(discRadii.SMALL)
     end)
-    self.btnDiscRadSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 328)
+    self.btnDiscRadSmall:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 326)
 
-    self.btnDiscRadMedium = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadMedium", pane, 68, 22, "", function()
+    self.btnDiscRadMedium = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadMedium", formParent, 68, 22, "", function()
         SetSelectedDiscoveryRadius(discRadii.MEDIUM)
     end)
-    self.btnDiscRadMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 74, 328)
+    self.btnDiscRadMedium:SetAnchor(TOPLEFT, formParent, TOPLEFT, 74, 326)
 
-    self.btnDiscRadLarge = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadLarge", pane, 68, 22, "", function()
+    self.btnDiscRadLarge = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadLarge", formParent, 68, 22, "", function()
         SetSelectedDiscoveryRadius(discRadii.LARGE)
     end)
-    self.btnDiscRadLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 148, 328)
+    self.btnDiscRadLarge:SetAnchor(TOPLEFT, formParent, TOPLEFT, 148, 326)
 
-    self.btnDiscPrev = CreateStyledButton(PANEL_NAME .. "_BtnDiscPrev", pane, 28, 22, "<", function()
+    self.btnDiscPrev = CreateStyledButton(PANEL_NAME .. "_BtnDiscPrev", formParent, 28, 22, "<", function()
         local draft = Addon.QuestRepository:GetDraft()
         local total = #(draft.discoveries or {})
         if total > 0 then
@@ -728,18 +750,18 @@ function JournalTab:BuildEditorPane(parent)
             self:RefreshEditorPane()
         end
     end)
-    self.btnDiscPrev:SetAnchor(TOPLEFT, pane, TOPLEFT, 230, 328)
+    self.btnDiscPrev:SetAnchor(TOPLEFT, formParent, TOPLEFT, 230, 326)
     self.btnDiscPrev:SetHidden(true)
 
-    local lblDiscIndex = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDiscIndex", pane, CT_LABEL)
+    local lblDiscIndex = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDiscIndex", formParent, CT_LABEL)
     lblDiscIndex:SetDimensions(70, 22)
-    lblDiscIndex:SetAnchor(TOPLEFT, pane, TOPLEFT, 262, 330)
+    lblDiscIndex:SetAnchor(TOPLEFT, formParent, TOPLEFT, 262, 328)
     if lblDiscIndex.SetFont then lblDiscIndex:SetFont("ZoFontGameBold") end
     if lblDiscIndex.SetHorizontalAlignment then lblDiscIndex:SetHorizontalAlignment(TEXT_ALIGN_CENTER) end
     self.lblDiscIndex = lblDiscIndex
     self.lblDiscIndex:SetHidden(true)
 
-    self.btnDiscNext = CreateStyledButton(PANEL_NAME .. "_BtnDiscNext", pane, 28, 22, ">", function()
+    self.btnDiscNext = CreateStyledButton(PANEL_NAME .. "_BtnDiscNext", formParent, 28, 22, ">", function()
         local draft = Addon.QuestRepository:GetDraft()
         local total = #(draft.discoveries or {})
         if total > 0 then
@@ -748,10 +770,10 @@ function JournalTab:BuildEditorPane(parent)
             self:RefreshEditorPane()
         end
     end)
-    self.btnDiscNext:SetAnchor(TOPLEFT, pane, TOPLEFT, 336, 328)
+    self.btnDiscNext:SetAnchor(TOPLEFT, formParent, TOPLEFT, 336, 326)
     self.btnDiscNext:SetHidden(true)
 
-    self.btnDiscRemove = CreateStyledButton(PANEL_NAME .. "_BtnDiscRemove", pane, 136, 22, Addon.Locale:Get("BTN_REMOVE_DISCOVERY"), function()
+    self.btnDiscRemove = CreateStyledButton(PANEL_NAME .. "_BtnDiscRemove", formParent, 136, 22, Addon.Locale:Get("BTN_REMOVE_DISCOVERY"), function()
         local idx = self.selectedDiscoveryIndex
         if idx then
             local draft = Addon.QuestRepository:RemoveDraftDiscoveryPoint(idx)
@@ -764,12 +786,12 @@ function JournalTab:BuildEditorPane(parent)
             self:RefreshEditorPane()
         end
     end)
-    self.btnDiscRemove:SetAnchor(TOPLEFT, pane, TOPLEFT, 374, 328)
+    self.btnDiscRemove:SetAnchor(TOPLEFT, formParent, TOPLEFT, 374, 326)
     self.btnDiscRemove:SetHidden(true)
 
     local discMsgBg, discMsgEdit = CreateEditBoxWithBackdrop(
         PANEL_NAME .. "_DiscoveryMsgEdit",
-        pane,
+        formParent,
         510,
         28,
         160,
@@ -784,25 +806,158 @@ function JournalTab:BuildEditorPane(parent)
             end
         end
     )
-    discMsgBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 354)
+    discMsgBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 354)
     self.discoveryMsgBg = discMsgBg
     self.discoveryMsgEdit = discMsgEdit
 
-    local lblCapturedDiscoveries = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedDiscoveries", pane, CT_LABEL)
+    local lblCapturedDiscoveries = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedDiscoveries", formParent, CT_LABEL)
     lblCapturedDiscoveries:SetDimensions(510, 32)
-    lblCapturedDiscoveries:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 386)
+    lblCapturedDiscoveries:SetAnchor(TOPLEFT, formParent, TOPLEFT, 6, 388)
     if lblCapturedDiscoveries.SetFont then lblCapturedDiscoveries:SetFont("ZoFontGame") end
     self.lblCapturedDiscoveries = lblCapturedDiscoveries
 
-    local lblCompletionMsg = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputCompletionMsg", pane, CT_LABEL)
-    lblCompletionMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 422)
+    -- Sección de Diálogos con NPCs Nativos (0-3)
+    local lblDialogueSec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDialogueSec", formParent, CT_LABEL)
+    lblDialogueSec:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 426)
+    if lblDialogueSec.SetFont then lblDialogueSec:SetFont("ZoFontGameBold") end
+    lblDialogueSec:SetText(Addon.Locale:Get("LABEL_DIALOGUE_SECTION"))
+    self.lblDialogueSec = lblDialogueSec
+
+    self.btnAddLastNpc = CreateStyledButton(PANEL_NAME .. "_BtnAddLastNpc", formParent, 110, 24, Addon.Locale:Get("BTN_ADD_LAST_NPC"), function()
+        local _, resultOrErr = Addon.QuestRepository:AddDraftDialogueFromLastNpc("")
+        if type(resultOrErr) == "number" then
+            self.selectedDialogueIndex = resultOrErr
+            local draft = Addon.QuestRepository:GetDraft()
+            local entry = draft.dialogues and draft.dialogues[resultOrErr]
+            if entry then
+                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_DIALOGUE_ADDED", entry.npcName), false)
+            end
+            self:RefreshEditorPane()
+        elseif type(resultOrErr) == "string" then
+            Addon.Announcements:ShowAlert(resultOrErr, true)
+        end
+    end)
+    self.btnAddLastNpc:SetAnchor(TOPLEFT, formParent, TOPLEFT, 294, 422)
+
+    self.btnClearDialogues = CreateStyledButton(PANEL_NAME .. "_BtnClearDialogues", formParent, 100, 24, Addon.Locale:Get("BTN_CLEAR_DIALOGUES"), function()
+        self.selectedDialogueIndex = nil
+        Addon.QuestRepository:ClearDraftDialogues()
+    end)
+    self.btnClearDialogues:SetAnchor(TOPLEFT, formParent, TOPLEFT, 410, 422)
+    self.btnClearDialogues:SetHidden(true)
+
+    local lblLastNpc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblLastNpc", formParent, CT_LABEL)
+    lblLastNpc:SetDimensions(510, 22)
+    lblLastNpc:SetAnchor(TOPLEFT, formParent, TOPLEFT, 6, 452)
+    if lblLastNpc.SetFont then lblLastNpc:SetFont("ZoFontGame") end
+    self.lblLastNpc = lblLastNpc
+
+    self.btnDlgPrev = CreateStyledButton(PANEL_NAME .. "_BtnDlgPrev", formParent, 28, 22, "<", function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local count = #(draft.dialogues or {})
+        if count > 0 then
+            local cur = self.selectedDialogueIndex or 1
+            self.selectedDialogueIndex = (cur > 1) and (cur - 1) or count
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnDlgPrev:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 476)
+    self.btnDlgPrev:SetHidden(true)
+
+    local lblDlgIndex = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDlgIndex", formParent, CT_LABEL)
+    lblDlgIndex:SetDimensions(60, 22)
+    lblDlgIndex:SetAnchor(TOPLEFT, formParent, TOPLEFT, 32, 479)
+    if lblDlgIndex.SetFont then lblDlgIndex:SetFont("ZoFontGameBold") end
+    if lblDlgIndex.SetHorizontalAlignment then lblDlgIndex:SetHorizontalAlignment(TEXT_ALIGN_CENTER) end
+    lblDlgIndex:SetHidden(true)
+    self.lblDlgIndex = lblDlgIndex
+
+    self.btnDlgNext = CreateStyledButton(PANEL_NAME .. "_BtnDlgNext", formParent, 28, 22, ">", function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local count = #(draft.dialogues or {})
+        if count > 0 then
+            local cur = self.selectedDialogueIndex or 1
+            self.selectedDialogueIndex = (cur < count) and (cur + 1) or 1
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnDlgNext:SetAnchor(TOPLEFT, formParent, TOPLEFT, 96, 476)
+    self.btnDlgNext:SetHidden(true)
+
+    self.btnDlgRemove = CreateStyledButton(PANEL_NAME .. "_BtnDlgRemove", formParent, 28, 22, "X", function()
+        local idx = self.selectedDialogueIndex
+        if idx then
+            Addon.QuestRepository:RemoveDraftDialogue(idx)
+            local draft = Addon.QuestRepository:GetDraft()
+            local count = #(draft.dialogues or {})
+            self.selectedDialogueIndex = (count > 0) and math.min(idx, count) or nil
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnDlgRemove:SetAnchor(TOPLEFT, formParent, TOPLEFT, 130, 476)
+    self.btnDlgRemove:SetHidden(true)
+
+    local lblClue = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputClue", formParent, CT_LABEL)
+    lblClue:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 504)
+    if lblClue.SetFont then lblClue:SetFont("ZoFontGameBold") end
+    lblClue:SetText(Addon.Locale:Get("LABEL_INPUT_CLUE"))
+    self.lblInputClue = lblClue
+
+    local clueBg, clueEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_ClueEdit",
+        formParent,
+        510,
+        28,
+        100,
+        false,
+        function(val)
+            Addon.QuestRepository:UpdateDraftFields({ clue = val }, true)
+        end
+    )
+    clueBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 524)
+    self.clueBg = clueBg
+    self.clueEdit = clueEdit
+
+    local lblDlgResponse = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDlgResponse", formParent, CT_LABEL)
+    lblDlgResponse:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 558)
+    if lblDlgResponse.SetFont then lblDlgResponse:SetFont("ZoFontGameBold") end
+    lblDlgResponse:SetText(Addon.Locale:Get("LABEL_DIALOGUE_RESPONSE"))
+    self.lblDlgResponse = lblDlgResponse
+
+    local dlgResponseBg, dlgResponseEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_DlgResponseEdit",
+        formParent,
+        510,
+        48,
+        300,
+        true,
+        function(val)
+            local draft = Addon.QuestRepository:GetDraft()
+            local idx = self.selectedDialogueIndex
+            if idx and draft.dialogues and draft.dialogues[idx] then
+                Addon.QuestRepository:UpdateDraftDialogue(idx, { response = val }, true)
+            end
+        end
+    )
+    dlgResponseBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 578)
+    self.dlgResponseBg = dlgResponseBg
+    self.dlgResponseEdit = dlgResponseEdit
+
+    local lblCapturedDialogues = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedDialogues", formParent, CT_LABEL)
+    lblCapturedDialogues:SetDimensions(510, 28)
+    lblCapturedDialogues:SetAnchor(TOPLEFT, formParent, TOPLEFT, 6, 632)
+    if lblCapturedDialogues.SetFont then lblCapturedDialogues:SetFont("ZoFontGame") end
+    self.lblCapturedDialogues = lblCapturedDialogues
+
+    local lblCompletionMsg = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputCompletionMsg", formParent, CT_LABEL)
+    lblCompletionMsg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 668)
     if lblCompletionMsg.SetFont then lblCompletionMsg:SetFont("ZoFontGameBold") end
     lblCompletionMsg:SetText(Addon.Locale:Get("LABEL_INPUT_COMPLETION_MSG"))
     self.lblInputCompletionMsg = lblCompletionMsg
 
     local compBg, compEdit = CreateEditBoxWithBackdrop(
         PANEL_NAME .. "_CompletionEdit",
-        pane,
+        formParent,
         510,
         28,
         140,
@@ -811,15 +966,15 @@ function JournalTab:BuildEditorPane(parent)
             Addon.QuestRepository:UpdateDraftFields({ completionMessage = val }, true)
         end
     )
-    compBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 442)
+    compBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 690)
     self.completionBg = compBg
     self.completionEdit = compEdit
 
-    self.btnRequireUndetected = CreateStyledButton(PANEL_NAME .. "_BtnRequireUndetected", pane, 280, 26, Addon.Locale:Get("OPT_REQUIRE_UNDETECTED"), function()
+    self.btnRequireUndetected = CreateStyledButton(PANEL_NAME .. "_BtnRequireUndetected", formParent, 280, 26, Addon.Locale:Get("OPT_REQUIRE_UNDETECTED"), function()
         local d = Addon.QuestRepository:GetDraft()
         Addon.QuestRepository:UpdateDraftFields({ requireUndetected = not (d and d.requireUndetected) })
     end)
-    self.btnRequireUndetected:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 478)
+    self.btnRequireUndetected:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 726)
 
     self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 34, Addon.Locale:Get("BTN_SAVE"), function()
         self:OnSaveDraftClicked()
@@ -828,11 +983,14 @@ function JournalTab:BuildEditorPane(parent)
 
     self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 34, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
+        self.selectedDialogueIndex = nil
         Addon.QuestRepository:ResetDraft()
         self.titleEdit:SetText("")
         self.descEdit:SetText("")
+        if self.clueEdit then self.clueEdit:SetText("") end
         self.completionEdit:SetText("")
         if self.discoveryMsgEdit then self.discoveryMsgEdit:SetText("") end
+        if self.dlgResponseEdit then self.dlgResponseEdit:SetText("") end
         self:Refresh()
     end)
     self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
@@ -975,7 +1133,9 @@ function JournalTab:OpenCreateEditor()
     end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
+    if self.clueEdit then self.clueEdit:SetText(draft.clue or "") end
     self.completionEdit:SetText(draft.completionMessage or "")
+    self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
 end
@@ -1025,7 +1185,9 @@ function JournalTab:OpenEditEditor(questId)
     end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
+    if self.clueEdit then self.clueEdit:SetText(draft.clue or "") end
     self.completionEdit:SetText(draft.completionMessage or "")
+    self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
 end
@@ -1046,6 +1208,9 @@ function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
     local compMsgText = self.completionEdit and self.completionEdit:GetText() or ""
+    if self.clueEdit then
+        Addon.QuestRepository:UpdateDraftFields({ clue = self.clueEdit:GetText() }, true)
+    end
 
     local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText)
     if not savedQuest then
@@ -1055,12 +1220,19 @@ function JournalTab:OnSaveDraftClicked()
 
     self.titleEdit:SetText("")
     self.descEdit:SetText("")
+    if self.clueEdit then
+        self.clueEdit:SetText("")
+    end
     if self.completionEdit then
         self.completionEdit:SetText("")
     end
     if self.discoveryMsgEdit then
         self.discoveryMsgEdit:SetText("")
     end
+    if self.dlgResponseEdit then
+        self.dlgResponseEdit:SetText("")
+    end
+    self.selectedDialogueIndex = nil
 
     Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
 end
@@ -1439,6 +1611,23 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         local stealthKey = selectedQuest.wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
         table.insert(objLines, "|t16:16:/esoui/art/miscellaneous/bullet.dds|t " .. Addon.Locale:Get(stealthKey))
     end
+    if isPrepared then
+        local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
+        if selectedQuest.clue and selectedQuest.clue ~= "" then
+            local clueLine = Addon.Locale:Get("DIALOGUE_DETAIL_CLUE_FORMAT", selectedQuest.clue):gsub("^•%s*", bullet)
+            table.insert(objLines, clueLine)
+        end
+        local dialogues = selectedQuest.dialogues or {}
+        if #dialogues > 0 then
+            local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+            local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)
+            table.insert(objLines, dlgLine)
+        end
+        if selectedQuest.hideMapArea then
+            local mapHiddenLine = Addon.Locale:Get("DIALOGUE_DETAIL_MAP_HIDDEN"):gsub("^•%s*", bullet)
+            table.insert(objLines, mapHiddenLine)
+        end
+    end
     local visibleLineCount = #objLines
     self.detailObjText:SetDimensions(495, 0)
     self.detailObjText:SetText(table.concat(objLines, "\n"))
@@ -1461,7 +1650,10 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.shareHeader:SetHidden(false)
     self.shareBg:SetHidden(false)
 
-    if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(false) end
+    if self.showOnMapKeybindButton then
+        local canShowMap = not selectedQuest.hideMapArea and selectedQuest.mapId and selectedQuest.mapId > 0 and selectedQuest.areaCenterX and selectedQuest.areaCenterY
+        self.showOnMapKeybindButton:SetHidden(not canShowMap)
+    end
     self.btnReset:ClearAnchors()
     self.codeDivider:ClearAnchors()
     if isPrepared then
@@ -1523,6 +1715,10 @@ function JournalTab:RefreshEditorPane()
     if not self.descEdit._focused and self.descEdit:GetText() ~= draftDesc then
         self.descEdit:SetText(draftDesc)
     end
+    local draftClue = draft.clue or ""
+    if self.clueEdit and not self.clueEdit._focused and self.clueEdit:GetText() ~= draftClue then
+        self.clueEdit:SetText(draftClue)
+    end
     local draftCompMsg = draft.completionMessage or ""
     if self.completionEdit and not self.completionEdit._focused and self.completionEdit:GetText() ~= draftCompMsg then
         self.completionEdit:SetText(draftCompMsg)
@@ -1541,7 +1737,7 @@ function JournalTab:RefreshEditorPane()
     end
 
     if self.btnShowMapEditor then
-        local hasDraftArea = summary ~= "" and draft.mapId and draft.mapId > 0 and draft.areaCenterX and draft.areaCenterY
+        local hasDraftArea = summary ~= "" and not draft.hideMapArea and draft.mapId and draft.mapId > 0 and draft.areaCenterX and draft.areaCenterY
         self.btnShowMapEditor:SetHidden(not hasDraftArea)
     end
 
@@ -1615,6 +1811,62 @@ function JournalTab:RefreshEditorPane()
     end
     if self.btnClearDiscoveries then
         self.btnClearDiscoveries:SetHidden(totalDisc == 0)
+    end
+
+    if self.btnHideMapArea then
+        local hideKey = draft.hideMapArea and "OPT_HIDE_MAP_AREA_ACTIVE" or "OPT_HIDE_MAP_AREA"
+        self.btnHideMapArea:SetText(Addon.Locale:Get(hideKey))
+    end
+
+    if self.lblLastNpc then
+        local lastNpc = Addon.QuestRepository:GetLastInteractedNpc()
+        if lastNpc and lastNpc.name and lastNpc.name ~= "" then
+            self.lblLastNpc:SetText(Addon.Locale:Get("DIALOGUE_LAST_NPC_FORMAT", lastNpc.name))
+        else
+            self.lblLastNpc:SetText(Addon.Locale:Get("DIALOGUE_NO_LAST_NPC"))
+        end
+    end
+
+    local dialogues = draft.dialogues or {}
+    local totalDlg = #dialogues
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    if totalDlg > 0 then
+        if not self.selectedDialogueIndex or self.selectedDialogueIndex < 1 or self.selectedDialogueIndex > totalDlg then
+            self.selectedDialogueIndex = totalDlg
+        end
+    else
+        self.selectedDialogueIndex = nil
+    end
+
+    local selectedDlg = self.selectedDialogueIndex and dialogues[self.selectedDialogueIndex] or nil
+    local activeDlgResp = selectedDlg and (selectedDlg.response or "") or ""
+    if self.dlgResponseEdit and not self.dlgResponseEdit._focused and self.dlgResponseEdit:GetText() ~= activeDlgResp then
+        self.dlgResponseEdit:SetText(activeDlgResp)
+    end
+
+    local showDlgSel = totalDlg > 0
+    if self.btnDlgPrev then self.btnDlgPrev:SetHidden(not showDlgSel) end
+    if self.btnDlgNext then self.btnDlgNext:SetHidden(not showDlgSel) end
+    if self.btnDlgRemove then self.btnDlgRemove:SetHidden(not showDlgSel) end
+    if self.lblDlgIndex then
+        self.lblDlgIndex:SetHidden(not showDlgSel)
+        if showDlgSel then
+            self.lblDlgIndex:SetText(Addon.Locale:Get("DIALOGUE_INDEX_FORMAT", self.selectedDialogueIndex, totalDlg))
+        end
+    end
+    if self.btnClearDialogues then
+        self.btnClearDialogues:SetHidden(totalDlg == 0)
+    end
+    if self.lblCapturedDialogues then
+        if totalDlg > 0 then
+            local names = {}
+            for _, d in ipairs(dialogues) do
+                table.insert(names, d.npcName or "")
+            end
+            self.lblCapturedDialogues:SetText(Addon.Locale:Get("DIALOGUE_CAPTURED_FORMAT", totalDlg, maxNpcs, table.concat(names, ", ")))
+        else
+            self.lblCapturedDialogues:SetText(Addon.Locale:Get("DIALOGUE_NONE_CAPTURED"))
+        end
     end
 
     if self.btnRequireUndetected then
