@@ -7,7 +7,6 @@ cd "$ROOT_DIR"
 ADDON_NAME="RPQuest"
 MANIFEST_FILE="${ADDON_NAME}.txt"
 DIST_DIR="${ROOT_DIR}/dist"
-OUT_ZIP="${DIST_DIR}/${ADDON_NAME}.zip"
 
 if [[ ! -f "$MANIFEST_FILE" ]]; then
   echo "Error: $MANIFEST_FILE not found in $ROOT_DIR" >&2
@@ -60,8 +59,10 @@ while IFS= read -r line; do
   fi
 done < "${TARGET_DIR}/${MANIFEST_FILE}"
 
+OUT_ZIP="${DIST_DIR}/${ADDON_NAME}-${DISPLAY_VERSION}.zip"
+
 mkdir -p "$DIST_DIR"
-rm -f "$OUT_ZIP"
+rm -f "${DIST_DIR}/${ADDON_NAME}.zip" "$OUT_ZIP"
 
 (
   cd "$STAGE_DIR"

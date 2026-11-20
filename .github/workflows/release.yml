@@ -33,11 +33,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RPQuest-zip
-          path: dist/RPQuest.zip
+          path: dist/RPQuest-*.zip
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/RPQuest.zip
+          files: dist/RPQuest-*.zip
           generate_release_notes: true
