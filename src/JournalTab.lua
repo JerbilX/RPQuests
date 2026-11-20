@@ -1379,17 +1379,11 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
             local sumLine = Addon.Locale:Get("DISCOVERY_PREPARED_SUMMARY", #discoveries):gsub("^•%s*", bullet)
             table.insert(objLines, sumLine)
         else
-            local foundCount = 0
             for _, d in ipairs(discoveries) do
                 if d.discovered then
-                    foundCount = foundCount + 1
                     local clueLine = Addon.Locale:Get("DISCOVERY_CLUE_FORMAT", d.message or ""):gsub("^•%s*", bullet)
                     table.insert(objLines, clueLine)
                 end
-            end
-            if foundCount < #discoveries then
-                local progLine = Addon.Locale:Get("DISCOVERY_HIDDEN_PROGRESS", foundCount, #discoveries):gsub("^•%s*", bullet)
-                table.insert(objLines, progLine)
             end
         end
     end
