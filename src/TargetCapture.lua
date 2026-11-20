@@ -11,7 +11,9 @@ function TargetCapture:GetPlayerMapContext(forceSync)
     if SetMapToPlayerLocation then
         local mapSceneShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("worldMap")
         if forceSync or not mapSceneShowing then
-            SetMapToPlayerLocation()
+            if not DoesCurrentMapMatchMapForPlayerLocation or not DoesCurrentMapMatchMapForPlayerLocation() then
+                SetMapToPlayerLocation()
+            end
         end
     end
 

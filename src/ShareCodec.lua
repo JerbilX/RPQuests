@@ -9,8 +9,16 @@ local ShareCodec = Addon.ShareCodec
 
 local B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 local B64_LOOKUP = {}
+local B64_CHARS = {}
 for i = 1, #B64_ALPHABET do
-    B64_LOOKUP[string.sub(B64_ALPHABET, i, i)] = i - 1
+    local ch = string.sub(B64_ALPHABET, i, i)
+    B64_LOOKUP[ch] = i - 1
+    B64_CHARS[i - 1] = ch
+end
+
+local BYTE_TO_CHAR = {}
+for b = 0, 255 do
+    BYTE_TO_CHAR[b] = string.char(b)
 end
 
 local function EscapeField(str)
@@ -38,14 +46,16 @@ end
 
 local function SplitByChar(raw, sep)
     local parts = {}
+    local count = 0
     local startIdx = 1
     while true do
         local pos = string.find(raw, sep, startIdx, true)
+        count = count + 1
         if not pos then
-            table.insert(parts, string.sub(raw, startIdx))
+            parts[count] = string.sub(raw, startIdx)
             break
         end
-        table.insert(parts, string.sub(raw, startIdx, pos - 1))
+        parts[count] = string.sub(raw, startIdx, pos - 1)
         startIdx = pos + 1
     end
     return parts
@@ -149,26 +159,33 @@ end
 
 local function Base64UrlEncode(input)
     local out = {}
+    local outLen = 0
     local len = #input
     local i = 1
+    local strByte = string.byte
+    local floor = math.floor
     while i <= len do
-        local b1 = string.byte(input, i) or 0
-        local b2 = string.byte(input, i + 1)
-        local b3 = string.byte(input, i + 2)
+        local b1 = strByte(input, i) or 0
+        local b2 = strByte(input, i + 1)
+        local b3 = strByte(input, i + 2)
 
         local n = (b1 * 65536) + ((b2 or 0) * 256) + (b3 or 0)
-        local c1 = math.floor(n / 262144) % 64
-        local c2 = math.floor(n / 4096) % 64
-        local c3 = math.floor(n / 64) % 64
+        local c1 = floor(n / 262144) % 64
+        local c2 = floor(n / 4096) % 64
+        local c3 = floor(n / 64) % 64
         local c4 = n % 64
 
-        table.insert(out, string.sub(B64_ALPHABET, c1 + 1, c1 + 1))
-        table.insert(out, string.sub(B64_ALPHABET, c2 + 1, c2 + 1))
+        outLen = outLen + 1
+        out[outLen] = B64_CHARS[c1]
+        outLen = outLen + 1
+        out[outLen] = B64_CHARS[c2]
         if b2 then
-            table.insert(out, string.sub(B64_ALPHABET, c3 + 1, c3 + 1))
+            outLen = outLen + 1
+            out[outLen] = B64_CHARS[c3]
         end
         if b3 then
-            table.insert(out, string.sub(B64_ALPHABET, c4 + 1, c4 + 1))
+            outLen = outLen + 1
+            out[outLen] = B64_CHARS[c4]
         end
 
         i = i + 3
@@ -182,13 +199,16 @@ local function Base64UrlDecode(encoded)
     end
 
     local out = {}
+    local outLen = 0
     local len = #encoded
     local i = 1
+    local strSub = string.sub
+    local floor = math.floor
     while i <= len do
-        local ch1 = string.sub(encoded, i, i)
-        local ch2 = string.sub(encoded, i + 1, i + 1)
-        local ch3 = (i + 2 <= len) and string.sub(encoded, i + 2, i + 2) or nil
-        local ch4 = (i + 3 <= len) and string.sub(encoded, i + 3, i + 3) or nil
+        local ch1 = strSub(encoded, i, i)
+        local ch2 = strSub(encoded, i + 1, i + 1)
+        local ch3 = (i + 2 <= len) and strSub(encoded, i + 2, i + 2) or nil
+        local ch4 = (i + 3 <= len) and strSub(encoded, i + 3, i + 3) or nil
 
         local v1 = B64_LOOKUP[ch1]
         local v2 = B64_LOOKUP[ch2]
@@ -200,16 +220,19 @@ local function Base64UrlDecode(encoded)
         end
 
         local n = (v1 * 262144) + (v2 * 4096) + (v3 * 64) + v4
-        local b1 = math.floor(n / 65536) % 256
-        local b2 = math.floor(n / 256) % 256
+        local b1 = floor(n / 65536) % 256
+        local b2 = floor(n / 256) % 256
         local b3 = n % 256
 
-        table.insert(out, string.char(b1))
+        outLen = outLen + 1
+        out[outLen] = BYTE_TO_CHAR[b1]
         if ch3 then
-            table.insert(out, string.char(b2))
+            outLen = outLen + 1
+            out[outLen] = BYTE_TO_CHAR[b2]
         end
         if ch4 then
-            table.insert(out, string.char(b3))
+            outLen = outLen + 1
+            out[outLen] = BYTE_TO_CHAR[b3]
         end
 
         i = i + 4

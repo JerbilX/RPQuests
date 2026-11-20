@@ -1275,6 +1275,77 @@ RunTest("17. ShowQuestOnMap cambia de zona con WORLD_MAP_MANAGER y abrir con M m
     AssertEqual(#mockPinManager._createdPins, 1, "Opening map with M renders active quest pin")
 end)
 
+RunTest("18. Issue 47: Deep optimization, overflow caps, deferred map pins and O(1) caches", function()
+    RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+    RPQuest.JournalTab:Initialize()
+    RPQuest.CombatTracker:Initialize()
+    RPQuest.WorldMapArea:Initialize()
+
+    local mockPinManager = ZO_WorldMap_GetPinManager()
+    local refreshCalls = 0
+    local origRefreshCustomPins = mockPinManager.RefreshCustomPins
+    mockPinManager.RefreshCustomPins = function(self, ...)
+        refreshCalls = refreshCalls + 1
+        return origRefreshCustomPins(self, ...)
+    end
+
+    -- 1. RequestRefreshPins debe diferirse cuando el mapa está cerrado
+    SCENE_MANAGER:Hide("worldMap")
+    refreshCalls = 0
+    RPQuest.WorldMapArea:RequestRefreshPins()
+    AssertEqual(refreshCalls, 0, "RequestRefreshPins defers when world map is hidden")
+    AssertEqual(RPQuest.WorldMapArea._pinsDirty, true, "Deferred refresh marks _pinsDirty")
+    mockPinManager.RefreshCustomPins = origRefreshCustomPins
+
+    -- 2. TargetCapture no debe llamar SetMapToPlayerLocation si DoesCurrentMapMatchMapForPlayerLocation() == true
+    local setMapCalls = 0
+    local origSetMap = SetMapToPlayerLocation
+    local origDoesMatch = DoesCurrentMapMatchMapForPlayerLocation
+    SetMapToPlayerLocation = function() setMapCalls = setMapCalls + 1; return SET_MAP_RESULT_CURRENT_MAP_UNCHANGED end
+    DoesCurrentMapMatchMapForPlayerLocation = function() return true end
+    RPQuest.TargetCapture:GetPlayerMapContext(false)
+    AssertEqual(setMapCalls, 0, "Skips SetMapToPlayerLocation when map already matches player location")
+    SetMapToPlayerLocation = origSetMap
+    DoesCurrentMapMatchMapForPlayerLocation = origDoesMatch
+
+    -- 3. UI vertical overflow cap (>4 objetivos) y códigos largos (>1024 chars)
+    for i = 1, 10 do
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Objetivo Largo Numero " .. i .. " de Prueba",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+    end
+    local longDesc = string.rep("Descripcion extensa para probar limites de Base64Url. ", 8)
+    local q = RPQuest.QuestRepository:SaveDraft("Mision Extensa", longDesc, nil, "Completada con exito!")
+    AssertTrue(q ~= nil, "Saved quest with 10 targets")
+
+    local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    AssertTrue(type(code) == "string" and #code > 900, "Exported code generated cleanly")
+
+    -- Verificar que maxChars >= 4096 en importCodeEdit y shareEdit
+    RPQuest.JournalTab:SelectQuest(q.id)
+    local _, objHeight = RPQuest.JournalTab.detailObjText:GetDimensions()
+    AssertTrue(objHeight <= 96, "detailObjText height capped at <= 96px to prevent vertical overflow")
+    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), code, "Long share code is not truncated in shareEdit")
+
+    -- Verificar invalidación de caché de ExportQuestToCode al editar
+    RPQuest.QuestRepository:LoadQuestIntoDraft(q.id)
+    local updated = RPQuest.QuestRepository:SaveDraft("Mision Extensa Editada", longDesc, nil, "Nuevo mensaje")
+    local updatedCode = RPQuest.QuestRepository:ExportQuestToCode(updated.id)
+    AssertTrue(updatedCode ~= code, "Share code cache invalidated on quest update")
+
+    -- 4. Ring buffer O(1) en CombatTracker:MarkUnitKilled (>32 unidades)
+    for u = 1, 40 do
+        RPQuest.CombatTracker:MarkUnitKilled(u)
+    end
+    AssertEqual(RPQuest.CombatTracker._recentKilledSet[1], nil, "Oldest unit evicted from 32-slot ring buffer")
+    AssertEqual(RPQuest.CombatTracker._recentKilledSet[40], true, "Newest unit retained in ring buffer")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)

@@ -29,19 +29,21 @@ local function GetWorldMapPinManager()
     return nil
 end
 
+local function IsMapSceneShowing()
+    if not SCENE_MANAGER or not SCENE_MANAGER.IsShowing then
+        return true
+    end
+    return SCENE_MANAGER:IsShowing("worldMap") or SCENE_MANAGER:IsShowing("gamepad_worldMap")
+end
+
 local function RegisterMapSceneCallbacks(self, scene)
     if not scene or not scene.RegisterCallback then
         return
     end
     scene:RegisterCallback("StateChange", function(_, newState)
-        if newState == SCENE_SHOWING then
-            self:RefreshPins()
-        elseif newState == SCENE_SHOWN then
-            self:RefreshPins()
-            if zo_callLater then
-                zo_callLater(function()
-                    self:RefreshPins()
-                end, 50)
+        if newState == SCENE_SHOWING or newState == SCENE_SHOWN then
+            if self._pinsDirty then
+                self:RefreshPins()
             end
         elseif newState == SCENE_HIDDEN then
             self.previewQuestId = nil
@@ -146,10 +148,10 @@ function WorldMapArea:Initialize()
 
     if CALLBACK_MANAGER and CALLBACK_MANAGER.RegisterCallback then
         CALLBACK_MANAGER:RegisterCallback("OnWorldMapChanged", function()
-            self:RefreshPins()
+            self:RequestRefreshPins()
         end)
         CALLBACK_MANAGER:RegisterCallback("OnWorldMapModeChanged", function()
-            self:RefreshPins()
+            self:RequestRefreshPins()
         end)
     end
 
@@ -159,25 +161,29 @@ function WorldMapArea:Initialize()
     if EVENT_MANAGER then
         if EVENT_PLAYER_ACTIVATED then
             EVENT_MANAGER:RegisterForEvent(MAP_LISTENER_NAME, EVENT_PLAYER_ACTIVATED, function()
-                self:RefreshPins()
+                self:RequestRefreshPins()
             end)
         end
         if EVENT_ZONE_CHANGED then
             EVENT_MANAGER:RegisterForEvent(MAP_LISTENER_NAME .. "_Zone", EVENT_ZONE_CHANGED, function()
-                self:RefreshPins()
+                self:RequestRefreshPins()
             end)
         end
     end
 
     Addon.QuestRepository:RegisterListener(function(eventType)
+        if eventType == "QUEST_PROGRESS" then
+            return
+        end
         if eventType == "ACTIVE_QUEST_CHANGED" or eventType == "QUEST_DELETED" then
             self.previewQuestId = nil
         end
-        self:RefreshPins()
+        self:RequestRefreshPins()
     end)
 
     self.isInitialized = true
-    self:RefreshPins()
+    self._pinsDirty = true
+    self:RequestRefreshPins()
 end
 
 function WorldMapArea:ShouldRenderOnCurrentMap(quest)
@@ -255,11 +261,20 @@ function WorldMapArea:OnLayoutPins(pinManager)
     )
 end
 
+function WorldMapArea:RequestRefreshPins()
+    if not IsMapSceneShowing() then
+        self._pinsDirty = true
+        return
+    end
+    self:RefreshPins()
+end
+
 function WorldMapArea:RefreshPins()
     local pinManager = GetWorldMapPinManager()
     if not pinManager or not pinManager.RefreshCustomPins then
         return
     end
+    self._pinsDirty = false
     if self.pinTypeId then
         pinManager:RefreshCustomPins(self.pinTypeId)
     else
@@ -279,16 +294,21 @@ function WorldMapArea:ShowQuestOnMap(quest)
     if not targetQuest then return false end
 
     self.previewQuestId = targetQuest.id or targetQuest.editingQuestId or DRAFT_PIN_TAG
+    self._pinsDirty = true
 
     SetWorldMapToId(targetQuest.mapId)
     OpenWorldMapScene()
-    self:RefreshPins()
+    if self._pinsDirty then
+        self:RefreshPins()
+    end
 
     if targetQuest.areaCenterX and targetQuest.areaCenterY then
         PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
         if zo_callLater then
             zo_callLater(function()
-                PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+                if IsMapSceneShowing() then
+                    PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+                end
             end, 50)
         end
     end
