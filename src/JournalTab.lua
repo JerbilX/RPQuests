@@ -154,8 +154,11 @@ function JournalTab:Initialize()
     self:BuildLeftColumn(panel)
     self:BuildRightColumn(panel)
 
-    if ZO_FadeSceneFragment then
-        self.fragment = ZO_FadeSceneFragment:New(panel)
+    -- Use ZO_SimpleSceneFragment instead of ZO_FadeSceneFragment so ESO does not create
+    -- per-instance animation OnStop closures in untrusted addon context (which taints
+    -- transitions to protected scenes such as TamrielTomesSceneKeyboard).
+    if ZO_SimpleSceneFragment then
+        self.fragment = ZO_SimpleSceneFragment:New(panel)
     end
 
     self:IntegrateIntoQuestJournalModeBar()

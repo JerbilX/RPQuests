@@ -258,6 +258,8 @@ function ZO_FadeSceneFragment:Hide()
     ZO_SceneFragment.Hide(self)
 end
 
+ZO_SimpleSceneFragment = ZO_SimpleSceneFragment or ZO_FadeSceneFragment
+
 ZO_Scene = ZO_Scene or ZO_CallbackObject:Subclass()
 function ZO_Scene:Initialize(name, sceneManager)
     ZO_CallbackObject.Initialize(self)
