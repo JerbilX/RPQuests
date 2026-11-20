@@ -91,6 +91,7 @@ RPQuest.Locales["en"] = {
     ALERT_QUEST_RESET = "RPQuest: Quest progress reset.",
     ALERT_QUEST_IMPORTED = "RPQuest: Quest imported -> %s",
     ALERT_SHARE_READY = "RPQuest: Code selected! Press Ctrl+C to copy.",
+    ALERT_COMPLETION_CODE_READY = "RPQuest: Delivery code ready! Press Ctrl+C to copy.",
     ERR_MISSING_TARGET = "Capture an NPC target with the reticle keybind before creating the quest.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
     ERR_CANNOT_EDIT_RECEIVED = "Received quests cannot be edited.",

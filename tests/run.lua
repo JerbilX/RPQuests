@@ -1107,16 +1107,39 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(okWrong, false, "RPQC1 from another quest rejected")
     AssertEqual(errWrong, "VALIDATE_ERR_WRONG_QUEST", "Specific error returned for wrong quest")
 
-    -- Flujo UI en JournalTab: jugador copia entrega y Master la valida
+    -- Flujo UI en JournalTab: jugador copia entrega en su propio textbox y Master la valida
     RPQuest.JournalTab:SelectQuest(playerQuest.id)
     AssertEqual(RPQuest.JournalTab.btnCompletionCode:IsHidden(), false, "Completion code button visible for completed received quest")
+    AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
+    local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
+    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ1:", "shareEdit populated with RPQ1 code for received quest")
     RPQuest.JournalTab:OnCompletionCodeClicked()
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), completionCode, "JournalTab puts RPQC1 code into shareEdit")
+    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab puts RPQC1 code into deliveryEdit")
+    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
+
+    -- Los textbox de código generado son readonly (revierten ediciones del usuario)
+    RPQuest.JournalTab.shareEdit:SetText("MODIFIED")
+    if RPQuest.JournalTab.shareEdit._handlers and RPQuest.JournalTab.shareEdit._handlers.OnTextChanged then
+        RPQuest.JournalTab.shareEdit._handlers.OnTextChanged(RPQuest.JournalTab.shareEdit)
+    end
+    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit reverts manual edits (readonly)")
+
+    RPQuest.JournalTab.deliveryEdit:SetText("MODIFIED")
+    if RPQuest.JournalTab.deliveryEdit._handlers and RPQuest.JournalTab.deliveryEdit._handlers.OnTextChanged then
+        RPQuest.JournalTab.deliveryEdit._handlers.OnTextChanged(RPQuest.JournalTab.deliveryEdit)
+    end
+    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "deliveryEdit reverts manual edits (readonly)")
+
+    -- Alerta amigable al generar código de entrega (no clave cruda)
+    local readyAlert = RPQuest.Locale:Get("ALERT_COMPLETION_CODE_READY")
+    AssertTrue(readyAlert ~= "ALERT_COMPLETION_CODE_READY", "ALERT_COMPLETION_CODE_READY is localized")
 
     RPQuest.JournalTab:SelectQuest(masterQuest.id)
     AssertEqual(RPQuest.JournalTab.btnValidateDelivery:IsHidden(), false, "Validate delivery button visible for prepared quest")
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
+    AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), true, "Delivery code box hidden for prepared quest")
+    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), "", "deliveryEdit cleared when switching quest")
     AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ1:", "shareEdit auto-populated with RPQ1 code for prepared quest")
     AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
     RPQuest.JournalTab:OnValidateDeliveryClicked()

@@ -91,6 +91,7 @@ RPQuest.Locales["es"] = {
     ALERT_QUEST_RESET = "RPQuest: Progreso de la misión reiniciado.",
     ALERT_QUEST_IMPORTED = "RPQuest: Misión importada -> %s",
     ALERT_SHARE_READY = "RPQuest: ¡Código seleccionado! Pulsa Ctrl+C para copiarlo.",
+    ALERT_COMPLETION_CODE_READY = "RPQuest: ¡Código de entrega listo! Pulsa Ctrl+C para copiarlo.",
     ERR_MISSING_TARGET = "Captura primero al menos un objetivo NPC con la tecla bajo la retícula.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
     ERR_CANNOT_EDIT_RECEIVED = "Las misiones recibidas para jugar no se pueden editar.",
