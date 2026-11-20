@@ -8,6 +8,7 @@ RPQuest.Locales["en"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Custom Quests",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Capture Target Under Reticle (NPC)",
+    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Capture Hidden Discovery Point Here",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Open / Close Custom Quests Tab",
 
     -- Tab & General
@@ -39,6 +40,13 @@ RPQuest.Locales["en"] = {
     BTN_RADIUS_SMALL = "Small",
     BTN_RADIUS_MEDIUM = "Medium",
     BTN_RADIUS_LARGE = "Large",
+    BTN_CAPTURE_DISCOVERY = "+ Point Here",
+    BTN_CLEAR_DISCOVERIES = "Clear Points",
+    BTN_REMOVE_DISCOVERY = "Remove Point",
+    DISCOVERY_INDEX_FORMAT = "#%d / %d",
+    BTN_DISCOVERY_RAD_SMALL = "8m",
+    BTN_DISCOVERY_RAD_MEDIUM = "15m",
+    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_ACTIVE = "Status: |c33FF33Active (Tracked)|r",
@@ -69,6 +77,14 @@ RPQuest.Locales["en"] = {
     TARGET_CAPTURED_FORMAT = "Target: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Aim at a living NPC and press the Capture keybind.|r",
     LABEL_AREA_SIZE = "Map Search Area Size:",
+    LABEL_DISCOVERY_SECTION = "Hidden Discovery Points (Optional):",
+    LABEL_DISCOVERY_MSG = "Discovery Narrative Message:",
+    DISCOVERY_NONE_CAPTURED = "|cAAAAAA0 hidden discovery points added.|r",
+    DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d discovery point(s)|r: %s",
+    DEFAULT_DISCOVERY_MSG = "You notice something unusual nearby (#%d).",
+    DISCOVERY_CLUE_FORMAT = "• Clue: %s",
+    DISCOVERY_HIDDEN_PROGRESS = "• Hidden clues discovered: %d / %d",
+    DISCOVERY_PREPARED_SUMMARY = "• Hidden discovery points: %d configured",
     OPT_REQUIRE_UNDETECTED = "[ ] Undetected (Optional)",
     OPT_REQUIRE_UNDETECTED_ACTIVE = "|c33FF33[X] Undetected (Optional)|r",
 
@@ -92,6 +108,8 @@ RPQuest.Locales["en"] = {
     ALERT_INVALID_TARGET_DEAD = "RPQuest: Target is already dead.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: Target cannot be eliminated.",
     ALERT_TARGET_CAPTURED = "RPQuest: Target captured -> %s (%s)",
+    ALERT_DISCOVERY_CAPTURED = "RPQuest: Discovery point #%d added (%s, %dm)",
+    ALERT_DISCOVERY_INVALID_POS = "RPQuest: Could not read player world position.",
     ALERT_QUEST_SAVED = "RPQuest: Quest saved -> %s",
     ALERT_QUEST_DELETED = "RPQuest: Quest deleted.",
     ALERT_QUEST_RESET = "RPQuest: Quest progress reset.",
@@ -99,7 +117,7 @@ RPQuest.Locales["en"] = {
     ALERT_SHARE_READY = "RPQuest: Code selected! Press Ctrl+C to copy.",
     ALERT_COMPLETION_CODE_READY = "RPQuest: Delivery code ready! Press Ctrl+C to copy.",
     ALERT_STEALTH_DETECTED = "RPQuest: You were detected! (Recorded on quest status)",
-    ERR_MISSING_TARGET = "Capture an NPC target with the reticle keybind before creating the quest.",
+    ERR_MISSING_TARGET = "Capture an NPC target or add at least one hidden discovery point before creating the quest.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
     ERR_CANNOT_EDIT_RECEIVED = "Received quests cannot be edited.",
     CSA_QUEST_PROGRESS = "%s: %d / %d",

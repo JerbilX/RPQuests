@@ -81,3 +81,31 @@ function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
         self:ShowAlert(mainText, false)
     end
 end
+
+function Announcements:AnnounceDiscovery(quest, point)
+    if not point or type(point.message) ~= "string" or point.message == "" then
+        return
+    end
+
+    local text = point.message
+    local soundId = SOUNDS and (SOUNDS.QUEST_OBJECTIVE_INCREMENT or SOUNDS.BOOK_PAGE_TURN) or nil
+
+    if CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.CreateMessageParams and CENTER_SCREEN_ANNOUNCE.AddMessageWithParams then
+        local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_SMALL_TEXT, soundId)
+        params:SetText(text)
+        if CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_CONDITION_COMPLETED then
+            params:SetCSAType(CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_CONDITION_COMPLETED)
+        end
+        CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
+    elseif CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.AddMessage then
+        CENTER_SCREEN_ANNOUNCE:AddMessage(nil, CSA_CATEGORY_SMALL_TEXT, soundId, text)
+    else
+        self:ShowAlert(text, false)
+    end
+
+    if CHAT_SYSTEM and CHAT_SYSTEM.AddMessage then
+        CHAT_SYSTEM:AddMessage(Addon.Constants.UI.CHAT_PREFIX .. text)
+    elseif d then
+        d(Addon.Constants.UI.CHAT_PREFIX .. text)
+    end
+end

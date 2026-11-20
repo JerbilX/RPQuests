@@ -557,7 +557,7 @@ function JournalTab:BuildEditorPane(parent)
     self.editorHeader = header
 
     local lblTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputTitle", pane, CT_LABEL)
-    lblTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 42)
+    lblTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 36)
     if lblTitle.SetFont then lblTitle:SetFont("ZoFontGameBold") end
     lblTitle:SetText(Addon.Locale:Get("LABEL_INPUT_TITLE"))
     self.lblInputTitle = lblTitle
@@ -566,19 +566,19 @@ function JournalTab:BuildEditorPane(parent)
         PANEL_NAME .. "_TitleEdit",
         pane,
         510,
-        34,
+        30,
         90,
         false,
         function(val)
             Addon.QuestRepository:UpdateDraftFields({ title = val }, true)
         end
     )
-    titleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 66)
+    titleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 56)
     self.titleBg = titleBg
     self.titleEdit = titleEdit
 
     local lblDesc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputDesc", pane, CT_LABEL)
-    lblDesc:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 112)
+    lblDesc:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 92)
     if lblDesc.SetFont then lblDesc:SetFont("ZoFontGameBold") end
     lblDesc:SetText(Addon.Locale:Get("LABEL_INPUT_DESCRIPTION"))
     self.lblInputDesc = lblDesc
@@ -587,61 +587,189 @@ function JournalTab:BuildEditorPane(parent)
         PANEL_NAME .. "_DescEdit",
         pane,
         510,
-        96,
+        70,
         400,
         true,
         function(val)
             Addon.QuestRepository:UpdateDraftFields({ description = val }, true)
         end
     )
-    descBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 136)
+    descBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 112)
     self.descBg = descBg
     self.descEdit = descEdit
 
     local lblTargetSec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetSec", pane, CT_LABEL)
-    lblTargetSec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 246)
+    lblTargetSec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 190)
     if lblTargetSec.SetFont then lblTargetSec:SetFont("ZoFontGameBold") end
     lblTargetSec:SetText(Addon.Locale:Get("LABEL_TARGET_SECTION"))
     self.lblTargetSec = lblTargetSec
 
-    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", pane, 150, 26, Addon.Locale:Get("BTN_CLEAR_TARGETS"), function()
+    self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", pane, 150, 24, Addon.Locale:Get("BTN_CLEAR_TARGETS"), function()
         Addon.QuestRepository:ClearDraftTargets()
     end)
-    self.btnClearTargets:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 242)
+    self.btnClearTargets:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 186)
     self.btnClearTargets:SetHidden(true)
 
     local lblCapturedTarget = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedTarget", pane, CT_LABEL)
-    lblCapturedTarget:SetDimensions(510, 56)
-    lblCapturedTarget:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 274)
+    lblCapturedTarget:SetDimensions(510, 32)
+    lblCapturedTarget:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 214)
     if lblCapturedTarget.SetFont then lblCapturedTarget:SetFont("ZoFontGame") end
     self.lblCapturedTarget = lblCapturedTarget
 
     -- Selector de radio del área de búsqueda
     local lblAreaSize = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblAreaSize", pane, CT_LABEL)
-    lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 342)
+    lblAreaSize:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 250)
     if lblAreaSize.SetFont then lblAreaSize:SetFont("ZoFontGameBold") end
     lblAreaSize:SetText(Addon.Locale:Get("LABEL_AREA_SIZE"))
     self.lblAreaSize = lblAreaSize
 
     local radii = Addon.Constants.AREA_RADIUS
 
-    self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", pane, 110, 30, "", function()
+    self.btnRadiusSmall = CreateStyledButton(PANEL_NAME .. "_BtnRadSmall", pane, 110, 24, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.SMALL })
     end)
-    self.btnRadiusSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 368)
+    self.btnRadiusSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 270)
 
-    self.btnRadiusMedium = CreateStyledButton(PANEL_NAME .. "_BtnRadMedium", pane, 110, 30, "", function()
+    self.btnRadiusMedium = CreateStyledButton(PANEL_NAME .. "_BtnRadMedium", pane, 110, 24, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.MEDIUM })
     end)
-    self.btnRadiusMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 120, 368)
+    self.btnRadiusMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 120, 270)
 
-    self.btnRadiusLarge = CreateStyledButton(PANEL_NAME .. "_BtnRadLarge", pane, 110, 30, "", function()
+    self.btnRadiusLarge = CreateStyledButton(PANEL_NAME .. "_BtnRadLarge", pane, 110, 24, "", function()
         Addon.QuestRepository:UpdateDraftFields({ areaRadius = radii.LARGE })
     end)
-    self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 368)
+    self.btnRadiusLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 240, 270)
+
+    -- Sección de Puntos de Descubrimiento Ocultos
+    local lblDiscoverySec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDiscoverySec", pane, CT_LABEL)
+    lblDiscoverySec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 302)
+    if lblDiscoverySec.SetFont then lblDiscoverySec:SetFont("ZoFontGameBold") end
+    lblDiscoverySec:SetText(Addon.Locale:Get("LABEL_DISCOVERY_SECTION"))
+    self.lblDiscoverySec = lblDiscoverySec
+
+    self.btnCaptureDiscovery = CreateStyledButton(PANEL_NAME .. "_BtnCaptureDiscovery", pane, 110, 24, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local hasExisting = #(draft.discoveries or {}) > 0
+        local msgText = (not hasExisting and self.discoveryMsgEdit) and self.discoveryMsgEdit:GetText() or nil
+        local _, count = Addon.TargetCapture:CaptureDiscoveryPoint(msgText)
+        if count and count > 0 then
+            self.selectedDiscoveryIndex = count
+            Addon.QuestRepository:UpdateDraftFields({ discoveryMessage = "" }, true)
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnCaptureDiscovery:SetAnchor(TOPLEFT, pane, TOPLEFT, 294, 298)
+
+    self.btnClearDiscoveries = CreateStyledButton(PANEL_NAME .. "_BtnClearDiscoveries", pane, 100, 24, Addon.Locale:Get("BTN_CLEAR_DISCOVERIES"), function()
+        self.selectedDiscoveryIndex = nil
+        Addon.QuestRepository:ClearDraftDiscoveries()
+    end)
+    self.btnClearDiscoveries:SetAnchor(TOPLEFT, pane, TOPLEFT, 410, 298)
+    self.btnClearDiscoveries:SetHidden(true)
+
+    local function SetSelectedDiscoveryRadius(radius)
+        local draft = Addon.QuestRepository:GetDraft()
+        local idx = self.selectedDiscoveryIndex
+        if idx and draft.discoveries and draft.discoveries[idx] then
+            Addon.QuestRepository:UpdateDraftDiscoveryPoint(idx, { radius = radius })
+        else
+            Addon.QuestRepository:UpdateDraftFields({ discoveryRadius = radius })
+        end
+    end
+
+    local discRadii = Addon.Constants.DISCOVERY_RADIUS
+    self.btnDiscRadSmall = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadSmall", pane, 68, 22, "", function()
+        SetSelectedDiscoveryRadius(discRadii.SMALL)
+    end)
+    self.btnDiscRadSmall:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 328)
+
+    self.btnDiscRadMedium = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadMedium", pane, 68, 22, "", function()
+        SetSelectedDiscoveryRadius(discRadii.MEDIUM)
+    end)
+    self.btnDiscRadMedium:SetAnchor(TOPLEFT, pane, TOPLEFT, 74, 328)
+
+    self.btnDiscRadLarge = CreateStyledButton(PANEL_NAME .. "_BtnDiscRadLarge", pane, 68, 22, "", function()
+        SetSelectedDiscoveryRadius(discRadii.LARGE)
+    end)
+    self.btnDiscRadLarge:SetAnchor(TOPLEFT, pane, TOPLEFT, 148, 328)
+
+    self.btnDiscPrev = CreateStyledButton(PANEL_NAME .. "_BtnDiscPrev", pane, 28, 22, "<", function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local total = #(draft.discoveries or {})
+        if total > 0 then
+            local cur = self.selectedDiscoveryIndex or 1
+            self.selectedDiscoveryIndex = (cur > 1) and (cur - 1) or total
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnDiscPrev:SetAnchor(TOPLEFT, pane, TOPLEFT, 230, 328)
+    self.btnDiscPrev:SetHidden(true)
+
+    local lblDiscIndex = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblDiscIndex", pane, CT_LABEL)
+    lblDiscIndex:SetDimensions(70, 22)
+    lblDiscIndex:SetAnchor(TOPLEFT, pane, TOPLEFT, 262, 330)
+    if lblDiscIndex.SetFont then lblDiscIndex:SetFont("ZoFontGameBold") end
+    if lblDiscIndex.SetHorizontalAlignment then lblDiscIndex:SetHorizontalAlignment(TEXT_ALIGN_CENTER) end
+    self.lblDiscIndex = lblDiscIndex
+    self.lblDiscIndex:SetHidden(true)
+
+    self.btnDiscNext = CreateStyledButton(PANEL_NAME .. "_BtnDiscNext", pane, 28, 22, ">", function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local total = #(draft.discoveries or {})
+        if total > 0 then
+            local cur = self.selectedDiscoveryIndex or 1
+            self.selectedDiscoveryIndex = (cur < total) and (cur + 1) or 1
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnDiscNext:SetAnchor(TOPLEFT, pane, TOPLEFT, 336, 328)
+    self.btnDiscNext:SetHidden(true)
+
+    self.btnDiscRemove = CreateStyledButton(PANEL_NAME .. "_BtnDiscRemove", pane, 136, 22, Addon.Locale:Get("BTN_REMOVE_DISCOVERY"), function()
+        local idx = self.selectedDiscoveryIndex
+        if idx then
+            local draft = Addon.QuestRepository:RemoveDraftDiscoveryPoint(idx)
+            local total = draft and #(draft.discoveries or {}) or 0
+            if total == 0 then
+                self.selectedDiscoveryIndex = nil
+            elseif idx > total then
+                self.selectedDiscoveryIndex = total
+            end
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnDiscRemove:SetAnchor(TOPLEFT, pane, TOPLEFT, 374, 328)
+    self.btnDiscRemove:SetHidden(true)
+
+    local discMsgBg, discMsgEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_DiscoveryMsgEdit",
+        pane,
+        510,
+        28,
+        160,
+        false,
+        function(val)
+            local draft = Addon.QuestRepository:GetDraft()
+            local idx = self.selectedDiscoveryIndex
+            if idx and draft.discoveries and draft.discoveries[idx] then
+                Addon.QuestRepository:UpdateDraftDiscoveryPoint(idx, { message = val }, true)
+            else
+                Addon.QuestRepository:UpdateDraftFields({ discoveryMessage = val }, true)
+            end
+        end
+    )
+    discMsgBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 354)
+    self.discoveryMsgBg = discMsgBg
+    self.discoveryMsgEdit = discMsgEdit
+
+    local lblCapturedDiscoveries = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedDiscoveries", pane, CT_LABEL)
+    lblCapturedDiscoveries:SetDimensions(510, 32)
+    lblCapturedDiscoveries:SetAnchor(TOPLEFT, pane, TOPLEFT, 6, 386)
+    if lblCapturedDiscoveries.SetFont then lblCapturedDiscoveries:SetFont("ZoFontGame") end
+    self.lblCapturedDiscoveries = lblCapturedDiscoveries
 
     local lblCompletionMsg = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputCompletionMsg", pane, CT_LABEL)
-    lblCompletionMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 412)
+    lblCompletionMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 422)
     if lblCompletionMsg.SetFont then lblCompletionMsg:SetFont("ZoFontGameBold") end
     lblCompletionMsg:SetText(Addon.Locale:Get("LABEL_INPUT_COMPLETION_MSG"))
     self.lblInputCompletionMsg = lblCompletionMsg
@@ -650,45 +778,46 @@ function JournalTab:BuildEditorPane(parent)
         PANEL_NAME .. "_CompletionEdit",
         pane,
         510,
-        34,
+        28,
         140,
         false,
         function(val)
             Addon.QuestRepository:UpdateDraftFields({ completionMessage = val }, true)
         end
     )
-    compBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 434)
+    compBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 442)
     self.completionBg = compBg
     self.completionEdit = compEdit
 
-    self.btnRequireUndetected = CreateStyledButton(PANEL_NAME .. "_BtnRequireUndetected", pane, 280, 28, Addon.Locale:Get("OPT_REQUIRE_UNDETECTED"), function()
+    self.btnRequireUndetected = CreateStyledButton(PANEL_NAME .. "_BtnRequireUndetected", pane, 280, 26, Addon.Locale:Get("OPT_REQUIRE_UNDETECTED"), function()
         local d = Addon.QuestRepository:GetDraft()
         Addon.QuestRepository:UpdateDraftFields({ requireUndetected = not (d and d.requireUndetected) })
     end)
     self.btnRequireUndetected:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 478)
 
-    self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 36, Addon.Locale:Get("BTN_SAVE"), function()
+    self.btnSaveEditor = CreateStyledButton(PANEL_NAME .. "_BtnSaveEditor", pane, 180, 34, Addon.Locale:Get("BTN_SAVE"), function()
         self:OnSaveDraftClicked()
     end)
-    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 516)
+    self.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 514)
 
-    self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
+    self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 34, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
         Addon.QuestRepository:ResetDraft()
         self.titleEdit:SetText("")
         self.descEdit:SetText("")
         self.completionEdit:SetText("")
+        if self.discoveryMsgEdit then self.discoveryMsgEdit:SetText("") end
         self:Refresh()
     end)
-    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 516)
+    self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
 
-    self.btnShowMapEditor = CreateStyledButton(PANEL_NAME .. "_BtnShowMapEditor", pane, 155, 36, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
+    self.btnShowMapEditor = CreateStyledButton(PANEL_NAME .. "_BtnShowMapEditor", pane, 155, 34, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
         local draft = Addon.QuestRepository:GetDraft()
         if draft and draft.mapId and draft.mapId > 0 then
             Addon.WorldMapArea:ShowQuestOnMap(draft)
         end
     end)
-    self.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 516)
+    self.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 514)
     self.btnShowMapEditor:SetHidden(true)
 end
 
@@ -874,6 +1003,9 @@ function JournalTab:OnSaveDraftClicked()
     self.descEdit:SetText("")
     if self.completionEdit then
         self.completionEdit:SetText("")
+    end
+    if self.discoveryMsgEdit then
+        self.discoveryMsgEdit:SetText("")
     end
 
     Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
@@ -1240,6 +1372,21 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     if totalTargets > maxVisibleObjLines then
         objLines[maxVisibleObjLines] = string.format("... (+%d)", totalTargets - limit)
     end
+    local discoveries = selectedQuest.discoveries or {}
+    if #discoveries > 0 then
+        local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
+        if isPrepared then
+            local sumLine = Addon.Locale:Get("DISCOVERY_PREPARED_SUMMARY", #discoveries):gsub("^•%s*", bullet)
+            table.insert(objLines, sumLine)
+        else
+            for _, d in ipairs(discoveries) do
+                if d.discovered then
+                    local clueLine = Addon.Locale:Get("DISCOVERY_CLUE_FORMAT", d.message or ""):gsub("^•%s*", bullet)
+                    table.insert(objLines, clueLine)
+                end
+            end
+        end
+    end
     if selectedQuest.requireUndetected then
         local stealthKey = selectedQuest.wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
         table.insert(objLines, "|t16:16:/esoui/art/miscellaneous/bullet.dds|t " .. Addon.Locale:Get(stealthKey))
@@ -1344,6 +1491,64 @@ function JournalTab:RefreshEditorPane()
     self.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
     self.btnRadiusMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_MEDIUM"), math.abs(curRad - radii.MEDIUM) < 0.005))
     self.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
+
+    local discoveries = draft.discoveries or {}
+    local totalDisc = #discoveries
+    if totalDisc > 0 then
+        if not self.selectedDiscoveryIndex or self.selectedDiscoveryIndex < 1 or self.selectedDiscoveryIndex > totalDisc then
+            self.selectedDiscoveryIndex = totalDisc
+        end
+    else
+        self.selectedDiscoveryIndex = nil
+    end
+
+    local selectedPoint = self.selectedDiscoveryIndex and discoveries[self.selectedDiscoveryIndex] or nil
+    local activeDiscMsg = selectedPoint and (selectedPoint.message or "") or (draft.discoveryMessage or "")
+    if self.discoveryMsgEdit and not self.discoveryMsgEdit._focused and self.discoveryMsgEdit:GetText() ~= activeDiscMsg then
+        self.discoveryMsgEdit:SetText(activeDiscMsg)
+    end
+
+    local discRadii = Addon.Constants.DISCOVERY_RADIUS
+    local curDiscRad = (selectedPoint and selectedPoint.radius) or draft.discoveryRadius or discRadii.MEDIUM
+    if self.btnDiscRadSmall then
+        self.btnDiscRadSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_SMALL"), curDiscRad == discRadii.SMALL))
+    end
+    if self.btnDiscRadMedium then
+        self.btnDiscRadMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_MEDIUM"), curDiscRad == discRadii.MEDIUM))
+    end
+    if self.btnDiscRadLarge then
+        self.btnDiscRadLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_LARGE"), curDiscRad == discRadii.LARGE))
+    end
+
+    local showSelector = totalDisc > 0
+    if self.btnDiscPrev then self.btnDiscPrev:SetHidden(not showSelector) end
+    if self.btnDiscNext then self.btnDiscNext:SetHidden(not showSelector) end
+    if self.btnDiscRemove then self.btnDiscRemove:SetHidden(not showSelector) end
+    if self.lblDiscIndex then
+        self.lblDiscIndex:SetHidden(not showSelector)
+        if showSelector then
+            self.lblDiscIndex:SetText(Addon.Locale:Get("DISCOVERY_INDEX_FORMAT", self.selectedDiscoveryIndex, totalDisc))
+        end
+    end
+
+    if self.lblCapturedDiscoveries then
+        if totalDisc > 0 then
+            local msgs = {}
+            for i = 1, math.min(2, totalDisc) do
+                table.insert(msgs, discoveries[i].message or "")
+            end
+            local preview = table.concat(msgs, " | ")
+            if totalDisc > 2 then
+                preview = preview .. string.format(" (+%d)", totalDisc - 2)
+            end
+            self.lblCapturedDiscoveries:SetText(Addon.Locale:Get("DISCOVERY_CAPTURED_FORMAT", totalDisc, preview))
+        else
+            self.lblCapturedDiscoveries:SetText(Addon.Locale:Get("DISCOVERY_NONE_CAPTURED"))
+        end
+    end
+    if self.btnClearDiscoveries then
+        self.btnClearDiscoveries:SetHidden(totalDisc == 0)
+    end
 
     if self.btnRequireUndetected then
         local key = draft.requireUndetected and "OPT_REQUIRE_UNDETECTED_ACTIVE" or "OPT_REQUIRE_UNDETECTED"

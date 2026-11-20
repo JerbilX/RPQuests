@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
+-- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -101,6 +102,62 @@ local function DecodeTargetsList(rawTargets)
     return targets
 end
 
+local function EncodeDiscoveriesList(discoveries)
+    if type(discoveries) ~= "table" or #discoveries == 0 then
+        return ""
+    end
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
+    local items = {}
+    for _, d in ipairs(discoveries) do
+        if type(d) == "table" and d.worldX and d.worldZ then
+            local parts = {
+                tostring(math.floor(tonumber(d.zoneId) or 0)),
+                tostring(math.floor(tonumber(d.worldX) or 0)),
+                tostring(math.floor(tonumber(d.worldY) or 0)),
+                tostring(math.floor(tonumber(d.worldZ) or 0)),
+                tostring(math.floor(tonumber(d.mapId) or 0)),
+                string.format("%.4f", tonumber(d.x) or 0),
+                string.format("%.4f", tonumber(d.y) or 0),
+                tostring(math.max(100, math.floor(tonumber(d.radius) or defaultRad))),
+                EscapeField(d.message or ""),
+            }
+            table.insert(items, table.concat(parts, "~"))
+        end
+    end
+    return table.concat(items, ";")
+end
+
+local function DecodeDiscoveriesList(rawDiscoveries)
+    if type(rawDiscoveries) ~= "string" or rawDiscoveries == "" then
+        return {}
+    end
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
+    local entries = SplitByChar(rawDiscoveries, ";")
+    local discoveries = {}
+    for _, item in ipairs(entries) do
+        if item ~= "" then
+            local kv = SplitByChar(item, "~")
+            local worldX = tonumber(kv[2])
+            local worldZ = tonumber(kv[4])
+            if worldX and worldZ then
+                table.insert(discoveries, {
+                    zoneId = math.floor(tonumber(kv[1]) or 0),
+                    worldX = math.floor(worldX),
+                    worldY = math.floor(tonumber(kv[3]) or 0),
+                    worldZ = math.floor(worldZ),
+                    mapId = math.floor(tonumber(kv[5]) or 0),
+                    x = tonumber(kv[6]) or 0,
+                    y = tonumber(kv[7]) or 0,
+                    radius = math.max(100, math.floor(tonumber(kv[8]) or defaultRad)),
+                    message = UnescapeField(kv[9] or ""),
+                    discovered = false,
+                })
+            end
+        end
+    end
+    return discoveries
+end
+
 local function ComputeChecksum16(data)
     local sum1 = 0x5A
     local sum2 = 0xA5
@@ -129,13 +186,12 @@ local function BuildQuestPayloadString(quest)
         return nil, "Invalid quest table"
     end
 
-    local targets = quest.targets
-    if type(targets) ~= "table" or #targets == 0 then
-        return nil, "Invalid quest table"
-    end
-
+    local targets = quest.targets or {}
+    local discoveries = quest.discoveries or {}
     local encodedTargets = EncodeTargetsList(targets)
-    if encodedTargets == "" then
+    local encodedDiscoveries = EncodeDiscoveriesList(discoveries)
+
+    if encodedTargets == "" and encodedDiscoveries == "" then
         return nil, "Invalid quest table"
     end
 
@@ -153,6 +209,7 @@ local function BuildQuestPayloadString(quest)
         encodedTargets,
         EscapeField(quest.completionMessage or ""),
         quest.requireUndetected and "1" or "0",
+        encodedDiscoveries,
     }
 
     return table.concat(fields, "|")
@@ -293,15 +350,16 @@ function ShareCodec:DecodeQuest(codeString)
     local areaCenterX = tonumber(fields[8])
     local areaCenterY = tonumber(fields[9])
     local areaRadius = tonumber(fields[10])
-    local decodedTargets = DecodeTargetsList(fields[11])
+    local decodedTargets = DecodeTargetsList(fields[11]) or {}
     local completionMessage = fields[12] and UnescapeField(fields[12]) or ""
     local requireUndetected = (fields[13] == "1")
+    local decodedDiscoveries = fields[14] and DecodeDiscoveriesList(fields[14]) or {}
 
-    if not decodedTargets or #decodedTargets == 0 then
+    if #decodedTargets == 0 and #decodedDiscoveries == 0 then
         return nil, "Invalid target data in code"
     end
 
-    if not areaCenterX or not areaCenterY or not areaRadius or areaRadius <= 0 then
+    if #decodedTargets > 0 and (not areaCenterX or not areaCenterY or not areaRadius or areaRadius <= 0) then
         return nil, "Invalid area coordinates in code"
     end
 
@@ -310,14 +368,15 @@ function ShareCodec:DecodeQuest(codeString)
         description = description,
         completionMessage = completionMessage,
         targets = decodedTargets,
+        discoveries = decodedDiscoveries,
         mapId = math.floor(mapId or 0),
         zoneId = math.floor(zoneId or 0),
         mapName = mapName,
-        targetX = targetX or areaCenterX,
-        targetY = targetY or areaCenterY,
-        areaCenterX = areaCenterX,
-        areaCenterY = areaCenterY,
-        areaRadius = areaRadius,
+        targetX = (#decodedTargets > 0) and (targetX or areaCenterX) or nil,
+        targetY = (#decodedTargets > 0) and (targetY or areaCenterY) or nil,
+        areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
+        areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
+        areaRadius = areaRadius or 0.075,
         requireUndetected = requireUndetected,
     }
 end
