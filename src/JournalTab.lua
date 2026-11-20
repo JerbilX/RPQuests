@@ -154,8 +154,11 @@ function JournalTab:Initialize()
     self:BuildLeftColumn(panel)
     self:BuildRightColumn(panel)
 
-    if ZO_FadeSceneFragment then
-        self.fragment = ZO_FadeSceneFragment:New(panel)
+    -- Use ZO_SimpleSceneFragment instead of ZO_FadeSceneFragment so ESO does not create
+    -- per-instance animation OnStop closures in untrusted addon context (which taints
+    -- transitions to protected scenes such as TamrielTomesSceneKeyboard).
+    if ZO_SimpleSceneFragment then
+        self.fragment = ZO_SimpleSceneFragment:New(panel)
     end
 
     self:IntegrateIntoQuestJournalModeBar()
@@ -222,12 +225,6 @@ function JournalTab:BuildLeftColumn(panel)
     end)
     self.leftCol = leftCol
 
-    local headerLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_QuestCount", leftCol, CT_LABEL)
-    headerLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 0)
-    if headerLabel.SetFont then headerLabel:SetFont("ZoFontHeader3") end
-    if headerLabel.SetColor then headerLabel:SetColor(0.77, 0.76, 0.62, 1) end
-    self.headerLabel = headerLabel
-
     self.importBtn = CreateStyledButton(
         PANEL_NAME .. "_ImportBtn",
         leftCol,
@@ -238,7 +235,7 @@ function JournalTab:BuildLeftColumn(panel)
             self:OpenImportView()
         end
     )
-    self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 34)
+    self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 4)
 
     self.newBtn = CreateStyledButton(
         PANEL_NAME .. "_NewBtn",
@@ -250,11 +247,11 @@ function JournalTab:BuildLeftColumn(panel)
             self:OpenCreateEditor()
         end
     )
-    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 179, 34)
+    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 179, 4)
 
     local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
     emptyLabel:SetDimensions(310, 80)
-    emptyLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 74)
+    emptyLabel:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 44)
     if emptyLabel.SetFont then emptyLabel:SetFont("ZoFontGame") end
     if emptyLabel.SetColor then emptyLabel:SetColor(0.75, 0.75, 0.75, 1) end
     emptyLabel:SetHidden(true)
@@ -266,7 +263,7 @@ function JournalTab:BuildLeftColumn(panel)
     for i = 1, MAX_VISIBLE_ROWS do
         local rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_Row" .. i, leftCol, CT_BUTTON)
         rowBtn:SetDimensions(320, 28)
-        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 72 + ((i - 1) * 30))
+        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 42 + ((i - 1) * 30))
         if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
         if rowBtn.SetHorizontalAlignment and TEXT_ALIGN_LEFT then
             rowBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
@@ -1202,7 +1199,6 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
         end
     end
 
-    self.headerLabel:SetText(Addon.Locale:Get("HEADER_QUEST_LIST", #allQuests))
     self.rowBindings = {}
 
     if #allQuests == 0 then

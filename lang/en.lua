@@ -13,7 +13,6 @@ RPQuest.Locales["en"] = {
 
     -- Tab & General
     TAB_TITLE = "RPQuests",
-    HEADER_QUEST_LIST = "RPQuests: %d",
     SECTION_ACTIVE_QUESTS = "QUESTS (%d)",
     SECTION_PREPARED_QUESTS = "PREPARING (%d)",
     SECTION_COMPLETED_QUESTS = "COMPLETED (%d)",
