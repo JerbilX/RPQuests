@@ -139,6 +139,7 @@ RPQuest.Locales["es"] = {
     ERR_MISSING_TARGET = "Captura al menos un objetivo NPC o agrega un punto de descubrimiento antes de crear la misión.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
     ERR_CANNOT_EDIT_RECEIVED = "Las misiones recibidas para jugar no se pueden editar.",
+    CSA_QUEST_ACCEPTED = "Misión Aceptada: %s",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Misión Completada: %s",
 

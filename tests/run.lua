@@ -56,6 +56,7 @@ UI_ALERT_CATEGORY_ALERT = 0
 UI_ALERT_CATEGORY_ERROR = 1
 CSA_CATEGORY_LARGE_TEXT = 1
 CSA_CATEGORY_SMALL_TEXT = 2
+CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED = 9
 CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED = 10
 CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_CONDITION_COMPLETED = 11
 MAPTYPE_WORLD = 1
@@ -77,6 +78,7 @@ ZO_PostHook = function(tbl, fnName, hookFn)
     end
 end
 
+SOUNDS.QUEST_ACCEPTED = "Quest_Accept"
 SOUNDS.QUEST_COMPLETED = "Quest_Complete"
 SOUNDS.QUEST_OBJECTIVE_INCREMENT = "Quest_ObjectivesIncrement"
 SOUNDS.QUEST_OBJECTIVE_COMPLETE = "Quest_ObjectivesComplete"
@@ -770,11 +772,16 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selects all text when focused")
 
     -- Probar vista Importar en JournalTab
+    mockState.csaMessages = {}
     RPQuest.JournalTab:OpenImportView()
     AssertEqual(RPQuest.JournalTab.importPane:IsHidden(), false, "Import pane is visible")
     RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
     RPQuest.JournalTab:OnConfirmImportClicked()
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
+    AssertEqual(#mockState.csaMessages, 1, "Importing quest emits one CENTER_SCREEN_ANNOUNCE banner")
+    AssertEqual(mockState.csaMessages[1].category, CSA_CATEGORY_LARGE_TEXT, "Quest accepted CSA uses large text category")
+    AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_ACCEPTED, "Quest accepted CSA plays SOUNDS.QUEST_ACCEPTED")
+    AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Quest accepted CSA uses CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED")
 
     -- Verificar que salir de Edit mode seleccionando otra misión limpia editingQuestId
     RPQuest.JournalTab:OpenEditEditor(active.id)

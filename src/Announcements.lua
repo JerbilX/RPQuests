@@ -52,21 +52,12 @@ function Announcements:AnnounceQuestProgress(quest, matchedTarget)
     end
 end
 
-function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
-    if not quest then return end
-
-    local mainText = Addon.Locale:Get("CSA_QUEST_COMPLETED", quest.title or "")
-    local customMsg = type(quest.completionMessage) == "string"
-        and quest.completionMessage:gsub("^%s+", ""):gsub("%s+$", "")
-        or ""
-    local subText = (customMsg ~= "") and customMsg or nil
-    local soundId = SOUNDS and SOUNDS.QUEST_COMPLETED or nil
-
+local function emitLargeBanner(mainText, subText, soundId, csaType)
     if CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.CreateMessageParams and CENTER_SCREEN_ANNOUNCE.AddMessageWithParams then
         local params = CENTER_SCREEN_ANNOUNCE:CreateMessageParams(CSA_CATEGORY_LARGE_TEXT, soundId)
         params:SetText(mainText, subText)
-        if CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED then
-            params:SetCSAType(CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED)
+        if csaType then
+            params:SetCSAType(csaType)
         end
         CENTER_SCREEN_ANNOUNCE:AddMessageWithParams(params)
     elseif CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.AddMessage then
@@ -78,8 +69,36 @@ function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
         if PlaySound and soundId then
             PlaySound(soundId)
         end
-        self:ShowAlert(mainText, false)
+        Announcements:ShowAlert(mainText, false)
     end
+end
+
+function Announcements:AnnounceQuestAccepted(quest)
+    if not quest then return end
+
+    local questTitle = quest.title or ""
+    local mainText
+    if zo_strformat and SI_NOTIFYTEXT_QUEST_ACCEPT then
+        mainText = zo_strformat(SI_NOTIFYTEXT_QUEST_ACCEPT, questTitle)
+    else
+        mainText = Addon.Locale:Get("CSA_QUEST_ACCEPTED", questTitle)
+    end
+
+    local soundId = SOUNDS and SOUNDS.QUEST_ACCEPTED or nil
+    emitLargeBanner(mainText, nil, soundId, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED)
+end
+
+function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
+    if not quest then return end
+
+    local mainText = Addon.Locale:Get("CSA_QUEST_COMPLETED", quest.title or "")
+    local customMsg = type(quest.completionMessage) == "string"
+        and quest.completionMessage:gsub("^%s+", ""):gsub("%s+$", "")
+        or ""
+    local subText = (customMsg ~= "") and customMsg or nil
+    local soundId = SOUNDS and SOUNDS.QUEST_COMPLETED or nil
+
+    emitLargeBanner(mainText, subText, soundId, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED)
 end
 
 function Announcements:AnnounceDiscovery(quest, point)

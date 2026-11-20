@@ -139,6 +139,7 @@ RPQuest.Locales["en"] = {
     ERR_MISSING_TARGET = "Capture an NPC target or add at least one hidden discovery point before creating the quest.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
     ERR_CANNOT_EDIT_RECEIVED = "Received quests cannot be edited.",
+    CSA_QUEST_ACCEPTED = "Quest Accepted: %s",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Quest Completed: %s",
 

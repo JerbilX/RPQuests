@@ -1247,7 +1247,7 @@ function JournalTab:OnConfirmImportClicked()
 
     self.importCodeEdit:SetText("")
 
-    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_IMPORTED", importedQuest.title), false)
+    Addon.Announcements:AnnounceQuestAccepted(importedQuest)
 end
 
 function JournalTab:OnToggleActiveClicked()
