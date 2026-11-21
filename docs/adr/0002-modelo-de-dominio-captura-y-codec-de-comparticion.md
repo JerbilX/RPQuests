@@ -42,6 +42,7 @@ Al capturar un objetivo en $(x_t, y_t) \in (0, 1)^2$ con un radio normalizado $R
 * Formato de cadena: `RPQ1:<HEX_CRC16>:<PAYLOAD_BASE64URL>` (o codificación hexadecimal/escape imprimible ASCII 7-bit segura para `EditControl`).
 * Al importar un código, se valida el prefijo `RPQ1:`, se recalcula el CRC16 sobre el payload y se reconstruye una nueva misión en estado activa (`completed = false`, cada entrada de `targets` con `currentCount = 0`) conservando título, descripción, objetivos y coordenadas del área de búsqueda.
 * **Enmienda (Issue #18):** Como no existían versiones publicadas previas a `targets[]`, se eliminaron los campos planos legacy (`targetName`, `currentCount`, `requiredCount`) del modelo y del payload `RPQ1` (ahora de 11 campos con `targets` como única fuente de verdad).
+* **Enmienda (Issue #96 — Idioma del cliente en el códec):** La API Lua de EsoUI no expone un identificador universal de especie o plantilla de NPC independiente del idioma del cliente (`GetUnitName`, `EVENT_COMBAT_EVENT` y `GetUnitName("interact")` devuelven nombres localizados). Se descarta traducir o reasignar el idioma de una misión directamente al importar porque muchos NPCs no comparten descripción/nombre equivalente entre localizaciones y la misión dejaría de detectar bajas o diálogos correctamente. Por ello, `ShareCodec` serializa el idioma del cliente creador (`GetCVar("language.2")`) y `DecodeQuest` rechaza códigos de otro idioma con `ERR_IMPORT_LANGUAGE_MISMATCH`.
 
 ### Consecuencias
 * **Positivas:**
