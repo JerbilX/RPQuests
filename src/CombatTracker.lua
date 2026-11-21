@@ -22,7 +22,7 @@ local function IsAllowedKillSource(sourceType)
         return true
     end
     if sourceType == COMBAT_UNIT_TYPE_GROUP then
-        return IsUnitGrouped ~= nil and IsUnitGrouped("player")
+        return IsUnitGrouped("player")
     end
     return false
 end
@@ -31,15 +31,11 @@ local function RegisterDeathFilter(listenerName, expectedResult, callback)
     EVENT_MANAGER:UnregisterForEvent(listenerName, EVENT_COMBAT_EVENT)
     if not expectedResult then return end
     EVENT_MANAGER:RegisterForEvent(listenerName, EVENT_COMBAT_EVENT, callback)
-    if EVENT_MANAGER.AddFilterForEvent then
-        EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_COMBAT_RESULT, expectedResult)
-        EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_IS_ERROR, false)
-    end
+    EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_COMBAT_RESULT, expectedResult)
+    EVENT_MANAGER:AddFilterForEvent(listenerName, EVENT_COMBAT_EVENT, REGISTER_FILTER_IS_ERROR, false)
 end
 
 function CombatTracker:UpdateJusticeRegistration(activeQuest)
-    if not EVENT_MANAGER then return end
-
     local shouldTrack = (activeQuest ~= nil)
         and not activeQuest.completed
         and (activeQuest.requireUndetected == true)
@@ -47,15 +43,9 @@ function CombatTracker:UpdateJusticeRegistration(activeQuest)
 
     if not shouldTrack then
         if self._isJusticeRegistered then
-            if EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED then
-                EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_BOUNTY, EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED)
-            end
-            if EVENT_JUSTICE_INFAMY_UPDATED then
-                EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_INFAMY, EVENT_JUSTICE_INFAMY_UPDATED)
-            end
-            if EVENT_JUSTICE_PICKPOCKET_FAILED then
-                EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_PICKPOCKET, EVENT_JUSTICE_PICKPOCKET_FAILED)
-            end
+            EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_BOUNTY, EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED)
+            EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_INFAMY, EVENT_JUSTICE_INFAMY_UPDATED)
+            EVENT_MANAGER:UnregisterForEvent(LISTENER_JUSTICE_PICKPOCKET, EVENT_JUSTICE_PICKPOCKET_FAILED)
             self._isJusticeRegistered = false
         end
         return
@@ -73,21 +63,13 @@ function CombatTracker:UpdateJusticeRegistration(activeQuest)
         self:OnJusticePickpocketFailed(eventCode)
     end
 
-    if EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED then
-        EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_BOUNTY, EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED, self._bountyHandler)
-    end
-    if EVENT_JUSTICE_INFAMY_UPDATED then
-        EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_INFAMY, EVENT_JUSTICE_INFAMY_UPDATED, self._infamyHandler)
-    end
-    if EVENT_JUSTICE_PICKPOCKET_FAILED then
-        EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_PICKPOCKET, EVENT_JUSTICE_PICKPOCKET_FAILED, self._pickpocketHandler)
-    end
+    EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_BOUNTY, EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED, self._bountyHandler)
+    EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_INFAMY, EVENT_JUSTICE_INFAMY_UPDATED, self._infamyHandler)
+    EVENT_MANAGER:RegisterForEvent(LISTENER_JUSTICE_PICKPOCKET, EVENT_JUSTICE_PICKPOCKET_FAILED, self._pickpocketHandler)
     self._isJusticeRegistered = true
 end
 
 function CombatTracker:UpdateRegistration()
-    if not EVENT_MANAGER or not EVENT_COMBAT_EVENT then return end
-
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
     self:UpdateJusticeRegistration(activeQuest)
 

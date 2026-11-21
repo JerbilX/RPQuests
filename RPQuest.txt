@@ -8,7 +8,7 @@
 
 src/Constants.lua
 lang/en.lua
-lang/es.lua
+lang/$(language).lua
 src/Locale.lua
 src/ShareCodec.lua
 src/QuestRepository.lua

@@ -123,6 +123,13 @@ luajit tests/run.lua
 
 ---
 
+## Transparencia de IA y Créditos
+
+- **Autor:** [JerbilX](https://github.com/JerbilX)
+- **Uso de IA (AI Disclosure):** Durante el desarrollo se utilizaron asistentes de programación con IA para apoyar la redacción de código Lua, refactorización, localización, documentación y pruebas unitarias. Todo el diseño funcional, decisiones de arquitectura, pruebas dentro del juego y revisión final fueron dirigidos y verificados por el autor.
+
+---
+
 ## Licencia
 
 Este proyecto está licenciado bajo **GNU General Public License v3.0** — consulta [LICENSE](LICENSE) para más detalles.

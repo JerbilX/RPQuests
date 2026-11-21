@@ -2,6 +2,7 @@
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 
 RPQuest = RPQuest or {}
+local RPQuest = RPQuest
 RPQuest.Locales = RPQuest.Locales or {}
 
 RPQuest.Locales["en"] = {

@@ -39,9 +39,7 @@ local function CreateStyledButton(name, parent, width, height, text, onClick)
 
     btn:SetText(text or "")
     btn:SetHandler("OnClicked", function()
-        if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
-            PlaySound(SOUNDS.DEFAULT_CLICK)
-        end
+        PlaySound(SOUNDS.DEFAULT_CLICK)
         if onClick then onClick() end
     end)
     return btn
@@ -101,9 +99,7 @@ local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, 
         if selectAllOnFocus and edit.SelectAll then
             edit:SelectAll()
         end
-        if PlaySound and SOUNDS and SOUNDS.EDIT_CLICK then
-            PlaySound(SOUNDS.EDIT_CLICK)
-        end
+        PlaySound(SOUNDS.EDIT_CLICK)
     end)
     edit:SetHandler("OnFocusLost", function()
         edit._focused = false
@@ -153,12 +149,8 @@ function JournalTab:Initialize()
 
     local panel = WINDOW_MANAGER:CreateControl(PANEL_NAME, GuiRoot, CT_TOPLEVELCONTROL)
     panel:SetDimensions(980, 680)
-    if ZO_QuestJournal then
-        panel:SetAnchor(TOPLEFT, ZO_QuestJournal, TOPLEFT, 0, 0)
-        panel:SetAnchor(BOTTOMRIGHT, ZO_QuestJournal, BOTTOMRIGHT, 0, 0)
-    else
-        panel:SetAnchor(TOPRIGHT, GuiRoot, TOPRIGHT, -30, 95)
-    end
+    panel:SetAnchor(TOPLEFT, ZO_QuestJournal, TOPLEFT, 0, 0)
+    panel:SetAnchor(BOTTOMRIGHT, ZO_QuestJournal, BOTTOMRIGHT, 0, 0)
     panel:SetHidden(true)
     self.panel = panel
 
@@ -180,9 +172,7 @@ function JournalTab:Initialize()
     -- Use ZO_SimpleSceneFragment instead of ZO_FadeSceneFragment so ESO does not create
     -- per-instance animation OnStop closures in untrusted addon context (which taints
     -- transitions to protected scenes such as TamrielTomesSceneKeyboard).
-    if ZO_SimpleSceneFragment then
-        self.fragment = ZO_SimpleSceneFragment:New(panel)
-    end
+    self.fragment = ZO_SimpleSceneFragment:New(panel)
 
     self:IntegrateIntoQuestJournalModeBar()
 
@@ -240,7 +230,7 @@ function JournalTab:Initialize()
         end)
     end
 
-    if EVENT_MANAGER and EVENT_GROUP_UPDATE and not self._groupListenerRegistered then
+    if not self._groupListenerRegistered then
         EVENT_MANAGER:RegisterForEvent("RPQuest_JournalTab_GroupUpdate", EVENT_GROUP_UPDATE, function()
             if self.panel and not self.panel:IsHidden() and KEYBIND_STRIP and self.keybindStripDescriptor then
                 KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
@@ -326,14 +316,10 @@ function JournalTab:BuildLeftColumn(panel)
             local binding = self.rowBindings[rowIndex]
             if not binding then return end
             if binding.isHeader and binding.sectionKey then
-                if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
-                    PlaySound(SOUNDS.DEFAULT_CLICK)
-                end
+                PlaySound(SOUNDS.DEFAULT_CLICK)
                 self:ToggleSection(binding.sectionKey)
             elseif binding.questId then
-                if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
-                    PlaySound(SOUNDS.DEFAULT_CLICK)
-                end
+                PlaySound(SOUNDS.DEFAULT_CLICK)
                 self:SelectQuest(binding.questId)
             end
         end)
@@ -416,8 +402,8 @@ function JournalTab:BuildDetailPane(parent)
     titleLabel:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 0)
     if titleLabel.SetFont then titleLabel:SetFont("ZoFontWinH2") end
     if titleLabel.SetColor then titleLabel:SetColor(1, 1, 1, 1) end
-    if titleLabel.SetModifyTextType and TEXT_MODIFY_TYPE_UPPERCASE then
-        titleLabel:SetModifyTextType(TEXT_MODIFY_TYPE_UPPERCASE)
+    if titleLabel.SetModifyTextType then
+        titleLabel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
     end
     self.detailTitle = titleLabel
 
@@ -452,8 +438,8 @@ function JournalTab:BuildDetailPane(parent)
     objHeader:SetAnchor(TOPLEFT, divider, BOTTOMLEFT, 0, 10)
     if objHeader.SetFont then objHeader:SetFont("ZoFontWinH3") end
     if objHeader.SetColor then objHeader:SetColor(1, 1, 1, 1) end
-    if objHeader.SetModifyTextType and TEXT_MODIFY_TYPE_UPPERCASE then
-        objHeader:SetModifyTextType(TEXT_MODIFY_TYPE_UPPERCASE)
+    if objHeader.SetModifyTextType then
+        objHeader:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
     end
     objHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     self.detailObjHeader = objHeader
@@ -483,7 +469,7 @@ function JournalTab:BuildDetailPane(parent)
     end)
     self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
 
-    if ESO_Dialogs and not ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
+    if not ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
         ESO_Dialogs["RPQUEST_ABANDON_QUEST"] = {
             title = {
                 text = SI_PROMPT_TITLE_ABANDON_QUEST,
@@ -559,9 +545,7 @@ function JournalTab:BuildDetailPane(parent)
     local showOnMapBtn = WINDOW_MANAGER.CreateControlFromVirtual
         and WINDOW_MANAGER:CreateControlFromVirtual(PANEL_NAME .. "_ShowOnMap", pane, "ZO_KeybindButton")
         or WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShowOnMap", pane, CT_CONTROL)
-    if ApplyTemplateToControl then
-        ApplyTemplateToControl(showOnMapBtn, "ZO_KeybindButton_Keyboard_Template")
-    end
+    ApplyTemplateToControl(showOnMapBtn, "ZO_KeybindButton_Keyboard_Template")
     if showOnMapBtn.SetKeybindButtonDescriptor then
         showOnMapBtn:SetKeybindButtonDescriptor(self.showOnMapDescriptor)
     end
@@ -749,9 +733,7 @@ function JournalTab:BuildEditorPane(parent)
         hdrBg:SetEdgeColor(0.45, 0.39, 0.24, 0.55)
 
         headerBtn:SetHandler("OnClicked", function()
-            if PlaySound and SOUNDS and SOUNDS.DEFAULT_CLICK then
-                PlaySound(SOUNDS.DEFAULT_CLICK)
-            end
+            PlaySound(SOUNDS.DEFAULT_CLICK)
             self:ToggleEditorSection(key)
         end)
 
@@ -1926,16 +1908,8 @@ function JournalTab:ConfirmAbandonQuest(questId)
     local q = Addon.QuestRepository:GetQuestById(questId)
     if not q then return false end
 
-    if ESO_Dialogs and ZO_Dialogs_ShowDialog and ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
-        ZO_Dialogs_ShowDialog("RPQUEST_ABANDON_QUEST", { questId = questId }, { mainTextParams = { q.title or "" } })
-        return true
-    end
-
-    if Addon.QuestRepository:DeleteQuest(questId) then
-        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_DELETED"), false)
-        return true
-    end
-    return false
+    ZO_Dialogs_ShowDialog("RPQUEST_ABANDON_QUEST", { questId = questId }, { mainTextParams = { q.title or "" } })
+    return true
 end
 
 function JournalTab:OnValidateDeliveryClicked()
@@ -1976,9 +1950,7 @@ function JournalTab:OpenTab()
 
     local wasShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
 
-    if SCENE_MANAGER and SCENE_MANAGER.Show then
-        SCENE_MANAGER:Show("questJournal")
-    end
+    SCENE_MANAGER:Show("questJournal")
 
     -- Solo seleccionar el fragmento de forma síncrona si questJournal ya está visible;
     -- si estamos transicionando desde otra escena (p. ej. Notificaciones o Correo),
@@ -2167,24 +2139,24 @@ function JournalTab:Refresh()
     if self.viewMode == VIEW_MODE.EDITOR then
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
-        if KEYBIND_STRIP and self.keybindStripDescriptor then
+        if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
     elseif self.viewMode == VIEW_MODE.IMPORT then
         self.importPane:SetHidden(false)
-        if KEYBIND_STRIP and self.keybindStripDescriptor then
+        if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
     elseif self.viewMode == VIEW_MODE.MAIL_SEND and self.mailSendPane then
         self.mailSendPane:SetHidden(false)
         self:RefreshMailSendCounter()
-        if KEYBIND_STRIP and self.keybindStripDescriptor then
+        if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
     elseif self.viewMode == VIEW_MODE.MAIL_INBOX and self.mailInboxPane then
         self.mailInboxPane:SetHidden(false)
         self:RefreshMailInboxPane()
-        if KEYBIND_STRIP and self.keybindStripDescriptor then
+        if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
     else
@@ -2219,7 +2191,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
         self.btnValidateDelivery:SetHidden(true)
-        if KEYBIND_STRIP and self.keybindStripDescriptor then
+        if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
         return
@@ -2402,7 +2374,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
             SetReadOnlyEditText(self.deliveryEdit, "")
         end
     end
-    if KEYBIND_STRIP and self.keybindStripDescriptor then
+    if self.keybindStripDescriptor then
         KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
     end
 end
