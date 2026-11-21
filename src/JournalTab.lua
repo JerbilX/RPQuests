@@ -1521,6 +1521,9 @@ function JournalTab:OpenMailSendView()
     if self.mailCopyBg then
         self.mailCopyBg:SetHidden(true)
     end
+    if self.mailCopyEdit then
+        SetReadOnlyEditText(self.mailCopyEdit, "")
+    end
     self:Refresh()
     self:RefreshMailSendCounter()
 end
@@ -1547,7 +1550,7 @@ function JournalTab:OnCopyMailCodeClicked()
     local code = Addon.QuestRepository:ExportQuestToCode(quest.id) or ""
     if self.mailCopyBg and self.mailCopyEdit then
         self.mailCopyBg:SetHidden(false)
-        self.mailCopyEdit:SetText(code)
+        SetReadOnlyEditText(self.mailCopyEdit, code)
         if self.mailCopyEdit.TakeFocus then self.mailCopyEdit:TakeFocus() end
         if self.mailCopyEdit.SelectAll then self.mailCopyEdit:SelectAll() end
     end
