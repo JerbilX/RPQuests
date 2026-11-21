@@ -60,12 +60,20 @@ jobs:
           fi
           ZIP_PATH=$(ls dist/RPQuest-*.zip | head -n 1)
           VERSION=$(basename "$ZIP_PATH" | sed -E 's/^RPQuest-(.+)\.zip$/\1/')
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
-          if [ -n "$PREV_TAG" ]; then
-            git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"- %s" > changelog.txt
-          else
-            git log -n 10 --no-merges --pretty=format:"- %s" > changelog.txt
-          fi
+          : > changelog.txt
+          mapfile -t TAGS < <(git tag -l 'v*' --sort=-v:refname --merged HEAD)
+          for i in "${!TAGS[@]}"; do
+            TAG="${TAGS[$i]}"
+            NEXT_IDX=$((i + 1))
+            echo "[B]${TAG}[/B]" >> changelog.txt
+            if [ "$NEXT_IDX" -lt "${#TAGS[@]}" ]; then
+              PREV="${TAGS[$NEXT_IDX]}"
+              git log "${PREV}..${TAG}" --no-merges --pretty=format:"- %s" >> changelog.txt
+            else
+              git log "${TAG}" --no-merges --pretty=format:"- %s" >> changelog.txt
+            fi
+            printf "\n\n" >> changelog.txt
+          done
           if [ ! -s changelog.txt ]; then
             echo "Release ${VERSION}" > changelog.txt
           fi
