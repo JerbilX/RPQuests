@@ -21,12 +21,12 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
 - **World Map Search Area (`M`):** Displays an approximate search circle (`ZO_PinBlob`) on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
 - **Native NPC Dialogue Injection:** Bind custom RPQuest dialogue lines and per-NPC player response options to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
-- **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners (including when accepting a shared quest by code) and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
+- **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
-- **Code Sharing & Completion Proof (`RPQ3` / `RPQC1`):**
-  - Export any prepared quest as a compact, LZSS-compressed, Discord-safe Base85 share code (`RPQ3:...`, backwards-compatible with `RPQ2`/`RPQ1`) for other players to import.
-  - **In-Game Mail Transport & Group Share:** Send quests directly to 1–4 `@AccountName` recipients with an optional roleplay message (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP`, with a quick **Copy Code** fallback for Discord), or press the native **Share** keybind in the RPQuest Journal when grouped to send the selected quest to your group members. Get notified on incoming quest mails, receive/accept (or optionally **Auto-Accept**) them from the **Mail** inbox in RPQuest, and report/auto-validate completion (`RPQC1`) back to the creator via mail (works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU). Discovery and combat objectives completed by nearby group members are also tracked automatically.
-  - Completed quests generate a delivery validation code (`RPQC1:...`) to prove completion back to the Quest Master.
+- **1-to-1 In-Game Mail Flow (Zero Copy/Paste):**
+  - Assign a single `@AccountName` recipient directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU).
+  - **Auto-Ingested Pending Quests:** Incoming quest mails are automatically ingested into the player's **Pending** list with a visible alert and **Accept** / **Reject** actions directly in the RPQuest Journal.
+  - **Automatic Completion & Rejection Reports:** Completing or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Completed` / `Rejected`).
 - **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
 
 ---
@@ -49,13 +49,13 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
    - Open the Quest Journal (`J`) and switch to the **RPQuest** tab (or type `/rpquest`).
    - Click **Create Quest**, use the collapsible form sections to set **Title**, **Description / Lore**, **Search Area** size (`Small`, `Medium`, `Large`), optional **Do not be detected**, and optional **NPC Dialogue** lines.
    - In the world, aim at NPCs and press your **Capture Target** keybind (or `/rpquest capture`), or stand at a location and press **Capture Discovery Point** (or `/rpquest discovery`).
-2. **Share with Players:**
-   - Select your prepared quest and copy its `RPQ3:...` share code.
-   - Players paste that code into the **Import** field in their **RPQuest** tab.
-   - **Same-language requirement:** Quest codes can only be imported on a game client using the same language as the creator. ESO does not expose universal NPC IDs across client locales, and some NPCs do not share direct equivalents—allowing cross-language imports or changing the language directly would cause NPC names and objectives to stop matching and break the quest.
-3. **Play & Verify:**
-   - Activate the received quest to show the HUD mini-tracker and World Map search area.
-   - Once all objectives are completed, copy the generated `RPQC1:...` delivery code to confirm completion.
+2. **Send to a Player (1-to-1 Mail):**
+   - Set the target `@AccountName` in the quest editor and click **Send Quest** from the prepared quest details.
+   - The player receives an alert and sees the quest under **Pending** in their **RPQuest** tab to **Accept** or **Reject**.
+   - **Same-language requirement:** Quests should be played on a game client using the same language as the creator so NPC names and dialogue targets match.
+3. **Play & Auto-Report:**
+   - Accepting the quest activates the HUD mini-tracker, World Map search area, and any injected NPC dialogues immediately.
+   - Upon completion (or rejection), RPQuest automatically mails the result back to the Quest Master and updates the quest status.
 
 ---
 
