@@ -43,7 +43,7 @@ local function CreateStyledButton(name, parent, width, height, text, onClick)
     return btn
 end
 
-local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine, onTextChanged, selectAllOnFocus, isReadOnly)
+local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, isMultiLine, onTextChanged, selectAllOnFocus)
     local bg = WINDOW_MANAGER:CreateControl(name .. "_Bg", parent, CT_BACKDROP)
     bg:SetDimensions(width, height)
     bg:SetMouseEnabled(true)
@@ -63,8 +63,6 @@ local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, 
     if selectAllOnFocus and edit.SetSelectAllOnFocus then
         edit:SetSelectAllOnFocus(true)
     end
-    edit._isReadOnly = isReadOnly and true or false
-    edit._readOnlyValue = ""
     edit:SetText("")
 
     local function FocusEditBox()
@@ -94,20 +92,7 @@ local function CreateEditBoxWithBackdrop(name, parent, width, height, maxChars, 
         edit._focused = false
         bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
     end)
-    if isReadOnly then
-        edit:SetHandler("OnTextChanged", function(ctrl)
-            if ctrl._readOnlySyncing then return end
-            local expected = ctrl._readOnlyValue or ""
-            if ctrl:GetText() ~= expected then
-                ctrl._readOnlySyncing = true
-                ctrl:SetText(expected)
-                if selectAllOnFocus and ctrl.SelectAll then
-                    ctrl:SelectAll()
-                end
-                ctrl._readOnlySyncing = false
-            end
-        end)
-    elseif onTextChanged then
+    if onTextChanged then
         edit:SetHandler("OnTextChanged", function(ctrl)
             onTextChanged(ctrl:GetText())
         end)
@@ -250,7 +235,6 @@ function JournalTab:BuildLeftColumn(panel)
         end
     )
     self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 4)
-    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 220, 4)
 
     local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
     emptyLabel:SetDimensions(310, 80)
