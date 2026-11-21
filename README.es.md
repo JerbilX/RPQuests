@@ -16,7 +16,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 ## Características Principales
 
 - **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuest** dentro del Diario de Misiones (`ZO_QuestJournal_Keyboard`) separando las listas de misiones **En preparación** (creadas por ti) y **Recibidas** (activas/jugables).
-- **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de teclado (o `/rpquest capture`). Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales.
+- **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de teclado (o `/rpquest capture`). Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones opcionales de ubicación (`Requerida` / `No requerida`) y mensajes personalizados al eliminarlos.
 - **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo (`Keybind` o `/rpquest discovery`) con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_PinBlob`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto. Desaparece automáticamente al completar o desactivar la misión.
