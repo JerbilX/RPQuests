@@ -183,8 +183,6 @@ function JournalTab:Initialize()
             if quest and self.selectedQuestId == quest.id then
                 self.selectedQuestId = nil
             end
-        elseif eventType == "QUEST_SENT" or eventType == "DELIVERY_RECORDED" then
-            -- Refresh detail pane to reflect updated send/delivery status
         elseif eventType == "DRAFT_TARGET_CAPTURED" then
             if self.viewMode ~= VIEW_MODE.EDITOR then
                 self.viewMode = VIEW_MODE.EDITOR
