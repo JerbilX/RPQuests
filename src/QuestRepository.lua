@@ -759,9 +759,9 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 end
 
 function QuestRepository:ImportQuestFromCode(codeString)
-    local decoded = Addon.ShareCodec:DecodeQuest(codeString)
+    local decoded, errKey = Addon.ShareCodec:DecodeQuest(codeString)
     if not decoded then
-        return nil, Addon.Locale:Get("ERR_INVALID_CODE")
+        return nil, Addon.Locale:Get(type(errKey) == "string" and errKey or "ERR_INVALID_CODE")
     end
 
     local newId = self.savedVars.nextId
