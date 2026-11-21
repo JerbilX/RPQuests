@@ -161,6 +161,8 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
+        status = data.status,
+        sourceMailId = data.sourceMailId,
         completionReported = (data.completionReported == true),
         deliveries = type(data.deliveries) == "table" and data.deliveries or {},
     }
@@ -224,6 +226,7 @@ function QuestRepository:GetDefaults()
         nextId = 1,
         activeQuestId = nil,
         quests = {},
+        ingestedMailIds = {},
         draft = CreateDefaultDraft(),
         settings = {
             autoDeleteMail = true,
@@ -237,6 +240,7 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars = savedVars or self:GetDefaults()
     self.savedVars.nextId = self.savedVars.nextId or 1
     self.savedVars.quests = self.savedVars.quests or {}
+    self.savedVars.ingestedMailIds = self.savedVars.ingestedMailIds or {}
     if type(self.savedVars.settings) ~= "table" then
         self.savedVars.settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = false }
     else
@@ -792,7 +796,38 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     return newQuest
 end
 
-function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName)
+function QuestRepository:IsOfferedQuest(quest)
+    return quest ~= nil and quest.status == Addon.Constants.QUEST_STATUS.OFFERED
+end
+
+function QuestRepository:HasIngestedMail(mailKey)
+    if type(mailKey) ~= "string" or mailKey == "" then
+        return false
+    end
+    if self.savedVars and self.savedVars.ingestedMailIds and self.savedVars.ingestedMailIds[mailKey] then
+        return true
+    end
+    for _, q in ipairs((self.savedVars and self.savedVars.quests) or {}) do
+        if q.sourceMailId == mailKey then
+            return true
+        end
+    end
+    return false
+end
+
+function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, options)
+    options = type(options) == "table" and options or {}
+    if type(options.sourceMailId) == "string" and options.sourceMailId ~= "" then
+        if self:HasIngestedMail(options.sourceMailId) then
+            for _, q in ipairs(self.savedVars.quests or {}) do
+                if q.sourceMailId == options.sourceMailId then
+                    return q, nil, true
+                end
+            end
+            return nil, nil, true
+        end
+    end
+
     local decoded, errKey = Addon.ShareCodec:DecodeQuest(codeString)
     if not decoded then
         return nil, Addon.Locale:Get(type(errKey) == "string" and errKey or "ERR_INVALID_CODE")
@@ -833,6 +868,8 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName)
     if type(senderDisplayName) == "string" and senderDisplayName ~= "" then
         decoded.senderDisplayName = senderDisplayName
     end
+    decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
+    decoded.sourceMailId = options.sourceMailId
 
     local importedQuest = BuildQuestRecord(
         newId,
@@ -847,11 +884,42 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName)
     if self._questById then
         self._questById[importedQuest.id] = importedQuest
     end
-    self.savedVars.activeQuestId = importedQuest.id
-    self:InvalidateActiveTargetCache()
+    if type(options.sourceMailId) == "string" and options.sourceMailId ~= "" then
+        self.savedVars.ingestedMailIds = self.savedVars.ingestedMailIds or {}
+        self.savedVars.ingestedMailIds[options.sourceMailId] = true
+    end
 
-    self:NotifyListeners("QUEST_IMPORTED", importedQuest)
-    return importedQuest
+    if importedQuest.status == Addon.Constants.QUEST_STATUS.OFFERED then
+        self:NotifyListeners("QUEST_OFFERED", importedQuest)
+    else
+        if options.setActive ~= false then
+            self.savedVars.activeQuestId = importedQuest.id
+            self:InvalidateActiveTargetCache()
+        end
+        self:NotifyListeners("QUEST_IMPORTED", importedQuest)
+    end
+    return importedQuest, nil, false
+end
+
+function QuestRepository:AcceptOfferedQuest(questId)
+    local q = self:GetQuestById(questId)
+    if not q or not self:IsOfferedQuest(q) then
+        return false, nil
+    end
+    q.status = Addon.Constants.QUEST_STATUS.ACTIVE
+    self:SetActiveQuest(q.id)
+    self:NotifyListeners("QUEST_ACCEPTED", q)
+    return true, q
+end
+
+function QuestRepository:RejectOfferedQuest(questId)
+    local q = self:GetQuestById(questId)
+    if not q or not self:IsOfferedQuest(q) then
+        return false, nil
+    end
+    self:DeleteQuest(q.id)
+    self:NotifyListeners("QUEST_REJECTED", q)
+    return true, q
 end
 
 function QuestRepository:ExportQuestToCode(questId)
@@ -1085,7 +1153,7 @@ function QuestRepository:GetActiveQuest()
         return nil
     end
     local q = self:GetQuestById(self.savedVars.activeQuestId)
-    if q and not q.completed and not q.failed then
+    if q and not q.completed and not q.failed and not self:IsOfferedQuest(q) then
         return q
     end
     return nil
@@ -1100,7 +1168,7 @@ function QuestRepository:SetActiveQuest(questId)
     end
 
     local q = self:GetQuestById(questId)
-    if not q or q.completed or q.failed then
+    if not q or q.completed or q.failed or self:IsOfferedQuest(q) then
         return false
     end
 

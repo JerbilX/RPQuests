@@ -14,6 +14,7 @@ RPQuest.Locales["es"] = {
 
     -- Tab & General
     TAB_TITLE = "RPQuests",
+    SECTION_PENDING_QUESTS = "PENDIENTES (%d)",
     SECTION_ACTIVE_QUESTS = "MISIONES (%d)",
     SECTION_PREPARED_QUESTS = "PREPARANDO (%d)",
     SECTION_COMPLETED_QUESTS = "COMPLETADAS (%d)",
@@ -49,6 +50,7 @@ RPQuest.Locales["es"] = {
     BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
+    STATUS_PENDING = "Estado: |cFFD155Pendiente (Aceptar o Rechazar)|r",
     STATUS_ACTIVE = "Estado: |c33FF33Activa (En Seguimiento)|r",
     STATUS_AVAILABLE = "Estado: |cE8D5A0Disponible|r",
     STATUS_COMPLETED = "Estado: |c00CCFFCompletada|r",
@@ -186,6 +188,8 @@ RPQuest.Locales["es"] = {
     BTN_MAIL_AUTO_ACCEPT_ON = "Auto-aceptar correo: SÍ",
     BTN_MAIL_AUTO_ACCEPT_OFF = "Auto-aceptar correo: NO",
     ALERT_MAIL_QUEST_RECEIVED = "Correo RPQuest recibido: \"%s\" de %s (abre RPQuest -> Bandeja de Correo).",
+    ALERT_MAIL_QUEST_OFFERED = "Nueva misión RPQuest disponible: \"%s\" de %s (abre el Diario RPQuest para Aceptar o Rechazar).",
+    ALERT_QUEST_REJECTED = "Misión rechazada: \"%s\".",
     MAIL_SEND_TITLE = "Enviar Misión por Correo: %s",
     MAIL_RECIPIENTS_LABEL = "Destinatario (1 @Cuenta):",
     HINT_MAIL_RECIPIENTS = "@NombreJugador",

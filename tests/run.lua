@@ -2433,28 +2433,33 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     end
 
     RPQuest.MailTransport:ScanInbox(false)
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "101 parsed immediately, 102 ignored")
-    local mails = RPQuest.MailTransport:GetReceivedMails()
-    AssertEqual(mails[1].senderDisplayName, "@QuestMaster", "Sender displayName preserved")
-    AssertEqual(mails[1].roleMessage, "Te encomiendo esta tarea.", "Role message extracted")
-
-    -- Simulate async readable for 103
-    _G.ReadMail = function(id) return mockInbox[id] and mockInbox[id].body or "" end
-    RPQuest.MailTransport:OnMailReadable(103)
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 2, "103 parsed via OnMailReadable")
-
-    -- Accept 101 with autoDeleteMail = true (default)
-    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(101)
-    AssertTrue(imported ~= nil, "AcceptReceivedMail imports quest: " .. tostring(impErr))
-    AssertEqual(#deletedMails, 1, "DeleteMail called when autoDeleteMail is true")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "101 auto-ingested from inbox, 102 ignored")
+    local receivedQuests = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#receivedQuests, 1, "101 auto-ingested as OFFERED quest")
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(receivedQuests[1]), true, "Ingested quest has OFFERED status")
+    AssertEqual(receivedQuests[1].senderDisplayName, "@QuestMaster", "Sender displayName preserved")
+    AssertEqual(#deletedMails, 1, "DeleteMail called on auto-ingest when autoDeleteMail is true")
     AssertEqual(deletedMails[1], 101, "Deleted mail 101")
 
-    -- Reject 103 with autoDeleteMail = false
+    -- Simulate async readable for 103 with autoDeleteMail = false
     RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
-    local rejOk = RPQuest.MailTransport:RejectReceivedMail(103)
-    AssertEqual(rejOk, true, "RejectReceivedMail returns true")
+    _G.ReadMail = function(id) return mockInbox[id] and mockInbox[id].body or "" end
+    RPQuest.MailTransport:OnMailReadable(103)
+    receivedQuests = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#receivedQuests, 2, "103 auto-ingested via OnMailReadable")
     AssertEqual(#deletedMails, 1, "DeleteMail NOT called when autoDeleteMail is false")
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after accept & reject")
+
+    -- Re-scan does not duplicate 103
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 2, "No duplicate on re-scan")
+
+    -- Accept 101 and Reject 103
+    local accOk = RPQuest.QuestRepository:AcceptOfferedQuest(receivedQuests[1].id)
+    AssertEqual(accOk, true, "AcceptOfferedQuest succeeds")
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(receivedQuests[1]), false, "Accepted quest is no longer OFFERED")
+    local rejOk = RPQuest.QuestRepository:RejectOfferedQuest(receivedQuests[2].id)
+    AssertEqual(rejOk, true, "RejectOfferedQuest succeeds")
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 1, "Rejected quest removed from list")
 
     -- Restore globals
     _G.SendMail = origSendMail
@@ -2513,8 +2518,10 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     _G.ReadMail = function(id) return (id == 201) and rpq3Code or "" end
 
     RPQuest.MailTransport:ScanInbox(false)
-    local imported = RPQuest.MailTransport:AcceptReceivedMail(201)
-    AssertTrue(imported ~= nil, "Quest accepted from mail")
+    local receivedList = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    local imported = receivedList[1]
+    AssertTrue(imported ~= nil, "Quest auto-ingested from mail")
+    RPQuest.QuestRepository:AcceptOfferedQuest(imported.id)
     AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
 
     -- Manual mode (default): completing quest does NOT auto-send, shows manual button
@@ -2770,17 +2777,13 @@ RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incom
         }
     end
     RPQuest.MailTransport:ScanInbox(false)
-    local mailsReady = RPQuest.MailTransport:GetReceivedMails()
-    AssertEqual(#mailsReady, 1, "Still 1 consolidated entry after all parts arrive")
-    AssertEqual(mailsReady[1].isIncomplete, false, "Entry marked complete")
-    AssertEqual(mailsReady[1].title, q.title, "Decoded title matches original")
-
-    -- Accept and verify all part mails are deleted
-    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(mailsReady[1].mailId)
-    AssertTrue(imported ~= nil, "Multi-part quest imported: " .. tostring(impErr))
-    AssertEqual(imported.title, q.title, "Imported quest title matches")
-    AssertEqual(#deletedIds, plan.partCount, "All part mails deleted on Accept")
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after Accept")
+    local receivedMulti = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#receivedMulti, 1, "Multi-part quest auto-ingested once all parts arrive")
+    local imported = receivedMulti[1]
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(imported), true, "Multi-part quest starts in OFFERED status")
+    AssertEqual(imported.title, q.title, "Decoded title matches original")
+    AssertEqual(#deletedIds, plan.partCount, "All part mails deleted on auto-ingest")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after auto-ingest")
 end)
 
 RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes and JournalTab shows version", function()
@@ -2892,15 +2895,18 @@ RunTest("MailTransport: alerts on incoming quest mail without duplicates and sup
         table.insert(alerts, { msg = msg, isErr = isErr })
     end
 
-    -- 1. Manual mode (autoAcceptMail = false)
+    -- 1. Manual mode (autoAcceptMail = false): auto-ingests as OFFERED
     RPQuest.MailTransport:ScanInbox(false)
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "Mail stored in inbox in manual mode")
+    local offeredList = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#offeredList, 1, "Quest auto-ingested as OFFERED in manual mode")
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(offeredList[1]), true, "Ingested quest is OFFERED")
     AssertEqual(#alerts, 1, "1 notification alert shown")
     AssertEqual(alerts[1].isErr, false, "Notification alert is not an error")
-    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", "Misión de Correo", "@SenderA"), "Notification message matches")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_QUEST_OFFERED", "Misión de Correo", "@SenderA"), "Notification message matches")
 
-    -- Re-scan does not duplicate alert
+    -- Re-scan does not duplicate quest or alert
     RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 1, "No duplicate OFFERED quest on re-scan")
     AssertEqual(#alerts, 1, "No duplicate notification alert on re-scan")
 
     -- 2. Auto-accept mode (autoAcceptMail = true)
@@ -2919,8 +2925,8 @@ RunTest("MailTransport: alerts on incoming quest mail without duplicates and sup
     RPQuest.MailTransport:ScanInbox(false)
     local qCountAfter = #RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
     AssertEqual(qCountAfter, qCountBefore + 1, "Quest auto-imported when autoAcceptMail=true")
-    AssertEqual(#deletedIds, 1, "Auto-accepted mail deleted when autoDeleteMail=true")
-    AssertEqual(deletedIds[1], 952, "Deleted mailId matches auto-accepted mail")
+    AssertEqual(#deletedIds, 2, "Both ingested and auto-accepted mails deleted when autoDeleteMail=true")
+    AssertEqual(deletedIds[2], 952, "Deleted mailId matches auto-accepted mail")
     AssertEqual(acceptedCount, 1, "AnnounceQuestAccepted called on auto-accept")
 
     RPQuest.Announcements.ShowAlert = origShowAlert
@@ -3031,6 +3037,61 @@ RunTest("36. Locale fallback to English for unsupported client languages and dir
     AssertEqual(RPQuest.Locale:Get("SECTION_ACTIVE_QUESTS", 3), "QUESTS (3)", "Locale:Get formats placeholders directly")
     mockState.language = origLang
     RPQuest.Locale:Initialize(origLang)
+end)
+
+RunTest("37. OFFERED pending quest UI in JournalTab: Accept activates and Reject removes (Issue #143)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.JournalTab:Initialize()
+
+    local code = RPQuest.ShareCodec:EncodeQuest({
+        title = "Contrato Pendiente",
+        description = "Acepta o rechaza.",
+        mapId = mockState.mapId,
+        zoneId = mockState.zoneId,
+        mapName = "Auridon",
+        targets = { { name = "Lobo", requiredCount = 1 } },
+    })
+
+    local offered, _, isDup = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_pending_1",
+    })
+    AssertTrue(offered ~= nil, "Offered quest imported")
+    AssertEqual(isDup, false, "First import is not duplicate")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Offered quest is not active yet")
+    AssertEqual(RPQuest.QuestRepository:SetActiveQuest(offered.id), false, "Cannot set OFFERED quest active directly")
+
+    -- Duplicate prevention by sourceMailId
+    local dupQ, _, isDup2 = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_pending_1",
+    })
+    AssertEqual(isDup2, true, "Second import with same sourceMailId detected as duplicate")
+    AssertEqual(dupQ.id, offered.id, "Returns existing quest on duplicate")
+
+    -- JournalTab shows Accept and Reject buttons for OFFERED quest
+    RPQuest.JournalTab:SelectQuest(offered.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.btnAcceptOffered:IsHidden(), false, "Accept button visible for OFFERED quest")
+    AssertEqual(RPQuest.JournalTab.btnRejectOffered:IsHidden(), false, "Reject button visible for OFFERED quest")
+    AssertEqual(RPQuest.JournalTab.btnActivate:IsHidden(), true, "Activate button hidden for OFFERED quest")
+
+    -- Accept activates quest
+    local accepted = RPQuest.JournalTab:AcceptSelectedOfferedQuest()
+    AssertEqual(accepted, true, "AcceptSelectedOfferedQuest succeeds")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, offered.id, "Quest becomes active after Accept")
+    AssertEqual(RPQuest.JournalTab.btnAcceptOffered:IsHidden(), true, "Accept button hidden after Accept")
+
+    -- Reject removes another offered quest
+    local offered2 = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_pending_2",
+    })
+    RPQuest.JournalTab:SelectQuest(offered2.id)
+    local rejected = RPQuest.JournalTab:RejectSelectedOfferedQuest()
+    AssertEqual(rejected, true, "RejectSelectedOfferedQuest succeeds")
+    AssertEqual(RPQuest.QuestRepository:GetQuestById(offered2.id), nil, "Rejected quest removed from repository")
 end)
 
 if failed > 0 then

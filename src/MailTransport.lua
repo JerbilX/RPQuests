@@ -556,6 +556,36 @@ function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, _subject
     return false
 end
 
+function MailTransport:IngestReceivedMail(mailId)
+    local idKey = tostring(mailId)
+    local idx = self._receivedById and self._receivedById[idKey]
+    local existing = idx and self._receivedMails[idx]
+    if existing and existing.isIncomplete then
+        return nil, "ERR_MAIL_INCOMPLETE"
+    end
+
+    local entry = self:RemoveEntryById(mailId)
+    if not entry then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local autoAccept = Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoAcceptMail")
+    local targetStatus = autoAccept and Addon.Constants.QUEST_STATUS.ACTIVE or Addon.Constants.QUEST_STATUS.OFFERED
+    local imported, err, isDuplicate = Addon.QuestRepository:ImportQuestFromCode(entry.questCode, entry.senderDisplayName, {
+        status = targetStatus,
+        sourceMailId = entry.idKey,
+    })
+    if not imported and not isDuplicate then
+        table.insert(self._receivedMails, entry)
+        self:RebuildReceivedIndex()
+        return nil, err
+    end
+
+    self:DisposeEntryMails(entry)
+    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+    return imported, nil, entry, isDuplicate
+end
+
 function MailTransport:UpsertReceivedEntry(entry)
     local existingIdx = self._receivedById[entry.idKey]
     if existingIdx then
@@ -570,16 +600,18 @@ function MailTransport:UpsertReceivedEntry(entry)
         self._notifiedMailIds = self._notifiedMailIds or {}
         if not self._notifiedMailIds[entry.idKey] then
             self._notifiedMailIds[entry.idKey] = true
-            if Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoAcceptMail") then
-                local imported = self:AcceptReceivedMail(entry.idKey)
-                if imported and Addon.Announcements and Addon.Announcements.AnnounceQuestAccepted then
-                    Addon.Announcements:AnnounceQuestAccepted(imported)
+            local imported, _, _, isDuplicate = self:IngestReceivedMail(entry.idKey)
+            if imported and not isDuplicate and Addon.Announcements then
+                if Addon.QuestRepository:GetSetting("autoAcceptMail") then
+                    if Addon.Announcements.AnnounceQuestAccepted then
+                        Addon.Announcements:AnnounceQuestAccepted(imported)
+                    end
+                elseif Addon.Announcements.ShowAlert then
+                    local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
+                        and entry.senderDisplayName
+                        or entry.senderCharacterName or ""
+                    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_OFFERED", imported.title or entry.title or "", who), false)
                 end
-            elseif Addon.Announcements and Addon.Announcements.ShowAlert then
-                local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
-                    and entry.senderDisplayName
-                    or entry.senderCharacterName or ""
-                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", entry.title or "", who), false)
             end
         end
     end
