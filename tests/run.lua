@@ -2744,6 +2744,58 @@ RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for futu
     AssertEqual(impErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized unsupported version error")
 end)
 
+RunTest("MailTransport: surfaces decode errors once per mailId on ScanInbox/OnMailReadable (Issue #125)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    local inbox = {
+        [901] = { sender = "@Sender", charName = "Sender", subject = "[RPQuest] Corrupt", body = "RPQ3:FFFF:badpayload", secs = 10 },
+        [902] = { sender = "@Sender", charName = "Sender", subject = "[RPQuest] Future", body = "RPQ4:1234:futurepayload", secs = 10 },
+    }
+    _G.GetNextMailId = function(cur)
+        if cur == nil then return 901 end
+        if cur == 901 then return 902 end
+        return nil
+    end
+    _G.GetMailItemInfo = function(id)
+        local m = inbox[id]
+        if not m then return nil end
+        return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+    end
+    _G.ReadMail = function(id)
+        local m = inbox[id]
+        return m and m.body or ""
+    end
+
+    local alerts = {}
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+
+    local events = {}
+    RPQuest.MailTransport:RegisterListener(function(ev, payload)
+        if ev == "MAIL_DECODE_ERROR" then
+            table.insert(events, payload)
+        end
+    end)
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#alerts, 2, "2 decode error alerts shown on first ScanInbox")
+    AssertEqual(alerts[1].isErr, true, "Corrupt mail alert is error")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ERR_IMPORT_TRUNCATED_OR_CORRUPT"), "Corrupt mail shows ERR_IMPORT_TRUNCATED_OR_CORRUPT")
+    AssertEqual(alerts[2].msg, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "Future RPQ4 mail shows ERR_IMPORT_UNSUPPORTED_VERSION")
+    AssertEqual(#events, 2, "MAIL_DECODE_ERROR emitted for both mails")
+
+    -- Re-scan and OnMailReadable must not duplicate alerts for the same mailIds
+    RPQuest.MailTransport:ScanInbox(false)
+    RPQuest.MailTransport:OnMailReadable(901)
+    AssertEqual(#alerts, 2, "No duplicate alerts on re-scan or OnMailReadable")
+
+    RPQuest.Announcements.ShowAlert = origShowAlert
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
