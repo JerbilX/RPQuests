@@ -343,6 +343,7 @@ dofile("src/CombatTracker.lua")
 dofile("src/DiscoveryTracker.lua")
 dofile("src/DialogueInjector.lua")
 dofile("src/WorldMapArea.lua")
+dofile("src/MailTransport.lua")
 dofile("src/JournalTab.lua")
 dofile("RPQuest.lua")
 
@@ -2243,6 +2244,156 @@ RunTest("RPQ3 compact codec: compression ratio, negative varints, Discord safety
     AssertTrue(compCode ~= nil and compCode:sub(1, 6) == "RPQC1:", "RPQC1 completion code works for RPQ3-decoded quest")
     local okVal, valRes = RPQuest.ShareCodec:ValidateCompletionForQuest(complexQuest, compCode)
     AssertEqual(okVal, true, "Original quest validates RPQC1 from RPQ3-decoded quest: " .. tostring(valRes))
+end)
+
+RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept/Reject and autoDeleteMail (Issue #101)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    -- Mock ESO Mail API
+    local sentMails = {}
+    local deletedMails = {}
+    local openCalls = 0
+    local closeCalls = 0
+    local nativeMailOpen = false
+
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReqRead = _G.RequestReadMail
+    local origReadMail = _G.ReadMail
+    local origDeleteMail = _G.DeleteMail
+    local origMaxBody = _G.MAIL_MAX_BODY_CHARACTERS
+    local origScene = _G.SCENE_MANAGER
+
+    _G.MAIL_MAX_BODY_CHARACTERS = 700
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.RequestOpenMailbox = function() openCalls = openCalls + 1 end
+    _G.CloseMailbox = function() closeCalls = closeCalls + 1 end
+    _G.DeleteMail = function(mailId) table.insert(deletedMails, mailId) end
+    _G.SCENE_MANAGER = {
+        IsShowing = function(_, name)
+            return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
+        end,
+    }
+
+    -- Create a prepared quest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Guardia",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local q = RPQuest.QuestRepository:SaveDraft("Misión por Correo", "Descripción corta")
+
+    -- 1. Reject > 4 recipients
+    local okMany, errMany = RPQuest.MailTransport:SendQuestToRecipients(q, "@A, @B, @C, @D, @E", "Hola")
+    AssertEqual(okMany, false, "Rejects more than 4 recipients")
+    AssertEqual(errMany, "ERR_MAIL_TOO_MANY_RECIPIENTS", "Returns too many recipients error")
+
+    -- 2. Reject body exceeding MAIL_MAX_BODY_CHARACTERS (no fragmentation)
+    local hugeMsg = string.rep("A", 700)
+    local okLong, errLong = RPQuest.MailTransport:SendQuestToRecipients(q, "@PlayerOne", hugeMsg)
+    AssertEqual(okLong, false, "Rejects mail exceeding MAIL_MAX_BODY_CHARACTERS")
+    AssertEqual(errLong, "ERR_MAIL_BODY_TOO_LONG", "Returns body too long error")
+
+    -- 3. Sequential queue for 3 recipients (normalizes @ prefix, deduplicates)
+    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, Two, @one, @Three", "Mensaje de rol.")
+    AssertEqual(okSend, true, "Sequential mail send started: " .. tostring(errSend))
+    AssertEqual(#sentMails, 1, "Only 1st mail dispatched immediately")
+    AssertEqual(sentMails[1].to, "@One", "First recipient normalized")
+    AssertEqual(sentMails[1].subject, "[RPQuest] Misión por Correo", "Subject uses [RPQuest] prefix")
+    AssertEqual(openCalls, 1, "RequestOpenMailbox called when native UI closed")
+    AssertEqual(closeCalls, 0, "CloseMailbox not called while sending")
+
+    RPQuest.MailTransport:OnMailSendSuccess("@One")
+    AssertEqual(#sentMails, 2, "Second mail dispatched after EVENT_MAIL_SEND_SUCCESS")
+    AssertEqual(sentMails[2].to, "@Two", "Second recipient received @ prefix")
+
+    RPQuest.MailTransport:OnMailSendSuccess("@Two")
+    AssertEqual(#sentMails, 3, "Third mail dispatched sequentially")
+    RPQuest.MailTransport:OnMailSendSuccess("@Three")
+    AssertEqual(closeCalls, 1, "CloseMailbox called after queue finishes when native UI is closed")
+
+    -- 4. Native mailbox open coordination: do not close if native UI is showing
+    nativeMailOpen = true
+    openCalls = 0
+    closeCalls = 0
+    local okNative = RPQuest.MailTransport:SendQuestToRecipients(q, "@Four", "")
+    AssertEqual(okNative, true, "Send succeeds when native mailbox already open")
+    AssertEqual(openCalls, 0, "RequestOpenMailbox skipped when native UI open")
+    RPQuest.MailTransport:OnMailSendSuccess("@Four")
+    AssertEqual(closeCalls, 0, "CloseMailbox NOT called when native mailbox UI is open")
+
+    -- 5. Inbox scanning & async EVENT_MAIL_READABLE parsing + Accept/Reject + autoDeleteMail
+    local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local mockInbox = {
+        [101] = { sender = "@QuestMaster", char = "Master", subject = "[RPQuest] Misión por Correo", body = "Te encomiendo esta tarea.\n\n" .. rpq3Code },
+        [102] = { sender = "@Other", char = "Other", subject = "Normal Mail", body = "Nothing here" },
+        [103] = { sender = "@RejectMe", char = "Reject", subject = "[RPQuest] Otra", body = rpq3Code },
+    }
+    _G.GetNextMailId = function(lastId)
+        if lastId == nil then return 101 end
+        if lastId == 101 then return 102 end
+        if lastId == 102 then return 103 end
+        return nil
+    end
+    _G.GetMailItemInfo = function(id)
+        local m = mockInbox[id]
+        if not m then return nil end
+        return m.sender, m.char, m.subject, "", true, false, false, false, 0, 0, 0, 30, 10, 0
+    end
+    _G.ReadMail = function(id)
+        if id == 103 then return "" end -- simulate async load for 103
+        return mockInbox[id] and mockInbox[id].body or ""
+    end
+    _G.RequestReadMail = function(id)
+        -- simulate EVENT_MAIL_READABLE later
+    end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "101 parsed immediately, 102 ignored")
+    local mails = RPQuest.MailTransport:GetReceivedMails()
+    AssertEqual(mails[1].senderDisplayName, "@QuestMaster", "Sender displayName preserved")
+    AssertEqual(mails[1].roleMessage, "Te encomiendo esta tarea.", "Role message extracted")
+
+    -- Simulate async readable for 103
+    _G.ReadMail = function(id) return mockInbox[id] and mockInbox[id].body or "" end
+    RPQuest.MailTransport:OnMailReadable(103)
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 2, "103 parsed via OnMailReadable")
+
+    -- Accept 101 with autoDeleteMail = true (default)
+    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(101)
+    AssertTrue(imported ~= nil, "AcceptReceivedMail imports quest: " .. tostring(impErr))
+    AssertEqual(#deletedMails, 1, "DeleteMail called when autoDeleteMail is true")
+    AssertEqual(deletedMails[1], 101, "Deleted mail 101")
+
+    -- Reject 103 with autoDeleteMail = false
+    RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
+    local rejOk = RPQuest.MailTransport:RejectReceivedMail(103)
+    AssertEqual(rejOk, true, "RejectReceivedMail returns true")
+    AssertEqual(#deletedMails, 1, "DeleteMail NOT called when autoDeleteMail is false")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after accept & reject")
+
+    -- Restore globals
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.RequestReadMail = origReqRead
+    _G.ReadMail = origReadMail
+    _G.DeleteMail = origDeleteMail
+    _G.MAIL_MAX_BODY_CHARACTERS = origMaxBody
+    _G.SCENE_MANAGER = origScene
 end)
 
 if failed > 0 then

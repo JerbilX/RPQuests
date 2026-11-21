@@ -17,6 +17,8 @@ local VIEW_MODE = {
     DETAIL = "DETAIL",
     EDITOR = "EDITOR",
     IMPORT = "IMPORT",
+    MAIL_SEND = "MAIL_SEND",
+    MAIL_INBOX = "MAIL_INBOX",
 }
 
 local function CreateStyledButton(name, parent, width, height, text, onClick)
@@ -219,6 +221,12 @@ function JournalTab:Initialize()
         end
     end)
 
+    if Addon.MailTransport and Addon.MailTransport.RegisterListener then
+        Addon.MailTransport:RegisterListener(function(evType, payload)
+            self:OnMailTransportEvent(evType, payload)
+        end)
+    end
+
     self.isInitialized = true
     self._dirty = true
 end
@@ -236,7 +244,7 @@ function JournalTab:BuildLeftColumn(panel)
     self.importBtn = CreateStyledButton(
         PANEL_NAME .. "_ImportBtn",
         leftCol,
-        165,
+        104,
         28,
         Addon.Locale:Get("BTN_IMPORT_CODE"),
         function()
@@ -245,17 +253,29 @@ function JournalTab:BuildLeftColumn(panel)
     )
     self.importBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 4)
 
+    self.mailInboxBtn = CreateStyledButton(
+        PANEL_NAME .. "_MailInboxBtn",
+        leftCol,
+        104,
+        28,
+        Addon.Locale:Get("BTN_MAIL_INBOX", 0),
+        function()
+            self:OpenMailInboxView()
+        end
+    )
+    self.mailInboxBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 112, 4)
+
     self.newBtn = CreateStyledButton(
         PANEL_NAME .. "_NewBtn",
         leftCol,
-        125,
+        104,
         28,
         Addon.Locale:Get("BTN_NEW_QUEST"),
         function()
             self:OpenCreateEditor()
         end
     )
-    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 179, 4)
+    self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 220, 4)
 
     local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
     emptyLabel:SetDimensions(310, 80)
@@ -341,6 +361,8 @@ function JournalTab:BuildRightColumn(panel)
     self:BuildDetailPane(rightCol)
     self:BuildEditorPane(rightCol)
     self:BuildImportPane(rightCol)
+    self:BuildMailSendPane(rightCol)
+    self:BuildMailInboxPane(rightCol)
 end
 
 function JournalTab:BuildDetailPane(parent)
@@ -519,12 +541,18 @@ function JournalTab:BuildDetailPane(parent)
 
     -- Grupo 2: Código para compartir siempre visible y sección de entrega/validación
     local shareHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ShareHeader", contentParent, CT_LABEL)
-    shareHeader:SetDimensions(520, 20)
+    shareHeader:SetDimensions(340, 20)
     shareHeader:SetAnchor(TOPLEFT, codeDivider, BOTTOMLEFT, 0, 8)
     if shareHeader.SetFont then shareHeader:SetFont("ZoFontGameBold") end
     if shareHeader.SetColor then shareHeader:SetColor(0.91, 0.83, 0.63, 1) end
     shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     self.shareHeader = shareHeader
+
+    self.btnSendByMail = CreateStyledButton(PANEL_NAME .. "_BtnSendByMail", contentParent, 160, 24, Addon.Locale:Get("BTN_SEND_BY_MAIL"), function()
+        self:OpenMailSendView()
+    end)
+    self.btnSendByMail:SetAnchor(TOPLEFT, codeDivider, BOTTOMLEFT, 350, 4)
+    self.btnSendByMail:SetHidden(true)
 
     local shareBg, shareEdit = CreateEditBoxWithBackdrop(PANEL_NAME .. "_ShareEdit", contentParent, 510, 32, 4096, false, nil, true, true)
     shareBg:SetAnchor(TOPLEFT, shareHeader, BOTTOMLEFT, 0, 2)
@@ -1226,6 +1254,295 @@ function JournalTab:BuildImportPane(parent)
     self.btnCancelImport:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 196)
 end
 
+function JournalTab:BuildMailSendPane(parent)
+    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendPane", parent, CT_CONTROL)
+    pane:SetDimensions(550, 580)
+    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    pane:SetHidden(true)
+    self.mailSendPane = pane
+
+    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendHeader", pane, CT_LABEL)
+    header:SetDimensions(520, 30)
+    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    if header.SetFont then header:SetFont("ZoFontWinH2") end
+    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
+    self.mailSendHeader = header
+
+    local lblRec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailRecLbl", pane, CT_LABEL)
+    lblRec:SetDimensions(520, 22)
+    lblRec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 44)
+    if lblRec.SetFont then lblRec:SetFont("ZoFontGameBold") end
+    lblRec:SetText(Addon.Locale:Get("MAIL_RECIPIENTS_LABEL"))
+
+    local recBg, recEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_MailRecEdit", pane, 510, 32, 200, false, nil, Addon.Locale:Get("HINT_MAIL_RECIPIENTS")
+    )
+    recBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 68)
+    self.mailRecEdit = recEdit
+
+    local lblRole = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailRoleLbl", pane, CT_LABEL)
+    lblRole:SetDimensions(520, 22)
+    lblRole:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 114)
+    if lblRole.SetFont then lblRole:SetFont("ZoFontGameBold") end
+    lblRole:SetText(Addon.Locale:Get("MAIL_ROLE_MSG_LABEL"))
+
+    local roleBg, roleEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_MailRoleEdit", pane, 510, 110, 700, true, function()
+            self:RefreshMailSendCounter()
+        end, Addon.Locale:Get("HINT_MAIL_ROLE_MSG")
+    )
+    roleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 138)
+    self.mailRoleEdit = roleEdit
+
+    local lblCounter = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCounterLbl", pane, CT_LABEL)
+    lblCounter:SetDimensions(510, 36)
+    lblCounter:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 258)
+    if lblCounter.SetFont then lblCounter:SetFont("ZoFontGame") end
+    self.mailCounterLabel = lblCounter
+
+    local lblStatus = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendStatusLbl", pane, CT_LABEL)
+    lblStatus:SetDimensions(510, 28)
+    lblStatus:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 300)
+    if lblStatus.SetFont then lblStatus:SetFont("ZoFontGameBold") end
+    self.mailSendStatusLabel = lblStatus
+
+    self.btnConfirmMailSend = CreateStyledButton(PANEL_NAME .. "_BtnConfirmMailSend", pane, 180, 36, Addon.Locale:Get("BTN_MAIL_SEND_CONFIRM"), function()
+        self:OnConfirmSendMailClicked()
+    end)
+    self.btnConfirmMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 340)
+
+    self.btnCancelMailSend = CreateStyledButton(PANEL_NAME .. "_BtnCancelMailSend", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
+        self.viewMode = VIEW_MODE.DETAIL
+        self:Refresh()
+    end)
+    self.btnCancelMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 340)
+end
+
+function JournalTab:BuildMailInboxPane(parent)
+    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailInboxPane", parent, CT_CONTROL)
+    pane:SetDimensions(550, 580)
+    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
+    pane:SetHidden(true)
+    self.mailInboxPane = pane
+
+    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailInboxHeader", pane, CT_LABEL)
+    header:SetDimensions(340, 30)
+    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
+    if header.SetFont then header:SetFont("ZoFontWinH2") end
+    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
+    header:SetText(Addon.Locale:Get("MAIL_INBOX_TITLE"))
+
+    self.btnMailRefresh = CreateStyledButton(PANEL_NAME .. "_BtnMailRefresh", pane, 100, 28, Addon.Locale:Get("BTN_MAIL_REFRESH"), function()
+        if Addon.MailTransport then
+            Addon.MailTransport:ScanInbox(true)
+        end
+        self:RefreshMailInboxPane()
+    end)
+    self.btnMailRefresh:SetAnchor(TOPLEFT, pane, TOPLEFT, 348, 0)
+
+    self.btnMailBack = CreateStyledButton(PANEL_NAME .. "_BtnMailBack", pane, 70, 28, Addon.Locale:Get("BTN_CANCEL"), function()
+        self.viewMode = VIEW_MODE.DETAIL
+        self:Refresh()
+    end)
+    self.btnMailBack:SetAnchor(TOPLEFT, pane, TOPLEFT, 456, 0)
+
+    self.btnToggleAutoDeleteMail = CreateStyledButton(PANEL_NAME .. "_BtnAutoDeleteMail", pane, 240, 26, "", function()
+        local cur = Addon.QuestRepository:GetSetting("autoDeleteMail")
+        Addon.QuestRepository:SetSetting("autoDeleteMail", not cur)
+        self:RefreshMailInboxPane()
+    end)
+    self.btnToggleAutoDeleteMail:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 42)
+
+    local lblEmpty = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailInboxEmpty", pane, CT_LABEL)
+    lblEmpty:SetDimensions(510, 40)
+    lblEmpty:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 86)
+    if lblEmpty.SetFont then lblEmpty:SetFont("ZoFontGame") end
+    lblEmpty:SetText(Addon.Locale:Get("MAIL_INBOX_EMPTY"))
+    self.mailInboxEmptyLabel = lblEmpty
+
+    local cardTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCardTitle", pane, CT_LABEL)
+    cardTitle:SetDimensions(510, 28)
+    cardTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 86)
+    if cardTitle.SetFont then cardTitle:SetFont("ZoFontWinH3") end
+    if cardTitle.SetColor then cardTitle:SetColor(1, 1, 1, 1) end
+    self.mailCardTitle = cardTitle
+
+    local cardFrom = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCardFrom", pane, CT_LABEL)
+    cardFrom:SetDimensions(510, 22)
+    cardFrom:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 118)
+    if cardFrom.SetFont then cardFrom:SetFont("ZoFontGameBold") end
+    if cardFrom.SetColor then cardFrom:SetColor(0.85, 0.78, 0.55, 1) end
+    self.mailCardFrom = cardFrom
+
+    local cardMsg = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCardMsg", pane, CT_LABEL)
+    cardMsg:SetDimensions(510, 140)
+    cardMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 148)
+    if cardMsg.SetFont then cardMsg:SetFont("ZoFontGame") end
+    self.mailCardMsg = cardMsg
+
+    self.btnMailAccept = CreateStyledButton(PANEL_NAME .. "_BtnMailAccept", pane, 140, 32, Addon.Locale:Get("BTN_MAIL_ACCEPT"), function()
+        local mails = Addon.MailTransport and Addon.MailTransport:GetReceivedMails() or {}
+        local entry = mails[self.selectedMailIndex or 1]
+        if not entry then return end
+        local imported, err = Addon.MailTransport:AcceptReceivedMail(entry.mailId)
+        if imported then
+            self.selectedQuestId = imported.id
+            self.viewMode = VIEW_MODE.DETAIL
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_IMPORTED", imported.title), false)
+            Addon.Announcements:AnnounceQuestAccepted(imported)
+            self:Refresh()
+        elseif err then
+            Addon.Announcements:ShowAlert(Addon.Locale:Get(err), true)
+        end
+    end)
+    self.btnMailAccept:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 304)
+
+    self.btnMailReject = CreateStyledButton(PANEL_NAME .. "_BtnMailReject", pane, 140, 32, Addon.Locale:Get("BTN_MAIL_REJECT"), function()
+        local mails = Addon.MailTransport and Addon.MailTransport:GetReceivedMails() or {}
+        local entry = mails[self.selectedMailIndex or 1]
+        if not entry then return end
+        Addon.MailTransport:RejectReceivedMail(entry.mailId)
+        self:RefreshMailInboxPane()
+    end)
+    self.btnMailReject:SetAnchor(TOPLEFT, pane, TOPLEFT, 154, 304)
+
+    self.btnMailPrev = CreateStyledButton(PANEL_NAME .. "_BtnMailPrev", pane, 36, 28, "<", function()
+        local total = Addon.MailTransport and Addon.MailTransport:GetReceivedMailCount() or 0
+        if total > 0 then
+            local cur = self.selectedMailIndex or 1
+            self.selectedMailIndex = (cur > 1) and (cur - 1) or total
+            self:RefreshMailInboxPane()
+        end
+    end)
+    self.btnMailPrev:SetAnchor(TOPLEFT, pane, TOPLEFT, 330, 306)
+
+    local lblPage = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailPageLbl", pane, CT_LABEL)
+    lblPage:SetDimensions(60, 28)
+    lblPage:SetAnchor(TOPLEFT, pane, TOPLEFT, 372, 310)
+    if lblPage.SetFont then lblPage:SetFont("ZoFontGameBold") end
+    self.mailPageLabel = lblPage
+
+    self.btnMailNext = CreateStyledButton(PANEL_NAME .. "_BtnMailNext", pane, 36, 28, ">", function()
+        local total = Addon.MailTransport and Addon.MailTransport:GetReceivedMailCount() or 0
+        if total > 0 then
+            local cur = self.selectedMailIndex or 1
+            self.selectedMailIndex = (cur < total) and (cur + 1) or 1
+            self:RefreshMailInboxPane()
+        end
+    end)
+    self.btnMailNext:SetAnchor(TOPLEFT, pane, TOPLEFT, 438, 306)
+end
+
+function JournalTab:OnMailTransportEvent(evType, payload)
+    if self.mailInboxBtn and Addon.MailTransport then
+        self.mailInboxBtn:SetText(Addon.Locale:Get("BTN_MAIL_INBOX", Addon.MailTransport:GetReceivedMailCount()))
+    end
+    if evType == "MAIL_SEND_PROGRESS" and self.mailSendStatusLabel and type(payload) == "table" then
+        self.mailSendStatusLabel:SetText(Addon.Locale:Get("MAIL_SENDING_PROGRESS", payload.current, payload.total, payload.to or ""))
+    elseif evType == "MAIL_SEND_COMPLETE" and type(payload) == "table" then
+        local msg = (payload.failed and payload.failed > 0)
+            and Addon.Locale:Get("MAIL_SEND_DONE_ERRORS", payload.sent, payload.total, payload.failed)
+            or Addon.Locale:Get("MAIL_SEND_DONE", payload.sent, payload.total)
+        if self.mailSendStatusLabel then
+            self.mailSendStatusLabel:SetText(msg)
+        end
+        Addon.Announcements:ShowAlert(msg, (payload.failed or 0) > 0)
+    elseif evType == "MAIL_INBOX_UPDATED" and self.viewMode == VIEW_MODE.MAIL_INBOX then
+        self:RefreshMailInboxPane()
+    end
+end
+
+function JournalTab:OpenMailSendView()
+    local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not quest then return end
+    self._mailSendQuestId = quest.id
+    self.viewMode = VIEW_MODE.MAIL_SEND
+    if self.mailSendHeader then
+        self.mailSendHeader:SetText(Addon.Locale:Get("MAIL_SEND_TITLE", quest.title or ""))
+    end
+    if self.mailSendStatusLabel then
+        self.mailSendStatusLabel:SetText("")
+    end
+    self:Refresh()
+    self:RefreshMailSendCounter()
+end
+
+function JournalTab:RefreshMailSendCounter()
+    if not Addon.MailTransport or not self.mailCounterLabel then return end
+    local quest = self._mailSendQuestId and Addon.QuestRepository:GetQuestById(self._mailSendQuestId)
+    if not quest then return end
+    local code = Addon.QuestRepository:ExportQuestToCode(quest.id) or ""
+    local roleMsg = self.mailRoleEdit and self.mailRoleEdit:GetText() or ""
+    local _, len, maxLen, fits = Addon.MailTransport:ComposeQuestMailBody(roleMsg, code)
+    if fits then
+        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER", len, maxLen))
+    else
+        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER_OVER", len, maxLen))
+    end
+end
+
+function JournalTab:OnConfirmSendMailClicked()
+    if not Addon.MailTransport then return end
+    local quest = self._mailSendQuestId and Addon.QuestRepository:GetQuestById(self._mailSendQuestId)
+    if not quest then return end
+    local rawRec = self.mailRecEdit and self.mailRecEdit:GetText() or ""
+    local roleMsg = self.mailRoleEdit and self.mailRoleEdit:GetText() or ""
+    local ok, errKey = Addon.MailTransport:SendQuestToRecipients(quest, rawRec, roleMsg)
+    if not ok and errKey then
+        local errMsg = Addon.Locale:Get(errKey)
+        if self.mailSendStatusLabel then
+            self.mailSendStatusLabel:SetText("|cFF4444" .. errMsg .. "|r")
+        end
+        Addon.Announcements:ShowAlert(errMsg, true)
+    end
+end
+
+function JournalTab:OpenMailInboxView()
+    self.viewMode = VIEW_MODE.MAIL_INBOX
+    if Addon.MailTransport then
+        Addon.MailTransport:ScanInbox(true)
+    end
+    self:Refresh()
+end
+
+function JournalTab:RefreshMailInboxPane()
+    if not self.mailInboxPane then return end
+    local autoDel = Addon.QuestRepository:GetSetting("autoDeleteMail")
+    if self.btnToggleAutoDeleteMail then
+        self.btnToggleAutoDeleteMail:SetText(Addon.Locale:Get(autoDel and "BTN_MAIL_AUTO_DELETE_ON" or "BTN_MAIL_AUTO_DELETE_OFF"))
+    end
+    local mails = Addon.MailTransport and Addon.MailTransport:GetReceivedMails() or {}
+    local total = #mails
+    if self.mailInboxBtn then
+        self.mailInboxBtn:SetText(Addon.Locale:Get("BTN_MAIL_INBOX", total))
+    end
+    local hasItems = total > 0
+    if self.mailInboxEmptyLabel then self.mailInboxEmptyLabel:SetHidden(hasItems) end
+    if self.mailCardTitle then self.mailCardTitle:SetHidden(not hasItems) end
+    if self.mailCardFrom then self.mailCardFrom:SetHidden(not hasItems) end
+    if self.mailCardMsg then self.mailCardMsg:SetHidden(not hasItems) end
+    if self.btnMailAccept then self.btnMailAccept:SetHidden(not hasItems) end
+    if self.btnMailReject then self.btnMailReject:SetHidden(not hasItems) end
+    if self.btnMailPrev then self.btnMailPrev:SetHidden(total <= 1) end
+    if self.btnMailNext then self.btnMailNext:SetHidden(total <= 1) end
+    if self.mailPageLabel then self.mailPageLabel:SetHidden(total <= 1) end
+
+    if not hasItems then
+        self.selectedMailIndex = nil
+        return
+    end
+    if not self.selectedMailIndex or self.selectedMailIndex < 1 or self.selectedMailIndex > total then
+        self.selectedMailIndex = 1
+    end
+    local entry = mails[self.selectedMailIndex]
+    self.mailCardTitle:SetText(entry.title or entry.subject or "")
+    self.mailCardFrom:SetText(Addon.Locale:Get("MAIL_FROM_LABEL", entry.senderDisplayName or ""))
+    self.mailCardMsg:SetText(entry.roleMessage or "")
+    if self.mailPageLabel then
+        self.mailPageLabel:SetText(Addon.Locale:Get("MAIL_INBOX_PAGE", self.selectedMailIndex, total))
+    end
+end
+
 function JournalTab:IntegrateIntoQuestJournalModeBar()
     local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
     if not qj then return end
@@ -1677,26 +1994,41 @@ function JournalTab:Refresh()
 
     -- 1. Actualizar columna izquierda
     self:RefreshQuestList(allQuests, activeQuest)
+    if self.mailInboxBtn and Addon.MailTransport then
+        self.mailInboxBtn:SetText(Addon.Locale:Get("BTN_MAIL_INBOX", Addon.MailTransport:GetReceivedMailCount()))
+    end
 
     -- 2. Actualizar columna derecha según el modo de vista
+    self.detailPane:SetHidden(true)
+    self.editorPane:SetHidden(true)
+    self.importPane:SetHidden(true)
+    if self.mailSendPane then self.mailSendPane:SetHidden(true) end
+    if self.mailInboxPane then self.mailInboxPane:SetHidden(true) end
+
     if self.viewMode == VIEW_MODE.EDITOR then
-        self.detailPane:SetHidden(true)
-        self.importPane:SetHidden(true)
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
         if KEYBIND_STRIP and self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
     elseif self.viewMode == VIEW_MODE.IMPORT then
-        self.detailPane:SetHidden(true)
-        self.editorPane:SetHidden(true)
         self.importPane:SetHidden(false)
         if KEYBIND_STRIP and self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
+    elseif self.viewMode == VIEW_MODE.MAIL_SEND and self.mailSendPane then
+        self.mailSendPane:SetHidden(false)
+        self:RefreshMailSendCounter()
+        if KEYBIND_STRIP and self.keybindStripDescriptor then
+            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+        end
+    elseif self.viewMode == VIEW_MODE.MAIL_INBOX and self.mailInboxPane then
+        self.mailInboxPane:SetHidden(false)
+        self:RefreshMailInboxPane()
+        if KEYBIND_STRIP and self.keybindStripDescriptor then
+            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+        end
     else
-        self.editorPane:SetHidden(true)
-        self.importPane:SetHidden(true)
         self.detailPane:SetHidden(false)
         self:RefreshDetailPane(selectedQuest, activeQuest)
     end
@@ -1715,6 +2047,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.detailObjText:SetText("")
         self.codeDivider:SetHidden(true)
         self.shareHeader:SetHidden(true)
+        if self.btnSendByMail then self.btnSendByMail:SetHidden(true) end
         self.shareBg:SetHidden(true)
         self.deliveryHeader:SetHidden(true)
         self.deliveryBg:SetHidden(true)
@@ -1840,6 +2173,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     end
     self.shareHeader:SetText(Addon.Locale:Get("LABEL_SHARE_CODE_HEADER"))
     self.shareHeader:SetHidden(false)
+    if self.btnSendByMail then self.btnSendByMail:SetHidden(false) end
     self.shareBg:SetHidden(false)
 
     if self.showOnMapKeybindButton then
