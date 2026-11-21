@@ -824,7 +824,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
     )
     AssertEqual(q.targets[1].currentCount, 1, "Group unit kill ignored when solo")
 
-    -- En grupo, muerte de miembro del grupo (distinto targetUnitId) sí cuenta y completa
+    -- En grupo, muerte de miembro del grupo sigue siendo ignorada (flujo 1-a-1)
     mockState.isGrouped = true
     EVENT_MANAGER:FireEvent(
         EVENT_COMBAT_EVENT,
@@ -833,6 +833,15 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
         1500, 0, 0, false, 98, 2004, 100
     )
     mockState.isGrouped = false
+    AssertEqual(q.targets[1].currentCount, 1, "Group unit kill ignored even when grouped")
+
+    -- Muerte del jugador completa la misión
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED_XP, false, "Ataque", 0, 0,
+        "Jugador", COMBAT_UNIT_TYPE_PLAYER, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 1, 2005, 100
+    )
     AssertTrue(q.completed, "Quest completed on second kill")
     AssertEqual(#mockState.csaMessages, 2, "CSA completion message emitted")
     AssertEqual(mockState.csaMessages[2].sound, SOUNDS.QUEST_COMPLETED, "Played QUEST_COMPLETED sound")
@@ -2348,9 +2357,9 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     })
     local q = RPQuest.QuestRepository:SaveDraft("Misión por Correo", "Descripción corta")
 
-    -- 1. Reject > 4 recipients
-    local okMany, errMany = RPQuest.MailTransport:SendQuestToRecipients(q, "@A, @B, @C, @D, @E", "Hola")
-    AssertEqual(okMany, false, "Rejects more than 4 recipients")
+    -- 1. Reject > 1 recipient (1-to-1 model)
+    local okMany, errMany = RPQuest.MailTransport:SendQuestToRecipients(q, "@A, @B", "Hola")
+    AssertEqual(okMany, false, "Rejects more than 1 recipient")
     AssertEqual(errMany, "ERR_MAIL_TOO_MANY_RECIPIENTS", "Returns too many recipients error")
 
     -- 2. Reject body exceeding max multi-part limit (MAX_MAIL_PARTS * chunkSize)
@@ -2359,25 +2368,19 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     AssertEqual(okLong, false, "Rejects mail exceeding multi-part mail limit")
     AssertEqual(errLong, "ERR_MAIL_BODY_TOO_LONG", "Returns body too long error")
 
-    -- 3. Sequential queue for 3 recipients (waits for EVENT_MAIL_OPEN_MAILBOX, normalizes @ prefix, deduplicates)
-    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, Two, @one, @Three", "Mensaje de rol.")
-    AssertEqual(okSend, true, "Sequential mail send started: " .. tostring(errSend))
+    -- 3. Single recipient send (waits for EVENT_MAIL_OPEN_MAILBOX, normalizes @ prefix, deduplicates)
+    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "One, @one", "Mensaje de rol.")
+    AssertEqual(okSend, true, "Single recipient mail send started: " .. tostring(errSend))
     AssertEqual(openCalls, 1, "RequestOpenMailbox called when native UI closed")
     AssertEqual(#sentMails, 0, "SendMail deferred until EVENT_MAIL_OPEN_MAILBOX fires")
     AssertEqual(closeCalls, 0, "CloseMailbox not called while waiting for mailbox open")
 
     RPQuest.MailTransport:OnMailboxOpened()
-    AssertEqual(#sentMails, 1, "1st mail dispatched after EVENT_MAIL_OPEN_MAILBOX")
-    AssertEqual(sentMails[1].to, "@One", "First recipient normalized")
+    AssertEqual(#sentMails, 1, "Mail dispatched after EVENT_MAIL_OPEN_MAILBOX")
+    AssertEqual(sentMails[1].to, "@One", "Recipient normalized with @ prefix")
     AssertEqual(sentMails[1].subject, "[RPQuest] Misión por Correo", "Subject uses [RPQuest] prefix")
 
     RPQuest.MailTransport:OnMailSendSuccess("@One")
-    AssertEqual(#sentMails, 2, "Second mail dispatched after EVENT_MAIL_SEND_SUCCESS")
-    AssertEqual(sentMails[2].to, "@Two", "Second recipient received @ prefix")
-
-    RPQuest.MailTransport:OnMailSendSuccess("@Two")
-    AssertEqual(#sentMails, 3, "Third mail dispatched sequentially")
-    RPQuest.MailTransport:OnMailSendSuccess("@Three")
     AssertEqual(closeCalls, 1, "CloseMailbox called after queue finishes when native UI is closed")
 
     -- 3b. Unexpected mailbox close mid-send aborts cleanly without hanging
@@ -2387,11 +2390,11 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
             lastComplete = payload
         end
     end)
-    local okAbort = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, @Two", "Hola")
+    local okAbort = RPQuest.MailTransport:SendQuestToRecipients(q, "@One", "Hola")
     AssertEqual(okAbort, true, "Second send batch started")
     RPQuest.MailTransport:OnMailboxClosed()
     AssertEqual(RPQuest.MailTransport._isSending, false, "Sending flag cleared on unexpected mailbox close")
-    AssertTrue(lastComplete ~= nil and lastComplete.failed == 2 and lastComplete.sent == 0, "MAIL_SEND_COMPLETE reports remaining mails as failed")
+    AssertTrue(lastComplete ~= nil and lastComplete.failed == 1 and lastComplete.sent == 0, "MAIL_SEND_COMPLETE reports remaining mail as failed")
 
     -- 4. Native mailbox open coordination: do not close if native UI is showing
     nativeMailOpen = true
@@ -2924,19 +2927,20 @@ RunTest("MailTransport: alerts on incoming quest mail without duplicates and sup
     RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
 end)
 
-RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Discovery/Combat tracking (Issue #103)", function()
+RunTest("1-to-1 model: group sharing disabled, group tracking ignored, and DialogueInjector works after mail accept without /reloadui (Issue #142)", function()
     local sv = RPQuest.QuestRepository:GetDefaults()
     RPQuest.QuestRepository:Initialize(sv)
     RPQuest.MailTransport:Initialize()
     RPQuest.JournalTab:Initialize()
     RPQuest.DiscoveryTracker:Initialize()
     RPQuest.CombatTracker:Initialize()
+    RPQuest.DialogueInjector:Initialize()
 
-    -- Create quest with targetLocation and discovery point
+    -- Create quest with targetLocation, discovery point, and NPC dialogue
     local zId = mockState.zoneId
     local code = RPQuest.ShareCodec:EncodeQuest({
-        title = "Grupo en Tamriel",
-        description = "Objetivo compartido.",
+        title = "Misión 1-a-1",
+        description = "Objetivo individual.",
         mapId = mockState.mapId,
         zoneId = zId,
         mapName = "Auridon",
@@ -2946,44 +2950,31 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
         discoveries = {
             { name = "Ruinas", zoneId = zId, worldX = 20000, worldZ = 20000, radius = 1000 },
         },
+        dialogues = {
+            { npcName = "Informante", zoneId = zId, clue = "¿Qué sabes del bandido?", response = "Está al sur." },
+        },
     })
+
+    -- Verify group sharing APIs/UI are removed
+    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor, nil, "Group share keybind descriptor removed")
+    AssertEqual(RPQuest.MailTransport.ShareQuestWithGroup, nil, "MailTransport:ShareQuestWithGroup removed")
+    AssertEqual(RPQuest.MailTransport.GetGroupMemberDisplayNames, nil, "MailTransport:GetGroupMemberDisplayNames removed")
+
+    -- Simulate grouped player receiving and accepting quest via mail without /reloadui
+    local isGrouped = true
+    _G.IsUnitGrouped = function() return isGrouped end
+    _G.GetGroupSize = function() return 2 end
+    _G.GetGroupUnitTagByIndex = function(i)
+        local tags = { "player", "group1" }
+        return tags[i]
+    end
+    _G.AreUnitsEqual = function(a, b) return a == b end
+
+    -- Group DiscoveryTracker & CombatTracker ignore group1
     local saved = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Creator")
     RPQuest.QuestRepository:SetActiveQuest(saved.id)
     RPQuest.JournalTab:SelectQuest(saved.id)
 
-    -- Mock group APIs: player + @Ally1 + @Ally2
-    local isGrouped = false
-    _G.IsUnitGrouped = function() return isGrouped end
-    _G.GetGroupSize = function() return isGrouped and 3 or 0 end
-    _G.GetGroupUnitTagByIndex = function(i)
-        local tags = { "player", "group1", "group2" }
-        return tags[i]
-    end
-    _G.AreUnitsEqual = function(a, b) return a == b end
-    _G.GetDisplayName = function() return "@PlayerSelf" end
-    _G.GetUnitDisplayName = function(tag)
-        if tag == "player" then return "@PlayerSelf" end
-        if tag == "group1" then return "@Ally1" end
-        if tag == "group2" then return "@Ally2" end
-        return ""
-    end
-
-    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), false, "Share keybind hidden when ungrouped")
-    isGrouped = true
-    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), true, "Share keybind visible when grouped in detail view")
-
-    local members = RPQuest.MailTransport:GetGroupMemberDisplayNames()
-    AssertEqual(#members, 2, "2 group members returned (excluding player)")
-    AssertEqual(members[1], "@Ally1", "First group member @Ally1")
-    AssertEqual(members[2], "@Ally2", "Second group member @Ally2")
-
-    local sentRecipients = {}
-    _G.SendMail = function(to) table.insert(sentRecipients, to) end
-    local okShare, errShare, countShare = RPQuest.MailTransport:ShareQuestWithGroup(saved)
-    AssertEqual(okShare, true, "ShareQuestWithGroup succeeds: " .. tostring(errShare))
-    AssertEqual(countShare, 2, "Shared with 2 group members")
-
-    -- Group DiscoveryTracker: player far away, group1 at discovery point (20000, 20000)
     _G.GetUnitWorldPosition = function(tag)
         if tag == "player" then return zId, 0, 0, 0 end
         if tag == "group1" then return zId, 20000, 0, 20000 end
@@ -2991,9 +2982,8 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
     end
     RPQuest.DiscoveryTracker:UpdatePollingState()
     RPQuest.DiscoveryTracker:OnUpdateTick()
-    AssertEqual(saved.discoveries[1].discovered, true, "Discovery triggered by group1 position")
+    AssertEqual(saved.discoveries[1].discovered, false, "Discovery NOT triggered by group1 position")
 
-    -- Group CombatTracker: player outside targetLocation (0,0), group1 inside (5000, 5000)
     _G.GetUnitWorldPosition = function(tag)
         if tag == "player" then return zId, 0, 0, 0 end
         if tag == "group1" then return zId, 5000, 0, 5000 end
@@ -3001,8 +2991,35 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
     end
     _G.GetMapPlayerPosition = function() return 0.5, 0.5 end
     RPQuest.CombatTracker:OnCombatEvent(nil, _G.ACTION_RESULT_DIED, false, "", 0, 0, "Ally1", _G.COMBAT_UNIT_TYPE_GROUP, "Bandido", 0, 0, 0, 0, false, 1, 777, 0)
-    AssertEqual(saved.targets[1].currentCount, 1, "Group kill recorded using group1 targetLocation")
-    AssertEqual(saved.failed, false, "Quest did not fail when group1 was inside targetLocation")
+    AssertEqual(saved.targets[1].currentCount, 0, "Group kill NOT recorded in 1-to-1 mode")
+
+    -- DialogueInjector injects option immediately after mail quest import even while grouped
+    local origUnitName = _G.GetUnitName
+    _G.GetUnitName = function(tag)
+        if tag == "interact" then return "Informante" end
+        return origUnitName(tag)
+    end
+    local injectedOptions = {}
+    local fakeInteraction = {
+        optionControls = {},
+        PopulateChatterOption = function(selfObj, controlID, optionIndex, optionText, optionType)
+            table.insert(injectedOptions, { controlID = controlID, text = optionText, optionType = optionType })
+        end,
+        PopulateChatterOptions = function(selfObj, optionCount)
+            selfObj:PopulateChatterOption(1, function() end, "Adiós", _G.CHATTER_GOODBYE)
+            selfObj:FinalizeChatterOptions(optionCount)
+            return optionCount
+        end,
+        FinalizeChatterOptions = function(selfObj, optionCount)
+            return optionCount
+        end,
+    }
+    _G.ZO_Interaction = fakeInteraction
+    RPQuest.DialogueInjector:InstallHooks()
+    fakeInteraction:PopulateChatterOptions(0)
+    AssertEqual(#injectedOptions, 2, "DialogueInjector injects clue + goodbye immediately without /reloadui")
+    AssertEqual(injectedOptions[1].text, "¿Qué sabes del bandido?", "Injected option has expected clue text")
+    _G.GetUnitName = origUnitName
 end)
 
 RunTest("36. Locale fallback to English for unsupported client languages and direct formatting", function()

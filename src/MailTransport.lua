@@ -1,6 +1,5 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0009-transporte-correo-multiparte-rpqp.md
--- Ref: docs/adr/0010-comparticion-grupo-y-objetivos-compartidos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -16,7 +15,7 @@ local LISTENER_INBOX_UPDATE = "RPQuest_Mail_InboxUpdate"
 local LISTENER_MAIL_READABLE = "RPQuest_Mail_Readable"
 local LISTENER_MAIL_REMOVED = "RPQuest_Mail_Removed"
 
-local MAX_RECIPIENTS = 4
+local MAX_RECIPIENTS = 1
 local DEFAULT_MAX_BODY_CHARS = 700
 local MAX_MAIL_PARTS = 6
 local PART_HEADER_RESERVE = 16
@@ -910,41 +909,4 @@ function MailTransport:RejectReceivedMail(mailId)
     self:DisposeEntryMails(entry)
     self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
     return true
-end
-
-function MailTransport:GetGroupMemberDisplayNames()
-    local names = {}
-    if not IsUnitGrouped or not IsUnitGrouped("player") or not GetGroupSize or not GetGroupUnitTagByIndex or not GetUnitDisplayName then
-        return names
-    end
-    local seen = {}
-    local playerName = GetDisplayName and GetDisplayName() or nil
-    local groupSize = GetGroupSize() or 0
-    for i = 1, groupSize do
-        local unitTag = GetGroupUnitTagByIndex(i)
-        if unitTag and unitTag ~= "player" and not (AreUnitsEqual and AreUnitsEqual(unitTag, "player")) then
-            local displayName = GetUnitDisplayName(unitTag)
-            if type(displayName) == "string" and displayName ~= "" and displayName ~= playerName then
-                local key = displayName:lower()
-                if not seen[key] then
-                    seen[key] = true
-                    table.insert(names, displayName)
-                end
-            end
-        end
-    end
-    return names
-end
-
-function MailTransport:ShareQuestWithGroup(quest)
-    if type(quest) ~= "table" then
-        return false, "ERR_INVALID_CODE", 0
-    end
-    local members = self:GetGroupMemberDisplayNames()
-    if #members == 0 then
-        return false, "ERR_SHARE_NO_GROUP_MEMBERS", 0
-    end
-    local rawRecipients = table.concat(members, ", ")
-    local ok, errKey = self:SendQuestToRecipients(quest, rawRecipients, "")
-    return ok, errKey, #members
 end
