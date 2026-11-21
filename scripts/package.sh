@@ -61,6 +61,14 @@ awk -v ver="$DISPLAY_VERSION" -v aver="$ADDON_VERSION" '
 while IFS= read -r line; do
   line="${line%$'\r'}"
   [[ -z "$line" || "$line" =~ ^# ]] && continue
+  if [[ "$line" == *'$(language)'* ]]; then
+    pattern="${TARGET_DIR}/${line//\$(language)/*}"
+    if ! compgen -G "$pattern" >/dev/null; then
+      echo "Error: manifest pattern '$line' matched no files in staged package" >&2
+      exit 1
+    fi
+    continue
+  fi
   if [[ ! -f "${TARGET_DIR}/${line}" ]]; then
     echo "Error: manifest entry '$line' missing from staged package" >&2
     exit 1
