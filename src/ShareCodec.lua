@@ -226,6 +226,7 @@ local function EncodeDialoguesList(dialogues)
                 EscapeField(d.npcName),
                 tostring(math.floor(tonumber(d.zoneId) or 0)),
                 EscapeField(d.response or ""),
+                EscapeField(d.clue or ""),
             }
             table.insert(items, table.concat(parts, "~"))
         end
@@ -250,6 +251,7 @@ local function DecodeDialoguesList(rawDialogues)
                     npcName = npcName,
                     zoneId = math.floor(tonumber(kv[2]) or 0),
                     response = UnescapeField(kv[3] or ""),
+                    clue = kv[4] ~= nil and UnescapeField(kv[4]) or nil,
                 })
             end
         end
@@ -755,6 +757,23 @@ local function PackQuestBinary(quest)
     if clue ~= "" then WriteStr(buf, clue) end
     if lang ~= "" then WriteStr(buf, lang) end
 
+    if #dialogues > 0 then
+        local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+        local count = math.min(#dialogues, maxNpcs)
+        local hasPerNpcClue = false
+        for idx = 1, count do
+            if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
+                hasPerNpcClue = true
+                break
+            end
+        end
+        if hasPerNpcClue then
+            for idx = 1, count do
+                WriteStr(buf, dialogues[idx].clue or "")
+            end
+        end
+    end
+
     return table.concat(buf)
 end
 
@@ -903,6 +922,15 @@ local function UnpackQuestBinary(data)
         sourceLanguage, pos = ReadStr(data, pos, len)
         if not sourceLanguage then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
         sourceLanguage = sourceLanguage:lower()
+    end
+
+    if hasDialogues and pos <= len then
+        for idx = 1, #decodedDialogues do
+            local dClue
+            dClue, pos = ReadStr(data, pos, len)
+            if not dClue then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+            decodedDialogues[idx].clue = dClue
+        end
     end
 
     if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then

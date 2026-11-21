@@ -117,10 +117,11 @@ local function CreateDefaultDraft()
     }
 end
 
-local function CloneDialoguesList(dialogues)
+local function CloneDialoguesList(dialogues, fallbackClue)
     local out = {}
     if type(dialogues) ~= "table" then return out end
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local fallback = type(fallbackClue) == "string" and fallbackClue or ""
     for _, d in ipairs(dialogues) do
         if #out >= maxNpcs then break end
         if type(d) == "table" and type(d.npcName) == "string" and d.npcName ~= "" then
@@ -129,6 +130,7 @@ local function CloneDialoguesList(dialogues)
                 table.insert(out, {
                     npcName = cleanName,
                     zoneId = math.floor(tonumber(d.zoneId) or 0),
+                    clue = type(d.clue) == "string" and d.clue or fallback,
                     response = type(d.response) == "string" and d.response or "",
                 })
             end
@@ -146,7 +148,7 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         completionMessage = data.completionMessage or "",
         targets = targets,
         discoveries = data.discoveries or {},
-        dialogues = CloneDialoguesList(data.dialogues),
+        dialogues = CloneDialoguesList(data.dialogues, data.clue),
         completed = false,
         role = role or Addon.Constants.QUEST_ROLE.RECEIVED,
         mapId = data.mapId or 0,
@@ -460,7 +462,7 @@ function QuestRepository:GetLastInteractedNpc()
     return self._lastInteractedNpc
 end
 
-function QuestRepository:AddDraftDialogue(npcName, zoneId, responseText)
+function QuestRepository:AddDraftDialogue(npcName, zoneId, responseText, clueText)
     local draft = self:GetDraft()
     draft.dialogues = draft.dialogues or {}
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
@@ -484,18 +486,19 @@ function QuestRepository:AddDraftDialogue(npcName, zoneId, responseText)
     table.insert(draft.dialogues, {
         npcName = cleanName,
         zoneId = z,
+        clue = type(clueText) == "string" and clueText or "",
         response = type(responseText) == "string" and responseText or "",
     })
     self:NotifyListeners("DRAFT_UPDATED", draft)
     return draft, #draft.dialogues
 end
 
-function QuestRepository:AddDraftDialogueFromLastNpc(responseText)
+function QuestRepository:AddDraftDialogueFromLastNpc(responseText, clueText)
     local lastNpc = self:GetLastInteractedNpc()
     if not lastNpc or not lastNpc.name or lastNpc.name == "" then
         return nil, Addon.Locale:Get("ALERT_DIALOGUE_NO_LAST_NPC")
     end
-    return self:AddDraftDialogue(lastNpc.name, lastNpc.zoneId, responseText)
+    return self:AddDraftDialogue(lastNpc.name, lastNpc.zoneId, responseText, clueText)
 end
 
 function QuestRepository:UpdateDraftDialogue(index, fields, silent)
@@ -503,6 +506,9 @@ function QuestRepository:UpdateDraftDialogue(index, fields, silent)
     local entry = draft.dialogues and draft.dialogues[index]
     if not entry or type(fields) ~= "table" then
         return nil
+    end
+    if fields.clue ~= nil then
+        entry.clue = tostring(fields.clue)
     end
     if fields.response ~= nil then
         entry.response = tostring(fields.response)
@@ -545,7 +551,7 @@ function QuestRepository:LoadQuestIntoDraft(questId)
         completionMessage = quest.completionMessage or "",
         targets = CloneTargetsList(quest.targets),
         discoveries = CloneDiscoveriesList(quest.discoveries, false),
-        dialogues = CloneDialoguesList(quest.dialogues),
+        dialogues = CloneDialoguesList(quest.dialogues, quest.clue),
         discoveryRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM,
         discoveryMessage = "",
         lastCapturedDisplay = nil,
@@ -717,7 +723,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         existing.completionMessage = cleanCompMsg
         existing.targets = CloneTargetsList(draft.targets, prevProgress)
         existing.discoveries = CloneDiscoveriesList(draft.discoveries, false)
-        existing.dialogues = CloneDialoguesList(draft.dialogues)
+        existing.dialogues = CloneDialoguesList(draft.dialogues, cleanClue)
         existing.mapId = draft.mapId or 0
         existing.zoneId = draft.zoneId or 0
         existing.mapName = draft.mapName or ""
@@ -822,7 +828,7 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName)
     end
 
     decoded.discoveries = CloneDiscoveriesList(decoded.discoveries, false)
-    decoded.dialogues = CloneDialoguesList(decoded.dialogues)
+    decoded.dialogues = CloneDialoguesList(decoded.dialogues, decoded.clue)
     if type(senderDisplayName) == "string" and senderDisplayName ~= "" then
         decoded.senderDisplayName = senderDisplayName
     end
@@ -1361,10 +1367,7 @@ function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)
         return nil
     end
 
-    local clue = type(activeQuest.clue) == "string" and activeQuest.clue:gsub("^%s+", ""):gsub("%s+$", "") or ""
-    if clue == "" then
-        return nil
-    end
+    local questClue = type(activeQuest.clue) == "string" and activeQuest.clue:gsub("^%s+", ""):gsub("%s+$", "") or ""
 
     local dialogues = activeQuest.dialogues
     if type(dialogues) ~= "table" or #dialogues == 0 then
@@ -1384,9 +1387,14 @@ function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)
             local entryName = self:NormalizeName(entry.npcName):lower()
             local entryZone = math.floor(tonumber(entry.zoneId) or 0)
             if entryName == lowerNpc and (entryZone == 0 or z == 0 or entryZone == z) then
+                local entryClue = type(entry.clue) == "string" and entry.clue:gsub("^%s+", ""):gsub("%s+$", "") or ""
+                local resolvedClue = (entryClue ~= "" and entryClue) or (entry.clue == nil and questClue) or ""
+                if resolvedClue == "" then
+                    return nil
+                end
                 return {
                     questId = activeQuest.id,
-                    clue = clue,
+                    clue = resolvedClue,
                     npcName = entry.npcName,
                     zoneId = entryZone,
                     response = type(entry.response) == "string" and entry.response or "",

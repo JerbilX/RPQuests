@@ -2540,6 +2540,58 @@ RunTest("29. JournalTab:OpenTab defers SelectFragment during async scene transit
     QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment = origSelectFragment
 end)
 
+RunTest("30. Per-NPC player dialogue option, ShareCodec RPQ3 roundtrip, and JournalTab selected NPC indicator", function()
+    RPQuest.JournalTab:Initialize()
+    RPQuest.QuestRepository:ResetDraft()
+
+    -- Add 2 NPCs with distinct player dialogue options and responses
+    local _, idx1 = RPQuest.QuestRepository:AddDraftDialogue("Farseer Kuamta", 381, "Look near the northern shrine.", "Ask about the shrine")
+    local _, idx2 = RPQuest.QuestRepository:AddDraftDialogue("Vasamannu", 381, "He lives to the south, I don't care.", "Daynill? Know him?")
+    AssertEqual(idx1, 1, "First NPC added at index 1")
+    AssertEqual(idx2, 2, "Second NPC added at index 2")
+
+    -- Capture a target and save quest
+    mockState.reticleExists = true
+    mockState.reticleName = "Bandit"
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local saved = RPQuest.QuestRepository:SaveDraft("Per-NPC Clues", "Test distinct options per NPC.")
+    AssertTrue(saved ~= nil, "Quest saved with per-NPC clues")
+    AssertEqual(saved.dialogues[1].clue, "Ask about the shrine", "NPC 1 clue persisted")
+    AssertEqual(saved.dialogues[2].clue, "Daynill? Know him?", "NPC 2 clue persisted")
+
+    -- Active quest dialogue lookup returns each NPC's own clue
+    RPQuest.QuestRepository:SetActiveQuest(saved.id)
+    local match1 = RPQuest.QuestRepository:FindDialogueForActiveQuest("Farseer Kuamta", 381)
+    local match2 = RPQuest.QuestRepository:FindDialogueForActiveQuest("Vasamannu", 381)
+    AssertTrue(match1 ~= nil and match1.clue == "Ask about the shrine", "FindDialogueForActiveQuest returns NPC 1's own option")
+    AssertTrue(match2 ~= nil and match2.clue == "Daynill? Know him?", "FindDialogueForActiveQuest returns NPC 2's own option")
+
+    -- ShareCodec RPQ3 roundtrip preserves distinct per-NPC clues
+    local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    AssertTrue(imported ~= nil, "RPQ3 quest with per-NPC clues imported")
+    AssertEqual(imported.dialogues[1].clue, "Ask about the shrine", "Imported NPC 1 clue preserved")
+    AssertEqual(imported.dialogues[2].clue, "Daynill? Know him?", "Imported NPC 2 clue preserved")
+
+    -- JournalTab editor shows selected NPC name and per-NPC option/response when cycling
+    RPQuest.JournalTab:OpenEditEditor(saved.id)
+    AssertEqual(RPQuest.JournalTab.selectedDialogueIndex, 1, "Editor selects first NPC on open")
+    AssertTrue(RPQuest.JournalTab.lblSelectedNpc:GetText():find("Farseer Kuamta", 1, true) ~= nil, "lblSelectedNpc shows Farseer Kuamta")
+    AssertTrue(RPQuest.JournalTab.lblInputClue:GetText():find("Farseer Kuamta", 1, true) ~= nil, "lblInputClue shows Farseer Kuamta")
+    AssertTrue(RPQuest.JournalTab.lblDlgResponse:GetText():find("Farseer Kuamta", 1, true) ~= nil, "lblDlgResponse shows Farseer Kuamta")
+    AssertEqual(RPQuest.JournalTab.clueEdit:GetText(), "Ask about the shrine", "clueEdit shows NPC 1 option")
+    AssertEqual(RPQuest.JournalTab.dlgResponseEdit:GetText(), "Look near the northern shrine.", "dlgResponseEdit shows NPC 1 response")
+
+    -- Cycle to NPC 2
+    RPQuest.JournalTab.btnDlgNext:FireHandler("OnClicked")
+    AssertEqual(RPQuest.JournalTab.selectedDialogueIndex, 2, "Editor cycles to second NPC")
+    AssertTrue(RPQuest.JournalTab.lblSelectedNpc:GetText():find("Vasamannu", 1, true) ~= nil, "lblSelectedNpc updates to Vasamannu")
+    AssertTrue(RPQuest.JournalTab.lblInputClue:GetText():find("Vasamannu", 1, true) ~= nil, "lblInputClue updates to Vasamannu")
+    AssertTrue(RPQuest.JournalTab.lblDlgResponse:GetText():find("Vasamannu", 1, true) ~= nil, "lblDlgResponse updates to Vasamannu")
+    AssertEqual(RPQuest.JournalTab.clueEdit:GetText(), "Daynill? Know him?", "clueEdit updates to NPC 2 option")
+    AssertEqual(RPQuest.JournalTab.dlgResponseEdit:GetText(), "He lives to the south, I don't care.", "dlgResponseEdit updates to NPC 2 response")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)

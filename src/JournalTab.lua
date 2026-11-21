@@ -1045,7 +1045,11 @@ function JournalTab:BuildEditorPane(parent)
     local dlgBody = dialogueSec.body
 
     self.btnAddLastNpc = CreateStyledButton(PANEL_NAME .. "_BtnAddLastNpc", dlgBody, 130, 26, Addon.Locale:Get("BTN_ADD_LAST_NPC"), function()
-        local _, resultOrErr = Addon.QuestRepository:AddDraftDialogueFromLastNpc("")
+        local preDraft = Addon.QuestRepository:GetDraft()
+        local isFirst = #(preDraft.dialogues or {}) == 0
+        local initResp = (isFirst and self.dlgResponseEdit and self.dlgResponseEdit:GetText()) or ""
+        local initClue = (isFirst and self.clueEdit and self.clueEdit:GetText()) or ""
+        local _, resultOrErr = Addon.QuestRepository:AddDraftDialogueFromLastNpc(initResp, initClue)
         if type(resultOrErr) == "number" then
             self.selectedDialogueIndex = resultOrErr
             local draft = Addon.QuestRepository:GetDraft()
@@ -1113,10 +1117,18 @@ function JournalTab:BuildEditorPane(parent)
     self.btnDlgRemove:SetHidden(true)
 
     local lblLastNpc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblLastNpc", dlgBody, CT_LABEL)
-    lblLastNpc:SetDimensions(510, 22)
+    lblLastNpc:SetDimensions(250, 22)
     lblLastNpc:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 4, 34)
     if lblLastNpc.SetFont then lblLastNpc:SetFont("ZoFontGame") end
     self.lblLastNpc = lblLastNpc
+
+    local lblSelectedNpc = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblSelectedNpc", dlgBody, CT_LABEL)
+    lblSelectedNpc:SetDimensions(250, 22)
+    lblSelectedNpc:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 258, 34)
+    if lblSelectedNpc.SetFont then lblSelectedNpc:SetFont("ZoFontGameBold") end
+    if lblSelectedNpc.SetHorizontalAlignment then lblSelectedNpc:SetHorizontalAlignment(TEXT_ALIGN_RIGHT) end
+    lblSelectedNpc:SetHidden(true)
+    self.lblSelectedNpc = lblSelectedNpc
 
     local lblClue = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputClue", dlgBody, CT_LABEL)
     lblClue:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 64)
@@ -1132,7 +1144,11 @@ function JournalTab:BuildEditorPane(parent)
         100,
         false,
         function(val)
-            Addon.QuestRepository:UpdateDraftFields({ clue = val }, true)
+            local draft = Addon.QuestRepository:GetDraft()
+            local idx = self.selectedDialogueIndex
+            if idx and draft.dialogues and draft.dialogues[idx] then
+                Addon.QuestRepository:UpdateDraftDialogue(idx, { clue = val }, true)
+            end
         end
     )
     clueBg:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 86)
@@ -1659,7 +1675,7 @@ function JournalTab:OpenCreateEditor()
     self.selectedDiscoveryIndex = nil
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
-    if self.clueEdit then self.clueEdit:SetText(draft.clue or "") end
+    if self.clueEdit then self.clueEdit:SetText("") end
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
     self.editorSectionsCollapsed = {
@@ -1717,7 +1733,7 @@ function JournalTab:OpenEditEditor(questId)
     end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
-    if self.clueEdit then self.clueEdit:SetText(draft.clue or "") end
+    if self.clueEdit then self.clueEdit:SetText("") end
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
     self.editorSectionsCollapsed = {
@@ -1757,8 +1773,13 @@ function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
     local compMsgText = self.completionEdit and self.completionEdit:GetText() or ""
-    if self.clueEdit then
-        Addon.QuestRepository:UpdateDraftFields({ clue = self.clueEdit:GetText() }, true)
+    local draft = Addon.QuestRepository:GetDraft()
+    local dlgIdx = self.selectedDialogueIndex
+    if dlgIdx and draft.dialogues and draft.dialogues[dlgIdx] then
+        local dlgFields = {}
+        if self.clueEdit then dlgFields.clue = self.clueEdit:GetText() end
+        if self.dlgResponseEdit then dlgFields.response = self.dlgResponseEdit:GetText() end
+        Addon.QuestRepository:UpdateDraftDialogue(dlgIdx, dlgFields, true)
     end
 
     local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText)
@@ -2366,10 +2387,6 @@ function JournalTab:RefreshEditorPane()
     if not self.descEdit._focused and self.descEdit:GetText() ~= draftDesc then
         self.descEdit:SetText(draftDesc)
     end
-    local draftClue = draft.clue or ""
-    if self.clueEdit and not self.clueEdit._focused and self.clueEdit:GetText() ~= draftClue then
-        self.clueEdit:SetText(draftClue)
-    end
     local draftCompMsg = draft.completionMessage or ""
     if self.completionEdit and not self.completionEdit._focused and self.completionEdit:GetText() ~= draftCompMsg then
         self.completionEdit:SetText(draftCompMsg)
@@ -2553,9 +2570,36 @@ function JournalTab:RefreshEditorPane()
     end
 
     local selectedDlg = self.selectedDialogueIndex and dialogues[self.selectedDialogueIndex] or nil
+    local activeDlgClue = selectedDlg and (selectedDlg.clue or "") or ""
+    if self.clueEdit and not self.clueEdit._focused and self.clueEdit:GetText() ~= activeDlgClue then
+        self.clueEdit:SetText(activeDlgClue)
+    end
     local activeDlgResp = selectedDlg and (selectedDlg.response or "") or ""
     if self.dlgResponseEdit and not self.dlgResponseEdit._focused and self.dlgResponseEdit:GetText() ~= activeDlgResp then
         self.dlgResponseEdit:SetText(activeDlgResp)
+    end
+
+    if self.lblSelectedNpc then
+        if selectedDlg then
+            self.lblSelectedNpc:SetText(Addon.Locale:Get("DIALOGUE_SELECTED_NPC_FORMAT", selectedDlg.npcName or ""))
+            self.lblSelectedNpc:SetHidden(false)
+        else
+            self.lblSelectedNpc:SetHidden(true)
+        end
+    end
+    if self.lblInputClue then
+        if selectedDlg then
+            self.lblInputClue:SetText(Addon.Locale:Get("DIALOGUE_OPTION_FOR_NPC_FORMAT", selectedDlg.npcName or ""))
+        else
+            self.lblInputClue:SetText(Addon.Locale:Get("LABEL_INPUT_CLUE"))
+        end
+    end
+    if self.lblDlgResponse then
+        if selectedDlg then
+            self.lblDlgResponse:SetText(Addon.Locale:Get("DIALOGUE_RESPONSE_FOR_NPC_FORMAT", selectedDlg.npcName or ""))
+        else
+            self.lblDlgResponse:SetText(Addon.Locale:Get("LABEL_DIALOGUE_RESPONSE"))
+        end
     end
 
     local showDlgSel = totalDlg > 0
@@ -2574,8 +2618,13 @@ function JournalTab:RefreshEditorPane()
     if self.lblCapturedDialogues then
         if totalDlg > 0 then
             local names = {}
-            for _, d in ipairs(dialogues) do
-                table.insert(names, d.npcName or "")
+            for i, d in ipairs(dialogues) do
+                local n = d.npcName or ""
+                if i == self.selectedDialogueIndex then
+                    table.insert(names, "|cE8D5A0[" .. n .. "]|r")
+                else
+                    table.insert(names, n)
+                end
             end
             self.lblCapturedDialogues:SetText(Addon.Locale:Get("DIALOGUE_CAPTURED_FORMAT", totalDlg, maxNpcs, table.concat(names, ", ")))
         else
