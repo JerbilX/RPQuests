@@ -133,6 +133,9 @@ zo_strformat = function(fmt, ...)
     return tostring(arg1 or fmt)
 end
 
+zo_callLater = function()
+end
+
 ZO_Alert = function(cat, sound, text)
     table.insert(mockState.alerts, { category = cat, sound = sound, text = text })
 end

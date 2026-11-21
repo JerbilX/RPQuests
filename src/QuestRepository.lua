@@ -19,10 +19,7 @@ end
 
 function QuestRepository:NormalizeName(name)
     if type(name) ~= "string" or name == "" then return "" end
-    local clean = name:gsub("%^%a+$", "")
-    if zo_strformat then
-        clean = zo_strformat("<<C:1>>", clean)
-    end
+    local clean = zo_strformat("<<C:1>>", name:gsub("%^%a+$", ""))
     clean = clean:gsub("^%s+", ""):gsub("%s+$", "")
     return clean
 end

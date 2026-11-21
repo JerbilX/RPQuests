@@ -249,7 +249,6 @@ function MailTransport:CloseMailboxIfOwned()
 end
 
 function MailTransport:ScheduleSendTimeout(delayMs, gen, doneCount)
-    if not zo_callLater then return end
     zo_callLater(function()
         if not self._isSending then return end
         if self._sendGen ~= gen or self._sendDone ~= doneCount then return end

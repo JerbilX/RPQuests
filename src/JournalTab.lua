@@ -837,7 +837,6 @@ function JournalTab:BuildEditorPane(parent)
         local draft = Addon.QuestRepository:GetDraft()
         local target = idx and draft.targets and draft.targets[idx]
         if not target then return end
-        if not GetUnitWorldPosition then return end
         local zoneId, worldX, _, worldZ = GetUnitWorldPosition("player")
         if not zoneId or zoneId == 0 or not worldX or not worldZ then
             Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_DISCOVERY_INVALID_POS"), true)

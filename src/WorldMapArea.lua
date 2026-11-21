@@ -277,13 +277,11 @@ function WorldMapArea:ShowQuestOnMap(quest)
 
     if targetQuest.areaCenterX and targetQuest.areaCenterY then
         PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
-        if zo_callLater then
-            zo_callLater(function()
-                if IsMapSceneShowing() then
-                    PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
-                end
-            end, 50)
-        end
+        zo_callLater(function()
+            if IsMapSceneShowing() then
+                PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+            end
+        end, 50)
     end
 
     return true
