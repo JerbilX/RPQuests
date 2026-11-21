@@ -2299,10 +2299,10 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     AssertEqual(okMany, false, "Rejects more than 4 recipients")
     AssertEqual(errMany, "ERR_MAIL_TOO_MANY_RECIPIENTS", "Returns too many recipients error")
 
-    -- 2. Reject body exceeding MAIL_MAX_BODY_CHARACTERS (no fragmentation)
-    local hugeMsg = string.rep("A", 700)
+    -- 2. Reject body exceeding max multi-part limit (MAX_MAIL_PARTS * chunkSize)
+    local hugeMsg = string.rep("A", 4200)
     local okLong, errLong = RPQuest.MailTransport:SendQuestToRecipients(q, "@PlayerOne", hugeMsg)
-    AssertEqual(okLong, false, "Rejects mail exceeding MAIL_MAX_BODY_CHARACTERS")
+    AssertEqual(okLong, false, "Rejects mail exceeding multi-part mail limit")
     AssertEqual(errLong, "ERR_MAIL_BODY_TOO_LONG", "Returns body too long error")
 
     -- 3. Sequential queue for 3 recipients (normalizes @ prefix, deduplicates)
@@ -2590,6 +2590,121 @@ RunTest("30. Per-NPC player dialogue option, ShareCodec RPQ3 roundtrip, and Jour
     AssertTrue(RPQuest.JournalTab.lblDlgResponse:GetText():find("Vasamannu", 1, true) ~= nil, "lblDlgResponse updates to Vasamannu")
     AssertEqual(RPQuest.JournalTab.clueEdit:GetText(), "Daynill? Know him?", "clueEdit updates to NPC 2 option")
     AssertEqual(RPQuest.JournalTab.dlgResponseEdit:GetText(), "He lives to the south, I don't care.", "dlgResponseEdit updates to NPC 2 response")
+end)
+
+RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incomplete state, and batch delete (Issue #113)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+    RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+
+    local sentMails = {}
+    local inbox = {}
+    local deletedIds = {}
+
+    _G.MAIL_MAX_BODY_CHARACTERS = 700
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.GetNextMailId = function(cur)
+        local keys = {}
+        for k in pairs(inbox) do table.insert(keys, k) end
+        table.sort(keys)
+        if cur == nil then return keys[1] end
+        for i, k in ipairs(keys) do
+            if k == cur then return keys[i + 1] end
+        end
+        return nil
+    end
+    _G.GetMailItemInfo = function(id)
+        local m = inbox[id]
+        if not m then return nil end
+        return m.sender, m.charName, m.subject, nil, nil, nil, nil, nil, nil, nil, nil, nil, m.secs
+    end
+    _G.ReadMail = function(id)
+        return inbox[id] and inbox[id].body or ""
+    end
+    _G.DeleteMail = function(id)
+        table.insert(deletedIds, id)
+        inbox[id] = nil
+    end
+
+    -- Build a quest whose RPQ3 code + roleplay message exceeds 700 chars
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Farseer Kuamta",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local q = RPQuest.QuestRepository:SaveDraft(
+        "House Quest: Multi-Part",
+        "Investigate the northern ruins and speak with the informants about the missing relic.",
+        nil,
+        "You have uncovered the truth behind the House Quest!"
+    )
+    local roleMsg = string.rep("Greetings agent, this mission requires utmost discretion. ", 18)
+    local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local plan = RPQuest.MailTransport:BuildQuestMailPackets(roleMsg, code, q.title)
+    AssertTrue(plan.fits, "Multi-part plan fits within MAX_MAIL_PARTS")
+    AssertTrue(plan.partCount >= 2, "Splits into >= 2 parts (got " .. tostring(plan.partCount) .. ")")
+    for i, pkt in ipairs(plan.packets) do
+        AssertTrue(#pkt.body <= 700, "Part " .. i .. " body <= 700 chars (got " .. #pkt.body .. ")")
+    end
+
+    -- Send all parts sequentially
+    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@Receiver", roleMsg)
+    AssertEqual(okSend, true, "Multi-part send started: " .. tostring(errSend))
+    for i = 1, plan.partCount do
+        AssertEqual(#sentMails, i, "Dispatched part " .. i)
+        RPQuest.MailTransport:OnMailSendSuccess("@Receiver")
+    end
+
+    -- Simulate receiving parts out of order (last part first, then remaining)
+    RPQuest.MailTransport:Initialize()
+    inbox[500 + plan.partCount] = {
+        sender = "@Sender",
+        charName = "Sender Char",
+        subject = sentMails[plan.partCount].subject,
+        body = sentMails[plan.partCount].body,
+        secs = 5,
+    }
+    RPQuest.MailTransport:ScanInbox(false)
+    local mailsPartial = RPQuest.MailTransport:GetReceivedMails()
+    AssertEqual(#mailsPartial, 1, "Shows 1 partial entry in inbox")
+    AssertEqual(mailsPartial[1].isIncomplete, true, "Entry marked incomplete while missing parts")
+    AssertEqual(mailsPartial[1].partsReceived, 1, "1 part received so far")
+
+    local accFail, accErr = RPQuest.MailTransport:AcceptReceivedMail(mailsPartial[1].mailId)
+    AssertEqual(accFail, nil, "Cannot accept incomplete multi-part mail")
+    AssertEqual(accErr, "ERR_MAIL_INCOMPLETE", "Returns ERR_MAIL_INCOMPLETE")
+
+    -- Deliver remaining parts
+    for i = 1, plan.partCount - 1 do
+        inbox[500 + i] = {
+            sender = "@Sender",
+            charName = "Sender Char",
+            subject = sentMails[i].subject,
+            body = sentMails[i].body,
+            secs = 5 + i,
+        }
+    end
+    RPQuest.MailTransport:ScanInbox(false)
+    local mailsReady = RPQuest.MailTransport:GetReceivedMails()
+    AssertEqual(#mailsReady, 1, "Still 1 consolidated entry after all parts arrive")
+    AssertEqual(mailsReady[1].isIncomplete, false, "Entry marked complete")
+    AssertEqual(mailsReady[1].title, q.title, "Decoded title matches original")
+
+    -- Accept and verify all part mails are deleted
+    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(mailsReady[1].mailId)
+    AssertTrue(imported ~= nil, "Multi-part quest imported: " .. tostring(impErr))
+    AssertEqual(imported.title, q.title, "Imported quest title matches")
+    AssertEqual(#deletedIds, plan.partCount, "All part mails deleted on Accept")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after Accept")
 end)
 
 if failed > 0 then
