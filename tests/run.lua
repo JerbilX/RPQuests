@@ -2498,6 +2498,48 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     _G.CloseMailbox = origClose
 end)
 
+RunTest("29. JournalTab:OpenTab defers SelectFragment during async scene transition from another scene", function()
+    RPQuest.JournalTab:Initialize()
+
+    local origIsShowing = SCENE_MANAGER.IsShowing
+    local origShow = SCENE_MANAGER.Show
+    local origSelectFragment = QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment
+    local selectCalls = 0
+
+    QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment = function(tabsSelf, name)
+        selectCalls = selectCalls + 1
+        origSelectFragment(tabsSelf, name)
+    end
+
+    -- Simular transición asíncrona (ej. desde Notificaciones o Correo en SCENE_HIDING):
+    -- SCENE_MANAGER:Show("questJournal") encola la escena pero IsShowing("questJournal") sigue false hasta SCENE_SHOWING.
+    SCENE_MANAGER.IsShowing = function(_, sceneName)
+        return false
+    end
+    SCENE_MANAGER.Show = function(_, sceneName)
+        -- No cambia a SCENE_SHOWN de forma síncrona
+    end
+
+    RPQuest.JournalTab:OpenTab()
+    AssertEqual(selectCalls, 0, "SelectFragment not called synchronously while previous scene is still hiding")
+    AssertEqual(QUEST_JOURNAL_KEYBOARD.mode, RPQuest.Constants.UI.TAB_DESCRIPTOR, "QuestJournal mode set before OnShowing")
+
+    -- Cuando la escena previa termina de ocultarse, ESO dispara QUEST_JOURNAL_KEYBOARD:OnShowing()
+    QUEST_JOURNAL_KEYBOARD:OnShowing()
+    AssertEqual(selectCalls, 1, "SelectFragment called inside OnShowing once questJournal scene starts showing")
+
+    -- Si questJournal ya estaba visible (p. ej. cambiando desde pestaña Quests), sí selecciona síncronamente
+    SCENE_MANAGER.IsShowing = function(_, sceneName)
+        return sceneName == "questJournal"
+    end
+    RPQuest.JournalTab:OpenTab()
+    AssertEqual(selectCalls, 2, "SelectFragment called synchronously when questJournal is already showing")
+
+    SCENE_MANAGER.IsShowing = origIsShowing
+    SCENE_MANAGER.Show = origShow
+    QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment = origSelectFragment
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
