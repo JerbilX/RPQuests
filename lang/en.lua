@@ -145,6 +145,7 @@ RPQuest.Locales["en"] = {
     ERR_IMPORT_NOT_QUEST_CODE = "That is a completion/delivery code, not a quest code. Use it in 'Validate Delivery'.",
     ERR_IMPORT_TRUNCATED_OR_CORRUPT = "The code is incomplete or altered (checksum mismatch). If sent via in-game chat, it may have been truncated.",
     ERR_IMPORT_INCOMPLETE_DATA = "The code does not contain valid quest data (missing objectives or coordinates).",
+    ERR_IMPORT_LANGUAGE_MISMATCH = "Invalid quest: created in another language.",
     ERR_CANNOT_EDIT_RECEIVED = "Received quests cannot be edited.",
     CSA_QUEST_ACCEPTED = "Quest Accepted: %s",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
