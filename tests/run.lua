@@ -52,6 +52,17 @@ EVENT_ZONE_CHANGED = 131072
 EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED = 131200
 EVENT_JUSTICE_INFAMY_UPDATED = 131201
 EVENT_JUSTICE_PICKPOCKET_FAILED = 131202
+EVENT_MAIL_OPEN_MAILBOX = 131300
+EVENT_MAIL_CLOSE_MAILBOX = 131301
+EVENT_MAIL_SEND_SUCCESS = 131302
+EVENT_MAIL_SEND_FAILED = 131303
+EVENT_MAIL_INBOX_UPDATE = 131304
+EVENT_MAIL_READABLE = 131305
+EVENT_MAIL_REMOVED = 131306
+EVENT_CHATTER_BEGIN = 131400
+EVENT_GROUP_UPDATE = 131500
+MODIFY_TEXT_TYPE_UPPERCASE = 1
+SI_NOTIFYTEXT_QUEST_ACCEPT = SI_NOTIFYTEXT_QUEST_ACCEPT or "Quest Accepted: <<1>>"
 UI_ALERT_CATEGORY_ALERT = 0
 UI_ALERT_CATEGORY_ERROR = 1
 CSA_CATEGORY_LARGE_TEXT = 1
@@ -85,6 +96,16 @@ SOUNDS.QUEST_OBJECTIVE_COMPLETE = "Quest_ObjectivesComplete"
 SOUNDS.NOTE_TAKEN = "Note_Taken"
 SOUNDS.GENERAL_ALERT_ERROR = "General_Alert_Error"
 SOUNDS.DEFAULT_CLICK = "Default_Click"
+SOUNDS.EDIT_CLICK = "Edit_Click"
+ESO_Dialogs = ESO_Dialogs or {}
+ZO_Dialogs_ShowDialog = ZO_Dialogs_ShowDialog or function() end
+KEYBIND_STRIP = KEYBIND_STRIP or {
+    UpdateKeybindButtonGroup = function() end,
+    AddKeybindButtonGroup = function() end,
+    RemoveKeybindButtonGroup = function() end,
+}
+ApplyTemplateToControl = ApplyTemplateToControl or function() end
+ZO_QuestJournal = ZO_QuestJournal or CreateControl("ZO_QuestJournal", GuiRoot, CT_TOPLEVELCONTROL)
 
 GetCVar = function(name)
     if name == "language.2" or name == "Language.2" then
@@ -163,10 +184,39 @@ SetMapToPlayerLocation = function()
     return SET_MAP_RESULT_CURRENT_MAP_UNCHANGED
 end
 
+DoesCurrentMapMatchMapForPlayerLocation = function()
+    return true
+end
+
 SetMapToMapId = function(mapId)
     mockState.mapId = mapId
     return SET_MAP_RESULT_MAP_CHANGED
 end
+
+WORLD_MAP_MANAGER = WORLD_MAP_MANAGER or {
+    SetMapById = function(self, mapId)
+        SetMapToMapId(mapId)
+    end,
+}
+
+ZO_MapPin = ZO_MapPin or { ASSISTED_PIN_TYPES = {} }
+ZO_WorldMapPins_Manager = ZO_WorldMapPins_Manager or {
+    IsCurrentMapGlobal = function() return false end,
+}
+CALLBACK_MANAGER = CALLBACK_MANAGER or {
+    RegisterCallback = function() end,
+    FireCallbacks = function() end,
+}
+IsInGamepadPreferredMode = IsInGamepadPreferredMode or function() return false end
+EVENT_MANAGER.AddFilterForEvent = EVENT_MANAGER.AddFilterForEvent or function() end
+MAIN_MENU_KEYBOARD.ShowCategory = MAIN_MENU_KEYBOARD.ShowCategory or function(self, category)
+    if category == MENU_CATEGORY_MAP then
+        SCENE_MANAGER:Show("worldMap")
+    end
+end
+INTERFACE_COLOR_TYPE_GENERAL = INTERFACE_COLOR_TYPE_GENERAL or 1
+INTERFACE_GENERAL_COLOR_DISABLED = INTERFACE_GENERAL_COLOR_DISABLED or 1
+GetInterfaceColor = GetInterfaceColor or function() return 0.5, 0.5, 0.5, 1 end
 
 GetCurrentMapId = function()
     return mockState.mapId
@@ -1362,6 +1412,7 @@ RunTest("17. ShowQuestOnMap cambia de zona con WORLD_MAP_MANAGER y abrir con M m
         return origSceneShow(self, sceneName)
     end
 
+    local origWorldMapManager = WORLD_MAP_MANAGER
     local setMapByIdCalledWith = nil
     WORLD_MAP_MANAGER = {
         SetMapById = function(self, mapId)
@@ -1384,7 +1435,7 @@ RunTest("17. ShowQuestOnMap cambia de zona con WORLD_MAP_MANAGER y abrir con M m
 
     -- Restaurar mocks globales
     SCENE_MANAGER.Show = origSceneShow
-    WORLD_MAP_MANAGER = nil
+    WORLD_MAP_MANAGER = origWorldMapManager
 
     -- 2. Cerrar el mapa y abrirlo por fuera con M en Stonefalls debe mostrar la marca activa
     SCENE_MANAGER:Hide("worldMap")
@@ -2949,6 +3000,17 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
     RPQuest.CombatTracker:OnCombatEvent(nil, _G.ACTION_RESULT_DIED, false, "", 0, 0, "Ally1", _G.COMBAT_UNIT_TYPE_GROUP, "Bandido", 0, 0, 0, 0, false, 1, 777, 0)
     AssertEqual(saved.targets[1].currentCount, 1, "Group kill recorded using group1 targetLocation")
     AssertEqual(saved.failed, false, "Quest did not fail when group1 was inside targetLocation")
+end)
+
+RunTest("36. Locale fallback to English for unsupported client languages and direct formatting", function()
+    local origLang = mockState.language
+    mockState.language = "de"
+    RPQuest.Locale.activeLang = nil
+    RPQuest.Locale:Initialize()
+    AssertEqual(RPQuest.Locale:GetLanguage(), "en", "Unsupported client language 'de' falls back to 'en'")
+    AssertEqual(RPQuest.Locale:Get("SECTION_ACTIVE_QUESTS", 3), "QUESTS (3)", "Locale:Get formats placeholders directly")
+    mockState.language = origLang
+    RPQuest.Locale:Initialize(origLang)
 end)
 
 if failed > 0 then

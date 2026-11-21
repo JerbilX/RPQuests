@@ -18,18 +18,12 @@ function DiscoveryTracker:Initialize()
         self:UpdatePollingState()
     end)
 
-    if EVENT_MANAGER then
-        if EVENT_PLAYER_ACTIVATED then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_ACTIVATED, EVENT_PLAYER_ACTIVATED, function()
-                self:UpdatePollingState()
-            end)
-        end
-        if EVENT_ZONE_CHANGED then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_ZONE, EVENT_ZONE_CHANGED, function()
-                self:UpdatePollingState()
-            end)
-        end
-    end
+    EVENT_MANAGER:RegisterForEvent(LISTENER_ACTIVATED, EVENT_PLAYER_ACTIVATED, function()
+        self:UpdatePollingState()
+    end)
+    EVENT_MANAGER:RegisterForEvent(LISTENER_ZONE, EVENT_ZONE_CHANGED, function()
+        self:UpdatePollingState()
+    end)
 
     self.isInitialized = true
     self:UpdatePollingState()
@@ -39,11 +33,6 @@ function DiscoveryTracker:UpdatePollingState()
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
     local shouldPoll = Addon.QuestRepository:HasPendingDiscoveries(activeQuest)
     self._isPolling = self._isPolling or false
-
-    if not EVENT_MANAGER then
-        self._isPolling = shouldPoll
-        return
-    end
 
     if shouldPoll and not self._isPolling then
         local interval = Addon.Constants.DISCOVERY_POLL_INTERVAL_MS or 750

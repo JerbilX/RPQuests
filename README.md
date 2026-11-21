@@ -123,6 +123,13 @@ luajit tests/run.lua
 
 ---
 
+## AI Disclosure & Credits
+
+- **Author:** [JerbilX](https://github.com/JerbilX)
+- **AI Assistance Disclosure:** AI coding assistants were used during development to assist with Lua code drafting, refactoring, localization, documentation, and unit test scaffolding. All feature design, architecture decisions, in-game testing, and final code reviews were directed and verified by the author.
+
+---
+
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE) for details.

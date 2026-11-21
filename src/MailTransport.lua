@@ -46,42 +46,28 @@ function MailTransport:Initialize()
     self._notifiedMailIds = {}
     self._txSeq = self._txSeq or 0
 
-    if not self._eventsRegistered and EVENT_MANAGER then
-        if EVENT_MAIL_OPEN_MAILBOX then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_OPEN_MAILBOX, EVENT_MAIL_OPEN_MAILBOX, function()
-                self:OnMailboxOpened()
-            end)
-        end
-        if EVENT_MAIL_CLOSE_MAILBOX then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_CLOSE_MAILBOX, EVENT_MAIL_CLOSE_MAILBOX, function()
-                self:OnMailboxClosed()
-            end)
-        end
-        if EVENT_MAIL_SEND_SUCCESS then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_SEND_SUCCESS, EVENT_MAIL_SEND_SUCCESS, function(_, playerName)
-                self:OnMailSendSuccess(playerName)
-            end)
-        end
-        if EVENT_MAIL_SEND_FAILED then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_SEND_FAILED, EVENT_MAIL_SEND_FAILED, function(_, reason)
-                self:OnMailSendFailed(reason)
-            end)
-        end
-        if EVENT_MAIL_INBOX_UPDATE then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_INBOX_UPDATE, EVENT_MAIL_INBOX_UPDATE, function()
-                self:ScanInbox()
-            end)
-        end
-        if EVENT_MAIL_READABLE then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_MAIL_READABLE, EVENT_MAIL_READABLE, function(_, mailId)
-                self:OnMailReadable(mailId)
-            end)
-        end
-        if EVENT_MAIL_REMOVED then
-            EVENT_MANAGER:RegisterForEvent(LISTENER_MAIL_REMOVED, EVENT_MAIL_REMOVED, function(_, mailId)
-                self:OnMailRemoved(mailId)
-            end)
-        end
+    if not self._eventsRegistered then
+        EVENT_MANAGER:RegisterForEvent(LISTENER_OPEN_MAILBOX, EVENT_MAIL_OPEN_MAILBOX, function()
+            self:OnMailboxOpened()
+        end)
+        EVENT_MANAGER:RegisterForEvent(LISTENER_CLOSE_MAILBOX, EVENT_MAIL_CLOSE_MAILBOX, function()
+            self:OnMailboxClosed()
+        end)
+        EVENT_MANAGER:RegisterForEvent(LISTENER_SEND_SUCCESS, EVENT_MAIL_SEND_SUCCESS, function(_, playerName)
+            self:OnMailSendSuccess(playerName)
+        end)
+        EVENT_MANAGER:RegisterForEvent(LISTENER_SEND_FAILED, EVENT_MAIL_SEND_FAILED, function(_, reason)
+            self:OnMailSendFailed(reason)
+        end)
+        EVENT_MANAGER:RegisterForEvent(LISTENER_INBOX_UPDATE, EVENT_MAIL_INBOX_UPDATE, function()
+            self:ScanInbox()
+        end)
+        EVENT_MANAGER:RegisterForEvent(LISTENER_MAIL_READABLE, EVENT_MAIL_READABLE, function(_, mailId)
+            self:OnMailReadable(mailId)
+        end)
+        EVENT_MANAGER:RegisterForEvent(LISTENER_MAIL_REMOVED, EVENT_MAIL_REMOVED, function(_, mailId)
+            self:OnMailRemoved(mailId)
+        end)
         self._eventsRegistered = true
     end
 
