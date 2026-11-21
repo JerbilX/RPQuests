@@ -9,7 +9,7 @@ Addon.Constants = {
     METADATA = {
         NAME = "RPQuest",
         TITLE = "RPQuest",
-        VERSION = "1.0.0",
+        VERSION = "1.4.0",
         AUTHOR = "JerbilX",
     },
     SAVED_VARS = {

@@ -3,6 +3,7 @@
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
+-- Ref: docs/adr/0010-comparticion-grupo-y-objetivos-compartidos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -161,6 +162,18 @@ function JournalTab:Initialize()
     panel:SetHidden(true)
     self.panel = panel
 
+    local versionLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_VersionLabel", panel, CT_LABEL)
+    versionLabel:SetDimensions(140, 20)
+    versionLabel:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -33, 38)
+    if versionLabel.SetFont then versionLabel:SetFont("ZoFontGameSmall") end
+    if versionLabel.SetColor then versionLabel:SetColor(0.68, 0.68, 0.68, 1) end
+    if versionLabel.SetHorizontalAlignment and TEXT_ALIGN_RIGHT then
+        versionLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    end
+    local versionStr = (Addon.Constants and Addon.Constants.METADATA and Addon.Constants.METADATA.VERSION) or ""
+    versionLabel:SetText(versionStr ~= "" and ("v" .. tostring(versionStr)) or "")
+    self.versionLabel = versionLabel
+
     self:BuildLeftColumn(panel)
     self:BuildRightColumn(panel)
 
@@ -225,6 +238,15 @@ function JournalTab:Initialize()
         Addon.MailTransport:RegisterListener(function(evType, payload)
             self:OnMailTransportEvent(evType, payload)
         end)
+    end
+
+    if EVENT_MANAGER and EVENT_GROUP_UPDATE and not self._groupListenerRegistered then
+        EVENT_MANAGER:RegisterForEvent("RPQuest_JournalTab_GroupUpdate", EVENT_GROUP_UPDATE, function()
+            if self.panel and not self.panel:IsHidden() and KEYBIND_STRIP and self.keybindStripDescriptor then
+                KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+            end
+        end)
+        self._groupListenerRegistered = true
     end
 
     self.isInitialized = true
@@ -514,8 +536,22 @@ function JournalTab:BuildDetailPane(parent)
             return self.viewMode == VIEW_MODE.DETAIL and self.selectedQuestId ~= nil
         end,
     }
+    self.shareWithGroupDescriptor = {
+        name = (GetString and SI_QUEST_JOURNAL_SHARE) and GetString(SI_QUEST_JOURNAL_SHARE) or Addon.Locale:Get("BTN_SHARE_GROUP"),
+        keybind = "UI_SHORTCUT_TERTIARY",
+        callback = function()
+            self:ShareSelectedQuestWithGroup()
+        end,
+        visible = function()
+            return self.viewMode == VIEW_MODE.DETAIL
+                and self.selectedQuestId ~= nil
+                and IsUnitGrouped ~= nil
+                and IsUnitGrouped("player")
+        end,
+    }
     self.keybindStripDescriptor = {
         alignment = KEYBIND_STRIP_ALIGN_CENTER or 1,
+        self.shareWithGroupDescriptor,
         self.abandonQuestDescriptor,
         self.showOnMapDescriptor,
     }
@@ -1403,30 +1439,37 @@ function JournalTab:BuildMailInboxPane(parent)
     end)
     self.btnToggleAutoReportMail:SetAnchor(TOPLEFT, pane, TOPLEFT, 250, 42)
 
+    self.btnToggleAutoAcceptMail = CreateStyledButton(PANEL_NAME .. "_BtnAutoAcceptMail", pane, 240, 26, "", function()
+        local cur = Addon.QuestRepository:GetSetting("autoAcceptMail")
+        Addon.QuestRepository:SetSetting("autoAcceptMail", not cur)
+        self:RefreshMailInboxPane()
+    end)
+    self.btnToggleAutoAcceptMail:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 74)
+
     local lblEmpty = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailInboxEmpty", pane, CT_LABEL)
     lblEmpty:SetDimensions(510, 40)
-    lblEmpty:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 86)
+    lblEmpty:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 118)
     if lblEmpty.SetFont then lblEmpty:SetFont("ZoFontGame") end
     lblEmpty:SetText(Addon.Locale:Get("MAIL_INBOX_EMPTY"))
     self.mailInboxEmptyLabel = lblEmpty
 
     local cardTitle = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCardTitle", pane, CT_LABEL)
     cardTitle:SetDimensions(510, 28)
-    cardTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 86)
+    cardTitle:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 118)
     if cardTitle.SetFont then cardTitle:SetFont("ZoFontWinH3") end
     if cardTitle.SetColor then cardTitle:SetColor(1, 1, 1, 1) end
     self.mailCardTitle = cardTitle
 
     local cardFrom = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCardFrom", pane, CT_LABEL)
     cardFrom:SetDimensions(510, 22)
-    cardFrom:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 118)
+    cardFrom:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 150)
     if cardFrom.SetFont then cardFrom:SetFont("ZoFontGameBold") end
     if cardFrom.SetColor then cardFrom:SetColor(0.85, 0.78, 0.55, 1) end
     self.mailCardFrom = cardFrom
 
     local cardMsg = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCardMsg", pane, CT_LABEL)
     cardMsg:SetDimensions(510, 140)
-    cardMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 148)
+    cardMsg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 180)
     if cardMsg.SetFont then cardMsg:SetFont("ZoFontGame") end
     self.mailCardMsg = cardMsg
 
@@ -1445,7 +1488,7 @@ function JournalTab:BuildMailInboxPane(parent)
             Addon.Announcements:ShowAlert(Addon.Locale:Get(err), true)
         end
     end)
-    self.btnMailAccept:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 304)
+    self.btnMailAccept:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 336)
 
     self.btnMailReject = CreateStyledButton(PANEL_NAME .. "_BtnMailReject", pane, 140, 32, Addon.Locale:Get("BTN_MAIL_REJECT"), function()
         local mails = Addon.MailTransport and Addon.MailTransport:GetReceivedMails() or {}
@@ -1454,7 +1497,7 @@ function JournalTab:BuildMailInboxPane(parent)
         Addon.MailTransport:RejectReceivedMail(entry.mailId)
         self:RefreshMailInboxPane()
     end)
-    self.btnMailReject:SetAnchor(TOPLEFT, pane, TOPLEFT, 154, 304)
+    self.btnMailReject:SetAnchor(TOPLEFT, pane, TOPLEFT, 154, 336)
 
     self.btnMailPrev = CreateStyledButton(PANEL_NAME .. "_BtnMailPrev", pane, 36, 28, "<", function()
         local total = Addon.MailTransport and Addon.MailTransport:GetReceivedMailCount() or 0
@@ -1464,11 +1507,11 @@ function JournalTab:BuildMailInboxPane(parent)
             self:RefreshMailInboxPane()
         end
     end)
-    self.btnMailPrev:SetAnchor(TOPLEFT, pane, TOPLEFT, 330, 306)
+    self.btnMailPrev:SetAnchor(TOPLEFT, pane, TOPLEFT, 330, 338)
 
     local lblPage = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailPageLbl", pane, CT_LABEL)
     lblPage:SetDimensions(60, 28)
-    lblPage:SetAnchor(TOPLEFT, pane, TOPLEFT, 372, 310)
+    lblPage:SetAnchor(TOPLEFT, pane, TOPLEFT, 372, 342)
     if lblPage.SetFont then lblPage:SetFont("ZoFontGameBold") end
     self.mailPageLabel = lblPage
 
@@ -1480,7 +1523,7 @@ function JournalTab:BuildMailInboxPane(parent)
             self:RefreshMailInboxPane()
         end
     end)
-    self.btnMailNext:SetAnchor(TOPLEFT, pane, TOPLEFT, 438, 306)
+    self.btnMailNext:SetAnchor(TOPLEFT, pane, TOPLEFT, 438, 338)
 end
 
 function JournalTab:OnMailTransportEvent(evType, payload)
@@ -1507,6 +1550,18 @@ function JournalTab:OnMailTransportEvent(evType, payload)
     end
 end
 
+function JournalTab:ShareSelectedQuestWithGroup()
+    if not Addon.MailTransport then return end
+    local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not quest then return end
+    local ok, errKey, count = Addon.MailTransport:ShareQuestWithGroup(quest)
+    if ok then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_SHARE_GROUP_SENT", quest.title or "", count or 1), false)
+    elseif errKey then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
+    end
+end
+
 function JournalTab:OpenMailSendView()
     local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
     if not quest then return end
@@ -1520,6 +1575,9 @@ function JournalTab:OpenMailSendView()
     end
     if self.mailCopyBg then
         self.mailCopyBg:SetHidden(true)
+    end
+    if self.mailCopyEdit then
+        SetReadOnlyEditText(self.mailCopyEdit, "")
     end
     self:Refresh()
     self:RefreshMailSendCounter()
@@ -1547,7 +1605,7 @@ function JournalTab:OnCopyMailCodeClicked()
     local code = Addon.QuestRepository:ExportQuestToCode(quest.id) or ""
     if self.mailCopyBg and self.mailCopyEdit then
         self.mailCopyBg:SetHidden(false)
-        self.mailCopyEdit:SetText(code)
+        SetReadOnlyEditText(self.mailCopyEdit, code)
         if self.mailCopyEdit.TakeFocus then self.mailCopyEdit:TakeFocus() end
         if self.mailCopyEdit.SelectAll then self.mailCopyEdit:SelectAll() end
     end
@@ -1589,6 +1647,10 @@ function JournalTab:RefreshMailInboxPane()
     local autoRep = Addon.QuestRepository:GetSetting("autoSendCompletionMail")
     if self.btnToggleAutoReportMail then
         self.btnToggleAutoReportMail:SetText(Addon.Locale:Get(autoRep and "BTN_AUTO_REPORT_ON" or "BTN_AUTO_REPORT_OFF"))
+    end
+    local autoAcc = Addon.QuestRepository:GetSetting("autoAcceptMail")
+    if self.btnToggleAutoAcceptMail then
+        self.btnToggleAutoAcceptMail:SetText(Addon.Locale:Get(autoAcc and "BTN_MAIL_AUTO_ACCEPT_ON" or "BTN_MAIL_AUTO_ACCEPT_OFF"))
     end
     local mails = Addon.MailTransport and Addon.MailTransport:GetReceivedMails() or {}
     local total = #mails

@@ -2726,6 +2726,231 @@ RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incom
     AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after Accept")
 end)
 
+RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes and JournalTab shows version", function()
+    RPQuest.JournalTab:Initialize()
+    AssertTrue(RPQuest.JournalTab.versionLabel ~= nil, "JournalTab creates versionLabel")
+    AssertEqual(RPQuest.JournalTab.versionLabel:GetText(), "v" .. RPQuest.Constants.METADATA.VERSION, "versionLabel displays addon version")
+
+    local dec1, err1 = RPQuest.ShareCodec:DecodeQuest("RPQ4:1234:abcd")
+    AssertEqual(dec1, nil, "RPQ4 standard envelope rejected")
+    AssertEqual(err1, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ4 returns ERR_IMPORT_UNSUPPORTED_VERSION")
+
+    local dec2, err2 = RPQuest.ShareCodec:DecodeQuest("RPQ99:future_format_payload")
+    AssertEqual(dec2, nil, "RPQ99 arbitrary format rejected")
+    AssertEqual(err2, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ99 returns ERR_IMPORT_UNSUPPORTED_VERSION")
+
+    local imp, impErr = RPQuest.QuestRepository:ImportQuestFromCode("RPQ4:1234:abcd")
+    AssertEqual(imp, nil, "ImportQuestFromCode fails for RPQ4")
+    AssertEqual(impErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized unsupported version error")
+end)
+
+RunTest("MailTransport: surfaces decode errors once per mailId on ScanInbox/OnMailReadable (Issue #125)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    local inbox = {
+        [901] = { sender = "@Sender", charName = "Sender", subject = "[RPQuest] Corrupt", body = "RPQ3:FFFF:badpayload", secs = 10 },
+        [902] = { sender = "@Sender", charName = "Sender", subject = "[RPQuest] Future", body = "RPQ4:1234:futurepayload", secs = 10 },
+    }
+    _G.GetNextMailId = function(cur)
+        if cur == nil then return 901 end
+        if cur == 901 then return 902 end
+        return nil
+    end
+    _G.GetMailItemInfo = function(id)
+        local m = inbox[id]
+        if not m then return nil end
+        return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+    end
+    _G.ReadMail = function(id)
+        local m = inbox[id]
+        return m and m.body or ""
+    end
+
+    local alerts = {}
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+
+    local events = {}
+    RPQuest.MailTransport:RegisterListener(function(ev, payload)
+        if ev == "MAIL_DECODE_ERROR" then
+            table.insert(events, payload)
+        end
+    end)
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#alerts, 2, "2 decode error alerts shown on first ScanInbox")
+    AssertEqual(alerts[1].isErr, true, "Corrupt mail alert is error")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ERR_IMPORT_TRUNCATED_OR_CORRUPT"), "Corrupt mail shows ERR_IMPORT_TRUNCATED_OR_CORRUPT")
+    AssertEqual(alerts[2].msg, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "Future RPQ4 mail shows ERR_IMPORT_UNSUPPORTED_VERSION")
+    AssertEqual(#events, 2, "MAIL_DECODE_ERROR emitted for both mails")
+
+    -- Re-scan and OnMailReadable must not duplicate alerts for the same mailIds
+    RPQuest.MailTransport:ScanInbox(false)
+    RPQuest.MailTransport:OnMailReadable(901)
+    AssertEqual(#alerts, 2, "No duplicate alerts on re-scan or OnMailReadable")
+
+    RPQuest.Announcements.ShowAlert = origShowAlert
+end)
+
+RunTest("MailTransport: alerts on incoming quest mail without duplicates and supports autoAcceptMail (Issue #124)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    AssertEqual(RPQuest.QuestRepository:GetSetting("autoAcceptMail"), false, "autoAcceptMail defaults to false")
+
+    -- Create a valid RPQ3 code
+    local code = RPQuest.ShareCodec:EncodeQuest({
+        title = "Misión de Correo",
+        description = "Prueba de correo.",
+        mapId = 1,
+        zoneId = 1,
+        mapName = "Auridon",
+        targets = { { name = "Guardia" } },
+    })
+
+    local inbox = {
+        [951] = { sender = "@SenderA", charName = "SenderA", subject = "[RPQuest] Misión de Correo", body = code, secs = 5 },
+    }
+    local deletedIds = {}
+    _G.GetNextMailId = function(cur) return (cur == nil and inbox[951]) and 951 or nil end
+    _G.GetMailItemInfo = function(id)
+        local m = inbox[id]
+        if not m then return nil end
+        return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+    end
+    _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+    _G.DeleteMail = function(id)
+        table.insert(deletedIds, id)
+        inbox[id] = nil
+    end
+
+    local alerts = {}
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+
+    -- 1. Manual mode (autoAcceptMail = false)
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "Mail stored in inbox in manual mode")
+    AssertEqual(#alerts, 1, "1 notification alert shown")
+    AssertEqual(alerts[1].isErr, false, "Notification alert is not an error")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", "Misión de Correo", "@SenderA"), "Notification message matches")
+
+    -- Re-scan does not duplicate alert
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#alerts, 1, "No duplicate notification alert on re-scan")
+
+    -- 2. Auto-accept mode (autoAcceptMail = true)
+    RPQuest.QuestRepository:SetSetting("autoAcceptMail", true)
+    local qCountBefore = #RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    inbox[952] = { sender = "@SenderB", charName = "SenderB", subject = "[RPQuest] Misión de Correo", body = code, secs = 2 }
+    _G.GetNextMailId = function(cur)
+        if cur == nil and inbox[952] then return 952 end
+        return nil
+    end
+
+    local acceptedCount = 0
+    local origAnnounce = RPQuest.Announcements.AnnounceQuestAccepted
+    RPQuest.Announcements.AnnounceQuestAccepted = function() acceptedCount = acceptedCount + 1 end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    local qCountAfter = #RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(qCountAfter, qCountBefore + 1, "Quest auto-imported when autoAcceptMail=true")
+    AssertEqual(#deletedIds, 1, "Auto-accepted mail deleted when autoDeleteMail=true")
+    AssertEqual(deletedIds[1], 952, "Deleted mailId matches auto-accepted mail")
+    AssertEqual(acceptedCount, 1, "AnnounceQuestAccepted called on auto-accept")
+
+    RPQuest.Announcements.ShowAlert = origShowAlert
+    RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
+end)
+
+RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Discovery/Combat tracking (Issue #103)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+    RPQuest.JournalTab:Initialize()
+    RPQuest.DiscoveryTracker:Initialize()
+    RPQuest.CombatTracker:Initialize()
+
+    -- Create quest with targetLocation and discovery point
+    local zId = mockState.zoneId
+    local code = RPQuest.ShareCodec:EncodeQuest({
+        title = "Grupo en Tamriel",
+        description = "Objetivo compartido.",
+        mapId = mockState.mapId,
+        zoneId = zId,
+        mapName = "Auridon",
+        targets = {
+            { name = "Bandido", requiredCount = 1, worldZoneId = zId, worldX = 5000, worldZ = 5000, radius = 1000, locationRequired = true },
+        },
+        discoveries = {
+            { name = "Ruinas", zoneId = zId, worldX = 20000, worldZ = 20000, radius = 1000 },
+        },
+    })
+    local saved = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Creator")
+    RPQuest.QuestRepository:SetActiveQuest(saved.id)
+    RPQuest.JournalTab:SelectQuest(saved.id)
+
+    -- Mock group APIs: player + @Ally1 + @Ally2
+    local isGrouped = false
+    _G.IsUnitGrouped = function() return isGrouped end
+    _G.GetGroupSize = function() return isGrouped and 3 or 0 end
+    _G.GetGroupUnitTagByIndex = function(i)
+        local tags = { "player", "group1", "group2" }
+        return tags[i]
+    end
+    _G.AreUnitsEqual = function(a, b) return a == b end
+    _G.GetDisplayName = function() return "@PlayerSelf" end
+    _G.GetUnitDisplayName = function(tag)
+        if tag == "player" then return "@PlayerSelf" end
+        if tag == "group1" then return "@Ally1" end
+        if tag == "group2" then return "@Ally2" end
+        return ""
+    end
+
+    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), false, "Share keybind hidden when ungrouped")
+    isGrouped = true
+    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), true, "Share keybind visible when grouped in detail view")
+
+    local members = RPQuest.MailTransport:GetGroupMemberDisplayNames()
+    AssertEqual(#members, 2, "2 group members returned (excluding player)")
+    AssertEqual(members[1], "@Ally1", "First group member @Ally1")
+    AssertEqual(members[2], "@Ally2", "Second group member @Ally2")
+
+    local sentRecipients = {}
+    _G.SendMail = function(to) table.insert(sentRecipients, to) end
+    local okShare, errShare, countShare = RPQuest.MailTransport:ShareQuestWithGroup(saved)
+    AssertEqual(okShare, true, "ShareQuestWithGroup succeeds: " .. tostring(errShare))
+    AssertEqual(countShare, 2, "Shared with 2 group members")
+
+    -- Group DiscoveryTracker: player far away, group1 at discovery point (20000, 20000)
+    _G.GetUnitWorldPosition = function(tag)
+        if tag == "player" then return zId, 0, 0, 0 end
+        if tag == "group1" then return zId, 20000, 0, 20000 end
+        return zId, 0, 0, 0
+    end
+    RPQuest.DiscoveryTracker:UpdatePollingState()
+    RPQuest.DiscoveryTracker:OnUpdateTick()
+    AssertEqual(saved.discoveries[1].discovered, true, "Discovery triggered by group1 position")
+
+    -- Group CombatTracker: player outside targetLocation (0,0), group1 inside (5000, 5000)
+    _G.GetUnitWorldPosition = function(tag)
+        if tag == "player" then return zId, 0, 0, 0 end
+        if tag == "group1" then return zId, 5000, 0, 5000 end
+        return zId, 0, 0, 0
+    end
+    _G.GetMapPlayerPosition = function() return 0.5, 0.5 end
+    RPQuest.CombatTracker:OnCombatEvent(nil, _G.ACTION_RESULT_DIED, false, "", 0, 0, "Ally1", _G.COMBAT_UNIT_TYPE_GROUP, "Bandido", 0, 0, 0, 0, false, 1, 777, 0)
+    AssertEqual(saved.targets[1].currentCount, 1, "Group kill recorded using group1 targetLocation")
+    AssertEqual(saved.failed, false, "Quest did not fail when group1 was inside targetLocation")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)

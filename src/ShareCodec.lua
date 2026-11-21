@@ -1025,6 +1025,11 @@ function ShareCodec:DecodeQuest(codeString)
     local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
     local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
 
+    local rpqPrefix = string.match(trimmed, "^(RPQ%d+):")
+    if rpqPrefix and rpqPrefix ~= prefix and rpqPrefix ~= legacyPrefixV2 and rpqPrefix ~= legacyPrefix then
+        return nil, "ERR_IMPORT_UNSUPPORTED_VERSION"
+    end
+
     if string.sub(trimmed, 1, #prefix + 1) == (prefix .. ":") then
         local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):(.+)$")
         if not pfx or not checksum or #checksum ~= 4 or not encodedPayload or encodedPayload:find("%s") then

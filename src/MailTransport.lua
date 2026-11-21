@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0009-transporte-correo-multiparte-rpqp.md
+-- Ref: docs/adr/0010-comparticion-grupo-y-objetivos-compartidos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -41,6 +42,8 @@ function MailTransport:Initialize()
     self._receivedById = {}
     self._partGroups = {}
     self._dismissedMailIds = {}
+    self._reportedErrorMailIds = {}
+    self._notifiedMailIds = {}
     self._txSeq = self._txSeq or 0
 
     if not self._eventsRegistered and EVENT_MANAGER then
@@ -486,7 +489,7 @@ function MailTransport:ParseQuestMailBody(body)
         return nil, ""
     end
 
-    local sIdx, eIdx, code = string.find(body, "(RPQ[123]:[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]:[^%s]+)")
+    local sIdx, eIdx, code = string.find(body, "(RPQ%d+:[^%s]+)")
     if not code then
         return nil, ""
     end
@@ -578,6 +581,24 @@ function MailTransport:UpsertReceivedEntry(entry)
         self._receivedById[entry.idKey] = #self._receivedMails
     end
     self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+
+    if not entry.isIncomplete then
+        self._notifiedMailIds = self._notifiedMailIds or {}
+        if not self._notifiedMailIds[entry.idKey] then
+            self._notifiedMailIds[entry.idKey] = true
+            if Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoAcceptMail") then
+                local imported = self:AcceptReceivedMail(entry.idKey)
+                if imported and Addon.Announcements and Addon.Announcements.AnnounceQuestAccepted then
+                    Addon.Announcements:AnnounceQuestAccepted(imported)
+                end
+            elseif Addon.Announcements and Addon.Announcements.ShowAlert then
+                local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
+                    and entry.senderDisplayName
+                    or entry.senderCharacterName or ""
+                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", entry.title or "", who), false)
+            end
+        end
+    end
 end
 
 function MailTransport:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
@@ -645,12 +666,12 @@ function MailTransport:UpsertPartMail(mailId, idKey, senderDisplayName, senderCh
     local fullBody = table.concat(group.parts, "", 1, total)
     local code, roleMessage = self:ParseQuestMailBody(fullBody)
     if not code then
-        return false
+        return false, "ERR_IMPORT_INVALID_FORMAT", groupKey
     end
 
     local decoded, errKey = Addon.ShareCodec:DecodeQuest(code)
     if not decoded then
-        return false, errKey
+        return false, errKey, groupKey
     end
 
     self:UpsertReceivedEntry({
@@ -678,19 +699,19 @@ function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderChara
         return false
     end
 
-    local partResult, partErr = self:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+    local partResult, partErr, partErrorKey = self:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
     if partResult ~= nil then
-        return partResult, partErr
+        return partResult, partErr, partErrorKey
     end
 
     local code, roleMessage = self:ParseQuestMailBody(body)
     if not code then
-        return false
+        return false, "ERR_IMPORT_INVALID_FORMAT", idKey
     end
 
     local decoded, errKey = Addon.ShareCodec:DecodeQuest(code)
     if not decoded then
-        return false, errKey
+        return false, errKey, idKey
     end
 
     self:UpsertReceivedEntry({
@@ -719,6 +740,45 @@ function MailTransport:RebuildReceivedIndex()
     end
 end
 
+function MailTransport:ReportDecodeError(errorKey, errKey, senderDisplayName)
+    if not errKey then return end
+    self._reportedErrorMailIds = self._reportedErrorMailIds or {}
+    local key = tostring(errorKey)
+    if self._reportedErrorMailIds[key] then return end
+    self._reportedErrorMailIds[key] = true
+
+    local msg = Addon.Locale:Get(errKey)
+    if Addon.Announcements and Addon.Announcements.ShowAlert then
+        Addon.Announcements:ShowAlert(msg, true)
+    end
+    self:NotifyListeners("MAIL_DECODE_ERROR", {
+        mailId = errorKey,
+        errKey = errKey,
+        message = msg,
+        senderDisplayName = senderDisplayName,
+    })
+end
+
+function MailTransport:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, allowRequestRead)
+    local isQuest = self:IsQuestMailSubject(subject)
+    local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
+    if not (isQuest or isCompletion) then return end
+
+    local body = ReadMail and ReadMail(mailId) or ""
+    if type(body) == "string" and body ~= "" then
+        if isQuest then
+            local ok, errKey, errorKey = self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+            if not ok and errKey then
+                self:ReportDecodeError(errorKey or mailId, errKey, senderDisplayName)
+            end
+        else
+            self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+        end
+    elseif allowRequestRead and RequestReadMail then
+        RequestReadMail(mailId)
+    end
+end
+
 function MailTransport:ScanInbox(requestOpen)
     if requestOpen then
         self:EnsureMailboxOpen()
@@ -730,20 +790,7 @@ function MailTransport:ScanInbox(requestOpen)
     local mailId = GetNextMailId(nil)
     while mailId ~= nil do
         local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
-        local isQuest = self:IsQuestMailSubject(subject)
-        local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
-        if isQuest or isCompletion then
-            local body = ReadMail and ReadMail(mailId) or ""
-            if type(body) == "string" and body ~= "" then
-                if isQuest then
-                    self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
-                else
-                    self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
-                end
-            elseif RequestReadMail then
-                RequestReadMail(mailId)
-            end
-        end
+        self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, true)
         mailId = GetNextMailId(mailId)
     end
 
@@ -753,23 +800,18 @@ end
 function MailTransport:OnMailReadable(mailId)
     if not mailId or not GetMailItemInfo or not ReadMail then return end
     local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
-    local isQuest = self:IsQuestMailSubject(subject)
-    local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
-    if isQuest or isCompletion then
-        local body = ReadMail(mailId)
-        if type(body) == "string" and body ~= "" then
-            if isQuest then
-                self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
-            else
-                self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
-            end
-        end
-    end
+    self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, false)
 end
 
 function MailTransport:OnMailRemoved(mailId)
     if not mailId then return end
     local idKey = tostring(mailId)
+    if self._reportedErrorMailIds then
+        self._reportedErrorMailIds[idKey] = nil
+    end
+    if self._notifiedMailIds then
+        self._notifiedMailIds[idKey] = nil
+    end
     local idx = self._receivedById and self._receivedById[idKey]
     if idx then
         table.remove(self._receivedMails, idx)
@@ -793,6 +835,12 @@ function MailTransport:OnMailRemoved(mailId)
                 end
                 if remaining == 0 then
                     self._partGroups[groupKey] = nil
+                    if self._reportedErrorMailIds then
+                        self._reportedErrorMailIds[groupKey] = nil
+                    end
+                    if self._notifiedMailIds then
+                        self._notifiedMailIds[groupKey] = nil
+                    end
                     self:RemoveEntryById(groupKey)
                 else
                     local existingIdx = self._receivedById and self._receivedById[groupKey]
@@ -877,4 +925,41 @@ function MailTransport:RejectReceivedMail(mailId)
     self:DisposeEntryMails(entry)
     self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
     return true
+end
+
+function MailTransport:GetGroupMemberDisplayNames()
+    local names = {}
+    if not IsUnitGrouped or not IsUnitGrouped("player") or not GetGroupSize or not GetGroupUnitTagByIndex or not GetUnitDisplayName then
+        return names
+    end
+    local seen = {}
+    local playerName = GetDisplayName and GetDisplayName() or nil
+    local groupSize = GetGroupSize() or 0
+    for i = 1, groupSize do
+        local unitTag = GetGroupUnitTagByIndex(i)
+        if unitTag and unitTag ~= "player" and not (AreUnitsEqual and AreUnitsEqual(unitTag, "player")) then
+            local displayName = GetUnitDisplayName(unitTag)
+            if type(displayName) == "string" and displayName ~= "" and displayName ~= playerName then
+                local key = displayName:lower()
+                if not seen[key] then
+                    seen[key] = true
+                    table.insert(names, displayName)
+                end
+            end
+        end
+    end
+    return names
+end
+
+function MailTransport:ShareQuestWithGroup(quest)
+    if type(quest) ~= "table" then
+        return false, "ERR_INVALID_CODE", 0
+    end
+    local members = self:GetGroupMemberDisplayNames()
+    if #members == 0 then
+        return false, "ERR_SHARE_NO_GROUP_MEMBERS", 0
+    end
+    local rawRecipients = table.concat(members, ", ")
+    local ok, errKey = self:SendQuestToRecipients(quest, rawRecipients, "")
+    return ok, errKey, #members
 end

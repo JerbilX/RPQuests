@@ -230,6 +230,7 @@ function QuestRepository:GetDefaults()
         draft = CreateDefaultDraft(),
         settings = {
             autoDeleteMail = true,
+            autoAcceptMail = false,
             autoSendCompletionMail = false,
         },
     }
@@ -240,10 +241,13 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars.nextId = self.savedVars.nextId or 1
     self.savedVars.quests = self.savedVars.quests or {}
     if type(self.savedVars.settings) ~= "table" then
-        self.savedVars.settings = { autoDeleteMail = true, autoSendCompletionMail = false }
+        self.savedVars.settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = false }
     else
         if self.savedVars.settings.autoDeleteMail == nil then
             self.savedVars.settings.autoDeleteMail = true
+        end
+        if self.savedVars.settings.autoAcceptMail == nil then
+            self.savedVars.settings.autoAcceptMail = false
         end
         if self.savedVars.settings.autoSendCompletionMail == nil then
             self.savedVars.settings.autoSendCompletionMail = false

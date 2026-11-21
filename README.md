@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.3.2-blue)
+![Version](https://img.shields.io/badge/version-1.4.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -25,7 +25,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
 - **Code Sharing & Completion Proof (`RPQ3` / `RPQC1`):**
   - Export any prepared quest as a compact, LZSS-compressed, Discord-safe Base85 share code (`RPQ3:...`, backwards-compatible with `RPQ2`/`RPQ1`) for other players to import.
-  - **In-Game Mail Transport:** Send quests directly to 1–4 `@AccountName` recipients with an optional roleplay message (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP`, with a quick **Copy RPQ3 Code** fallback for Discord), receive/accept them from the **Mail** inbox in RPQuest, and report/auto-validate completion (`RPQC1`) back to the creator via mail (works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU).
+  - **In-Game Mail Transport & Group Share:** Send quests directly to 1–4 `@AccountName` recipients with an optional roleplay message (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP`, with a quick **Copy Code** fallback for Discord), or press the native **Share** keybind in the RPQuest Journal when grouped to send the selected quest to your group members. Get notified on incoming quest mails, receive/accept (or optionally **Auto-Accept**) them from the **Mail** inbox in RPQuest, and report/auto-validate completion (`RPQC1`) back to the creator via mail (works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU). Discovery and combat objectives completed by nearby group members are also tracked automatically.
   - Completed quests generate a delivery validation code (`RPQC1:...`) to prove completion back to the Quest Master.
 - **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
 

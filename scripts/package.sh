@@ -42,10 +42,18 @@ mkdir -p "$TARGET_DIR"
 # Copy runtime addon files only
 cp -R RPQuest.lua Bindings.xml README.md readme.txt LICENSE src lang "$TARGET_DIR/"
 
-# Stamp auto-computed Version and AddOnVersion into staged manifest
+# Stamp auto-computed Version, AddOnVersion, and Description version tag into staged manifest
 awk -v ver="$DISPLAY_VERSION" -v aver="$ADDON_VERSION" '
   /^## Version:/      { print "## Version: " ver; next }
   /^## AddOnVersion:/ { print "## AddOnVersion: " aver; next }
+  /^## Description:/  {
+    if ($0 ~ /\(v[0-9]+\.[0-9]+\.[0-9]+[^)]*\)/) {
+      sub(/\(v[0-9]+\.[0-9]+\.[0-9]+[^)]*\)/, "(v" ver ")")
+    } else {
+      $0 = $0 " (v" ver ")"
+    }
+    print; next
+  }
   { print }
 ' "$MANIFEST_FILE" > "${TARGET_DIR}/${MANIFEST_FILE}"
 
