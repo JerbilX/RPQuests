@@ -527,7 +527,8 @@ local function ReadSVarint(data, pos, len)
 end
 
 local function WriteUInt16(buf, val)
-    local q = math.floor(math.max(0, math.min(1, tonumber(val) or 0)) * 65535 + 0.5)
+    local snapped = tonumber(string.format("%.4f", tonumber(val) or 0)) or 0
+    local q = math.floor(math.max(0, math.min(1, snapped)) * 65535 + 0.5)
     buf[#buf + 1] = BYTE_TO_CHAR[math.floor(q / 256)]
     buf[#buf + 1] = BYTE_TO_CHAR[q % 256]
 end

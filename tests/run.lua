@@ -2103,10 +2103,10 @@ RunTest("RPQ3 compact codec: compression ratio, negative varints, Discord safety
         mapId = 32,
         zoneId = 381,
         mapName = "Auridon",
-        targetX = 0.4321,
-        targetY = 0.6789,
-        areaCenterX = 0.4512,
-        areaCenterY = 0.6543,
+        targetX = 0.432149,
+        targetY = 0.678951,
+        areaCenterX = 0.451249,
+        areaCenterY = 0.654351,
         areaRadius = 0.075,
         hideMapArea = true,
         requireUndetected = true,
@@ -2237,10 +2237,12 @@ RunTest("RPQ3 compact codec: compression ratio, negative varints, Discord safety
     local sig1 = RPQuest.ShareCodec:ComputeQuestSignature(complexQuest)
     local sig2 = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
     AssertTrue(sig1 ~= nil and #sig1 == 8, "ComputeQuestSignature returns 8-char hex")
-    -- Note: uint16 quantization may alter 4-decimal float rounding by 0.0001, check RPQC1 works on decoded quest
+    AssertEqual(sig1, sig2, "ComputeQuestSignature matches between original and RPQ3-decoded quest")
     decoded.completed = true
     local compCode = RPQuest.ShareCodec:EncodeCompletion(decoded, "Player", 1000)
     AssertTrue(compCode ~= nil and compCode:sub(1, 6) == "RPQC1:", "RPQC1 completion code works for RPQ3-decoded quest")
+    local okVal, valRes = RPQuest.ShareCodec:ValidateCompletionForQuest(complexQuest, compCode)
+    AssertEqual(okVal, true, "Original quest validates RPQC1 from RPQ3-decoded quest: " .. tostring(valRes))
 end)
 
 if failed > 0 then
