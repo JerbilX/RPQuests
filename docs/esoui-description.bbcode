@@ -4,14 +4,14 @@ A native, [B]zero-dependency[/B] add-on for [B]The Elder Scrolls Online[/B] that
 [SIZE="3"][B]Key Features[/B][/SIZE]
 [LIST]
 [*][B]Native Quest Journal Integration (J):[/B] Adds a dedicated [B]RPQuest[/B] tab inside the standard Quest Journal with separate [B]Prepared[/B] (authored) and [B]Received[/B] (active/playable) quest lists.
-[*][B]Reticle NPC Target Capture:[/B] Aim at any living NPC and press your keybind to register objectives automatically. Capturing the same NPC name multiple times stacks into [I]Imp x3[/I]; different named NPCs are tracked individually.
+[*][B]Reticle NPC Target Capture:[/B] Aim at any living NPC and press your keybind to register objectives automatically. Capturing the same NPC name multiple times stacks into [I]Imp x3[/I]; different named NPCs are tracked individually, with optional per-target location conditions ([I]Required[/I] / [I]Not Required[/I]) and custom elimination messages.
 [*][B]Hidden Discovery Points:[/B] Capture in-world exploration coordinates with configurable trigger radii ([I]Small[/I], [I]Medium[/I], [I]Large[/I]) without cluttering the map or compass with spoilers.
 [*][B]Optional Stealth / Undetected Condition:[/B] Require players to complete objectives without being detected in combat.
 [*][B]World Map Search Area (M):[/B] Displays an approximate search circle on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
-[*][B]Native NPC Dialogue Injection:[/B] Bind custom RPQuest dialogue lines to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
+[*][B]Native NPC Dialogue Injection:[/B] Bind custom RPQuest dialogue lines and per-NPC player response options to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
 [*][B]Combat & Discovery Tracking + Native Alerts:[/B] Tracks kills and exploration proximity, triggering native Center Screen Announcements (including when accepting a shared quest by code) and official quest sounds.
 [*][B]HUD Mini-Tracker:[/B] Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
-[*][B]Code Sharing & Completion Proof (RPQ2 / RPQC1):[/B] Export any prepared quest as a compact, checksum-verified share code for other players to import, and generate a delivery validation code upon completion to prove it back to the Quest Master.
+[*][B]Code Sharing & In-Game Mail (RPQ3 / RPQC1):[/B] Export any prepared quest as a compact, LZSS-compressed, Discord-safe Base85 share code ([I]RPQ3[/I], backwards-compatible with [I]RPQ2[/I]/[I]RPQ1[/I]) for other players to import, or send quests directly via in-game mail to 1–4 [I]@AccountName[/I] recipients with an optional roleplay message (same megaserver). Completed quests generate an [I]RPQC1[/I] delivery validation code and can be reported/auto-validated back to the creator via mail.
 [*][B]Per-Character Persistence & Auto-Localization:[/B] Stores progress per character via SavedVariables and auto-detects client language (English / Spanish).
 [/LIST]
 

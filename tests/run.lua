@@ -343,6 +343,7 @@ dofile("src/CombatTracker.lua")
 dofile("src/DiscoveryTracker.lua")
 dofile("src/DialogueInjector.lua")
 dofile("src/WorldMapArea.lua")
+dofile("src/MailTransport.lua")
 dofile("src/JournalTab.lua")
 dofile("RPQuest.lua")
 
@@ -413,7 +414,7 @@ RunTest("ShareCodec roundtrip preserves UTF-8, pipes, newlines and coordinates",
 
     local code, err = RPQuest.ShareCodec:EncodeQuest(original)
     AssertTrue(code ~= nil, "Code should be generated without error: " .. tostring(err))
-    AssertTrue(string.sub(code, 1, 5) == "RPQ2:", "Code must start with RPQ2:")
+    AssertTrue(string.sub(code, 1, 5) == "RPQ3:", "Code must start with RPQ3:")
 
     local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
     AssertTrue(decoded ~= nil, "Decode should succeed: " .. tostring(decErr))
@@ -448,7 +449,7 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
         areaRadius = 0.075,
     }
     local code = RPQuest.ShareCodec:EncodeQuest(validQuest)
-    local tampered = code:gsub("^RPQ2:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ2:0000:")
+    local tampered = code:gsub("^RPQ3:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ3:0000:")
     local res, tamperErr = RPQuest.ShareCodec:DecodeQuest(tampered)
     AssertEqual(res, nil, "Tampered checksum must fail")
     AssertEqual(tamperErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Tampered checksum returns specific error key")
@@ -461,7 +462,7 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
     AssertEqual(emptyRes, nil, "Empty string must fail")
     AssertEqual(emptyErr, "ERR_IMPORT_EMPTY", "Empty string returns empty error key")
 
-    local futureCode = code:gsub("^RPQ2:", "RPQ9:")
+    local futureCode = code:gsub("^RPQ3:", "RPQ9:")
     local futureRes, futureErr = RPQuest.ShareCodec:DecodeQuest(futureCode)
     AssertEqual(futureRes, nil, "Unknown version prefix must fail")
     AssertEqual(futureErr, "ERR_IMPORT_UNSUPPORTED_VERSION", "Unknown version prefix returns version error key")
@@ -835,7 +836,7 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
 
     -- Código para compartir siempre visible en shareEdit al seleccionar/crear la misión
     local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ2:", "Share edit box auto-populated with RPQ2 code")
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ3:", "Share edit box auto-populated with RPQ3 code")
     AssertEqual(RPQuest.JournalTab.btnShare, nil, "Share button removed in favor of always-visible share box")
     RPQuest.JournalTab.shareEdit._selectedAll = false
     RPQuest.JournalTab.shareEdit:FireHandler("OnFocusGained")
@@ -1224,7 +1225,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
     local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ2:", "shareEdit populated with RPQ2 code for received quest")
+    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ3:", "shareEdit populated with RPQ3 code for received quest")
     AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab auto-populates RPQC1 code into deliveryEdit")
     AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
 
@@ -1259,7 +1260,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), true, "Delivery code box hidden for prepared quest")
     AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), "", "deliveryEdit cleared when switching quest")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ2:", "shareEdit auto-populated with RPQ2 code for prepared quest")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit auto-populated with RPQ3 code for prepared quest")
     AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
@@ -1268,7 +1269,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local msg = RPQuest.JournalTab.validateResultLabel:GetText()
     AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ2:", "shareEdit still preserves RPQ2 code after validation")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit still preserves RPQ3 code after validation")
 end)
 
 RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
@@ -1443,7 +1444,7 @@ RunTest("18. Issue 47: Deep optimization, overflow caps, deferred map pins and O
     AssertTrue(q ~= nil, "Saved quest with 10 targets")
 
     local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
-    AssertTrue(type(code) == "string" and #code > 900, "Exported code generated cleanly")
+    AssertTrue(type(code) == "string" and #code > 100 and code:sub(1, 5) == "RPQ3:", "Exported RPQ3 code generated cleanly")
 
     -- Verificar que maxChars >= 4096 en importCodeEdit y shareEdit
     RPQuest.JournalTab:SelectQuest(q.id)
@@ -1607,7 +1608,7 @@ RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map
 
     -- 3. ShareCodec roundtrip preserves discoveries and resets discovered=false
     local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
-    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ2:", "ShareCodec encodes discovery-only quest")
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ3:", "ShareCodec encodes discovery-only quest")
 
     local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
     AssertTrue(imported ~= nil, "ShareCodec decodes and imports discovery-only quest")
@@ -1749,7 +1750,7 @@ RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjec
 
     -- 4. ShareCodec RPQ2 roundtrip
     local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
-    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ2:", "Exported code uses RPQ2 prefix")
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ3:", "Exported code uses RPQ3 prefix")
 
     local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
     AssertTrue(imported ~= nil, "RPQ2 quest imported successfully")
@@ -1958,6 +1959,637 @@ RunTest("Optimizations: completion code cache, discovery-only FindPendingTarget,
     local cAfterReset, errAfterReset = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
     AssertEqual(cAfterReset, nil, "ExportCompletionCode cache invalidated on ResetQuest")
     AssertEqual(errAfterReset, "Quest is not completed", "ResetQuest marks quest incomplete")
+end)
+
+RunTest("Target location conditions and custom messages (Issue #99)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.CombatTracker:Initialize()
+
+    -- Helper to spy on Announcements
+    local customMsgCalls = {}
+    local failedCalls = {}
+    local origCustom = RPQuest.Announcements.AnnounceTargetCustomMessage
+    local origFailed = RPQuest.Announcements.AnnounceQuestFailed
+    RPQuest.Announcements.AnnounceTargetCustomMessage = function(self, quest, target)
+        table.insert(customMsgCalls, target.customMessage)
+        origCustom(self, quest, target)
+    end
+    RPQuest.Announcements.AnnounceQuestFailed = function(self, quest, target)
+        table.insert(failedCalls, quest.id)
+        origFailed(self, quest, target)
+    end
+
+    local origGetMapId = _G.GetCurrentMapId
+    local origGetMapPos = _G.GetMapPlayerPosition
+    local origGetWorldPos = _G.GetUnitWorldPosition
+    _G.GetCurrentMapId = function() return 32 end
+    _G.GetMapPlayerPosition = function() return 0.5, 0.5 end
+
+    -- Case 1 & 2: Required location
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Guard",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1000)
+    RPQuest.QuestRepository:UpdateDraftTarget(1, {
+        locationRequired = true,
+        customMessage = "Silent takedown in the alley.",
+    })
+    local qReq = RPQuest.QuestRepository:SaveDraft("Required Loc Quest", "Desc")
+    RPQuest.QuestRepository:SetActiveQuest(qReq.id)
+
+    -- Kill outside required location -> fails quest, kill does NOT count
+    _G.GetUnitWorldPosition = function() return 381, 50000, 0, 50000 end
+    RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Guard", 0, 1, 0, 0, false, 1, 901, 0)
+    AssertEqual(qReq.failed, true, "Quest fails when required location target is killed outside radius")
+    AssertEqual(qReq.targets[1].currentCount, 0, "Kill outside required location does not count")
+    AssertEqual(#failedCalls, 1, "AnnounceQuestFailed called once")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Failed quest is deactivated")
+
+    -- Reset quest and kill inside required location -> counts kill + shows customMessage
+    RPQuest.QuestRepository:ResetQuest(qReq.id)
+    AssertEqual(qReq.failed, false, "ResetQuest clears failed flag")
+    _G.GetUnitWorldPosition = function() return 381, 10200, 0, 20200 end
+    RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Guard", 0, 1, 0, 0, false, 1, 902, 0)
+    AssertEqual(qReq.targets[1].currentCount, 1, "Kill inside required location counts")
+    AssertEqual(qReq.completed, true, "Quest completes on kill inside required location")
+    AssertEqual(#customMsgCalls, 1, "Custom message shown inside required location")
+    AssertEqual(customMsgCalls[1], "Silent takedown in the alley.", "Exact custom message emitted")
+
+    -- Case 3: Optional location + defined point
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Scout",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1000)
+    RPQuest.QuestRepository:UpdateDraftTarget(1, {
+        locationRequired = false,
+        customMessage = "Scout ambushed at the bridge!",
+    })
+    RPQuest.QuestRepository:GetDraft().targets[1].requiredCount = 2
+    local qOpt = RPQuest.QuestRepository:SaveDraft("Optional Loc Quest", "Desc")
+    RPQuest.QuestRepository:SetActiveQuest(qOpt.id)
+
+    -- Kill outside defined point -> counts kill, does NOT show customMessage, does NOT fail
+    _G.GetUnitWorldPosition = function() return 381, 50000, 0, 50000 end
+    RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Scout", 0, 1, 0, 0, false, 1, 903, 0)
+    AssertEqual(qOpt.failed, false, "Optional location does not fail quest outside radius")
+    AssertEqual(qOpt.targets[1].currentCount, 1, "Kill outside optional location still counts")
+    AssertEqual(#customMsgCalls, 1, "Custom message NOT shown outside optional location")
+
+    -- Kill inside defined point -> counts kill + shows customMessage
+    _G.GetUnitWorldPosition = function() return 381, 10100, 0, 20100 end
+    RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Scout", 0, 1, 0, 0, false, 1, 904, 0)
+    AssertEqual(qOpt.targets[1].currentCount, 2, "Second kill inside optional location counts")
+    AssertEqual(#customMsgCalls, 2, "Custom message shown inside optional location")
+
+    -- Case 4: Optional location + NO defined point
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandit",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    RPQuest.QuestRepository:UpdateDraftTarget(1, {
+        locationRequired = false,
+        customMessage = "Bandit eliminated anywhere.",
+    })
+    local qNoLoc = RPQuest.QuestRepository:SaveDraft("No Loc Custom Msg", "Desc")
+    RPQuest.QuestRepository:SetActiveQuest(qNoLoc.id)
+    RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Bandit", 0, 1, 0, 0, false, 1, 905, 0)
+    AssertEqual(qNoLoc.targets[1].currentCount, 1, "Target without location counts anywhere")
+    AssertEqual(#customMsgCalls, 3, "Custom message shown anywhere when no location defined")
+
+    -- ShareCodec roundtrip for target conditions & custom message
+    local exported = RPQuest.QuestRepository:ExportQuestToCode(qReq.id)
+    local decoded = RPQuest.ShareCodec:DecodeQuest(exported)
+    AssertTrue(decoded ~= nil and decoded.targets ~= nil and #decoded.targets == 1, "Encoded quest with target condition decoded")
+    AssertEqual(decoded.targets[1].zoneId, 381, "Target zoneId preserved in ShareCodec")
+    AssertEqual(decoded.targets[1].worldX, 10000, "Target worldX preserved in ShareCodec")
+    AssertEqual(decoded.targets[1].worldZ, 20000, "Target worldZ preserved in ShareCodec")
+    AssertEqual(decoded.targets[1].radius, 1000, "Target radius preserved in ShareCodec")
+    AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved in ShareCodec")
+    AssertEqual(decoded.targets[1].customMessage, "Silent takedown in the alley.", "Target customMessage preserved in ShareCodec")
+
+    RPQuest.Announcements.AnnounceTargetCustomMessage = origCustom
+    RPQuest.Announcements.AnnounceQuestFailed = origFailed
+    _G.GetCurrentMapId = origGetMapId
+    _G.GetMapPlayerPosition = origGetMapPos
+    _G.GetUnitWorldPosition = origGetWorldPos
+end)
+
+RunTest("RPQ3 compact codec: compression ratio, negative varints, Discord safety, corrupt inputs (Issue #100)", function()
+    local complexQuest = {
+        title = "La Conspiración de Auridon — Año Nuevo (Ñoño)",
+        description = "Investiga las ruinas antiguas al norte de Vulkhel Guard. "
+            .. "Los agentes del Veiled Heritance han estado reuniendo suministros y "
+            .. "enviando mensajeros secretos entre los campamentos de la costa. "
+            .. "Elimina a los exploradores en el puente y recoge las pistas ocultas.",
+        clue = "Busca el sello roto junto al muelle de los contrabandistas.",
+        completionMessage = "¡Misión completada! Regresa con el capitán para recibir tu recompensa.",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.432149,
+        targetY = 0.678951,
+        areaCenterX = 0.451249,
+        areaCenterY = 0.654351,
+        areaRadius = 0.075,
+        hideMapArea = true,
+        requireUndetected = true,
+        targets = {
+            {
+                name = "Explorador del Velo",
+                requiredCount = 3,
+                zoneId = 381,
+                worldX = -123456,
+                worldZ = -78901,
+                radius = 1500,
+                locationRequired = true,
+                customMessage = "Has interceptado al explorador en el puente secreto.",
+            },
+            {
+                name = "Capitán Contrabandista",
+                requiredCount = 1,
+                locationRequired = false,
+                customMessage = "El capitán cae tras una breve escaramuza.",
+            },
+        },
+        discoveries = {
+            {
+                zoneId = 381,
+                worldX = -45000,
+                worldY = 1200,
+                worldZ = 98765,
+                mapId = 32,
+                x = 0.4123,
+                y = 0.6123,
+                radius = 1500,
+                message = "Notas huellas recientes que conducen hacia la cueva oculta.",
+            },
+            {
+                zoneId = 381,
+                worldX = -46000,
+                worldY = 1250,
+                worldZ = 99500,
+                mapId = 32,
+                x = 0.4223,
+                y = 0.6223,
+                radius = 800,
+                message = "Encuentras una carta cifrada con el emblema del Velo.",
+            },
+        },
+        dialogues = {
+            { npcName = "Tabernero Orin", zoneId = 381, response = "Los contrabandistas suelen reunirse al anochecer cerca del muelle." },
+            { npcName = "Guardia Elara", zoneId = 381, response = "Ten cuidado, los exploradores vigilan el puente norte." },
+        },
+    }
+
+    local rpq3 = RPQuest.ShareCodec:EncodeQuest(complexQuest)
+    AssertTrue(type(rpq3) == "string" and rpq3:sub(1, 5) == "RPQ3:", "EncodeQuest emits RPQ3 prefix")
+
+    -- Verify Discord-safe Base85 payload (no *, _, ~, `, |, >, <, \, :, or whitespace)
+    local payload = rpq3:match("^RPQ3:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:(.+)$")
+    AssertTrue(payload ~= nil and #payload > 0, "RPQ3 envelope matches RPQ3:<CRC16>:<PAYLOAD>")
+    AssertEqual(payload:find("[*_~`|>\\:<%s]"), nil, "RPQ3 Base85 payload contains no Discord-unsafe or delimiter chars")
+
+    -- Verify >= 45% length reduction vs RPQ2 on a medium/large quest
+    local repeatedQuest = {
+        title = "Patrulla del Velo en Auridon",
+        description = string.rep("Los exploradores del Velo vigilan los caminos del norte de Auridon. ", 6),
+        clue = "Busca los campamentos del Velo en la costa norte.",
+        completionMessage = "Los campamentos del Velo han sido despejados.",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+        areaCenterX = 0.52,
+        areaCenterY = 0.48,
+        areaRadius = 0.075,
+        targets = {
+            { name = "Explorador del Velo", requiredCount = 3, zoneId = 381, worldX = 10000, worldZ = 20000, radius = 1500, locationRequired = true, customMessage = "Explorador del Velo eliminado en el campamento." },
+            { name = "Guardia del Velo", requiredCount = 2, zoneId = 381, worldX = 10500, worldZ = 20500, radius = 1500, locationRequired = false, customMessage = "Guardia del Velo eliminado en el campamento." },
+            { name = "Capitán del Velo", requiredCount = 1, zoneId = 381, worldX = 11000, worldZ = 21000, radius = 1500, locationRequired = true, customMessage = "Capitán del Velo eliminado en el campamento." },
+        },
+        discoveries = {
+            { zoneId = 381, worldX = 10000, worldY = 100, worldZ = 20000, mapId = 32, x = 0.5, y = 0.5, radius = 1500, message = "Campamento norte descubierto." },
+            { zoneId = 381, worldX = 11000, worldY = 100, worldZ = 21000, mapId = 32, x = 0.55, y = 0.55, radius = 1500, message = "Campamento sur descubierto." },
+        },
+    }
+    local rpq3Rep = RPQuest.ShareCodec:EncodeQuest(repeatedQuest)
+    -- Compute exact RPQ2 length for repeatedQuest (18-field pipe string * 4/3 Base64Url)
+    local rpq2RawLen = #repeatedQuest.title + #repeatedQuest.description + #repeatedQuest.clue + #repeatedQuest.completionMessage
+        + #repeatedQuest.mapName + 5 * 6 + 17 + 3 * 70 + 2 * 75
+    local rpq2Len = 10 + math.ceil(rpq2RawLen * 4 / 3)
+    local reduction = 1 - (#rpq3Rep / rpq2Len)
+    AssertTrue(reduction >= 0.45, string.format("RPQ3 achieves >= 45%% reduction vs RPQ2 (actual: %.1f%%, len=%d vs rpq2=%d)", reduction * 100, #rpq3Rep, rpq2Len))
+
+    -- Verify exact round-trip (coords <= 0.0001)
+    local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(rpq3)
+    AssertTrue(decoded ~= nil, "RPQ3 decodes cleanly: " .. tostring(decErr))
+    AssertEqual(decoded.title, complexQuest.title, "UTF-8 title preserved")
+    AssertEqual(decoded.description, complexQuest.description, "UTF-8 description preserved")
+    AssertEqual(decoded.clue, complexQuest.clue, "Clue preserved")
+    AssertEqual(decoded.completionMessage, complexQuest.completionMessage, "Completion message preserved")
+    AssertTrue(math.abs(decoded.targetX - complexQuest.targetX) <= 0.0001, "targetX uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.targetY - complexQuest.targetY) <= 0.0001, "targetY uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.areaCenterX - complexQuest.areaCenterX) <= 0.0001, "areaCenterX uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.areaCenterY - complexQuest.areaCenterY) <= 0.0001, "areaCenterY uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.areaRadius - complexQuest.areaRadius) <= 0.0001, "areaRadius uint16 precision <= 0.0001")
+    AssertEqual(decoded.hideMapArea, true, "hideMapArea preserved")
+    AssertEqual(decoded.requireUndetected, true, "requireUndetected preserved")
+    AssertEqual(#decoded.targets, 2, "2 targets preserved")
+    AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
+    AssertEqual(decoded.targets[1].worldZ, -78901, "Negative worldZ preserved via ZigZag varint")
+    AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved")
+    AssertEqual(decoded.targets[1].customMessage, complexQuest.targets[1].customMessage, "Target customMessage preserved")
+    AssertEqual(decoded.targets[2].worldX, nil, "Target without location has nil worldX")
+    AssertEqual(#decoded.discoveries, 2, "2 discoveries preserved")
+    AssertEqual(decoded.discoveries[1].worldX, -45000, "Discovery negative worldX preserved")
+    AssertEqual(#decoded.dialogues, 2, "2 dialogues preserved")
+
+    -- Truncated/corrupted RPQ3 rejection
+    local trunc = rpq3:sub(1, #rpq3 - 5)
+    local tRes, tErr = RPQuest.ShareCodec:DecodeQuest(trunc)
+    AssertEqual(tRes, nil, "Truncated RPQ3 rejected")
+    AssertEqual(tErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Truncated RPQ3 returns corrupt error")
+
+    local badChar = "RPQ3:0000:INVALID*CHAR"
+    local bRes, bErr = RPQuest.ShareCodec:DecodeQuest(badChar)
+    AssertEqual(bRes, nil, "Invalid Base85 char rejected")
+    AssertEqual(bErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Invalid Base85 char returns corrupt error")
+
+    -- ComputeQuestSignature remains deterministic across RPQ3
+    local sig1 = RPQuest.ShareCodec:ComputeQuestSignature(complexQuest)
+    local sig2 = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+    AssertTrue(sig1 ~= nil and #sig1 == 8, "ComputeQuestSignature returns 8-char hex")
+    AssertEqual(sig1, sig2, "ComputeQuestSignature matches between original and RPQ3-decoded quest")
+    decoded.completed = true
+    local compCode = RPQuest.ShareCodec:EncodeCompletion(decoded, "Player", 1000)
+    AssertTrue(compCode ~= nil and compCode:sub(1, 6) == "RPQC1:", "RPQC1 completion code works for RPQ3-decoded quest")
+    local okVal, valRes = RPQuest.ShareCodec:ValidateCompletionForQuest(complexQuest, compCode)
+    AssertEqual(okVal, true, "Original quest validates RPQC1 from RPQ3-decoded quest: " .. tostring(valRes))
+end)
+
+RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept/Reject and autoDeleteMail (Issue #101)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    -- Mock ESO Mail API
+    local sentMails = {}
+    local deletedMails = {}
+    local openCalls = 0
+    local closeCalls = 0
+    local nativeMailOpen = false
+
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReqRead = _G.RequestReadMail
+    local origReadMail = _G.ReadMail
+    local origDeleteMail = _G.DeleteMail
+    local origMaxBody = _G.MAIL_MAX_BODY_CHARACTERS
+    local origScene = _G.SCENE_MANAGER
+
+    _G.MAIL_MAX_BODY_CHARACTERS = 700
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.RequestOpenMailbox = function() openCalls = openCalls + 1 end
+    _G.CloseMailbox = function() closeCalls = closeCalls + 1 end
+    _G.DeleteMail = function(mailId) table.insert(deletedMails, mailId) end
+    _G.SCENE_MANAGER = {
+        IsShowing = function(_, name)
+            return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
+        end,
+    }
+
+    -- Create a prepared quest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Guardia",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local q = RPQuest.QuestRepository:SaveDraft("Misión por Correo", "Descripción corta")
+
+    -- 1. Reject > 4 recipients
+    local okMany, errMany = RPQuest.MailTransport:SendQuestToRecipients(q, "@A, @B, @C, @D, @E", "Hola")
+    AssertEqual(okMany, false, "Rejects more than 4 recipients")
+    AssertEqual(errMany, "ERR_MAIL_TOO_MANY_RECIPIENTS", "Returns too many recipients error")
+
+    -- 2. Reject body exceeding MAIL_MAX_BODY_CHARACTERS (no fragmentation)
+    local hugeMsg = string.rep("A", 700)
+    local okLong, errLong = RPQuest.MailTransport:SendQuestToRecipients(q, "@PlayerOne", hugeMsg)
+    AssertEqual(okLong, false, "Rejects mail exceeding MAIL_MAX_BODY_CHARACTERS")
+    AssertEqual(errLong, "ERR_MAIL_BODY_TOO_LONG", "Returns body too long error")
+
+    -- 3. Sequential queue for 3 recipients (normalizes @ prefix, deduplicates)
+    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, Two, @one, @Three", "Mensaje de rol.")
+    AssertEqual(okSend, true, "Sequential mail send started: " .. tostring(errSend))
+    AssertEqual(#sentMails, 1, "Only 1st mail dispatched immediately")
+    AssertEqual(sentMails[1].to, "@One", "First recipient normalized")
+    AssertEqual(sentMails[1].subject, "[RPQuest] Misión por Correo", "Subject uses [RPQuest] prefix")
+    AssertEqual(openCalls, 1, "RequestOpenMailbox called when native UI closed")
+    AssertEqual(closeCalls, 0, "CloseMailbox not called while sending")
+
+    RPQuest.MailTransport:OnMailSendSuccess("@One")
+    AssertEqual(#sentMails, 2, "Second mail dispatched after EVENT_MAIL_SEND_SUCCESS")
+    AssertEqual(sentMails[2].to, "@Two", "Second recipient received @ prefix")
+
+    RPQuest.MailTransport:OnMailSendSuccess("@Two")
+    AssertEqual(#sentMails, 3, "Third mail dispatched sequentially")
+    RPQuest.MailTransport:OnMailSendSuccess("@Three")
+    AssertEqual(closeCalls, 1, "CloseMailbox called after queue finishes when native UI is closed")
+
+    -- 4. Native mailbox open coordination: do not close if native UI is showing
+    nativeMailOpen = true
+    openCalls = 0
+    closeCalls = 0
+    local okNative = RPQuest.MailTransport:SendQuestToRecipients(q, "@Four", "")
+    AssertEqual(okNative, true, "Send succeeds when native mailbox already open")
+    AssertEqual(openCalls, 0, "RequestOpenMailbox skipped when native UI open")
+    RPQuest.MailTransport:OnMailSendSuccess("@Four")
+    AssertEqual(closeCalls, 0, "CloseMailbox NOT called when native mailbox UI is open")
+
+    -- 5. Inbox scanning & async EVENT_MAIL_READABLE parsing + Accept/Reject + autoDeleteMail
+    local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local mockInbox = {
+        [101] = { sender = "@QuestMaster", char = "Master", subject = "[RPQuest] Misión por Correo", body = "Te encomiendo esta tarea.\n\n" .. rpq3Code },
+        [102] = { sender = "@Other", char = "Other", subject = "Normal Mail", body = "Nothing here" },
+        [103] = { sender = "@RejectMe", char = "Reject", subject = "[RPQuest] Otra", body = rpq3Code },
+    }
+    _G.GetNextMailId = function(lastId)
+        if lastId == nil then return 101 end
+        if lastId == 101 then return 102 end
+        if lastId == 102 then return 103 end
+        return nil
+    end
+    _G.GetMailItemInfo = function(id)
+        local m = mockInbox[id]
+        if not m then return nil end
+        return m.sender, m.char, m.subject, "", true, false, false, false, 0, 0, 0, 30, 10, 0
+    end
+    _G.ReadMail = function(id)
+        if id == 103 then return "" end -- simulate async load for 103
+        return mockInbox[id] and mockInbox[id].body or ""
+    end
+    _G.RequestReadMail = function(id)
+        -- simulate EVENT_MAIL_READABLE later
+    end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "101 parsed immediately, 102 ignored")
+    local mails = RPQuest.MailTransport:GetReceivedMails()
+    AssertEqual(mails[1].senderDisplayName, "@QuestMaster", "Sender displayName preserved")
+    AssertEqual(mails[1].roleMessage, "Te encomiendo esta tarea.", "Role message extracted")
+
+    -- Simulate async readable for 103
+    _G.ReadMail = function(id) return mockInbox[id] and mockInbox[id].body or "" end
+    RPQuest.MailTransport:OnMailReadable(103)
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 2, "103 parsed via OnMailReadable")
+
+    -- Accept 101 with autoDeleteMail = true (default)
+    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(101)
+    AssertTrue(imported ~= nil, "AcceptReceivedMail imports quest: " .. tostring(impErr))
+    AssertEqual(#deletedMails, 1, "DeleteMail called when autoDeleteMail is true")
+    AssertEqual(deletedMails[1], 101, "Deleted mail 101")
+
+    -- Reject 103 with autoDeleteMail = false
+    RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
+    local rejOk = RPQuest.MailTransport:RejectReceivedMail(103)
+    AssertEqual(rejOk, true, "RejectReceivedMail returns true")
+    AssertEqual(#deletedMails, 1, "DeleteMail NOT called when autoDeleteMail is false")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after accept & reject")
+
+    -- Restore globals
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.RequestReadMail = origReqRead
+    _G.ReadMail = origReadMail
+    _G.DeleteMail = origDeleteMail
+    _G.MAIL_MAX_BODY_CHARACTERS = origMaxBody
+    _G.SCENE_MANAGER = origScene
+end)
+
+RunTest("MailTransport completion report (manual/auto) and creator auto-validation (Issue #102)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    local sentMails = {}
+    local deletedMails = {}
+    local origSendMail = _G.SendMail
+    local origDeleteMail = _G.DeleteMail
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReadMail = _G.ReadMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.DeleteMail = function(mailId) table.insert(deletedMails, mailId) end
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+
+    -- Creator prepares quest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local preparedQuest = RPQuest.QuestRepository:SaveDraft("Entrega por Correo", "Desc")
+    local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(preparedQuest.id)
+
+    -- Player receives quest via mail from @Creator
+    _G.GetNextMailId = function(lastId) return (lastId == nil) and 201 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 201 then return "@Creator", "CreatorChar", "[RPQuest] Entrega por Correo", "", true, false, false, false, 0, 0, 0, 30, 5, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 201) and rpq3Code or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    local imported = RPQuest.MailTransport:AcceptReceivedMail(201)
+    AssertTrue(imported ~= nil, "Quest accepted from mail")
+    AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
+
+    -- Manual mode (default): completing quest does NOT auto-send, shows manual button
+    AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), false, "autoSendCompletionMail defaults to false")
+    RPQuest.QuestRepository:SetActiveQuest(imported.id)
+    RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
+    AssertEqual(imported.completed, true, "Imported quest completed")
+    AssertEqual(#sentMails, 0, "Manual mode does NOT auto-send completion mail")
+
+    RPQuest.JournalTab:SelectQuest(imported.id)
+    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), false, "Manual report button visible in manual mode")
+
+    -- 1-click manual send
+    local okManual = RPQuest.MailTransport:SendCompletionReport(imported)
+    AssertEqual(okManual, true, "SendCompletionReport succeeds in manual mode")
+    AssertEqual(#sentMails, 1, "Completion mail sent to creator")
+    AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
+    AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
+    local rpqc1Code = sentMails[1].body
+    AssertTrue(rpqc1Code:sub(1, 6) == "RPQC1:", "Body contains RPQC1 code")
+    RPQuest.MailTransport:OnMailSendSuccess("@Creator")
+    AssertEqual(imported.completionReported, true, "completionReported marked true after send success")
+
+    -- Automatic mode: reset quest, enable autoSendCompletionMail, complete again
+    RPQuest.QuestRepository:ResetQuest(imported.id)
+    RPQuest.QuestRepository:SetSetting("autoSendCompletionMail", true)
+    RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
+    AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
+    RPQuest.JournalTab:SelectQuest(imported.id)
+    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), true, "Manual report button hidden in automatic mode")
+    RPQuest.MailTransport:OnMailSendSuccess("@Creator")
+
+    -- Creator receives [RPQuest:Done] mail and auto-validates RPQC1
+    deletedMails = {}
+    _G.GetNextMailId = function(lastId) return (lastId == nil) and 301 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 301 then return "@Finisher", "FinisherChar", "[RPQuest:Done] Entrega por Correo", "", true, false, false, false, 0, 0, 0, 30, 2, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 301) and rpqc1Code or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#(preparedQuest.deliveries or {}), 1, "Creator recorded 1 verified delivery from [RPQuest:Done] mail")
+    AssertEqual(preparedQuest.deliveries[1].senderDisplayName, "@Finisher", "Recorded finisher @AccountName")
+    AssertEqual(#deletedMails, 1, "Completion mail auto-deleted when autoDeleteMail is true")
+    AssertEqual(deletedMails[1], 301, "Deleted completion mail 301")
+
+    _G.SendMail = origSendMail
+    _G.DeleteMail = origDeleteMail
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.ReadMail = origReadMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+end)
+
+RunTest("29. JournalTab:OpenTab defers SelectFragment during async scene transition from another scene", function()
+    RPQuest.JournalTab:Initialize()
+
+    local origIsShowing = SCENE_MANAGER.IsShowing
+    local origShow = SCENE_MANAGER.Show
+    local origSelectFragment = QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment
+    local selectCalls = 0
+
+    QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment = function(tabsSelf, name)
+        selectCalls = selectCalls + 1
+        origSelectFragment(tabsSelf, name)
+    end
+
+    -- Simular transición asíncrona (ej. desde Notificaciones o Correo en SCENE_HIDING):
+    -- SCENE_MANAGER:Show("questJournal") encola la escena pero IsShowing("questJournal") sigue false hasta SCENE_SHOWING.
+    SCENE_MANAGER.IsShowing = function(_, sceneName)
+        return false
+    end
+    SCENE_MANAGER.Show = function(_, sceneName)
+        -- No cambia a SCENE_SHOWN de forma síncrona
+    end
+
+    RPQuest.JournalTab:OpenTab()
+    AssertEqual(selectCalls, 0, "SelectFragment not called synchronously while previous scene is still hiding")
+    AssertEqual(QUEST_JOURNAL_KEYBOARD.mode, RPQuest.Constants.UI.TAB_DESCRIPTOR, "QuestJournal mode set before OnShowing")
+
+    -- Cuando la escena previa termina de ocultarse, ESO dispara QUEST_JOURNAL_KEYBOARD:OnShowing()
+    QUEST_JOURNAL_KEYBOARD:OnShowing()
+    AssertEqual(selectCalls, 1, "SelectFragment called inside OnShowing once questJournal scene starts showing")
+
+    -- Si questJournal ya estaba visible (p. ej. cambiando desde pestaña Quests), sí selecciona síncronamente
+    SCENE_MANAGER.IsShowing = function(_, sceneName)
+        return sceneName == "questJournal"
+    end
+    RPQuest.JournalTab:OpenTab()
+    AssertEqual(selectCalls, 2, "SelectFragment called synchronously when questJournal is already showing")
+
+    SCENE_MANAGER.IsShowing = origIsShowing
+    SCENE_MANAGER.Show = origShow
+    QUEST_JOURNAL_KEYBOARD.tabs.SelectFragment = origSelectFragment
+end)
+
+RunTest("30. Per-NPC player dialogue option, ShareCodec RPQ3 roundtrip, and JournalTab selected NPC indicator", function()
+    RPQuest.JournalTab:Initialize()
+    RPQuest.QuestRepository:ResetDraft()
+
+    -- Add 2 NPCs with distinct player dialogue options and responses
+    local _, idx1 = RPQuest.QuestRepository:AddDraftDialogue("Farseer Kuamta", 381, "Look near the northern shrine.", "Ask about the shrine")
+    local _, idx2 = RPQuest.QuestRepository:AddDraftDialogue("Vasamannu", 381, "He lives to the south, I don't care.", "Daynill? Know him?")
+    AssertEqual(idx1, 1, "First NPC added at index 1")
+    AssertEqual(idx2, 2, "Second NPC added at index 2")
+
+    -- Capture a target and save quest
+    mockState.reticleExists = true
+    mockState.reticleName = "Bandit"
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local saved = RPQuest.QuestRepository:SaveDraft("Per-NPC Clues", "Test distinct options per NPC.")
+    AssertTrue(saved ~= nil, "Quest saved with per-NPC clues")
+    AssertEqual(saved.dialogues[1].clue, "Ask about the shrine", "NPC 1 clue persisted")
+    AssertEqual(saved.dialogues[2].clue, "Daynill? Know him?", "NPC 2 clue persisted")
+
+    -- Active quest dialogue lookup returns each NPC's own clue
+    RPQuest.QuestRepository:SetActiveQuest(saved.id)
+    local match1 = RPQuest.QuestRepository:FindDialogueForActiveQuest("Farseer Kuamta", 381)
+    local match2 = RPQuest.QuestRepository:FindDialogueForActiveQuest("Vasamannu", 381)
+    AssertTrue(match1 ~= nil and match1.clue == "Ask about the shrine", "FindDialogueForActiveQuest returns NPC 1's own option")
+    AssertTrue(match2 ~= nil and match2.clue == "Daynill? Know him?", "FindDialogueForActiveQuest returns NPC 2's own option")
+
+    -- ShareCodec RPQ3 roundtrip preserves distinct per-NPC clues
+    local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    AssertTrue(imported ~= nil, "RPQ3 quest with per-NPC clues imported")
+    AssertEqual(imported.dialogues[1].clue, "Ask about the shrine", "Imported NPC 1 clue preserved")
+    AssertEqual(imported.dialogues[2].clue, "Daynill? Know him?", "Imported NPC 2 clue preserved")
+
+    -- JournalTab editor shows selected NPC name and per-NPC option/response when cycling
+    RPQuest.JournalTab:OpenEditEditor(saved.id)
+    AssertEqual(RPQuest.JournalTab.selectedDialogueIndex, 1, "Editor selects first NPC on open")
+    AssertTrue(RPQuest.JournalTab.lblSelectedNpc:GetText():find("Farseer Kuamta", 1, true) ~= nil, "lblSelectedNpc shows Farseer Kuamta")
+    AssertTrue(RPQuest.JournalTab.lblInputClue:GetText():find("Farseer Kuamta", 1, true) ~= nil, "lblInputClue shows Farseer Kuamta")
+    AssertTrue(RPQuest.JournalTab.lblDlgResponse:GetText():find("Farseer Kuamta", 1, true) ~= nil, "lblDlgResponse shows Farseer Kuamta")
+    AssertEqual(RPQuest.JournalTab.clueEdit:GetText(), "Ask about the shrine", "clueEdit shows NPC 1 option")
+    AssertEqual(RPQuest.JournalTab.dlgResponseEdit:GetText(), "Look near the northern shrine.", "dlgResponseEdit shows NPC 1 response")
+
+    -- Cycle to NPC 2
+    RPQuest.JournalTab.btnDlgNext:FireHandler("OnClicked")
+    AssertEqual(RPQuest.JournalTab.selectedDialogueIndex, 2, "Editor cycles to second NPC")
+    AssertTrue(RPQuest.JournalTab.lblSelectedNpc:GetText():find("Vasamannu", 1, true) ~= nil, "lblSelectedNpc updates to Vasamannu")
+    AssertTrue(RPQuest.JournalTab.lblInputClue:GetText():find("Vasamannu", 1, true) ~= nil, "lblInputClue updates to Vasamannu")
+    AssertTrue(RPQuest.JournalTab.lblDlgResponse:GetText():find("Vasamannu", 1, true) ~= nil, "lblDlgResponse updates to Vasamannu")
+    AssertEqual(RPQuest.JournalTab.clueEdit:GetText(), "Daynill? Know him?", "clueEdit updates to NPC 2 option")
+    AssertEqual(RPQuest.JournalTab.dlgResponseEdit:GetText(), "He lives to the south, I don't care.", "dlgResponseEdit updates to NPC 2 response")
 end)
 
 if failed > 0 then

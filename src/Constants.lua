@@ -17,10 +17,11 @@ Addon.Constants = {
         VERSION = 1,
     },
     SHARE_CODEC = {
-        PREFIX = "RPQ2",
+        PREFIX = "RPQ3",
+        LEGACY_PREFIX_V2 = "RPQ2",
         LEGACY_PREFIX = "RPQ1",
         COMPLETION_PREFIX = "RPQC1",
-        VERSION = 2,
+        VERSION = 3,
     },
     DIALOGUE = {
         MAX_NPCS = 3,
