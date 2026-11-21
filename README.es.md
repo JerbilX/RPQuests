@@ -21,12 +21,12 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_PinBlob`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto. Desaparece automáticamente al completar o desactivar la misión.
 - **Inyección de Diálogos en NPCs Nativos:** Asocia líneas de diálogo personalizadas y opciones de respuesta del jugador por NPC a NPCs nativos de ESO (mediante captura por retícula o nombre), inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
-- **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` (incluyendo al aceptar una misión compartida por código) y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
+- **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
-- **Compartición y Validación por Código (`RPQ3` / `RPQC1`):**
-  - Exporta misiones en códigos compactos comprimidos con LZSS y Base85 seguro para Discord (`RPQ3:...`, retrocompatible con `RPQ2`/`RPQ1`) listos para copiar y compartir.
-  - **Envío por Correo In-Game y Compartición en Grupo:** Envía misiones directamente a 1–4 destinatarios (`@Cuenta`) con un mensaje de rol opcional (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP`, con un botón rápido **Copiar Código** como alternativa para Discord), o usa el keybind nativo **Compartir** en el Diario de RPQuest cuando estés en grupo para enviarla a tus compañeros. Recibe alertas al llegar misiones por correo, acéptalas/recházalas (o activa **Auto-aceptar correo**) desde la bandeja de **Correo** de RPQuest y reporta/valida la finalización (`RPQC1`) al creador por correo (funciona únicamente dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU). Los objetivos de descubrimiento y combate completados por miembros del grupo en rango también se registran automáticamente.
-  - Al completar una misión, genera un código de validación de entrega (`RPQC1:...`) para demostrarle al creador que fue completada.
+- **Flujo 100% por Correo In-Game 1-a-1 (Sin Copiar/Pegar):**
+  - Asigna un único destinatario (`@Cuenta`) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU).
+  - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario.
+  - **Reportes Automáticos de Completado y Rechazo:** Al completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Completada` / `Rechazada`).
 - **Persistencia por Personaje y Auto-Localización:** Guarda el progreso por personaje con `ZO_SavedVars:NewCharacterIdSettings` y detecta automáticamente el idioma del cliente (`es` / `en`).
 
 ---
@@ -49,13 +49,13 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
    - Abre el Diario de Misiones (`J`) y entra en la pestaña **RPQuest** (o escribe `/rpquest`).
    - Pulsa **Crear Misión**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`), opcionalmente activar **No ser detectado** y configurar líneas de **Diálogo de NPC**.
    - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo** (`/rpquest capture`), o párate en un lugar y usa **Capturar Punto de Descubrimiento** (`/rpquest discovery`).
-2. **Compartir con Jugadores:**
-   - Selecciona la misión preparada y copia el código `RPQ3:...` generado.
-   - Los jugadores pegan ese código en el campo **Importar** dentro de su pestaña **RPQuest**.
-   - **Mismo idioma requerido:** Los códigos de misión solo pueden importarse en clientes del juego con el mismo idioma que el creador. ESO no expone IDs universales de NPC entre idiomas y hay NPCs que no comparten descripción/nombre equivalente; permitir cambiar de idioma directamente haría que los objetivos o diálogos dejen de coincidir y la misión deje de funcionar.
-3. **Jugar y Verificar:**
-   - Activa la misión recibida para ver el mini-tracker en el HUD y el área en el Mapa Mundial.
-   - Al completar todos los objetivos, copia el código de entrega `RPQC1:...` generado para confirmar la finalización.
+2. **Enviar al Jugador (Correo 1-a-1):**
+   - Define el destinatario `@Cuenta` en el editor de la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
+   - El jugador recibe una alerta y ve la misión en **Pendientes** dentro de su pestaña **RPQuest** para **Aceptar** o **Rechazar**.
+   - **Mismo idioma requerido:** Las misiones deben jugarse en un cliente del juego con el mismo idioma que el creador para que coincidan los nombres de NPCs y diálogos.
+3. **Jugar y Reporte Automático:**
+   - Al aceptar la misión se activan inmediatamente el mini-tracker del HUD, el área en el Mapa Mundial y los diálogos inyectados en NPCs.
+   - Al completar (o rechazar) la misión, RPQuest envía automáticamente el resultado por correo al Quest Master y actualiza su estado.
 
 ---
 

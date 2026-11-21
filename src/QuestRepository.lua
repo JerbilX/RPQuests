@@ -749,6 +749,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
             existing.sentTo = nil
             existing.sentAt = nil
             existing.lastResult = nil
+            existing.deliveries = {}
         end
         existing.clue = cleanClue
         existing.completionMessage = cleanCompMsg

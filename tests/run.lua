@@ -900,22 +900,23 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     local active = RPQuest.QuestRepository:GetActiveQuest()
     AssertTrue(active ~= nil and active.id == preparedQuest.id, "Prepared quest activated for local testing via JournalTab")
 
-    -- Código para compartir siempre visible en shareEdit al seleccionar/crear la misión
-    local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ3:", "Share edit box auto-populated with RPQ3 code")
-    AssertEqual(RPQuest.JournalTab.btnShare, nil, "Share button removed in favor of always-visible share box")
-    RPQuest.JournalTab.shareEdit._selectedAll = false
-    RPQuest.JournalTab.shareEdit:FireHandler("OnFocusGained")
-    AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selects all text when focused")
+    -- ShareCodec sigue funcionando como capa interna de serialización para MailTransport
+    local generatedCode = RPQuest.QuestRepository:ExportQuestToCode(preparedQuest.id)
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ3:", "Internal ExportQuestToCode produces RPQ3 code")
+    AssertEqual(RPQuest.JournalTab.importPane, nil, "Manual importPane removed")
+    AssertEqual(RPQuest.JournalTab.shareEdit, nil, "Manual shareEdit removed")
+    AssertEqual(RPQuest.JournalTab.mailInboxPane, nil, "Manual mailInboxPane removed")
 
-    -- Probar vista Importar en JournalTab
+    -- Verificar que ImportQuestFromCode + AcceptOfferedQuest emite banner CSA
     mockState.csaMessages = {}
-    RPQuest.JournalTab:OpenImportView()
-    AssertEqual(RPQuest.JournalTab.importPane:IsHidden(), false, "Import pane is visible")
-    RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
-    RPQuest.JournalTab:OnConfirmImportClicked()
-    AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
-    AssertEqual(#mockState.csaMessages, 1, "Importing quest emits one CENTER_SCREEN_ANNOUNCE banner")
+    local offeredQ = RPQuest.QuestRepository:ImportQuestFromCode(generatedCode, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "test_import_901",
+    })
+    RPQuest.QuestRepository:AcceptOfferedQuest(offeredQ.id)
+    RPQuest.Announcements:AnnounceQuestAccepted(offeredQ)
+    AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via internal repository flow")
+    AssertEqual(#mockState.csaMessages, 1, "Accepting quest emits one CENTER_SCREEN_ANNOUNCE banner")
     AssertEqual(mockState.csaMessages[1].category, CSA_CATEGORY_LARGE_TEXT, "Quest accepted CSA uses large text category")
     AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_ACCEPTED, "Quest accepted CSA plays SOUNDS.QUEST_ACCEPTED")
     AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Quest accepted CSA uses CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED")
@@ -1051,12 +1052,12 @@ RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borra
     local qc = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
     AssertTrue(qb.title ~= qc.title, "Default title uses nextId and does not collide after deletion")
 
-    -- 2. Separador de código, cuadro de compartir y cuadro de validación visibles en detalle de misión
+    -- 2. Detalle de misión preparada muestra botón de envío directo sin cajas de código manual
     RPQuest.JournalTab:SelectQuest(qc.id)
-    AssertEqual(RPQuest.JournalTab.codeDivider:IsHidden(), false, "codeDivider visible when quest selected")
-    AssertEqual(RPQuest.JournalTab.shareBg:IsHidden(), false, "shareBg always visible in code section when quest selected")
-    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "validateBg visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.shareHeader._anchors[1].relTo, RPQuest.JournalTab.codeDivider, "shareHeader anchored below codeDivider")
+    AssertEqual(RPQuest.JournalTab.codeDivider, nil, "Manual codeDivider removed")
+    AssertEqual(RPQuest.JournalTab.shareBg, nil, "Manual shareBg removed")
+    AssertEqual(RPQuest.JournalTab.validateBg, nil, "Manual validateBg removed")
+    AssertEqual(RPQuest.JournalTab.btnSendDirect:IsHidden(), false, "Direct mail send button visible for prepared quest")
 
     -- 3. _dirty se marca cuando panel está oculto y se limpia al abrir
     RPQuest.JournalTab.panel:SetHidden(true)
@@ -1284,16 +1285,12 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(okWrong, false, "RPQC1 from another quest rejected")
     AssertEqual(errWrong, "VALIDATE_ERR_WRONG_QUEST", "Specific error returned for wrong quest")
 
-    -- Flujo UI en JournalTab: delivery code se genera automáticamente al completarse la misión
+    -- Flujo UI en JournalTab: sin cajas de código manual ni validación por pegado
     RPQuest.JournalTab:SelectQuest(playerQuest.id)
     AssertEqual(RPQuest.JournalTab.btnCompletionCode, nil, "On-demand completion code button removed")
     AssertEqual(RPQuest.JournalTab.btnActivate:IsHidden(), true, "Set Active button hidden for completed player quest")
-    AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
-    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
-    local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ3:", "shareEdit populated with RPQ3 code for received quest")
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab auto-populates RPQC1 code into deliveryEdit")
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
+    AssertEqual(RPQuest.JournalTab.deliveryBg, nil, "Manual deliveryBg removed")
+    AssertEqual(RPQuest.JournalTab.validateBg, nil, "Manual validateBg removed")
 
     -- Keybind X Abandon presente en keybindStripDescriptor
     AssertTrue(RPQuest.JournalTab.abandonQuestDescriptor ~= nil, "Abandon quest keybind descriptor exists")
@@ -1304,38 +1301,9 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     RPQuest.JournalTab:ToggleSection("completed")
     AssertEqual(RPQuest.JournalTab.collapsedSections.completed, false, "Section with selected quest cannot be collapsed")
 
-    -- Los textbox de código generado son readonly (revierten ediciones del usuario)
-    RPQuest.JournalTab.shareEdit:SetText("MODIFIED")
-    if RPQuest.JournalTab.shareEdit._handlers and RPQuest.JournalTab.shareEdit._handlers.OnTextChanged then
-        RPQuest.JournalTab.shareEdit._handlers.OnTextChanged(RPQuest.JournalTab.shareEdit)
-    end
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit reverts manual edits (readonly)")
-
-    RPQuest.JournalTab.deliveryEdit:SetText("MODIFIED")
-    if RPQuest.JournalTab.deliveryEdit._handlers and RPQuest.JournalTab.deliveryEdit._handlers.OnTextChanged then
-        RPQuest.JournalTab.deliveryEdit._handlers.OnTextChanged(RPQuest.JournalTab.deliveryEdit)
-    end
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "deliveryEdit reverts manual edits (readonly)")
-
-    -- Alerta amigable al generar código de entrega (no clave cruda)
-    local readyAlert = RPQuest.Locale:Get("ALERT_COMPLETION_CODE_READY")
-    AssertTrue(readyAlert ~= "ALERT_COMPLETION_CODE_READY", "ALERT_COMPLETION_CODE_READY is localized")
-
     RPQuest.JournalTab:SelectQuest(masterQuest.id)
-    AssertEqual(RPQuest.JournalTab.btnValidateDelivery:IsHidden(), false, "Validate delivery button visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), true, "Delivery code box hidden for prepared quest")
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), "", "deliveryEdit cleared when switching quest")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit auto-populated with RPQ3 code for prepared quest")
-    AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
-    RPQuest.JournalTab:OnValidateDeliveryClicked()
-    local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
-    AssertEqual(emptyMsg, RPQuest.Locale:Get("VALIDATE_ERR_EMPTY"), "Validate UI prompts when validate box is empty (ignores shareEdit)")
-    RPQuest.JournalTab.validateEdit:SetText(completionCode)
-    RPQuest.JournalTab:OnValidateDeliveryClicked()
-    local msg = RPQuest.JournalTab.validateResultLabel:GetText()
-    AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit still preserves RPQ3 code after validation")
+    AssertEqual(RPQuest.JournalTab.btnValidateDelivery, nil, "Manual validate delivery button removed")
+    AssertEqual(RPQuest.JournalTab.btnSendDirect:IsHidden(), false, "Direct send button visible for prepared quest")
 end)
 
 RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
@@ -1513,11 +1481,10 @@ RunTest("18. Issue 47: Deep optimization, overflow caps, deferred map pins and O
     local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
     AssertTrue(type(code) == "string" and #code > 100 and code:sub(1, 5) == "RPQ3:", "Exported RPQ3 code generated cleanly")
 
-    -- Verificar que maxChars >= 4096 en importCodeEdit y shareEdit
+    -- Verificar que detailObjText tiene altura acotada (<= 96px)
     RPQuest.JournalTab:SelectQuest(q.id)
     local _, objHeight = RPQuest.JournalTab.detailObjText:GetDimensions()
     AssertTrue(objHeight <= 96, "detailObjText height capped at <= 96px to prevent vertical overflow")
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), code, "Long share code is not truncated in shareEdit")
 
     -- Verificar invalidación de caché de ExportQuestToCode al editar
     RPQuest.QuestRepository:LoadQuestIntoDraft(q.id)
@@ -2549,7 +2516,7 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     RPQuest.MailTransport:OnMailboxOpened()
     AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
     RPQuest.JournalTab:SelectQuest(imported.id)
-    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), true, "Manual report button hidden in automatic mode")
+    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail, nil, "Manual report button removed in mail-only UX")
     RPQuest.MailTransport:OnMailSendSuccess("@Creator")
 
     -- Creator receives [RPQuest:Done] mail and auto-validates RPQC1
