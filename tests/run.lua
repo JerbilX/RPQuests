@@ -2796,6 +2796,80 @@ RunTest("MailTransport: surfaces decode errors once per mailId on ScanInbox/OnMa
     RPQuest.Announcements.ShowAlert = origShowAlert
 end)
 
+RunTest("MailTransport: alerts on incoming quest mail without duplicates and supports autoAcceptMail (Issue #124)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    AssertEqual(RPQuest.QuestRepository:GetSetting("autoAcceptMail"), false, "autoAcceptMail defaults to false")
+
+    -- Create a valid RPQ3 code
+    local code = RPQuest.ShareCodec:EncodeQuest({
+        title = "Misión de Correo",
+        description = "Prueba de correo.",
+        mapId = 1,
+        zoneId = 1,
+        mapName = "Auridon",
+        targets = { { name = "Guardia" } },
+    })
+
+    local inbox = {
+        [951] = { sender = "@SenderA", charName = "SenderA", subject = "[RPQuest] Misión de Correo", body = code, secs = 5 },
+    }
+    local deletedIds = {}
+    _G.GetNextMailId = function(cur) return (cur == nil and inbox[951]) and 951 or nil end
+    _G.GetMailItemInfo = function(id)
+        local m = inbox[id]
+        if not m then return nil end
+        return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+    end
+    _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+    _G.DeleteMail = function(id)
+        table.insert(deletedIds, id)
+        inbox[id] = nil
+    end
+
+    local alerts = {}
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+
+    -- 1. Manual mode (autoAcceptMail = false)
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "Mail stored in inbox in manual mode")
+    AssertEqual(#alerts, 1, "1 notification alert shown")
+    AssertEqual(alerts[1].isErr, false, "Notification alert is not an error")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", "Misión de Correo", "@SenderA"), "Notification message matches")
+
+    -- Re-scan does not duplicate alert
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#alerts, 1, "No duplicate notification alert on re-scan")
+
+    -- 2. Auto-accept mode (autoAcceptMail = true)
+    RPQuest.QuestRepository:SetSetting("autoAcceptMail", true)
+    local qCountBefore = #RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    inbox[952] = { sender = "@SenderB", charName = "SenderB", subject = "[RPQuest] Misión de Correo", body = code, secs = 2 }
+    _G.GetNextMailId = function(cur)
+        if cur == nil and inbox[952] then return 952 end
+        return nil
+    end
+
+    local acceptedCount = 0
+    local origAnnounce = RPQuest.Announcements.AnnounceQuestAccepted
+    RPQuest.Announcements.AnnounceQuestAccepted = function() acceptedCount = acceptedCount + 1 end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    local qCountAfter = #RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(qCountAfter, qCountBefore + 1, "Quest auto-imported when autoAcceptMail=true")
+    AssertEqual(#deletedIds, 1, "Auto-accepted mail deleted when autoDeleteMail=true")
+    AssertEqual(deletedIds[1], 952, "Deleted mailId matches auto-accepted mail")
+    AssertEqual(acceptedCount, 1, "AnnounceQuestAccepted called on auto-accept")
+
+    RPQuest.Announcements.ShowAlert = origShowAlert
+    RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)

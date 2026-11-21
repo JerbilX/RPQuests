@@ -42,6 +42,7 @@ function MailTransport:Initialize()
     self._partGroups = {}
     self._dismissedMailIds = {}
     self._reportedErrorMailIds = {}
+    self._notifiedMailIds = {}
     self._txSeq = self._txSeq or 0
 
     if not self._eventsRegistered and EVENT_MANAGER then
@@ -579,6 +580,24 @@ function MailTransport:UpsertReceivedEntry(entry)
         self._receivedById[entry.idKey] = #self._receivedMails
     end
     self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+
+    if not entry.isIncomplete then
+        self._notifiedMailIds = self._notifiedMailIds or {}
+        if not self._notifiedMailIds[entry.idKey] then
+            self._notifiedMailIds[entry.idKey] = true
+            if Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoAcceptMail") then
+                local imported = self:AcceptReceivedMail(entry.idKey)
+                if imported and Addon.Announcements and Addon.Announcements.AnnounceQuestAccepted then
+                    Addon.Announcements:AnnounceQuestAccepted(imported)
+                end
+            elseif Addon.Announcements and Addon.Announcements.ShowAlert then
+                local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
+                    and entry.senderDisplayName
+                    or entry.senderCharacterName or ""
+                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", entry.title or "", who), false)
+            end
+        end
+    end
 end
 
 function MailTransport:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
@@ -789,6 +808,9 @@ function MailTransport:OnMailRemoved(mailId)
     if self._reportedErrorMailIds then
         self._reportedErrorMailIds[idKey] = nil
     end
+    if self._notifiedMailIds then
+        self._notifiedMailIds[idKey] = nil
+    end
     local idx = self._receivedById and self._receivedById[idKey]
     if idx then
         table.remove(self._receivedMails, idx)
@@ -812,6 +834,12 @@ function MailTransport:OnMailRemoved(mailId)
                 end
                 if remaining == 0 then
                     self._partGroups[groupKey] = nil
+                    if self._reportedErrorMailIds then
+                        self._reportedErrorMailIds[groupKey] = nil
+                    end
+                    if self._notifiedMailIds then
+                        self._notifiedMailIds[groupKey] = nil
+                    end
                     self:RemoveEntryById(groupKey)
                 else
                     local existingIdx = self._receivedById and self._receivedById[groupKey]
