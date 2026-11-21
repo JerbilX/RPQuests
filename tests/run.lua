@@ -2524,21 +2524,13 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     RPQuest.QuestRepository:AcceptOfferedQuest(imported.id)
     AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
 
-    -- Manual mode (default): completing quest does NOT auto-send, shows manual button
-    AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), false, "autoSendCompletionMail defaults to false")
+    -- Automatic mode (default): completing quest auto-sends completion report to @Creator
+    AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), true, "autoSendCompletionMail defaults to true")
     RPQuest.QuestRepository:SetActiveQuest(imported.id)
     RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
     AssertEqual(imported.completed, true, "Imported quest completed")
-    AssertEqual(#sentMails, 0, "Manual mode does NOT auto-send completion mail")
-
-    RPQuest.JournalTab:SelectQuest(imported.id)
-    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), false, "Manual report button visible in manual mode")
-
-    -- 1-click manual send
-    local okManual = RPQuest.MailTransport:SendCompletionReport(imported)
-    AssertEqual(okManual, true, "SendCompletionReport succeeds in manual mode")
     RPQuest.MailTransport:OnMailboxOpened()
-    AssertEqual(#sentMails, 1, "Completion mail sent to creator")
+    AssertEqual(#sentMails, 1, "Completion mail auto-sent to creator")
     AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
     AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
     local rpqc1Code = sentMails[1].body
@@ -2546,9 +2538,9 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     RPQuest.MailTransport:OnMailSendSuccess("@Creator")
     AssertEqual(imported.completionReported, true, "completionReported marked true after send success")
 
-    -- Automatic mode: reset quest, enable autoSendCompletionMail, complete again
+    -- Manual re-send if reset & not yet reported
     RPQuest.QuestRepository:ResetQuest(imported.id)
-    RPQuest.QuestRepository:SetSetting("autoSendCompletionMail", true)
+    imported.completionReported = false
     RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
     RPQuest.MailTransport:OnMailboxOpened()
     AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
@@ -3092,6 +3084,101 @@ RunTest("37. OFFERED pending quest UI in JournalTab: Accept activates and Reject
     local rejected = RPQuest.JournalTab:RejectSelectedOfferedQuest()
     AssertEqual(rejected, true, "RejectSelectedOfferedQuest succeeds")
     AssertEqual(RPQuest.QuestRepository:GetQuestById(offered2.id), nil, "Rejected quest removed from repository")
+end)
+
+RunTest("38. Auto-report rejection and completion results to Master via mail (Issue #144)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    -- Master creates prepared quest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Esqueleto",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.4,
+        targetY = 0.4,
+    })
+    local prepared = RPQuest.QuestRepository:SaveDraft("Misión Rechazo", "Prueba de rechazo.")
+    local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+
+    -- Encode/Decode rejection via ShareCodec
+    local rejCode, rejErr = RPQuest.ShareCodec:EncodeRejection(prepared, "JugadorUno", 123456)
+    AssertTrue(rejCode ~= nil and rejCode:sub(1, 6) == "RPQC1:", "EncodeRejection produces RPQC1 code: " .. tostring(rejErr))
+    local decodedRej = RPQuest.ShareCodec:DecodeCompletion(rejCode)
+    AssertTrue(decodedRej ~= nil, "DecodeCompletion decodes rejection payload")
+    AssertEqual(decodedRej.completed, false, "Rejection has completed=false")
+    AssertEqual(decodedRej.rejected, true, "Rejection has rejected=true")
+    AssertEqual(decodedRej.characterName, "JugadorUno", "Rejection preserves characterName")
+    AssertEqual(decodedRej.completedAt, 123456, "Rejection preserves timestamp")
+
+    local okCompOnly, errCompOnly = RPQuest.ShareCodec:ValidateCompletionForQuest(prepared, rejCode)
+    AssertEqual(okCompOnly, false, "ValidateCompletionForQuest rejects a rejection code")
+    AssertEqual(errCompOnly, "VALIDATE_ERR_NOT_COMPLETED", "Returns VALIDATE_ERR_NOT_COMPLETED")
+
+    local okResult, resPayload = RPQuest.ShareCodec:ValidateResultForQuest(prepared, rejCode)
+    AssertEqual(okResult, true, "ValidateResultForQuest accepts rejection code")
+    AssertEqual(resPayload.rejected, true, "ValidateResultForQuest returns rejected=true")
+
+    -- Player receives quest as OFFERED and rejects it -> auto-sends rejection mail to @Master
+    local sentMails = {}
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReadMail = _G.ReadMail
+    local origDeleteMail = _G.DeleteMail
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+
+    local offered = RPQuest.QuestRepository:ImportQuestFromCode(rpq3Code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_rej_1",
+    })
+    RPQuest.QuestRepository:RejectOfferedQuest(offered.id)
+    RPQuest.MailTransport:OnMailboxOpened()
+    AssertEqual(#sentMails, 1, "Rejection mail auto-queued and sent on RejectOfferedQuest")
+    AssertEqual(sentMails[1].to, "@Master", "Rejection mail sent to @Master")
+    AssertEqual(sentMails[1].subject, "[RPQuest:Rejected] Misión Rechazo", "Uses [RPQuest:Rejected] subject")
+    RPQuest.MailTransport:OnMailSendSuccess("@Master")
+
+    -- Master receives rejection mail -> auto-records result and shows alert
+    local alerts = {}
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+    local deletedIds = {}
+    _G.DeleteMail = function(id) table.insert(deletedIds, id) end
+    _G.GetNextMailId = function(cur) return (cur == nil) and 401 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 401 then return "@PlayerRej", "PlayerRejChar", sentMails[1].subject, "", true, false, false, false, 0, 0, 0, 30, 1, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 401) and sentMails[1].body or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#alerts, 1, "Master receives alert for rejection mail")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_REJECTION_RECEIVED", "@PlayerRej", prepared.title), "Rejection alert text matches")
+    AssertTrue(prepared.lastResult ~= nil and prepared.lastResult.status == "rejected", "Prepared quest records lastResult.status == 'rejected'")
+    AssertEqual(prepared.lastResult.senderDisplayName, "@PlayerRej", "Prepared quest records rejecting player")
+    AssertEqual(#deletedIds, 1, "Rejection mail auto-deleted on Master")
+
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.ReadMail = origReadMail
+    _G.DeleteMail = origDeleteMail
+    RPQuest.Announcements.ShowAlert = origShowAlert
 end)
 
 if failed > 0 then

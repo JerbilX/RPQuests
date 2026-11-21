@@ -231,7 +231,7 @@ function QuestRepository:GetDefaults()
         settings = {
             autoDeleteMail = true,
             autoAcceptMail = false,
-            autoSendCompletionMail = false,
+            autoSendCompletionMail = true,
         },
     }
 end
@@ -242,7 +242,7 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars.quests = self.savedVars.quests or {}
     self.savedVars.ingestedMailIds = self.savedVars.ingestedMailIds or {}
     if type(self.savedVars.settings) ~= "table" then
-        self.savedVars.settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = false }
+        self.savedVars.settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = true }
     else
         if self.savedVars.settings.autoDeleteMail == nil then
             self.savedVars.settings.autoDeleteMail = true
@@ -251,7 +251,7 @@ function QuestRepository:Initialize(savedVars)
             self.savedVars.settings.autoAcceptMail = false
         end
         if self.savedVars.settings.autoSendCompletionMail == nil then
-            self.savedVars.settings.autoSendCompletionMail = false
+            self.savedVars.settings.autoSendCompletionMail = true
         end
     end
     if not self.savedVars.draft then
@@ -965,6 +965,16 @@ function QuestRepository:ExportCompletionCode(questId)
     return code, err
 end
 
+function QuestRepository:ExportRejectionCode(quest)
+    if type(quest) ~= "table" then
+        return nil, "Invalid quest"
+    end
+    local rawName = GetUnitName("player") or ""
+    local charName = (rawName ~= "" and zo_strformat) and zo_strformat("<<C:1>>", rawName) or rawName
+    local ts = GetTimeStamp and GetTimeStamp() or 0
+    return Addon.ShareCodec:EncodeRejection(quest, charName, ts)
+end
+
 function QuestRepository:ValidateCompletionCode(questId, codeString)
     local quest = self:GetQuestById(questId)
     if not quest then
@@ -973,25 +983,38 @@ function QuestRepository:ValidateCompletionCode(questId, codeString)
     return Addon.ShareCodec:ValidateCompletionForQuest(quest, codeString)
 end
 
+function QuestRepository:ValidateResultCode(questId, codeString)
+    local quest = self:GetQuestById(questId)
+    if not quest then
+        return false, "VALIDATE_ERR_INVALID_CODE"
+    end
+    return Addon.ShareCodec:ValidateResultForQuest(quest, codeString)
+end
+
 function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validationResult)
     local quest = self:GetQuestById(questId)
     if not quest or type(validationResult) ~= "table" then
         return nil
     end
     quest.deliveries = quest.deliveries or {}
+    local status = (validationResult.completed == false) and "rejected" or "completed"
     local entry = {
         senderDisplayName = type(senderDisplayName) == "string" and senderDisplayName or "",
         characterName = validationResult.characterName or "",
         completedAt = tonumber(validationResult.completedAt) or 0,
         wasDetected = validationResult.wasDetected,
+        status = status,
     }
-    -- Avoid duplicate entries for same characterName + completedAt
+    -- Avoid duplicate entries for same characterName + completedAt + status
     for _, existing in ipairs(quest.deliveries) do
-        if existing.characterName == entry.characterName and existing.completedAt == entry.completedAt then
+        if existing.characterName == entry.characterName
+            and existing.completedAt == entry.completedAt
+            and (existing.status or "completed") == status then
             return existing, false
         end
     end
     table.insert(quest.deliveries, entry)
+    quest.lastResult = entry
     self:NotifyListeners("DELIVERY_RECORDED", { quest = quest, delivery = entry })
     return entry, true
 end
