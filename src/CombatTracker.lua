@@ -146,6 +146,15 @@ function CombatTracker:MarkUnitKilled(targetUnitId)
     self._recentKilledSet[targetUnitId] = true
 end
 
+local function GetAreaContextIfNeeded(quest)
+    if not quest then return nil end
+    local hasMapConstraint = (quest.mapId and quest.mapId > 0) or (quest.zoneId and quest.zoneId > 0)
+    if not hasMapConstraint then
+        return nil
+    end
+    return Addon.TargetCapture:GetPlayerMapContext(false, false)
+end
+
 function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, abilityGraphic,
                                      abilityActionSlotType, sourceName, sourceType, targetName,
                                      targetType, hitValue, powerType, damageType, log,
@@ -172,7 +181,7 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         return
     end
 
-    local playerContext = Addon.TargetCapture:GetPlayerMapContext()
+    local playerContext = GetAreaContextIfNeeded(activeQuest)
 
     local recorded, updatedQuest, justCompleted, finalTarget = Addon.QuestRepository:RecordTargetEliminated(
         targetName, playerContext, activeQuest, matchedTarget
@@ -191,7 +200,11 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
 end
 
 function CombatTracker:HandleJusticeViolation()
-    local playerContext = Addon.TargetCapture:GetPlayerMapContext()
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    if not activeQuest or activeQuest.completed or not activeQuest.requireUndetected or activeQuest.wasDetected then
+        return
+    end
+    local playerContext = GetAreaContextIfNeeded(activeQuest)
     local recorded, updatedQuest = Addon.QuestRepository:RecordPlayerDetected(playerContext)
     if recorded and updatedQuest then
         Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_STEALTH_DETECTED"), true)

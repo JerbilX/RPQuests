@@ -27,10 +27,13 @@ function Locale:Initialize(overrideLang)
         lang = DEFAULT_LANG
     end
     self.activeLang = lang
+    self._dict = (Addon.Locales and Addon.Locales[lang]) or {}
+    self._fallbackDict = (Addon.Locales and Addon.Locales[DEFAULT_LANG]) or {}
 
     if not self._stringsRegistered and ZO_CreateStringId then
         ZO_CreateStringId("SI_KEYBINDINGS_CATEGORY_RPQUEST", self:Get("SI_KEYBINDINGS_CATEGORY_RPQUEST"))
         ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET", self:Get("SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET"))
+        ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY", self:Get("SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"))
         ZO_CreateStringId("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL", self:Get("SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL"))
         self._stringsRegistered = true
     end
@@ -44,9 +47,15 @@ function Locale:GetLanguage()
 end
 
 function Locale:Get(key, ...)
-    local lang = self:GetLanguage()
-    local dict = (Addon.Locales and Addon.Locales[lang]) or {}
-    local fallbackDict = (Addon.Locales and Addon.Locales[DEFAULT_LANG]) or {}
+    local dict = self._dict
+    local fallbackDict = self._fallbackDict
+    if not dict or not fallbackDict then
+        local lang = self:GetLanguage()
+        dict = (Addon.Locales and Addon.Locales[lang]) or {}
+        fallbackDict = (Addon.Locales and Addon.Locales[DEFAULT_LANG]) or {}
+        self._dict = dict
+        self._fallbackDict = fallbackDict
+    end
 
     local template = dict[key] or fallbackDict[key] or tostring(key)
     if select("#", ...) > 0 then

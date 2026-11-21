@@ -1821,6 +1821,75 @@ RunTest("Editor Accordion Sections: default state, toggle layout, and auto-expan
     AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed on edit")
 end)
 
+RunTest("Optimizations: completion code cache, discovery-only FindPendingTarget, ShareCodec escape, keybind string", function()
+    RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+
+    -- 1. Keybind string for discovery capture is registered
+    RPQuest.Locale._stringsRegistered = false
+    RPQuest.Locale:Initialize("en")
+    AssertTrue(_G["SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"] ~= nil, "SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY is registered")
+
+    -- 2. ShareCodec escaping roundtrip with special delimiters
+    local specialQuest = {
+        title = "100% Test | ; ~",
+        description = "Line 1\nLine 2 %7C ~ ;",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+        areaCenterX = 0.5,
+        areaCenterY = 0.5,
+        areaRadius = 0.075,
+        targets = { { name = "Bandit | Boss", requiredCount = 2 } },
+    }
+    local encoded = RPQuest.ShareCodec:EncodeQuest(specialQuest)
+    local decoded = RPQuest.ShareCodec:DecodeQuest(encoded)
+    AssertTrue(decoded ~= nil, "Special characters quest decoded")
+    AssertEqual(decoded.title, specialQuest.title, "Special delimiter characters preserved in title")
+    AssertEqual(decoded.description, specialQuest.description, "Newline and percent sequences preserved in description")
+    AssertEqual(decoded.targets[1].name, "Bandit | Boss", "Pipe preserved in target name")
+
+    -- 3. Discovery-only active quest skips target normalization in FindPendingTarget
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+        zoneId = 381,
+        worldX = 1000,
+        worldY = 0,
+        worldZ = 2000,
+        radius = 1000,
+        message = "Clue",
+    })
+    local discQuest = RPQuest.QuestRepository:SaveDraft("Discovery Only", "Desc")
+    RPQuest.QuestRepository:SetActiveQuest(discQuest.id)
+    local matchedQ, matchedT = RPQuest.QuestRepository:FindPendingTarget("Random Mob")
+    AssertEqual(matchedQ, nil, "FindPendingTarget returns nil for discovery-only quest")
+    AssertEqual(matchedT, nil, "FindPendingTarget returns nil target for discovery-only quest")
+
+    -- 4. ExportCompletionCode caches result and invalidates on ResetQuest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.50,
+        targetY = 0.50,
+    })
+    local q = RPQuest.QuestRepository:SaveDraft("Cache Test", "Desc")
+    local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local imp = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imp.areaCenterX, y = imp.areaCenterY })
+    AssertEqual(imp.completed, true, "Imported quest completed")
+    local c1 = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
+    local c2 = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
+    AssertTrue(c1 ~= nil and c1 == c2, "ExportCompletionCode returns cached code")
+    RPQuest.QuestRepository:ResetQuest(imp.id)
+    local cAfterReset, errAfterReset = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
+    AssertEqual(cAfterReset, nil, "ExportCompletionCode cache invalidated on ResetQuest")
+    AssertEqual(errAfterReset, "Quest is not completed", "ResetQuest marks quest incomplete")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
