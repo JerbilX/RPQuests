@@ -2870,6 +2870,87 @@ RunTest("MailTransport: alerts on incoming quest mail without duplicates and sup
     RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
 end)
 
+RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Discovery/Combat tracking (Issue #103)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+    RPQuest.JournalTab:Initialize()
+    RPQuest.DiscoveryTracker:Initialize()
+    RPQuest.CombatTracker:Initialize()
+
+    -- Create quest with targetLocation and discovery point
+    local zId = mockState.zoneId
+    local code = RPQuest.ShareCodec:EncodeQuest({
+        title = "Grupo en Tamriel",
+        description = "Objetivo compartido.",
+        mapId = mockState.mapId,
+        zoneId = zId,
+        mapName = "Auridon",
+        targets = {
+            { name = "Bandido", requiredCount = 1, worldZoneId = zId, worldX = 5000, worldZ = 5000, radius = 1000, locationRequired = true },
+        },
+        discoveries = {
+            { name = "Ruinas", zoneId = zId, worldX = 20000, worldZ = 20000, radius = 1000 },
+        },
+    })
+    local saved = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Creator")
+    RPQuest.QuestRepository:SetActiveQuest(saved.id)
+    RPQuest.JournalTab:SelectQuest(saved.id)
+
+    -- Mock group APIs: player + @Ally1 + @Ally2
+    local isGrouped = false
+    _G.IsUnitGrouped = function() return isGrouped end
+    _G.GetGroupSize = function() return isGrouped and 3 or 0 end
+    _G.GetGroupUnitTagByIndex = function(i)
+        local tags = { "player", "group1", "group2" }
+        return tags[i]
+    end
+    _G.AreUnitsEqual = function(a, b) return a == b end
+    _G.GetDisplayName = function() return "@PlayerSelf" end
+    _G.GetUnitDisplayName = function(tag)
+        if tag == "player" then return "@PlayerSelf" end
+        if tag == "group1" then return "@Ally1" end
+        if tag == "group2" then return "@Ally2" end
+        return ""
+    end
+
+    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), false, "Share keybind hidden when ungrouped")
+    isGrouped = true
+    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), true, "Share keybind visible when grouped in detail view")
+
+    local members = RPQuest.MailTransport:GetGroupMemberDisplayNames()
+    AssertEqual(#members, 2, "2 group members returned (excluding player)")
+    AssertEqual(members[1], "@Ally1", "First group member @Ally1")
+    AssertEqual(members[2], "@Ally2", "Second group member @Ally2")
+
+    local sentRecipients = {}
+    _G.SendMail = function(to) table.insert(sentRecipients, to) end
+    local okShare, errShare, countShare = RPQuest.MailTransport:ShareQuestWithGroup(saved)
+    AssertEqual(okShare, true, "ShareQuestWithGroup succeeds: " .. tostring(errShare))
+    AssertEqual(countShare, 2, "Shared with 2 group members")
+
+    -- Group DiscoveryTracker: player far away, group1 at discovery point (20000, 20000)
+    _G.GetUnitWorldPosition = function(tag)
+        if tag == "player" then return zId, 0, 0, 0 end
+        if tag == "group1" then return zId, 20000, 0, 20000 end
+        return zId, 0, 0, 0
+    end
+    RPQuest.DiscoveryTracker:UpdatePollingState()
+    RPQuest.DiscoveryTracker:OnUpdateTick()
+    AssertEqual(saved.discoveries[1].discovered, true, "Discovery triggered by group1 position")
+
+    -- Group CombatTracker: player outside targetLocation (0,0), group1 inside (5000, 5000)
+    _G.GetUnitWorldPosition = function(tag)
+        if tag == "player" then return zId, 0, 0, 0 end
+        if tag == "group1" then return zId, 5000, 0, 5000 end
+        return zId, 0, 0, 0
+    end
+    _G.GetMapPlayerPosition = function() return 0.5, 0.5 end
+    RPQuest.CombatTracker:OnCombatEvent(nil, _G.ACTION_RESULT_DIED, false, "", 0, 0, "Ally1", _G.COMBAT_UNIT_TYPE_GROUP, "Bandido", 0, 0, 0, 0, false, 1, 777, 0)
+    AssertEqual(saved.targets[1].currentCount, 1, "Group kill recorded using group1 targetLocation")
+    AssertEqual(saved.failed, false, "Quest did not fail when group1 was inside targetLocation")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
