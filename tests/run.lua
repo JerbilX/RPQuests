@@ -478,6 +478,54 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
     AssertEqual(importedErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized specific error")
 end)
 
+RunTest("ShareCodec rejects quests created in another client language", function()
+    local prevLang = mockState.language
+    mockState.language = "en"
+    RPQuest.Locale:Initialize("en")
+    RPQuest.QuestRepository:Initialize({})
+
+    local enQuest = {
+        title = "Wool Hunt",
+        description = "Hunt sheep",
+        targets = {
+            { name = "Sheep", currentCount = 0, requiredCount = 1 },
+        },
+        mapId = 1,
+        zoneId = 2,
+        mapName = "Glenumbra",
+        targetX = 0.5,
+        targetY = 0.5,
+        areaCenterX = 0.52,
+        areaCenterY = 0.48,
+        areaRadius = 0.075,
+    }
+    local enCode = RPQuest.ShareCodec:EncodeQuest(enQuest)
+    AssertTrue(enCode ~= nil, "EncodeQuest must succeed in EN")
+
+    -- Switch client to Spanish
+    mockState.language = "es"
+    RPQuest.Locale:Initialize("es")
+
+    local decoded, errKey = RPQuest.ShareCodec:DecodeQuest(enCode)
+    AssertEqual(decoded, nil, "DecodeQuest must reject quest from another language")
+    AssertEqual(errKey, "ERR_IMPORT_LANGUAGE_MISMATCH", "DecodeQuest returns ERR_IMPORT_LANGUAGE_MISMATCH")
+
+    local imported, importErr = RPQuest.QuestRepository:ImportQuestFromCode(enCode)
+    AssertEqual(imported, nil, "ImportQuestFromCode must reject quest from another language")
+    AssertEqual(importErr, "Misión inválida: creada en otro idioma.", "ImportQuestFromCode returns localized Spanish mismatch error")
+
+    -- Same language (ES -> ES) must succeed
+    local esCode = RPQuest.ShareCodec:EncodeQuest(enQuest)
+    local decodedEs, errEs = RPQuest.ShareCodec:DecodeQuest(esCode)
+    AssertTrue(decodedEs ~= nil, "DecodeQuest must accept quest in same language")
+    AssertEqual(errEs, nil, "No error when language matches")
+    AssertEqual(decodedEs.language, "es", "Decoded quest preserves source language")
+
+    -- Restore
+    mockState.language = prevLang
+    RPQuest.Locale:Initialize(prevLang)
+end)
+
 -- ============================================================================
 -- 3. Tests de QuestRepository (src/QuestRepository.lua)
 -- ============================================================================

@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.1.2-blue)
+![Version](https://img.shields.io/badge/version-1.1.3-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -51,6 +51,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 2. **Compartir con Jugadores:**
    - Selecciona la misión preparada y copia el código `RPQ1:...` generado.
    - Los jugadores pegan ese código en el campo **Importar** dentro de su pestaña **RPQuest**.
+   - **Mismo idioma requerido:** Los códigos de misión solo pueden importarse en clientes del juego con el mismo idioma que el creador. ESO no expone IDs universales de NPC entre idiomas y hay NPCs que no comparten descripción/nombre equivalente; permitir cambiar de idioma directamente haría que los objetivos o diálogos dejen de coincidir y la misión deje de funcionar.
 3. **Jugar y Verificar:**
    - Activa la misión recibida para ver el mini-tracker en el HUD y el área en el Mapa Mundial.
    - Al completar todos los objetivos, copia el código de entrega `RPQC1:...` generado para confirmar la finalización.

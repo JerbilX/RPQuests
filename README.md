@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.1.2-blue)
+![Version](https://img.shields.io/badge/version-1.1.3-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -51,6 +51,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 2. **Share with Players:**
    - Select your prepared quest and copy its `RPQ1:...` share code.
    - Players paste that code into the **Import** field in their **RPQuest** tab.
+   - **Same-language requirement:** Quest codes can only be imported on a game client using the same language as the creator. ESO does not expose universal NPC IDs across client locales, and some NPCs do not share direct equivalents—allowing cross-language imports or changing the language directly would cause NPC names and objectives to stop matching and break the quest.
 3. **Play & Verify:**
    - Activate the received quest to show the HUD mini-tracker and World Map search area.
    - Once all objectives are completed, copy the generated `RPQC1:...` delivery code to confirm completion.

@@ -145,6 +145,7 @@ RPQuest.Locales["es"] = {
     ERR_IMPORT_NOT_QUEST_CODE = "Ese es un código de entrega/completado, no un código de misión. Úsalo en 'Validar Entrega'.",
     ERR_IMPORT_TRUNCATED_OR_CORRUPT = "El código está incompleto o alterado (checksum inválido). Si lo enviaste por el chat del juego, puede haberse recortado.",
     ERR_IMPORT_INCOMPLETE_DATA = "El código no contiene datos válidos de misión (faltan objetivos o coordenadas).",
+    ERR_IMPORT_LANGUAGE_MISMATCH = "Misión inválida: creada en otro idioma.",
     ERR_CANNOT_EDIT_RECEIVED = "Las misiones recibidas para jugar no se pueden editar.",
     CSA_QUEST_ACCEPTED = "Misión Aceptada: %s",
     CSA_QUEST_PROGRESS = "%s: %d / %d",
