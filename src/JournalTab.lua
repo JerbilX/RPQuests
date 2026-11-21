@@ -3,6 +3,7 @@
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
+-- Ref: docs/adr/0010-comparticion-grupo-y-objetivos-compartidos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -237,6 +238,15 @@ function JournalTab:Initialize()
         Addon.MailTransport:RegisterListener(function(evType, payload)
             self:OnMailTransportEvent(evType, payload)
         end)
+    end
+
+    if EVENT_MANAGER and EVENT_GROUP_UPDATE and not self._groupListenerRegistered then
+        EVENT_MANAGER:RegisterForEvent("RPQuest_JournalTab_GroupUpdate", EVENT_GROUP_UPDATE, function()
+            if self.panel and not self.panel:IsHidden() and KEYBIND_STRIP and self.keybindStripDescriptor then
+                KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+            end
+        end)
+        self._groupListenerRegistered = true
     end
 
     self.isInitialized = true
@@ -526,8 +536,22 @@ function JournalTab:BuildDetailPane(parent)
             return self.viewMode == VIEW_MODE.DETAIL and self.selectedQuestId ~= nil
         end,
     }
+    self.shareWithGroupDescriptor = {
+        name = (GetString and SI_QUEST_JOURNAL_SHARE) and GetString(SI_QUEST_JOURNAL_SHARE) or Addon.Locale:Get("BTN_SHARE_GROUP"),
+        keybind = "UI_SHORTCUT_TERTIARY",
+        callback = function()
+            self:ShareSelectedQuestWithGroup()
+        end,
+        visible = function()
+            return self.viewMode == VIEW_MODE.DETAIL
+                and self.selectedQuestId ~= nil
+                and IsUnitGrouped ~= nil
+                and IsUnitGrouped("player")
+        end,
+    }
     self.keybindStripDescriptor = {
         alignment = KEYBIND_STRIP_ALIGN_CENTER or 1,
+        self.shareWithGroupDescriptor,
         self.abandonQuestDescriptor,
         self.showOnMapDescriptor,
     }
@@ -1523,6 +1547,18 @@ function JournalTab:OnMailTransportEvent(evType, payload)
         if self.viewMode == VIEW_MODE.DETAIL then
             self:RefreshDetailPane()
         end
+    end
+end
+
+function JournalTab:ShareSelectedQuestWithGroup()
+    if not Addon.MailTransport then return end
+    local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not quest then return end
+    local ok, errKey, count = Addon.MailTransport:ShareQuestWithGroup(quest)
+    if ok then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_SHARE_GROUP_SENT", quest.title or "", count or 1), false)
+    elseif errKey then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
     end
 end
 
