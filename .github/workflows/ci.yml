@@ -16,7 +16,8 @@ jobs:
       - name: Install LuaJIT, Luacheck, and zip
         run: |
           sudo apt-get update
-          sudo apt-get install -y luajit luacheck zip
+          sudo apt-get install -y luajit luarocks zip
+          sudo luarocks install luacheck
 
       - name: Run unit tests
         run: luajit tests/run.lua
