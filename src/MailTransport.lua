@@ -74,7 +74,8 @@ function MailTransport:Initialize()
     if not self._repoListenerAdded and Addon.QuestRepository and Addon.QuestRepository.RegisterListener then
         Addon.QuestRepository:RegisterListener(function(evType, payload)
             if evType == "QUEST_COMPLETED" and type(payload) == "table" then
-                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
+                if Addon.QuestRepository:GetSetting("autoSendCompletionMail")
+                    and payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
                     and type(payload.senderDisplayName) == "string"
                     and payload.senderDisplayName ~= ""
                     and not payload.completionReported then
@@ -354,11 +355,13 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
 
     self._sendQueue = {}
     for _, to in ipairs(recipients) do
-        for _, pkt in ipairs(plan.packets) do
+        local numPackets = #plan.packets
+        for idx, pkt in ipairs(plan.packets) do
             table.insert(self._sendQueue, {
                 to = to,
                 subject = pkt.subject,
                 body = pkt.body,
+                sentQuestId = (idx == numPackets) and quest.id or nil,
             })
         end
     end
@@ -470,6 +473,8 @@ function MailTransport:OnMailSendSuccess(_playerName)
             questId = self._currentSendItem.completionQuestId,
             to = self._currentSendItem.to,
         })
+    elseif self._currentSendItem and self._currentSendItem.sentQuestId then
+        Addon.QuestRepository:MarkPreparedQuestSent(self._currentSendItem.sentQuestId, self._currentSendItem.to)
     end
     self._currentSendItem = nil
     self._sendDone = self._sendDone + 1
