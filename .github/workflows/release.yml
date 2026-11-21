@@ -88,6 +88,6 @@ jobs:
             -H "x-api-token: ${ESOUI_API_TOKEN}" \
             -F "id=5080" \
             -F "version=${VERSION}" \
-            -F "file=@${ZIP_PATH}" \
+            -F "updatefile=@${ZIP_PATH}" \
             -F "changelog=<changelog.txt" \
             -F "description=<docs/esoui-description.bbcode"
