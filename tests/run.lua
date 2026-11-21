@@ -449,11 +449,33 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
     }
     local code = RPQuest.ShareCodec:EncodeQuest(validQuest)
     local tampered = code:gsub("^RPQ2:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ2:0000:")
-    local res, _ = RPQuest.ShareCodec:DecodeQuest(tampered)
+    local res, tamperErr = RPQuest.ShareCodec:DecodeQuest(tampered)
     AssertEqual(res, nil, "Tampered checksum must fail")
+    AssertEqual(tamperErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Tampered checksum returns specific error key")
 
-    local malformed, _ = RPQuest.ShareCodec:DecodeQuest("INVALID_STRING")
+    local malformed, malformedErr = RPQuest.ShareCodec:DecodeQuest("INVALID_STRING")
     AssertEqual(malformed, nil, "Malformed string must fail")
+    AssertEqual(malformedErr, "ERR_IMPORT_INVALID_FORMAT", "Malformed string returns format error key")
+
+    local emptyRes, emptyErr = RPQuest.ShareCodec:DecodeQuest("   ")
+    AssertEqual(emptyRes, nil, "Empty string must fail")
+    AssertEqual(emptyErr, "ERR_IMPORT_EMPTY", "Empty string returns empty error key")
+
+    local futureCode = code:gsub("^RPQ2:", "RPQ9:")
+    local futureRes, futureErr = RPQuest.ShareCodec:DecodeQuest(futureCode)
+    AssertEqual(futureRes, nil, "Unknown version prefix must fail")
+    AssertEqual(futureErr, "ERR_IMPORT_UNSUPPORTED_VERSION", "Unknown version prefix returns version error key")
+
+    validQuest.completed = true
+    local compCode = RPQuest.ShareCodec:EncodeCompletion(validQuest, "Tester", 12345)
+    AssertTrue(compCode ~= nil, "Completion code should be generated")
+    local compRes, compErr = RPQuest.ShareCodec:DecodeQuest(compCode)
+    AssertEqual(compRes, nil, "Completion code in quest importer must fail")
+    AssertEqual(compErr, "ERR_IMPORT_NOT_QUEST_CODE", "Completion code returns not-quest-code error key")
+
+    local importedBad, importedErr = RPQuest.QuestRepository:ImportQuestFromCode(futureCode)
+    AssertEqual(importedBad, nil, "ImportQuestFromCode must fail on incompatible version")
+    AssertEqual(importedErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized specific error")
 end)
 
 -- ============================================================================
