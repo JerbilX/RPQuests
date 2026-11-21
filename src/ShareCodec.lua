@@ -9,6 +9,19 @@ local Addon = RPQuest
 Addon.ShareCodec = {}
 local ShareCodec = Addon.ShareCodec
 
+local function GetClientLanguage()
+    if GetCVar then
+        local lang = GetCVar("language.2") or GetCVar("Language.2")
+        if type(lang) == "string" and lang ~= "" then
+            return lang:lower()
+        end
+    end
+    if Addon.Locale and Addon.Locale.GetLanguage then
+        return (Addon.Locale:GetLanguage() or "en"):lower()
+    end
+    return "en"
+end
+
 local B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 local B64_LOOKUP = {}
 local B64_CHARS = {}
@@ -270,6 +283,7 @@ local function BuildQuestPayloadString(quest)
         EscapeField(quest.clue or ""),
         quest.hideMapArea and "1" or "0",
         EncodeDialoguesList(quest.dialogues),
+        EscapeField((type(quest.language) == "string" and quest.language ~= "" and quest.language:lower()) or GetClientLanguage()),
     }
 
     return table.concat(fields, "|")
@@ -451,6 +465,11 @@ function ShareCodec:DecodeQuest(codeString)
     local clue = fields[15] and UnescapeField(fields[15]) or ""
     local hideMapArea = (fields[16] == "1")
     local decodedDialogues = fields[17] and DecodeDialoguesList(fields[17]) or {}
+    local sourceLanguage = fields[18] and UnescapeField(fields[18]):lower() or ""
+
+    if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then
+        return nil, "ERR_IMPORT_LANGUAGE_MISMATCH"
+    end
 
     if #decodedTargets == 0 and #decodedDiscoveries == 0 then
         return nil, "ERR_IMPORT_INCOMPLETE_DATA"
@@ -478,6 +497,7 @@ function ShareCodec:DecodeQuest(codeString)
         areaRadius = areaRadius or 0.075,
         hideMapArea = hideMapArea,
         requireUndetected = requireUndetected,
+        language = (sourceLanguage ~= "" and sourceLanguage) or nil,
     }
 end
 
