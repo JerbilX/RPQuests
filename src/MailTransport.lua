@@ -41,6 +41,7 @@ function MailTransport:Initialize()
     self._receivedById = {}
     self._partGroups = {}
     self._dismissedMailIds = {}
+    self._reportedErrorMailIds = {}
     self._txSeq = self._txSeq or 0
 
     if not self._eventsRegistered and EVENT_MANAGER then
@@ -486,7 +487,7 @@ function MailTransport:ParseQuestMailBody(body)
         return nil, ""
     end
 
-    local sIdx, eIdx, code = string.find(body, "(RPQ[123]:[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]:[^%s]+)")
+    local sIdx, eIdx, code = string.find(body, "(RPQ%d+:[^%s]+)")
     if not code then
         return nil, ""
     end
@@ -645,12 +646,12 @@ function MailTransport:UpsertPartMail(mailId, idKey, senderDisplayName, senderCh
     local fullBody = table.concat(group.parts, "", 1, total)
     local code, roleMessage = self:ParseQuestMailBody(fullBody)
     if not code then
-        return false
+        return false, "ERR_IMPORT_INVALID_FORMAT", groupKey
     end
 
     local decoded, errKey = Addon.ShareCodec:DecodeQuest(code)
     if not decoded then
-        return false, errKey
+        return false, errKey, groupKey
     end
 
     self:UpsertReceivedEntry({
@@ -678,19 +679,19 @@ function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderChara
         return false
     end
 
-    local partResult, partErr = self:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+    local partResult, partErr, partErrorKey = self:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
     if partResult ~= nil then
-        return partResult, partErr
+        return partResult, partErr, partErrorKey
     end
 
     local code, roleMessage = self:ParseQuestMailBody(body)
     if not code then
-        return false
+        return false, "ERR_IMPORT_INVALID_FORMAT", idKey
     end
 
     local decoded, errKey = Addon.ShareCodec:DecodeQuest(code)
     if not decoded then
-        return false, errKey
+        return false, errKey, idKey
     end
 
     self:UpsertReceivedEntry({
@@ -719,6 +720,45 @@ function MailTransport:RebuildReceivedIndex()
     end
 end
 
+function MailTransport:ReportDecodeError(errorKey, errKey, senderDisplayName)
+    if not errKey then return end
+    self._reportedErrorMailIds = self._reportedErrorMailIds or {}
+    local key = tostring(errorKey)
+    if self._reportedErrorMailIds[key] then return end
+    self._reportedErrorMailIds[key] = true
+
+    local msg = Addon.Locale:Get(errKey)
+    if Addon.Announcements and Addon.Announcements.ShowAlert then
+        Addon.Announcements:ShowAlert(msg, true)
+    end
+    self:NotifyListeners("MAIL_DECODE_ERROR", {
+        mailId = errorKey,
+        errKey = errKey,
+        message = msg,
+        senderDisplayName = senderDisplayName,
+    })
+end
+
+function MailTransport:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, allowRequestRead)
+    local isQuest = self:IsQuestMailSubject(subject)
+    local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
+    if not (isQuest or isCompletion) then return end
+
+    local body = ReadMail and ReadMail(mailId) or ""
+    if type(body) == "string" and body ~= "" then
+        if isQuest then
+            local ok, errKey, errorKey = self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+            if not ok and errKey then
+                self:ReportDecodeError(errorKey or mailId, errKey, senderDisplayName)
+            end
+        else
+            self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+        end
+    elseif allowRequestRead and RequestReadMail then
+        RequestReadMail(mailId)
+    end
+end
+
 function MailTransport:ScanInbox(requestOpen)
     if requestOpen then
         self:EnsureMailboxOpen()
@@ -730,20 +770,7 @@ function MailTransport:ScanInbox(requestOpen)
     local mailId = GetNextMailId(nil)
     while mailId ~= nil do
         local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
-        local isQuest = self:IsQuestMailSubject(subject)
-        local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
-        if isQuest or isCompletion then
-            local body = ReadMail and ReadMail(mailId) or ""
-            if type(body) == "string" and body ~= "" then
-                if isQuest then
-                    self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
-                else
-                    self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
-                end
-            elseif RequestReadMail then
-                RequestReadMail(mailId)
-            end
-        end
+        self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, true)
         mailId = GetNextMailId(mailId)
     end
 
@@ -753,23 +780,15 @@ end
 function MailTransport:OnMailReadable(mailId)
     if not mailId or not GetMailItemInfo or not ReadMail then return end
     local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
-    local isQuest = self:IsQuestMailSubject(subject)
-    local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
-    if isQuest or isCompletion then
-        local body = ReadMail(mailId)
-        if type(body) == "string" and body ~= "" then
-            if isQuest then
-                self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
-            else
-                self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
-            end
-        end
-    end
+    self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, false)
 end
 
 function MailTransport:OnMailRemoved(mailId)
     if not mailId then return end
     local idKey = tostring(mailId)
+    if self._reportedErrorMailIds then
+        self._reportedErrorMailIds[idKey] = nil
+    end
     local idx = self._receivedById and self._receivedById[idKey]
     if idx then
         table.remove(self._receivedMails, idx)
