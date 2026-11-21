@@ -219,5 +219,6 @@ RPQuest.Locales["es"] = {
     BTN_AUTO_REPORT_OFF = "Reporte Finalización: Manual",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Reporte de finalización enviado a %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: ¡Entrega verificada de %s para '%s'!",
+    ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s rechazó '%s'.",
     LABEL_MAIL_DELIVERIES = "|c33FF33Entregas verificadas por correo (%d):|r %s",
 }

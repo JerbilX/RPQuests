@@ -21,6 +21,7 @@ local MAX_MAIL_PARTS = 6
 local PART_HEADER_RESERVE = 16
 local QUEST_SUBJECT_PREFIX = "[RPQuest] "
 local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
+local REJECTION_SUBJECT_PREFIX = "[RPQuest:Rejected] "
 local MAILBOX_OPEN_TIMEOUT_MS = 10000
 local MAIL_SEND_TIMEOUT_MS = 15000
 
@@ -73,11 +74,17 @@ function MailTransport:Initialize()
     if not self._repoListenerAdded and Addon.QuestRepository and Addon.QuestRepository.RegisterListener then
         Addon.QuestRepository:RegisterListener(function(evType, payload)
             if evType == "QUEST_COMPLETED" and type(payload) == "table" then
-                if Addon.QuestRepository:GetSetting("autoSendCompletionMail")
+                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
                     and type(payload.senderDisplayName) == "string"
                     and payload.senderDisplayName ~= ""
                     and not payload.completionReported then
                     self:SendCompletionReport(payload)
+                end
+            elseif evType == "QUEST_REJECTED" and type(payload) == "table" then
+                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
+                    and type(payload.senderDisplayName) == "string"
+                    and payload.senderDisplayName ~= "" then
+                    self:SendRejectionReport(payload)
                 end
             end
         end)
@@ -396,10 +403,7 @@ function MailTransport:DispatchNextQueuedMail()
     SendMail(nextItem.to, nextItem.subject, nextItem.body)
 end
 
-function MailTransport:SendCompletionReport(quest)
-    if type(quest) ~= "table" or not quest.completed then
-        return false, "ERR_INVALID_CODE"
-    end
+function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, isRejection)
     local recipient = type(quest.senderDisplayName) == "string"
         and quest.senderDisplayName:gsub("^%s+", ""):gsub("%s+$", "")
         or ""
@@ -410,17 +414,12 @@ function MailTransport:SendCompletionReport(quest)
         return false, "ERR_MAIL_API_UNAVAILABLE"
     end
 
-    local rpqc1Code, err = Addon.QuestRepository:ExportCompletionCode(quest.id)
-    if not rpqc1Code or rpqc1Code == "" then
-        return false, err or "ERR_INVALID_CODE"
-    end
-
-    local subject = COMPLETION_SUBJECT_PREFIX .. (quest.title or "RPQuest")
     local item = {
         to = recipient,
-        subject = subject,
-        body = rpqc1Code,
-        completionQuestId = quest.id,
+        subject = subjectPrefix .. (quest.title or "RPQuest"),
+        body = code,
+        completionQuestId = (not isRejection) and quest.id or nil,
+        rejectionQuestId = isRejection and quest.id or nil,
     }
 
     if self._isSending then
@@ -439,6 +438,28 @@ function MailTransport:SendCompletionReport(quest)
 
     self:StartSendQueue()
     return true
+end
+
+function MailTransport:SendCompletionReport(quest)
+    if type(quest) ~= "table" or not quest.completed then
+        return false, "ERR_INVALID_CODE"
+    end
+    local rpqc1Code, err = Addon.QuestRepository:ExportCompletionCode(quest.id)
+    if not rpqc1Code or rpqc1Code == "" then
+        return false, err or "ERR_INVALID_CODE"
+    end
+    return self:EnqueueResultMail(quest, COMPLETION_SUBJECT_PREFIX, rpqc1Code, false)
+end
+
+function MailTransport:SendRejectionReport(quest)
+    if type(quest) ~= "table" then
+        return false, "ERR_INVALID_CODE"
+    end
+    local rpqc1Code, err = Addon.QuestRepository:ExportRejectionCode(quest)
+    if not rpqc1Code or rpqc1Code == "" then
+        return false, err or "ERR_INVALID_CODE"
+    end
+    return self:EnqueueResultMail(quest, REJECTION_SUBJECT_PREFIX, rpqc1Code, true)
 end
 
 function MailTransport:OnMailSendSuccess(_playerName)
@@ -513,6 +534,7 @@ end
 function MailTransport:IsCompletionMailSubject(subject)
     if type(subject) ~= "string" then return false end
     return string.sub(subject, 1, #COMPLETION_SUBJECT_PREFIX) == COMPLETION_SUBJECT_PREFIX
+        or string.sub(subject, 1, #REJECTION_SUBJECT_PREFIX) == REJECTION_SUBJECT_PREFIX
 end
 
 function MailTransport:ParseCompletionMailBody(body)
@@ -536,14 +558,15 @@ function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, _subject
 
     local preparedQuests = Addon.QuestRepository:GetQuestsByRole(Addon.Constants.QUEST_ROLE.PREPARED)
     for _, q in ipairs(preparedQuests) do
-        local ok, res = Addon.QuestRepository:ValidateCompletionCode(q.id, rpqc1Code)
+        local ok, res = Addon.QuestRepository:ValidateResultCode(q.id, rpqc1Code)
         if ok and type(res) == "table" then
             local _, isNew = Addon.QuestRepository:RecordMailDelivery(q.id, senderDisplayName, res)
             if isNew and Addon.Announcements and Addon.Announcements.ShowAlert then
                 local who = (type(senderDisplayName) == "string" and senderDisplayName ~= "")
                     and senderDisplayName
                     or (res.characterName or "")
-                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_DELIVERY_VALIDATED", who, q.title or ""), false)
+                local alertKey = (res.completed == false) and "ALERT_MAIL_REJECTION_RECEIVED" or "ALERT_MAIL_DELIVERY_VALIDATED"
+                Addon.Announcements:ShowAlert(Addon.Locale:Get(alertKey, who, q.title or ""), false)
             end
             if Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail then
                 DeleteMail(mailId)
