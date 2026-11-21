@@ -164,7 +164,6 @@ local function HookInteractionClass(cls)
 end
 
 function DialogueInjector:OnChatterBegin()
-    if not GetUnitName then return nil end
     local npcName = GetUnitName("interact")
     if type(npcName) ~= "string" or npcName == "" then
         return nil

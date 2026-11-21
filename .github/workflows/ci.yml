@@ -13,10 +13,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install LuaJIT
+      - name: Install LuaJIT, Luacheck, and zip
         run: |
           sudo apt-get update
-          sudo apt-get install -y luajit
+          sudo apt-get install -y luajit luarocks zip
+          sudo luarocks install luacheck
 
       - name: Run unit tests
         run: luajit tests/run.lua
+
+      - name: Run Luacheck
+        run: luacheck .
+
+      - name: Run ESOUI compliance checks
+        run: ./scripts/check-esoui.sh --skip-package
+
+      - name: Verify package build
+        run: ./scripts/package.sh
