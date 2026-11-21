@@ -1,6 +1,5 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
--- Ref: docs/adr/0010-comparticion-grupo-y-objetivos-compartidos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -16,15 +15,9 @@ local LISTENER_JUSTICE_PICKPOCKET = "RPQuest_Justice_Pickpocket"
 local MAX_RECENT_KILLED_UNITS = 32
 
 local function IsAllowedKillSource(sourceType)
-    if sourceType == COMBAT_UNIT_TYPE_PLAYER
+    return sourceType == COMBAT_UNIT_TYPE_PLAYER
         or sourceType == COMBAT_UNIT_TYPE_PLAYER_PET
-        or sourceType == COMBAT_UNIT_TYPE_PLAYER_COMPANION then
-        return true
-    end
-    if sourceType == COMBAT_UNIT_TYPE_GROUP then
-        return IsUnitGrouped("player")
-    end
-    return false
+        or sourceType == COMBAT_UNIT_TYPE_PLAYER_COMPANION
 end
 
 local function RegisterDeathFilter(listenerName, expectedResult, callback)
@@ -165,39 +158,8 @@ function CombatTracker:OnCombatEvent(_eventCode, result, isError, _abilityName, 
     end
 
     local playerContext = GetAreaContextIfNeeded(activeQuest)
-    if sourceType == COMBAT_UNIT_TYPE_GROUP and playerContext
-        and not Addon.QuestRepository:IsPlayerInsideQuestArea(activeQuest, playerContext.mapId, playerContext.zoneId, playerContext.x, playerContext.y)
-        and IsUnitGrouped and IsUnitGrouped("player") and GetGroupSize and GetGroupUnitTagByIndex and GetMapPlayerPosition then
-        local groupSize = GetGroupSize() or 0
-        for i = 1, groupSize do
-            local unitTag = GetGroupUnitTagByIndex(i)
-            if unitTag and unitTag ~= "player" and not (AreUnitsEqual and AreUnitsEqual(unitTag, "player")) then
-                local gx, gy = GetMapPlayerPosition(unitTag)
-                if gx and gy and Addon.QuestRepository:IsPlayerInsideQuestArea(activeQuest, playerContext.mapId, playerContext.zoneId, gx, gy) then
-                    playerContext.x = gx
-                    playerContext.y = gy
-                    break
-                end
-            end
-        end
-    end
     if Addon.QuestRepository:HasTargetLocation(matchedTarget) and GetUnitWorldPosition then
         local pZone, pWorldX, _, pWorldZ = GetUnitWorldPosition("player")
-        if sourceType == COMBAT_UNIT_TYPE_GROUP
-            and not Addon.QuestRepository:IsPlayerInsideTargetLocation(matchedTarget, pZone, pWorldX, pWorldZ)
-            and IsUnitGrouped and IsUnitGrouped("player") and GetGroupSize and GetGroupUnitTagByIndex then
-            local groupSize = GetGroupSize() or 0
-            for i = 1, groupSize do
-                local unitTag = GetGroupUnitTagByIndex(i)
-                if unitTag and unitTag ~= "player" and not (AreUnitsEqual and AreUnitsEqual(unitTag, "player")) then
-                    local uZone, uWX, _, uWZ = GetUnitWorldPosition(unitTag)
-                    if uZone and uWX and uWZ and Addon.QuestRepository:IsPlayerInsideTargetLocation(matchedTarget, uZone, uWX, uWZ) then
-                        pZone, pWorldX, pWorldZ = uZone, uWX, uWZ
-                        break
-                    end
-                end
-            end
-        end
         playerContext = playerContext or {}
         playerContext.worldZoneId = pZone
         playerContext.worldX = pWorldX
