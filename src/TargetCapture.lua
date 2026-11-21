@@ -7,7 +7,7 @@ local Addon = RPQuest
 Addon.TargetCapture = {}
 local TargetCapture = Addon.TargetCapture
 
-function TargetCapture:GetPlayerMapContext(forceSync)
+function TargetCapture:GetPlayerMapContext(forceSync, includeMapName)
     if SetMapToPlayerLocation then
         local mapSceneShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("worldMap")
         if forceSync or not mapSceneShowing then
@@ -20,7 +20,7 @@ function TargetCapture:GetPlayerMapContext(forceSync)
     local mapId = (GetCurrentMapId and GetCurrentMapId()) or 0
     local zoneIndex = (GetUnitZoneIndex and GetUnitZoneIndex("player")) or (GetCurrentMapZoneIndex and GetCurrentMapZoneIndex()) or 0
     local zoneId = (zoneIndex and zoneIndex > 0 and GetZoneId and GetZoneId(zoneIndex)) or 0
-    local mapName = (GetMapName and GetMapName()) or ""
+    local mapName = (includeMapName ~= false and GetMapName and GetMapName()) or ""
     local normX, normY = 0.5, 0.5
     if GetMapPlayerPosition then
         local x, y = GetMapPlayerPosition("player")

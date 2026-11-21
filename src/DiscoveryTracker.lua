@@ -72,8 +72,11 @@ end
 
 function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, worldY, worldZ, preloadedQuest)
     local activeQuest = preloadedQuest or Addon.QuestRepository:GetActiveQuest()
-    if not Addon.QuestRepository:HasPendingDiscoveries(activeQuest) then
+    if not preloadedQuest and not Addon.QuestRepository:HasPendingDiscoveries(activeQuest) then
         self:UpdatePollingState()
+        return false
+    end
+    if not activeQuest or activeQuest.completed or type(activeQuest.discoveries) ~= "table" then
         return false
     end
 

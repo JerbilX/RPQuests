@@ -220,7 +220,7 @@ function JournalTab:Initialize()
     end)
 
     self.isInitialized = true
-    self:Refresh()
+    self._dirty = true
 end
 
 function JournalTab:BuildLeftColumn(panel)
@@ -362,6 +362,7 @@ function JournalTab:BuildDetailPane(parent)
         if scrollChild then
             scrollChild:SetDimensions(526, 650)
             contentParent = scrollChild
+            self.detailScrollChild = scrollChild
         end
         self.detailScroll = scrollContainer
     end
@@ -765,12 +766,21 @@ function JournalTab:BuildEditorPane(parent)
     self.btnClearDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 140, 0)
     self.btnClearDiscoveries:SetHidden(true)
 
+    local function CycleEditorIndex(currentIndex, totalCount, delta)
+        if totalCount <= 0 then return nil end
+        local cur = currentIndex or 1
+        if delta < 0 then
+            return (cur > 1) and (cur - 1) or totalCount
+        end
+        return (cur < totalCount) and (cur + 1) or 1
+    end
+
     self.btnDiscPrev = CreateStyledButton(PANEL_NAME .. "_BtnDiscPrev", discBody, 28, 26, "<", function()
         local draft = Addon.QuestRepository:GetDraft()
         local total = #(draft.discoveries or {})
-        if total > 0 then
-            local cur = self.selectedDiscoveryIndex or 1
-            self.selectedDiscoveryIndex = (cur > 1) and (cur - 1) or total
+        local nextIdx = CycleEditorIndex(self.selectedDiscoveryIndex, total, -1)
+        if nextIdx then
+            self.selectedDiscoveryIndex = nextIdx
             self:RefreshEditorPane()
         end
     end)
@@ -788,9 +798,9 @@ function JournalTab:BuildEditorPane(parent)
     self.btnDiscNext = CreateStyledButton(PANEL_NAME .. "_BtnDiscNext", discBody, 28, 26, ">", function()
         local draft = Addon.QuestRepository:GetDraft()
         local total = #(draft.discoveries or {})
-        if total > 0 then
-            local cur = self.selectedDiscoveryIndex or 1
-            self.selectedDiscoveryIndex = (cur < total) and (cur + 1) or 1
+        local nextIdx = CycleEditorIndex(self.selectedDiscoveryIndex, total, 1)
+        if nextIdx then
+            self.selectedDiscoveryIndex = nextIdx
             self:RefreshEditorPane()
         end
     end)
@@ -896,9 +906,9 @@ function JournalTab:BuildEditorPane(parent)
     self.btnDlgPrev = CreateStyledButton(PANEL_NAME .. "_BtnDlgPrev", dlgBody, 28, 26, "<", function()
         local draft = Addon.QuestRepository:GetDraft()
         local count = #(draft.dialogues or {})
-        if count > 0 then
-            local cur = self.selectedDialogueIndex or 1
-            self.selectedDialogueIndex = (cur > 1) and (cur - 1) or count
+        local nextIdx = CycleEditorIndex(self.selectedDialogueIndex, count, -1)
+        if nextIdx then
+            self.selectedDialogueIndex = nextIdx
             self:RefreshEditorPane()
         end
     end)
@@ -916,9 +926,9 @@ function JournalTab:BuildEditorPane(parent)
     self.btnDlgNext = CreateStyledButton(PANEL_NAME .. "_BtnDlgNext", dlgBody, 28, 26, ">", function()
         local draft = Addon.QuestRepository:GetDraft()
         local count = #(draft.dialogues or {})
-        if count > 0 then
-            local cur = self.selectedDialogueIndex or 1
-            self.selectedDialogueIndex = (cur < count) and (cur + 1) or 1
+        local nextIdx = CycleEditorIndex(self.selectedDialogueIndex, count, 1)
+        if nextIdx then
+            self.selectedDialogueIndex = nextIdx
             self:RefreshEditorPane()
         end
     end)
@@ -1036,14 +1046,8 @@ function JournalTab:BuildEditorPane(parent)
 
     self.btnCancelEditor = CreateStyledButton(PANEL_NAME .. "_BtnCancelEditor", pane, 150, 34, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
-        self.selectedDialogueIndex = nil
         Addon.QuestRepository:ResetDraft()
-        self.titleEdit:SetText("")
-        self.descEdit:SetText("")
-        if self.clueEdit then self.clueEdit:SetText("") end
-        self.completionEdit:SetText("")
-        if self.discoveryMsgEdit then self.discoveryMsgEdit:SetText("") end
-        if self.dlgResponseEdit then self.dlgResponseEdit:SetText("") end
+        self:ClearEditorInputs()
         self:Refresh()
     end)
     self.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
@@ -1266,6 +1270,17 @@ function JournalTab:OpenImportView()
     end
 end
 
+function JournalTab:ClearEditorInputs()
+    if self.titleEdit then self.titleEdit:SetText("") end
+    if self.descEdit then self.descEdit:SetText("") end
+    if self.clueEdit then self.clueEdit:SetText("") end
+    if self.completionEdit then self.completionEdit:SetText("") end
+    if self.discoveryMsgEdit then self.discoveryMsgEdit:SetText("") end
+    if self.dlgResponseEdit then self.dlgResponseEdit:SetText("") end
+    self.selectedDialogueIndex = nil
+    self.selectedDiscoveryIndex = nil
+end
+
 function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
@@ -1280,21 +1295,7 @@ function JournalTab:OnSaveDraftClicked()
         return
     end
 
-    self.titleEdit:SetText("")
-    self.descEdit:SetText("")
-    if self.clueEdit then
-        self.clueEdit:SetText("")
-    end
-    if self.completionEdit then
-        self.completionEdit:SetText("")
-    end
-    if self.discoveryMsgEdit then
-        self.discoveryMsgEdit:SetText("")
-    end
-    if self.dlgResponseEdit then
-        self.dlgResponseEdit:SetText("")
-    end
-    self.selectedDialogueIndex = nil
+    self:ClearEditorInputs()
 
     Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_SAVED", savedQuest.title), false)
 end
@@ -1696,11 +1697,8 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     local textHeight = self.detailObjText.GetTextHeight and self.detailObjText:GetTextHeight()
     local objHeight = textHeight and (textHeight + 16) or (visibleLineCount * 24)
     self.detailObjText:SetDimensions(495, math.max(32, objHeight))
-    if self.detailScroll and self.detailScroll.GetNamedChild then
-        local scrollChild = self.detailScroll:GetNamedChild("ScrollChild")
-        if scrollChild and scrollChild.SetDimensions then
-            scrollChild:SetDimensions(526, math.max(650, 540 + objHeight))
-        end
+    if self.detailScrollChild and self.detailScrollChild.SetDimensions then
+        self.detailScrollChild:SetDimensions(526, math.max(650, 540 + objHeight))
     end
 
     self.codeDivider:SetHidden(false)

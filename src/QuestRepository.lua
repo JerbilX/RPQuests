@@ -229,6 +229,7 @@ function QuestRepository:Initialize(savedVars)
     end
     self._questById = {}
     self._shareCodeCache = {}
+    self._completionCodeCache = {}
     self._activeTargetCache = nil
     local roles = Addon.Constants.QUEST_ROLE
     for _, q in ipairs(self.savedVars.quests) do
@@ -831,6 +832,12 @@ function QuestRepository:ExportCompletionCode(questId)
         return nil, "Quest is not completed"
     end
 
+    self._completionCodeCache = self._completionCodeCache or {}
+    local cached = self._completionCodeCache[questId]
+    if cached then
+        return cached
+    end
+
     local rawName = GetUnitName and GetUnitName("player") or ""
     local charName = rawName
     if zo_strformat and rawName ~= "" then
@@ -838,7 +845,11 @@ function QuestRepository:ExportCompletionCode(questId)
     end
     local ts = GetTimeStamp and GetTimeStamp() or 0
 
-    return Addon.ShareCodec:EncodeCompletion(quest, charName, ts)
+    local code, err = Addon.ShareCodec:EncodeCompletion(quest, charName, ts)
+    if code then
+        self._completionCodeCache[questId] = code
+    end
+    return code, err
 end
 
 function QuestRepository:ValidateCompletionCode(questId, codeString)
@@ -946,6 +957,9 @@ function QuestRepository:ResetQuest(questId)
     end
     q.completed = false
     q.wasDetected = false
+    if self._completionCodeCache then
+        self._completionCodeCache[questId] = nil
+    end
     self.savedVars.activeQuestId = q.id
     self:InvalidateActiveTargetCache()
     self:NotifyListeners("QUEST_RESET", q)
@@ -964,15 +978,20 @@ function QuestRepository:DeleteQuest(questId)
             if self._shareCodeCache then
                 self._shareCodeCache[questId] = nil
             end
+            if self._completionCodeCache then
+                self._completionCodeCache[questId] = nil
+            end
             if self.savedVars.draft and self.savedVars.draft.editingQuestId == questId then
                 self:ResetDraft()
             end
             if wasActive then
                 self.savedVars.activeQuestId = nil
                 self:InvalidateActiveTargetCache()
-                local nextAvailable = self:GetActiveAndAvailableQuests()[1]
-                if nextAvailable then
-                    self.savedVars.activeQuestId = nextAvailable.id
+                for _, cand in ipairs(self.savedVars.quests) do
+                    if not cand.completed then
+                        self.savedVars.activeQuestId = cand.id
+                        break
+                    end
                 end
             end
             self:NotifyListeners("QUEST_DELETED", q)
@@ -1018,7 +1037,7 @@ function QuestRepository:FindPendingTarget(rawTargetName)
     end
 
     local activeQuest = self:GetActiveQuest()
-    if not activeQuest or activeQuest.completed then
+    if not activeQuest or activeQuest.completed or not activeQuest.targets or #activeQuest.targets == 0 then
         return nil, nil
     end
 
@@ -1080,6 +1099,7 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
         if self.savedVars.activeQuestId == activeQuest.id then
             self.savedVars.activeQuestId = nil
         end
+        self:InvalidateActiveTargetCache()
         self:NotifyListeners("QUEST_COMPLETED", activeQuest)
     else
         self:NotifyListeners("QUEST_PROGRESS", activeQuest)

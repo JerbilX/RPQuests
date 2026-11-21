@@ -23,27 +23,39 @@ for b = 0, 255 do
     BYTE_TO_CHAR[b] = string.char(b)
 end
 
+local ESCAPE_MAP = {
+    ["%"] = "%25",
+    ["|"] = "%7C",
+    [";"] = "%3B",
+    ["~"] = "%7E",
+    ["\r"] = "",
+    ["\n"] = "%0A",
+}
+
+local UNESCAPE_MAP = {
+    ["%0A"] = "\n",
+    ["%7E"] = "~",
+    ["%3B"] = ";",
+    ["%7C"] = "|",
+    ["%25"] = "%",
+}
+
 local function EscapeField(str)
     if str == nil then return "" end
     local s = tostring(str)
-    s = s:gsub("%%", "%%25")
-    s = s:gsub("|", "%%7C")
-    s = s:gsub(";", "%%3B")
-    s = s:gsub("~", "%%7E")
-    s = s:gsub("\r", "")
-    s = s:gsub("\n", "%%0A")
-    return s
+    if not s:find("[%%|;~\r\n]") then
+        return s
+    end
+    return (s:gsub("[%%|;~\r\n]", ESCAPE_MAP))
 end
 
 local function UnescapeField(str)
     if str == nil then return "" end
     local s = tostring(str)
-    s = s:gsub("%%0A", "\n")
-    s = s:gsub("%%7E", "~")
-    s = s:gsub("%%3B", ";")
-    s = s:gsub("%%7C", "|")
-    s = s:gsub("%%25", "%%")
-    return s
+    if not s:find("%", 1, true) then
+        return s
+    end
+    return (s:gsub("%%[0-9A-F][0-9A-F]", UNESCAPE_MAP))
 end
 
 local function SplitByChar(raw, sep)
@@ -360,28 +372,50 @@ function ShareCodec:EncodeQuest(quest)
     return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
 end
 
+local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, badChecksumErr, allowedPrefixes)
+    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
+    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
+    if not pfx or not checksum or #checksum ~= 4 or not encodedPayload then
+        return nil, nil, invalidFormatErr
+    end
+    if allowedPrefixes then
+        local errOrAllowed = allowedPrefixes[pfx]
+        if errOrAllowed == nil then
+            return nil, nil, invalidFormatErr
+        elseif type(errOrAllowed) == "string" then
+            return nil, nil, errOrAllowed
+        end
+    end
+
+    local rawPayload = Base64UrlDecode(encodedPayload)
+    if not rawPayload then
+        return nil, nil, badB64Err
+    end
+
+    local expectedChecksum = ComputeChecksum16(rawPayload)
+    if checksum:upper() ~= expectedChecksum:upper() then
+        return nil, nil, badChecksumErr
+    end
+
+    return pfx, rawPayload, nil
+end
+
 function ShareCodec:DecodeQuest(codeString)
     if type(codeString) ~= "string" then
         return nil, "Code must be a string"
     end
 
-    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
     local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
-
-    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
-    if not pfx or (pfx ~= prefix and pfx ~= legacyPrefix) or not checksum or #checksum ~= 4 or not encodedPayload then
-        return nil, "Invalid code format"
-    end
-
-    local rawPayload = Base64UrlDecode(encodedPayload)
+    local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
+        codeString,
+        "Invalid code format",
+        "Corrupted base64 payload",
+        "Checksum mismatch",
+        { [prefix] = true, [legacyPrefix] = true }
+    )
     if not rawPayload then
-        return nil, "Corrupted base64 payload"
-    end
-
-    local expectedChecksum = ComputeChecksum16(rawPayload)
-    if checksum:upper() ~= expectedChecksum:upper() then
-        return nil, "Checksum mismatch"
+        return nil, envErr
     end
 
     local fields = SplitByChar(rawPayload, "|")
@@ -487,31 +521,23 @@ function ShareCodec:DecodeCompletion(codeString)
         return nil, "VALIDATE_ERR_INVALID_CODE"
     end
 
-    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local questPrefix = Addon.Constants.SHARE_CODEC.PREFIX
     local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
     local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
 
-    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
-    if not pfx or not checksum or #checksum ~= 4 or not encodedPayload then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
-    end
-
-    if pfx == questPrefix or pfx == legacyPrefix then
-        return nil, "VALIDATE_ERR_NOT_COMPLETION_CODE"
-    end
-    if pfx ~= compPrefix then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
-    end
-
-    local rawPayload = Base64UrlDecode(encodedPayload)
+    local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
+        codeString,
+        "VALIDATE_ERR_INVALID_CODE",
+        "VALIDATE_ERR_INVALID_CODE",
+        "VALIDATE_ERR_INVALID_CODE",
+        {
+            [compPrefix] = true,
+            [questPrefix] = "VALIDATE_ERR_NOT_COMPLETION_CODE",
+            [legacyPrefix] = "VALIDATE_ERR_NOT_COMPLETION_CODE",
+        }
+    )
     if not rawPayload then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
-    end
-
-    local expectedChecksum = ComputeChecksum16(rawPayload)
-    if checksum:upper() ~= expectedChecksum:upper() then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
+        return nil, envErr
     end
 
     local fields = SplitByChar(rawPayload, "|")
