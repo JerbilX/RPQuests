@@ -1322,27 +1322,40 @@ function JournalTab:BuildMailSendPane(parent)
     self.mailRoleEdit = roleEdit
 
     local lblCounter = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCounterLbl", pane, CT_LABEL)
-    lblCounter:SetDimensions(510, 36)
-    lblCounter:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 258)
+    lblCounter:SetDimensions(510, 44)
+    lblCounter:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 256)
     if lblCounter.SetFont then lblCounter:SetFont("ZoFontGame") end
     self.mailCounterLabel = lblCounter
 
     local lblStatus = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendStatusLbl", pane, CT_LABEL)
     lblStatus:SetDimensions(510, 28)
-    lblStatus:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 300)
+    lblStatus:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 304)
     if lblStatus.SetFont then lblStatus:SetFont("ZoFontGameBold") end
     self.mailSendStatusLabel = lblStatus
 
-    self.btnConfirmMailSend = CreateStyledButton(PANEL_NAME .. "_BtnConfirmMailSend", pane, 180, 36, Addon.Locale:Get("BTN_MAIL_SEND_CONFIRM"), function()
+    self.btnConfirmMailSend = CreateStyledButton(PANEL_NAME .. "_BtnConfirmMailSend", pane, 165, 36, Addon.Locale:Get("BTN_MAIL_SEND_CONFIRM"), function()
         self:OnConfirmSendMailClicked()
     end)
     self.btnConfirmMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 340)
 
-    self.btnCancelMailSend = CreateStyledButton(PANEL_NAME .. "_BtnCancelMailSend", pane, 150, 36, Addon.Locale:Get("BTN_CANCEL"), function()
+    self.btnCopyMailCode = CreateStyledButton(PANEL_NAME .. "_BtnCopyMailCode", pane, 165, 36, Addon.Locale:Get("BTN_MAIL_COPY_RPQ3"), function()
+        self:OnCopyMailCodeClicked()
+    end)
+    self.btnCopyMailCode:SetAnchor(TOPLEFT, pane, TOPLEFT, 175, 340)
+
+    self.btnCancelMailSend = CreateStyledButton(PANEL_NAME .. "_BtnCancelMailSend", pane, 155, 36, Addon.Locale:Get("BTN_CANCEL"), function()
         self.viewMode = VIEW_MODE.DETAIL
         self:Refresh()
     end)
-    self.btnCancelMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 340)
+    self.btnCancelMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 350, 340)
+
+    local copyBg, copyEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_MailCopyEdit", pane, 510, 32, 4096, false, nil, true, true
+    )
+    copyBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 390)
+    copyBg:SetHidden(true)
+    self.mailCopyBg = copyBg
+    self.mailCopyEdit = copyEdit
 end
 
 function JournalTab:BuildMailInboxPane(parent)
@@ -1505,6 +1518,9 @@ function JournalTab:OpenMailSendView()
     if self.mailSendStatusLabel then
         self.mailSendStatusLabel:SetText("")
     end
+    if self.mailCopyBg then
+        self.mailCopyBg:SetHidden(true)
+    end
     self:Refresh()
     self:RefreshMailSendCounter()
 end
@@ -1515,11 +1531,28 @@ function JournalTab:RefreshMailSendCounter()
     if not quest then return end
     local code = Addon.QuestRepository:ExportQuestToCode(quest.id) or ""
     local roleMsg = self.mailRoleEdit and self.mailRoleEdit:GetText() or ""
-    local _, len, maxLen, fits = Addon.MailTransport:ComposeQuestMailBody(roleMsg, code)
-    if fits then
-        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER", len, maxLen))
+    local plan = Addon.MailTransport:BuildQuestMailPackets(roleMsg, code, quest.title)
+    if plan.partCount == 1 then
+        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER", plan.totalLen, plan.maxLen))
+    elseif plan.fits then
+        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER_MULTI", plan.totalLen, plan.partCount, plan.maxParts))
     else
-        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER_OVER", len, maxLen))
+        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER_OVER", plan.totalLen, plan.maxTotalChars, plan.maxParts))
+    end
+end
+
+function JournalTab:OnCopyMailCodeClicked()
+    local quest = self._mailSendQuestId and Addon.QuestRepository:GetQuestById(self._mailSendQuestId)
+    if not quest then return end
+    local code = Addon.QuestRepository:ExportQuestToCode(quest.id) or ""
+    if self.mailCopyBg and self.mailCopyEdit then
+        self.mailCopyBg:SetHidden(false)
+        self.mailCopyEdit:SetText(code)
+        if self.mailCopyEdit.TakeFocus then self.mailCopyEdit:TakeFocus() end
+        if self.mailCopyEdit.SelectAll then self.mailCopyEdit:SelectAll() end
+    end
+    if self.mailSendStatusLabel then
+        self.mailSendStatusLabel:SetText(Addon.Locale:Get("MAIL_COPY_RPQ3_HINT"))
     end
 end
 
@@ -1583,7 +1616,12 @@ function JournalTab:RefreshMailInboxPane()
     local entry = mails[self.selectedMailIndex]
     self.mailCardTitle:SetText(entry.title or entry.subject or "")
     self.mailCardFrom:SetText(Addon.Locale:Get("MAIL_FROM_LABEL", entry.senderDisplayName or ""))
-    self.mailCardMsg:SetText(entry.roleMessage or "")
+    if entry.isIncomplete then
+        self.mailCardMsg:SetText(Addon.Locale:Get("MAIL_INBOX_INCOMPLETE", entry.partsReceived or 0, entry.partsTotal or 0))
+        if self.btnMailAccept then self.btnMailAccept:SetHidden(true) end
+    else
+        self.mailCardMsg:SetText(entry.roleMessage or "")
+    end
     if self.mailPageLabel then
         self.mailPageLabel:SetText(Addon.Locale:Get("MAIL_INBOX_PAGE", self.selectedMailIndex, total))
     end

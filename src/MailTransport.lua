@@ -1,4 +1,5 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
+-- Ref: docs/adr/0009-transporte-correo-multiparte-rpqp.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -14,6 +15,8 @@ local LISTENER_MAIL_REMOVED = "RPQuest_Mail_Removed"
 
 local MAX_RECIPIENTS = 4
 local DEFAULT_MAX_BODY_CHARS = 700
+local MAX_MAIL_PARTS = 6
+local PART_HEADER_RESERVE = 16
 local QUEST_SUBJECT_PREFIX = "[RPQuest] "
 local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
 
@@ -28,7 +31,9 @@ function MailTransport:Initialize()
     self._openedMailbox = false
     self._receivedMails = {}
     self._receivedById = {}
+    self._partGroups = {}
     self._dismissedMailIds = {}
+    self._txSeq = self._txSeq or 0
 
     if not self._eventsRegistered and EVENT_MANAGER then
         if EVENT_MAIL_SEND_SUCCESS then
@@ -95,12 +100,87 @@ function MailTransport:GetMaxBodyLength()
         or DEFAULT_MAX_BODY_CHARS
 end
 
+function MailTransport:GetMaxMailParts()
+    return MAX_MAIL_PARTS
+end
+
+function MailTransport:GenerateTxId(seedText)
+    self._txSeq = (self._txSeq or 0) + 1
+    local hash = 0
+    if Addon.ShareCodec and Addon.ShareCodec.ComputeCRC16 and type(seedText) == "string" then
+        hash = Addon.ShareCodec:ComputeCRC16(seedText) or 0
+    end
+    local ts = GetTimeStamp and GetTimeStamp() or 0
+    local mixed = (hash + ts + self._txSeq * 7919) % 65536
+    return string.format("%04X", mixed)
+end
+
 function MailTransport:ComposeQuestMailBody(roleMessage, questCode)
     local code = type(questCode) == "string" and questCode:gsub("^%s+", ""):gsub("%s+$", "") or ""
     local msg = type(roleMessage) == "string" and roleMessage:gsub("^%s+", ""):gsub("%s+$", "") or ""
     local body = (msg ~= "") and (msg .. "\n\n" .. code) or code
     local maxLen = self:GetMaxBodyLength()
     return body, #body, maxLen, (#body <= maxLen)
+end
+
+function MailTransport:BuildQuestMailPackets(roleMessage, questCode, title)
+    local fullBody, len, maxLen, fitsSingle = self:ComposeQuestMailBody(roleMessage, questCode)
+    local cleanTitle = (type(title) == "string" and title ~= "") and title or "RPQuest"
+
+    if fitsSingle then
+        return {
+            packets = {
+                {
+                    subject = QUEST_SUBJECT_PREFIX .. cleanTitle,
+                    body = fullBody,
+                },
+            },
+            totalLen = len,
+            maxLen = maxLen,
+            partCount = 1,
+            maxParts = MAX_MAIL_PARTS,
+            maxTotalChars = maxLen,
+            fits = true,
+        }
+    end
+
+    local chunkSize = math.max(1, maxLen - PART_HEADER_RESERVE)
+    local totalParts = math.ceil(len / chunkSize)
+    local maxTotalChars = chunkSize * MAX_MAIL_PARTS
+
+    if totalParts > MAX_MAIL_PARTS then
+        return {
+            packets = {},
+            totalLen = len,
+            maxLen = maxLen,
+            partCount = totalParts,
+            maxParts = MAX_MAIL_PARTS,
+            maxTotalChars = maxTotalChars,
+            fits = false,
+        }
+    end
+
+    local txId = self:GenerateTxId(fullBody)
+    local packets = {}
+    for i = 1, totalParts do
+        local startIdx = (i - 1) * chunkSize + 1
+        local endIdx = math.min(len, i * chunkSize)
+        local chunk = string.sub(fullBody, startIdx, endIdx)
+        table.insert(packets, {
+            subject = string.format("[RPQuest %d/%d] %s", i, totalParts, cleanTitle),
+            body = string.format("RPQP:%s:%d/%d\n%s", txId, i, totalParts, chunk),
+        })
+    end
+
+    return {
+        packets = packets,
+        totalLen = len,
+        maxLen = maxLen,
+        partCount = totalParts,
+        maxParts = MAX_MAIL_PARTS,
+        maxTotalChars = maxTotalChars,
+        fits = true,
+    }
 end
 
 function MailTransport:ParseRecipients(rawInput)
@@ -174,23 +254,24 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
         return false, "ERR_INVALID_CODE"
     end
 
-    local body, len, maxLen, fits = self:ComposeQuestMailBody(roleMessage, questCode)
-    if not fits then
-        return false, "ERR_MAIL_BODY_TOO_LONG", len, maxLen
+    local plan = self:BuildQuestMailPackets(roleMessage, questCode, quest.title)
+    if not plan.fits then
+        return false, "ERR_MAIL_BODY_TOO_LONG", plan.totalLen, plan.maxTotalChars
     end
 
     if not SendMail then
         return false, "ERR_MAIL_API_UNAVAILABLE"
     end
 
-    local subject = QUEST_SUBJECT_PREFIX .. (quest.title or "RPQuest")
     self._sendQueue = {}
     for _, to in ipairs(recipients) do
-        table.insert(self._sendQueue, {
-            to = to,
-            subject = subject,
-            body = body,
-        })
+        for _, pkt in ipairs(plan.packets) do
+            table.insert(self._sendQueue, {
+                to = to,
+                subject = pkt.subject,
+                body = pkt.body,
+            })
+        end
     end
 
     self._isSending = true
@@ -201,7 +282,7 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
 
     self:EnsureMailboxOpen()
     self:DispatchNextQueuedMail()
-    return true, nil, len, maxLen
+    return true, nil, plan.totalLen, plan.maxTotalChars
 end
 
 function MailTransport:DispatchNextQueuedMail()
@@ -320,7 +401,26 @@ function MailTransport:IsQuestMailSubject(subject)
     if string.sub(subject, 1, #COMPLETION_SUBJECT_PREFIX) == COMPLETION_SUBJECT_PREFIX then
         return false
     end
-    return string.sub(subject, 1, #QUEST_SUBJECT_PREFIX) == QUEST_SUBJECT_PREFIX
+    if string.sub(subject, 1, #QUEST_SUBJECT_PREFIX) == QUEST_SUBJECT_PREFIX then
+        return true
+    end
+    return string.match(subject, "^%[RPQuest %d+/%d+%] ") ~= nil
+end
+
+function MailTransport:ParseQuestPartMailBody(body)
+    if type(body) ~= "string" or body == "" then
+        return nil
+    end
+    local txId, partStr, totalStr, chunk = string.match(body, "^RPQP:([0-9A-Fa-f]+):(%d+)/(%d+)\n(.*)$")
+    if not txId then
+        return nil
+    end
+    local part = tonumber(partStr)
+    local total = tonumber(totalStr)
+    if not part or not total or part < 1 or total < 2 or part > total or total > (MAX_MAIL_PARTS * 2) then
+        return nil
+    end
+    return txId:upper(), part, total, chunk
 end
 
 function MailTransport:IsCompletionMailSubject(subject)
@@ -369,10 +469,118 @@ function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, subject,
     return false
 end
 
+function MailTransport:UpsertReceivedEntry(entry)
+    local existingIdx = self._receivedById[entry.idKey]
+    if existingIdx then
+        self._receivedMails[existingIdx] = entry
+    else
+        table.insert(self._receivedMails, entry)
+        self._receivedById[entry.idKey] = #self._receivedMails
+    end
+    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+end
+
+function MailTransport:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+    local txId, part, total, chunk = self:ParseQuestPartMailBody(body)
+    if not txId then
+        return nil
+    end
+
+    self._partGroups = self._partGroups or {}
+    local groupKey = string.format("part:%s:%s:%d", (senderDisplayName or ""):lower(), txId, total)
+    local group = self._partGroups[groupKey]
+    if not group then
+        group = {
+            groupKey = groupKey,
+            txId = txId,
+            total = total,
+            senderDisplayName = senderDisplayName or "",
+            senderCharacterName = senderCharacterName or "",
+            subject = subject or "",
+            parts = {},
+            mailIds = {},
+            mailIdByKey = {},
+            secsSinceReceived = secsSinceReceived or 0,
+        }
+        self._partGroups[groupKey] = group
+    end
+
+    group.parts[part] = chunk
+    group.mailIds[part] = mailId
+    group.mailIdByKey[idKey] = part
+    if type(secsSinceReceived) == "number" then
+        group.secsSinceReceived = math.min(group.secsSinceReceived, secsSinceReceived)
+    end
+
+    local receivedCount = 0
+    local allMailIds = {}
+    for i = 1, total do
+        if group.parts[i] ~= nil then
+            receivedCount = receivedCount + 1
+        end
+        if group.mailIds[i] ~= nil then
+            table.insert(allMailIds, group.mailIds[i])
+        end
+    end
+
+    if receivedCount < total then
+        local cleanTitle = (subject or ""):gsub("^%[RPQuest %d+/%d+%]%s*", "")
+        self:UpsertReceivedEntry({
+            mailId = groupKey,
+            idKey = groupKey,
+            mailIds = allMailIds,
+            senderDisplayName = group.senderDisplayName,
+            senderCharacterName = group.senderCharacterName,
+            subject = group.subject,
+            title = cleanTitle,
+            roleMessage = "",
+            isIncomplete = true,
+            partsReceived = receivedCount,
+            partsTotal = total,
+            secsSinceReceived = group.secsSinceReceived,
+        })
+        return true
+    end
+
+    local fullBody = table.concat(group.parts, "", 1, total)
+    local code, roleMessage = self:ParseQuestMailBody(fullBody)
+    if not code then
+        return false
+    end
+
+    local decoded, errKey = Addon.ShareCodec:DecodeQuest(code)
+    if not decoded then
+        return false, errKey
+    end
+
+    self:UpsertReceivedEntry({
+        mailId = groupKey,
+        idKey = groupKey,
+        mailIds = allMailIds,
+        senderDisplayName = group.senderDisplayName,
+        senderCharacterName = group.senderCharacterName,
+        subject = group.subject,
+        title = decoded.title or "",
+        roleMessage = roleMessage,
+        questCode = code,
+        decodedQuest = decoded,
+        isIncomplete = false,
+        partsReceived = total,
+        partsTotal = total,
+        secsSinceReceived = group.secsSinceReceived,
+    })
+    return true
+end
+
 function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
     local idKey = tostring(mailId)
     if self._dismissedMailIds and self._dismissedMailIds[idKey] then
         return false
+    end
+
+    local partResult, partErr = self:UpsertPartMail(mailId, idKey, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+    if partResult ~= nil then
+        return partResult, partErr
     end
 
     local code, roleMessage = self:ParseQuestMailBody(body)
@@ -385,9 +593,10 @@ function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderChara
         return false, errKey
     end
 
-    local entry = {
+    self:UpsertReceivedEntry({
         mailId = mailId,
         idKey = idKey,
+        mailIds = { mailId },
         senderDisplayName = senderDisplayName or "",
         senderCharacterName = senderCharacterName or "",
         subject = subject or "",
@@ -395,17 +604,11 @@ function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderChara
         roleMessage = roleMessage,
         questCode = code,
         decodedQuest = decoded,
+        isIncomplete = false,
+        partsReceived = 1,
+        partsTotal = 1,
         secsSinceReceived = secsSinceReceived or 0,
-    }
-
-    local existingIdx = self._receivedById[idKey]
-    if existingIdx then
-        self._receivedMails[existingIdx] = entry
-    else
-        table.insert(self._receivedMails, entry)
-        self._receivedById[idKey] = #self._receivedMails
-    end
-    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+    })
     return true
 end
 
@@ -472,6 +675,39 @@ function MailTransport:OnMailRemoved(mailId)
         table.remove(self._receivedMails, idx)
         self:RebuildReceivedIndex()
         self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+        return
+    end
+
+    if self._partGroups then
+        for groupKey, group in pairs(self._partGroups) do
+            local part = group.mailIdByKey and group.mailIdByKey[idKey]
+            if part then
+                group.parts[part] = nil
+                group.mailIds[part] = nil
+                group.mailIdByKey[idKey] = nil
+                local remaining = 0
+                for i = 1, group.total do
+                    if group.parts[i] ~= nil then
+                        remaining = remaining + 1
+                    end
+                end
+                if remaining == 0 then
+                    self._partGroups[groupKey] = nil
+                    self:RemoveEntryById(groupKey)
+                else
+                    local existingIdx = self._receivedById and self._receivedById[groupKey]
+                    if existingIdx and self._receivedMails[existingIdx] then
+                        local e = self._receivedMails[existingIdx]
+                        e.isIncomplete = true
+                        e.partsReceived = remaining
+                        e.questCode = nil
+                        e.decodedQuest = nil
+                    end
+                end
+                self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
+                return
+            end
+        end
     end
 end
 
@@ -492,7 +728,29 @@ function MailTransport:RemoveEntryById(mailId)
     return entry
 end
 
+function MailTransport:DisposeEntryMails(entry)
+    local ids = (type(entry.mailIds) == "table" and #entry.mailIds > 0) and entry.mailIds or { entry.mailId }
+    local shouldDelete = Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail
+    for _, mid in ipairs(ids) do
+        if shouldDelete then
+            DeleteMail(mid)
+        else
+            self._dismissedMailIds[tostring(mid)] = true
+        end
+    end
+    if self._partGroups and entry.idKey then
+        self._partGroups[entry.idKey] = nil
+    end
+end
+
 function MailTransport:AcceptReceivedMail(mailId)
+    local idKey = tostring(mailId)
+    local idx = self._receivedById and self._receivedById[idKey]
+    local existing = idx and self._receivedMails[idx]
+    if existing and existing.isIncomplete then
+        return nil, "ERR_MAIL_INCOMPLETE"
+    end
+
     local entry = self:RemoveEntryById(mailId)
     if not entry then
         return nil, "ERR_INVALID_CODE"
@@ -505,12 +763,7 @@ function MailTransport:AcceptReceivedMail(mailId)
         return nil, err
     end
 
-    if Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail then
-        DeleteMail(entry.mailId)
-    else
-        self._dismissedMailIds[entry.idKey] = true
-    end
-
+    self:DisposeEntryMails(entry)
     self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
     return imported, nil, entry
 end
@@ -521,12 +774,7 @@ function MailTransport:RejectReceivedMail(mailId)
         return false
     end
 
-    if Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail then
-        DeleteMail(entry.mailId)
-    else
-        self._dismissedMailIds[entry.idKey] = true
-    end
-
+    self:DisposeEntryMails(entry)
     self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
     return true
 end
