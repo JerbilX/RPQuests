@@ -23,8 +23,8 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **Native NPC Dialogue Injection:** Bind custom RPQuest dialogue lines to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
 - **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners (including when accepting a shared quest by code) and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
-- **Code Sharing & Completion Proof (`RPQ1` / `RPQC1`):**
-  - Export any prepared quest as a compact, CRC16-verified share code (`RPQ1:...`) for other players to import.
+- **Code Sharing & Completion Proof (`RPQ3` / `RPQC1`):**
+  - Export any prepared quest as a compact, LZSS-compressed, Discord-safe Base85 share code (`RPQ3:...`, backwards-compatible with `RPQ2`/`RPQ1`) for other players to import.
   - Completed quests generate a delivery validation code (`RPQC1:...`) to prove completion back to the Quest Master.
 - **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
 
@@ -49,7 +49,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
    - Click **Create Quest**, use the collapsible form sections to set **Title**, **Description / Lore**, **Search Area** size (`Small`, `Medium`, `Large`), optional **Do not be detected**, and optional **NPC Dialogue** lines.
    - In the world, aim at NPCs and press your **Capture Target** keybind (or `/rpquest capture`), or stand at a location and press **Capture Discovery Point** (or `/rpquest discovery`).
 2. **Share with Players:**
-   - Select your prepared quest and copy its `RPQ1:...` share code.
+   - Select your prepared quest and copy its `RPQ3:...` share code.
    - Players paste that code into the **Import** field in their **RPQuest** tab.
    - **Same-language requirement:** Quest codes can only be imported on a game client using the same language as the creator. ESO does not expose universal NPC IDs across client locales, and some NPCs do not share direct equivalents—allowing cross-language imports or changing the language directly would cause NPC names and objectives to stop matching and break the quest.
 3. **Play & Verify:**

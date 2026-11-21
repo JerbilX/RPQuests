@@ -23,8 +23,8 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Inyección de Diálogos en NPCs Nativos:** Asocia líneas de diálogo personalizadas de RPQuest a NPCs nativos de ESO (mediante captura por retícula o nombre), inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
 - **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` (incluyendo al aceptar una misión compartida por código) y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
-- **Compartición y Validación por Código (`RPQ1` / `RPQC1`):**
-  - Exporta misiones en códigos compactos con suma de verificación `CRC16` (`RPQ1:...`) listos para copiar y compartir.
+- **Compartición y Validación por Código (`RPQ3` / `RPQC1`):**
+  - Exporta misiones en códigos compactos comprimidos con LZSS y Base85 seguro para Discord (`RPQ3:...`, retrocompatible con `RPQ2`/`RPQ1`) listos para copiar y compartir.
   - Al completar una misión, genera un código de validación de entrega (`RPQC1:...`) para demostrarle al creador que fue completada.
 - **Persistencia por Personaje y Auto-Localización:** Guarda el progreso por personaje con `ZO_SavedVars:NewCharacterIdSettings` y detecta automáticamente el idioma del cliente (`es` / `en`).
 
@@ -49,7 +49,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
    - Pulsa **Crear Misión**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`), opcionalmente activar **No ser detectado** y configurar líneas de **Diálogo de NPC**.
    - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo** (`/rpquest capture`), o párate en un lugar y usa **Capturar Punto de Descubrimiento** (`/rpquest discovery`).
 2. **Compartir con Jugadores:**
-   - Selecciona la misión preparada y copia el código `RPQ1:...` generado.
+   - Selecciona la misión preparada y copia el código `RPQ3:...` generado.
    - Los jugadores pegan ese código en el campo **Importar** dentro de su pestaña **RPQuest**.
    - **Mismo idioma requerido:** Los códigos de misión solo pueden importarse en clientes del juego con el mismo idioma que el creador. ESO no expone IDs universales de NPC entre idiomas y hay NPCs que no comparten descripción/nombre equivalente; permitir cambiar de idioma directamente haría que los objetivos o diálogos dejen de coincidir y la misión deje de funcionar.
 3. **Jugar y Verificar:**

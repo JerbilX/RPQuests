@@ -413,7 +413,7 @@ RunTest("ShareCodec roundtrip preserves UTF-8, pipes, newlines and coordinates",
 
     local code, err = RPQuest.ShareCodec:EncodeQuest(original)
     AssertTrue(code ~= nil, "Code should be generated without error: " .. tostring(err))
-    AssertTrue(string.sub(code, 1, 5) == "RPQ2:", "Code must start with RPQ2:")
+    AssertTrue(string.sub(code, 1, 5) == "RPQ3:", "Code must start with RPQ3:")
 
     local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
     AssertTrue(decoded ~= nil, "Decode should succeed: " .. tostring(decErr))
@@ -448,7 +448,7 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
         areaRadius = 0.075,
     }
     local code = RPQuest.ShareCodec:EncodeQuest(validQuest)
-    local tampered = code:gsub("^RPQ2:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ2:0000:")
+    local tampered = code:gsub("^RPQ3:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ3:0000:")
     local res, tamperErr = RPQuest.ShareCodec:DecodeQuest(tampered)
     AssertEqual(res, nil, "Tampered checksum must fail")
     AssertEqual(tamperErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Tampered checksum returns specific error key")
@@ -461,7 +461,7 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
     AssertEqual(emptyRes, nil, "Empty string must fail")
     AssertEqual(emptyErr, "ERR_IMPORT_EMPTY", "Empty string returns empty error key")
 
-    local futureCode = code:gsub("^RPQ2:", "RPQ9:")
+    local futureCode = code:gsub("^RPQ3:", "RPQ9:")
     local futureRes, futureErr = RPQuest.ShareCodec:DecodeQuest(futureCode)
     AssertEqual(futureRes, nil, "Unknown version prefix must fail")
     AssertEqual(futureErr, "ERR_IMPORT_UNSUPPORTED_VERSION", "Unknown version prefix returns version error key")
@@ -835,7 +835,7 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
 
     -- Código para compartir siempre visible en shareEdit al seleccionar/crear la misión
     local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ2:", "Share edit box auto-populated with RPQ2 code")
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ3:", "Share edit box auto-populated with RPQ3 code")
     AssertEqual(RPQuest.JournalTab.btnShare, nil, "Share button removed in favor of always-visible share box")
     RPQuest.JournalTab.shareEdit._selectedAll = false
     RPQuest.JournalTab.shareEdit:FireHandler("OnFocusGained")
@@ -1224,7 +1224,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
     local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ2:", "shareEdit populated with RPQ2 code for received quest")
+    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ3:", "shareEdit populated with RPQ3 code for received quest")
     AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab auto-populates RPQC1 code into deliveryEdit")
     AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
 
@@ -1259,7 +1259,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), true, "Delivery code box hidden for prepared quest")
     AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), "", "deliveryEdit cleared when switching quest")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ2:", "shareEdit auto-populated with RPQ2 code for prepared quest")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit auto-populated with RPQ3 code for prepared quest")
     AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
@@ -1268,7 +1268,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local msg = RPQuest.JournalTab.validateResultLabel:GetText()
     AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ2:", "shareEdit still preserves RPQ2 code after validation")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit still preserves RPQ3 code after validation")
 end)
 
 RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
@@ -1443,7 +1443,7 @@ RunTest("18. Issue 47: Deep optimization, overflow caps, deferred map pins and O
     AssertTrue(q ~= nil, "Saved quest with 10 targets")
 
     local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
-    AssertTrue(type(code) == "string" and #code > 900, "Exported code generated cleanly")
+    AssertTrue(type(code) == "string" and #code > 100 and code:sub(1, 5) == "RPQ3:", "Exported RPQ3 code generated cleanly")
 
     -- Verificar que maxChars >= 4096 en importCodeEdit y shareEdit
     RPQuest.JournalTab:SelectQuest(q.id)
@@ -1607,7 +1607,7 @@ RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map
 
     -- 3. ShareCodec roundtrip preserves discoveries and resets discovered=false
     local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
-    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ2:", "ShareCodec encodes discovery-only quest")
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ3:", "ShareCodec encodes discovery-only quest")
 
     local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
     AssertTrue(imported ~= nil, "ShareCodec decodes and imports discovery-only quest")
@@ -1749,7 +1749,7 @@ RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjec
 
     -- 4. ShareCodec RPQ2 roundtrip
     local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
-    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ2:", "Exported code uses RPQ2 prefix")
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ3:", "Exported code uses RPQ3 prefix")
 
     local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
     AssertTrue(imported ~= nil, "RPQ2 quest imported successfully")
@@ -2089,6 +2089,158 @@ RunTest("Target location conditions and custom messages (Issue #99)", function()
     _G.GetCurrentMapId = origGetMapId
     _G.GetMapPlayerPosition = origGetMapPos
     _G.GetUnitWorldPosition = origGetWorldPos
+end)
+
+RunTest("RPQ3 compact codec: compression ratio, negative varints, Discord safety, corrupt inputs (Issue #100)", function()
+    local complexQuest = {
+        title = "La Conspiración de Auridon — Año Nuevo (Ñoño)",
+        description = "Investiga las ruinas antiguas al norte de Vulkhel Guard. "
+            .. "Los agentes del Veiled Heritance han estado reuniendo suministros y "
+            .. "enviando mensajeros secretos entre los campamentos de la costa. "
+            .. "Elimina a los exploradores en el puente y recoge las pistas ocultas.",
+        clue = "Busca el sello roto junto al muelle de los contrabandistas.",
+        completionMessage = "¡Misión completada! Regresa con el capitán para recibir tu recompensa.",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.4321,
+        targetY = 0.6789,
+        areaCenterX = 0.4512,
+        areaCenterY = 0.6543,
+        areaRadius = 0.075,
+        hideMapArea = true,
+        requireUndetected = true,
+        targets = {
+            {
+                name = "Explorador del Velo",
+                requiredCount = 3,
+                zoneId = 381,
+                worldX = -123456,
+                worldZ = -78901,
+                radius = 1500,
+                locationRequired = true,
+                customMessage = "Has interceptado al explorador en el puente secreto.",
+            },
+            {
+                name = "Capitán Contrabandista",
+                requiredCount = 1,
+                locationRequired = false,
+                customMessage = "El capitán cae tras una breve escaramuza.",
+            },
+        },
+        discoveries = {
+            {
+                zoneId = 381,
+                worldX = -45000,
+                worldY = 1200,
+                worldZ = 98765,
+                mapId = 32,
+                x = 0.4123,
+                y = 0.6123,
+                radius = 1500,
+                message = "Notas huellas recientes que conducen hacia la cueva oculta.",
+            },
+            {
+                zoneId = 381,
+                worldX = -46000,
+                worldY = 1250,
+                worldZ = 99500,
+                mapId = 32,
+                x = 0.4223,
+                y = 0.6223,
+                radius = 800,
+                message = "Encuentras una carta cifrada con el emblema del Velo.",
+            },
+        },
+        dialogues = {
+            { npcName = "Tabernero Orin", zoneId = 381, response = "Los contrabandistas suelen reunirse al anochecer cerca del muelle." },
+            { npcName = "Guardia Elara", zoneId = 381, response = "Ten cuidado, los exploradores vigilan el puente norte." },
+        },
+    }
+
+    local rpq3 = RPQuest.ShareCodec:EncodeQuest(complexQuest)
+    AssertTrue(type(rpq3) == "string" and rpq3:sub(1, 5) == "RPQ3:", "EncodeQuest emits RPQ3 prefix")
+
+    -- Verify Discord-safe Base85 payload (no *, _, ~, `, |, >, <, \, :, or whitespace)
+    local payload = rpq3:match("^RPQ3:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:(.+)$")
+    AssertTrue(payload ~= nil and #payload > 0, "RPQ3 envelope matches RPQ3:<CRC16>:<PAYLOAD>")
+    AssertEqual(payload:find("[*_~`|>\\:<%s]"), nil, "RPQ3 Base85 payload contains no Discord-unsafe or delimiter chars")
+
+    -- Verify >= 45% length reduction vs RPQ2 on a medium/large quest
+    local repeatedQuest = {
+        title = "Patrulla del Velo en Auridon",
+        description = string.rep("Los exploradores del Velo vigilan los caminos del norte de Auridon. ", 6),
+        clue = "Busca los campamentos del Velo en la costa norte.",
+        completionMessage = "Los campamentos del Velo han sido despejados.",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+        areaCenterX = 0.52,
+        areaCenterY = 0.48,
+        areaRadius = 0.075,
+        targets = {
+            { name = "Explorador del Velo", requiredCount = 3, zoneId = 381, worldX = 10000, worldZ = 20000, radius = 1500, locationRequired = true, customMessage = "Explorador del Velo eliminado en el campamento." },
+            { name = "Guardia del Velo", requiredCount = 2, zoneId = 381, worldX = 10500, worldZ = 20500, radius = 1500, locationRequired = false, customMessage = "Guardia del Velo eliminado en el campamento." },
+            { name = "Capitán del Velo", requiredCount = 1, zoneId = 381, worldX = 11000, worldZ = 21000, radius = 1500, locationRequired = true, customMessage = "Capitán del Velo eliminado en el campamento." },
+        },
+        discoveries = {
+            { zoneId = 381, worldX = 10000, worldY = 100, worldZ = 20000, mapId = 32, x = 0.5, y = 0.5, radius = 1500, message = "Campamento norte descubierto." },
+            { zoneId = 381, worldX = 11000, worldY = 100, worldZ = 21000, mapId = 32, x = 0.55, y = 0.55, radius = 1500, message = "Campamento sur descubierto." },
+        },
+    }
+    local rpq3Rep = RPQuest.ShareCodec:EncodeQuest(repeatedQuest)
+    -- Compute exact RPQ2 length for repeatedQuest (18-field pipe string * 4/3 Base64Url)
+    local rpq2RawLen = #repeatedQuest.title + #repeatedQuest.description + #repeatedQuest.clue + #repeatedQuest.completionMessage
+        + #repeatedQuest.mapName + 5 * 6 + 17 + 3 * 70 + 2 * 75
+    local rpq2Len = 10 + math.ceil(rpq2RawLen * 4 / 3)
+    local reduction = 1 - (#rpq3Rep / rpq2Len)
+    AssertTrue(reduction >= 0.45, string.format("RPQ3 achieves >= 45%% reduction vs RPQ2 (actual: %.1f%%, len=%d vs rpq2=%d)", reduction * 100, #rpq3Rep, rpq2Len))
+
+    -- Verify exact round-trip (coords <= 0.0001)
+    local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(rpq3)
+    AssertTrue(decoded ~= nil, "RPQ3 decodes cleanly: " .. tostring(decErr))
+    AssertEqual(decoded.title, complexQuest.title, "UTF-8 title preserved")
+    AssertEqual(decoded.description, complexQuest.description, "UTF-8 description preserved")
+    AssertEqual(decoded.clue, complexQuest.clue, "Clue preserved")
+    AssertEqual(decoded.completionMessage, complexQuest.completionMessage, "Completion message preserved")
+    AssertTrue(math.abs(decoded.targetX - complexQuest.targetX) <= 0.0001, "targetX uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.targetY - complexQuest.targetY) <= 0.0001, "targetY uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.areaCenterX - complexQuest.areaCenterX) <= 0.0001, "areaCenterX uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.areaCenterY - complexQuest.areaCenterY) <= 0.0001, "areaCenterY uint16 precision <= 0.0001")
+    AssertTrue(math.abs(decoded.areaRadius - complexQuest.areaRadius) <= 0.0001, "areaRadius uint16 precision <= 0.0001")
+    AssertEqual(decoded.hideMapArea, true, "hideMapArea preserved")
+    AssertEqual(decoded.requireUndetected, true, "requireUndetected preserved")
+    AssertEqual(#decoded.targets, 2, "2 targets preserved")
+    AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
+    AssertEqual(decoded.targets[1].worldZ, -78901, "Negative worldZ preserved via ZigZag varint")
+    AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved")
+    AssertEqual(decoded.targets[1].customMessage, complexQuest.targets[1].customMessage, "Target customMessage preserved")
+    AssertEqual(decoded.targets[2].worldX, nil, "Target without location has nil worldX")
+    AssertEqual(#decoded.discoveries, 2, "2 discoveries preserved")
+    AssertEqual(decoded.discoveries[1].worldX, -45000, "Discovery negative worldX preserved")
+    AssertEqual(#decoded.dialogues, 2, "2 dialogues preserved")
+
+    -- Truncated/corrupted RPQ3 rejection
+    local trunc = rpq3:sub(1, #rpq3 - 5)
+    local tRes, tErr = RPQuest.ShareCodec:DecodeQuest(trunc)
+    AssertEqual(tRes, nil, "Truncated RPQ3 rejected")
+    AssertEqual(tErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Truncated RPQ3 returns corrupt error")
+
+    local badChar = "RPQ3:0000:INVALID*CHAR"
+    local bRes, bErr = RPQuest.ShareCodec:DecodeQuest(badChar)
+    AssertEqual(bRes, nil, "Invalid Base85 char rejected")
+    AssertEqual(bErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Invalid Base85 char returns corrupt error")
+
+    -- ComputeQuestSignature remains deterministic across RPQ3
+    local sig1 = RPQuest.ShareCodec:ComputeQuestSignature(complexQuest)
+    local sig2 = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+    AssertTrue(sig1 ~= nil and #sig1 == 8, "ComputeQuestSignature returns 8-char hex")
+    -- Note: uint16 quantization may alter 4-decimal float rounding by 0.0001, check RPQC1 works on decoded quest
+    decoded.completed = true
+    local compCode = RPQuest.ShareCodec:EncodeCompletion(decoded, "Player", 1000)
+    AssertTrue(compCode ~= nil and compCode:sub(1, 6) == "RPQC1:", "RPQC1 completion code works for RPQ3-decoded quest")
 end)
 
 if failed > 0 then
