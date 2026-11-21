@@ -17,4 +17,5 @@ trigger: always_on
 
 3. **Descripción y Changelog Público en ESOUI (BBCode / Inglés por defecto):**
    - Al redactar o actualizar **`docs/esoui-description.bbcode`** (formato BBCode), **nunca incluir slash commands** (como `/rpquest` o `/rpq`); documentar únicamente los **keybinds** (`Settings -> Controls -> RPQuest`).
+   - **Aviso de desarrollo activo destacado:** Conservar siempre en **`docs/esoui-description.bbcode`**, inmediatamente debajo del título, el bloque `[SIZE="4"][COLOR="DarkRed"][B]Notice:[/B][/COLOR] ...[/SIZE]` con tamaño grande (`SIZE="4"` o superior) para que sobresalga respecto al texto normal.
    - **Títulos de commits y PRs en inglés:** El workflow `.github/workflows/release.yml` genera el changelog de ESOUI a partir de `git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"- %s"`, y GitHub Release lo genera desde los títulos de PR. Por lo tanto, todos los títulos de commits (`git commit`) y de Pull Requests (`gh pr create`) deben redactarse en **inglés** para que el changelog público salga en inglés por defecto.
