@@ -2305,14 +2305,17 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     AssertEqual(okLong, false, "Rejects mail exceeding multi-part mail limit")
     AssertEqual(errLong, "ERR_MAIL_BODY_TOO_LONG", "Returns body too long error")
 
-    -- 3. Sequential queue for 3 recipients (normalizes @ prefix, deduplicates)
+    -- 3. Sequential queue for 3 recipients (waits for EVENT_MAIL_OPEN_MAILBOX, normalizes @ prefix, deduplicates)
     local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, Two, @one, @Three", "Mensaje de rol.")
     AssertEqual(okSend, true, "Sequential mail send started: " .. tostring(errSend))
-    AssertEqual(#sentMails, 1, "Only 1st mail dispatched immediately")
+    AssertEqual(openCalls, 1, "RequestOpenMailbox called when native UI closed")
+    AssertEqual(#sentMails, 0, "SendMail deferred until EVENT_MAIL_OPEN_MAILBOX fires")
+    AssertEqual(closeCalls, 0, "CloseMailbox not called while waiting for mailbox open")
+
+    RPQuest.MailTransport:OnMailboxOpened()
+    AssertEqual(#sentMails, 1, "1st mail dispatched after EVENT_MAIL_OPEN_MAILBOX")
     AssertEqual(sentMails[1].to, "@One", "First recipient normalized")
     AssertEqual(sentMails[1].subject, "[RPQuest] Misión por Correo", "Subject uses [RPQuest] prefix")
-    AssertEqual(openCalls, 1, "RequestOpenMailbox called when native UI closed")
-    AssertEqual(closeCalls, 0, "CloseMailbox not called while sending")
 
     RPQuest.MailTransport:OnMailSendSuccess("@One")
     AssertEqual(#sentMails, 2, "Second mail dispatched after EVENT_MAIL_SEND_SUCCESS")
@@ -2322,6 +2325,19 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     AssertEqual(#sentMails, 3, "Third mail dispatched sequentially")
     RPQuest.MailTransport:OnMailSendSuccess("@Three")
     AssertEqual(closeCalls, 1, "CloseMailbox called after queue finishes when native UI is closed")
+
+    -- 3b. Unexpected mailbox close mid-send aborts cleanly without hanging
+    local lastComplete = nil
+    RPQuest.MailTransport:RegisterListener(function(evType, payload)
+        if evType == "MAIL_SEND_COMPLETE" then
+            lastComplete = payload
+        end
+    end)
+    local okAbort = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, @Two", "Hola")
+    AssertEqual(okAbort, true, "Second send batch started")
+    RPQuest.MailTransport:OnMailboxClosed()
+    AssertEqual(RPQuest.MailTransport._isSending, false, "Sending flag cleared on unexpected mailbox close")
+    AssertTrue(lastComplete ~= nil and lastComplete.failed == 2 and lastComplete.sent == 0, "MAIL_SEND_COMPLETE reports remaining mails as failed")
 
     -- 4. Native mailbox open coordination: do not close if native UI is showing
     nativeMailOpen = true
@@ -2457,6 +2473,7 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     -- 1-click manual send
     local okManual = RPQuest.MailTransport:SendCompletionReport(imported)
     AssertEqual(okManual, true, "SendCompletionReport succeeds in manual mode")
+    RPQuest.MailTransport:OnMailboxOpened()
     AssertEqual(#sentMails, 1, "Completion mail sent to creator")
     AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
     AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
@@ -2469,6 +2486,7 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     RPQuest.QuestRepository:ResetQuest(imported.id)
     RPQuest.QuestRepository:SetSetting("autoSendCompletionMail", true)
     RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
+    RPQuest.MailTransport:OnMailboxOpened()
     AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
     RPQuest.JournalTab:SelectQuest(imported.id)
     AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), true, "Manual report button hidden in automatic mode")
@@ -2659,6 +2677,7 @@ RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incom
     -- Send all parts sequentially
     local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@Receiver", roleMsg)
     AssertEqual(okSend, true, "Multi-part send started: " .. tostring(errSend))
+    RPQuest.MailTransport:OnMailboxOpened()
     for i = 1, plan.partCount do
         AssertEqual(#sentMails, i, "Dispatched part " .. i)
         RPQuest.MailTransport:OnMailSendSuccess("@Receiver")

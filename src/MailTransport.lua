@@ -9,6 +9,8 @@ local MailTransport = Addon.MailTransport
 
 local LISTENER_SEND_SUCCESS = "RPQuest_Mail_SendSuccess"
 local LISTENER_SEND_FAILED = "RPQuest_Mail_SendFailed"
+local LISTENER_OPEN_MAILBOX = "RPQuest_Mail_OpenMailbox"
+local LISTENER_CLOSE_MAILBOX = "RPQuest_Mail_CloseMailbox"
 local LISTENER_INBOX_UPDATE = "RPQuest_Mail_InboxUpdate"
 local LISTENER_MAIL_READABLE = "RPQuest_Mail_Readable"
 local LISTENER_MAIL_REMOVED = "RPQuest_Mail_Removed"
@@ -19,11 +21,17 @@ local MAX_MAIL_PARTS = 6
 local PART_HEADER_RESERVE = 16
 local QUEST_SUBJECT_PREFIX = "[RPQuest] "
 local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
+local MAILBOX_OPEN_TIMEOUT_MS = 10000
+local MAIL_SEND_TIMEOUT_MS = 15000
 
 function MailTransport:Initialize()
     self._listeners = self._listeners or {}
     self._sendQueue = {}
     self._isSending = false
+    self._isMailboxOpen = false
+    self._waitingForMailboxOpen = false
+    self._currentSendItem = nil
+    self._sendGen = self._sendGen or 0
     self._sendTotal = 0
     self._sendDone = 0
     self._sendSuccessCount = 0
@@ -36,6 +44,16 @@ function MailTransport:Initialize()
     self._txSeq = self._txSeq or 0
 
     if not self._eventsRegistered and EVENT_MANAGER then
+        if EVENT_MAIL_OPEN_MAILBOX then
+            EVENT_MANAGER:RegisterForEvent(LISTENER_OPEN_MAILBOX, EVENT_MAIL_OPEN_MAILBOX, function()
+                self:OnMailboxOpened()
+            end)
+        end
+        if EVENT_MAIL_CLOSE_MAILBOX then
+            EVENT_MANAGER:RegisterForEvent(LISTENER_CLOSE_MAILBOX, EVENT_MAIL_CLOSE_MAILBOX, function()
+                self:OnMailboxClosed()
+            end)
+        end
         if EVENT_MAIL_SEND_SUCCESS then
             EVENT_MANAGER:RegisterForEvent(LISTENER_SEND_SUCCESS, EVENT_MAIL_SEND_SUCCESS, function(_, playerName)
                 self:OnMailSendSuccess(playerName)
@@ -222,8 +240,12 @@ function MailTransport:IsNativeMailboxOpen()
         or false
 end
 
+function MailTransport:IsMailboxReady()
+    return self._isMailboxOpen or self:IsNativeMailboxOpen()
+end
+
 function MailTransport:EnsureMailboxOpen()
-    if not self:IsNativeMailboxOpen() and RequestOpenMailbox then
+    if not self:IsMailboxReady() and RequestOpenMailbox then
         RequestOpenMailbox()
         self._openedMailbox = true
     end
@@ -233,7 +255,80 @@ function MailTransport:CloseMailboxIfOwned()
     if self._openedMailbox and not self._isSending and not self:IsNativeMailboxOpen() and CloseMailbox then
         CloseMailbox()
         self._openedMailbox = false
+        self._isMailboxOpen = false
     end
+end
+
+function MailTransport:ScheduleSendTimeout(delayMs, gen, doneCount)
+    if not zo_callLater then return end
+    zo_callLater(function()
+        if not self._isSending then return end
+        if self._sendGen ~= gen or self._sendDone ~= doneCount then return end
+        if self._waitingForMailboxOpen then
+            self:AbortSendQueue("MAILBOX_OPEN_TIMEOUT")
+        else
+            self:OnMailSendFailed("TIMEOUT")
+        end
+    end, delayMs)
+end
+
+function MailTransport:StartSendQueue()
+    self._sendGen = (self._sendGen or 0) + 1
+    if self:IsMailboxReady() then
+        self._waitingForMailboxOpen = false
+        self:DispatchNextQueuedMail()
+        return
+    end
+    self._waitingForMailboxOpen = true
+    local firstItem = self._sendQueue[1]
+    if firstItem then
+        self:NotifyListeners("MAIL_SEND_PROGRESS", {
+            current = 1,
+            total = self._sendTotal,
+            to = firstItem.to,
+        })
+    end
+    self:EnsureMailboxOpen()
+    self:ScheduleSendTimeout(MAILBOX_OPEN_TIMEOUT_MS, self._sendGen, self._sendDone)
+end
+
+function MailTransport:OnMailboxOpened()
+    self._isMailboxOpen = true
+    if self._isSending and self._waitingForMailboxOpen then
+        self._waitingForMailboxOpen = false
+        self:DispatchNextQueuedMail()
+    end
+end
+
+function MailTransport:OnMailboxClosed()
+    self._isMailboxOpen = false
+    self._openedMailbox = false
+    if self._isSending then
+        self:AbortSendQueue("MAILBOX_CLOSED")
+    end
+end
+
+function MailTransport:AbortSendQueue(reason)
+    if not self._isSending then return end
+    local remaining = #self._sendQueue + (self._currentSendItem and 1 or 0)
+    if remaining > 0 then
+        self._sendFailCount = self._sendFailCount + remaining
+        self._sendDone = self._sendDone + remaining
+    end
+    self._sendQueue = {}
+    self._currentSendItem = nil
+    self._waitingForMailboxOpen = false
+    self._isSending = false
+    self._sendGen = (self._sendGen or 0) + 1
+    self:NotifyListeners("MAIL_SEND_ERROR", {
+        to = self._currentSendTarget,
+        reason = reason,
+    })
+    self:NotifyListeners("MAIL_SEND_COMPLETE", {
+        total = self._sendTotal,
+        sent = self._sendSuccessCount,
+        failed = self._sendFailCount,
+    })
 end
 
 function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
@@ -259,7 +354,7 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
         return false, "ERR_MAIL_BODY_TOO_LONG", plan.totalLen, plan.maxTotalChars
     end
 
-    if not SendMail then
+    if not SendMail or (not self:IsMailboxReady() and not RequestOpenMailbox) then
         return false, "ERR_MAIL_API_UNAVAILABLE"
     end
 
@@ -275,13 +370,13 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
     end
 
     self._isSending = true
+    self._currentSendItem = nil
     self._sendTotal = #self._sendQueue
     self._sendDone = 0
     self._sendSuccessCount = 0
     self._sendFailCount = 0
 
-    self:EnsureMailboxOpen()
-    self:DispatchNextQueuedMail()
+    self:StartSendQueue()
     return true, nil, plan.totalLen, plan.maxTotalChars
 end
 
@@ -291,6 +386,8 @@ function MailTransport:DispatchNextQueuedMail()
     local nextItem = table.remove(self._sendQueue, 1)
     if not nextItem then
         self._isSending = false
+        self._currentSendItem = nil
+        self._waitingForMailboxOpen = false
         local summary = {
             total = self._sendTotal,
             sent = self._sendSuccessCount,
@@ -308,6 +405,7 @@ function MailTransport:DispatchNextQueuedMail()
         total = self._sendTotal,
         to = nextItem.to,
     })
+    self:ScheduleSendTimeout(MAIL_SEND_TIMEOUT_MS, self._sendGen, self._sendDone)
     SendMail(nextItem.to, nextItem.subject, nextItem.body)
 end
 
@@ -321,7 +419,7 @@ function MailTransport:SendCompletionReport(quest)
     if recipient == "" then
         return false, "ERR_MAIL_NO_RECIPIENTS"
     end
-    if not SendMail then
+    if not SendMail or (not self:IsMailboxReady() and not RequestOpenMailbox) then
         return false, "ERR_MAIL_API_UNAVAILABLE"
     end
 
@@ -346,13 +444,13 @@ function MailTransport:SendCompletionReport(quest)
 
     self._sendQueue = { item }
     self._isSending = true
+    self._currentSendItem = nil
     self._sendTotal = 1
     self._sendDone = 0
     self._sendSuccessCount = 0
     self._sendFailCount = 0
 
-    self:EnsureMailboxOpen()
-    self:DispatchNextQueuedMail()
+    self:StartSendQueue()
     return true
 end
 
@@ -365,6 +463,7 @@ function MailTransport:OnMailSendSuccess(playerName)
             to = self._currentSendItem.to,
         })
     end
+    self._currentSendItem = nil
     self._sendDone = self._sendDone + 1
     self._sendSuccessCount = self._sendSuccessCount + 1
     self:DispatchNextQueuedMail()
@@ -372,6 +471,7 @@ end
 
 function MailTransport:OnMailSendFailed(reason)
     if not self._isSending then return end
+    self._currentSendItem = nil
     self._sendDone = self._sendDone + 1
     self._sendFailCount = self._sendFailCount + 1
     self:NotifyListeners("MAIL_SEND_ERROR", {
