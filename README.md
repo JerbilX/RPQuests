@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.1.3-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -20,7 +20,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **Hidden Discovery Points:** Capture in-world exploration coordinates (`Keybind` or `/rpquest discovery`) with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
 - **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
 - **World Map Search Area (`M`):** Displays an approximate search circle (`ZO_PinBlob`) on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
-- **Native NPC Dialogue Injection:** Bind custom RPQuest dialogue lines to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
+- **Native NPC Dialogue Injection:** Bind custom RPQuest dialogue lines and per-NPC player response options to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
 - **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners (including when accepting a shared quest by code) and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
 - **Code Sharing & Completion Proof (`RPQ3` / `RPQC1`):**
@@ -100,7 +100,8 @@ RPQuest/
 ├── src/
 │   ├── Constants.lua        # Constants, radii, and metadata
 │   ├── Locale.lua           # Client language selector & i18n
-│   ├── ShareCodec.lua       # RPQ1 / RPQC1 codec with CRC16 checksum
+│   ├── ShareCodec.lua       # RPQ3 / RPQ2 / RPQ1 & RPQC1 codec with LZSS + CRC16
+│   ├── MailTransport.lua    # In-game quest & completion mail transport
 │   ├── QuestRepository.lua  # Per-character CRUD & search area offset logic
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture

@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.1.3-blue)
+![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -20,7 +20,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo (`Keybind` o `/rpquest discovery`) con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_PinBlob`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto. Desaparece automáticamente al completar o desactivar la misión.
-- **Inyección de Diálogos en NPCs Nativos:** Asocia líneas de diálogo personalizadas de RPQuest a NPCs nativos de ESO (mediante captura por retícula o nombre), inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
+- **Inyección de Diálogos en NPCs Nativos:** Asocia líneas de diálogo personalizadas y opciones de respuesta del jugador por NPC a NPCs nativos de ESO (mediante captura por retícula o nombre), inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
 - **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` (incluyendo al aceptar una misión compartida por código) y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
 - **Compartición y Validación por Código (`RPQ3` / `RPQC1`):**
@@ -100,7 +100,8 @@ RPQuest/
 ├── src/
 │   ├── Constants.lua        # Constantes, radios y metadatos
 │   ├── Locale.lua           # Selector de idioma del cliente e i18n
-│   ├── ShareCodec.lua       # Codificador/decodificador RPQ1 / RPQC1 con CRC16
+│   ├── ShareCodec.lua       # Codificador/decodificador RPQ3 / RPQ2 / RPQ1 y RPQC1 con LZSS + CRC16
+│   ├── MailTransport.lua    # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestRepository.lua  # CRUD por personaje y cálculo de offset del círculo
 │   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
