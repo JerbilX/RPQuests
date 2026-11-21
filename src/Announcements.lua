@@ -101,12 +101,7 @@ function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
     emitLargeBanner(mainText, subText, soundId, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED)
 end
 
-function Announcements:AnnounceDiscovery(quest, point)
-    if not point or type(point.message) ~= "string" or point.message == "" then
-        return
-    end
-
-    local text = point.message
+local function emitDiscoveryStyleMessage(self, text)
     local soundId = SOUNDS and (SOUNDS.QUEST_OBJECTIVE_INCREMENT or SOUNDS.BOOK_PAGE_TURN) or nil
 
     if CENTER_SCREEN_ANNOUNCE and CENTER_SCREEN_ANNOUNCE.CreateMessageParams and CENTER_SCREEN_ANNOUNCE.AddMessageWithParams then
@@ -126,5 +121,41 @@ function Announcements:AnnounceDiscovery(quest, point)
         CHAT_SYSTEM:AddMessage(Addon.Constants.UI.CHAT_PREFIX .. text)
     elseif d then
         d(Addon.Constants.UI.CHAT_PREFIX .. text)
+    end
+end
+
+function Announcements:AnnounceDiscovery(quest, point)
+    if not point or type(point.message) ~= "string" or point.message == "" then
+        return
+    end
+    emitDiscoveryStyleMessage(self, point.message)
+end
+
+function Announcements:AnnounceTargetCustomMessage(quest, target)
+    if not target or type(target.customMessage) ~= "string" then
+        return
+    end
+    local text = target.customMessage:gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return end
+    emitDiscoveryStyleMessage(self, text)
+end
+
+function Announcements:AnnounceQuestFailed(quest, target)
+    if not quest then return end
+
+    local mainText = Addon.Locale:Get("CSA_QUEST_FAILED", quest.title or "")
+    local subText = nil
+    if target and target.name and target.name ~= "" then
+        subText = Addon.Locale:Get("ALERT_QUEST_FAILED_LOCATION", target.name)
+    end
+    local soundId = SOUNDS and (SOUNDS.QUEST_STEP_FAILED or SOUNDS.GENERAL_ALERT_ERROR) or nil
+
+    emitLargeBanner(mainText, subText, soundId, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_PROGRESSION_CHANGED)
+
+    local chatText = subText and (mainText .. " — " .. subText) or mainText
+    if CHAT_SYSTEM and CHAT_SYSTEM.AddMessage then
+        CHAT_SYSTEM:AddMessage(Addon.Constants.UI.CHAT_PREFIX .. "|cFF4444" .. chatText .. "|r")
+    elseif d then
+        d(Addon.Constants.UI.CHAT_PREFIX .. chatText)
     end
 end

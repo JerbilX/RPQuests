@@ -92,11 +92,29 @@ local function EncodeTargetsList(targets)
     if type(targets) ~= "table" or #targets == 0 then
         return ""
     end
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
     local items = {}
     for _, t in ipairs(targets) do
         if type(t) == "table" and type(t.name) == "string" and t.name ~= "" then
             local req = math.max(1, math.floor(tonumber(t.requiredCount) or 1))
-            table.insert(items, EscapeField(t.name) .. "~" .. tostring(req))
+            local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
+            local reqLoc = (t.locationRequired == true)
+            local msg = type(t.customMessage) == "string" and t.customMessage or ""
+            if hasLoc or reqLoc or msg ~= "" then
+                local parts = {
+                    EscapeField(t.name),
+                    tostring(req),
+                    hasLoc and tostring(math.floor(tonumber(t.zoneId) or 0)) or "",
+                    hasLoc and tostring(math.floor(tonumber(t.worldX))) or "",
+                    hasLoc and tostring(math.floor(tonumber(t.worldZ))) or "",
+                    hasLoc and tostring(math.max(100, math.floor(tonumber(t.radius) or defaultRad))) or "",
+                    reqLoc and "1" or "0",
+                    EscapeField(msg),
+                }
+                table.insert(items, table.concat(parts, "~"))
+            else
+                table.insert(items, EscapeField(t.name) .. "~" .. tostring(req))
+            end
         end
     end
     return table.concat(items, ";")
@@ -106,6 +124,7 @@ local function DecodeTargetsList(rawTargets)
     if type(rawTargets) ~= "string" or rawTargets == "" then
         return nil
     end
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
     local entries = SplitByChar(rawTargets, ";")
     local targets = {}
     for _, item in ipairs(entries) do
@@ -114,10 +133,19 @@ local function DecodeTargetsList(rawTargets)
             local name = UnescapeField(kv[1] or "")
             local req = tonumber(kv[2]) or 1
             if name ~= "" and req >= 1 then
+                local wx = (kv[4] ~= nil and kv[4] ~= "") and tonumber(kv[4]) or nil
+                local wz = (kv[5] ~= nil and kv[5] ~= "") and tonumber(kv[5]) or nil
+                local hasLoc = (wx ~= nil and wz ~= nil)
                 table.insert(targets, {
                     name = name,
                     currentCount = 0,
                     requiredCount = math.max(1, math.floor(req)),
+                    zoneId = hasLoc and math.floor(tonumber(kv[3]) or 0) or nil,
+                    worldX = hasLoc and wx or nil,
+                    worldZ = hasLoc and wz or nil,
+                    radius = hasLoc and math.max(100, math.floor(tonumber(kv[6]) or defaultRad)) or nil,
+                    locationRequired = (kv[7] == "1"),
+                    customMessage = UnescapeField(kv[8] or ""),
                 })
             end
         end

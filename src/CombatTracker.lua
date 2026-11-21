@@ -182,10 +182,22 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
     end
 
     local playerContext = GetAreaContextIfNeeded(activeQuest)
+    if Addon.QuestRepository:HasTargetLocation(matchedTarget) and GetUnitWorldPosition then
+        local pZone, pWorldX, _, pWorldZ = GetUnitWorldPosition("player")
+        playerContext = playerContext or {}
+        playerContext.worldZoneId = pZone
+        playerContext.worldX = pWorldX
+        playerContext.worldZ = pWorldZ
+    end
 
-    local recorded, updatedQuest, justCompleted, finalTarget = Addon.QuestRepository:RecordTargetEliminated(
+    local recorded, updatedQuest, justCompleted, finalTarget, questFailed, showCustomMessage = Addon.QuestRepository:RecordTargetEliminated(
         targetName, playerContext, activeQuest, matchedTarget
     )
+    if questFailed and updatedQuest then
+        self:MarkUnitKilled(targetUnitId)
+        Addon.Announcements:AnnounceQuestFailed(updatedQuest, finalTarget)
+        return
+    end
     if not recorded or not updatedQuest then
         return
     end
@@ -196,6 +208,9 @@ function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, ab
         Addon.Announcements:AnnounceQuestCompleted(updatedQuest, finalTarget)
     else
         Addon.Announcements:AnnounceQuestProgress(updatedQuest, finalTarget)
+    end
+    if showCustomMessage then
+        Addon.Announcements:AnnounceTargetCustomMessage(updatedQuest, finalTarget)
     end
 end
 

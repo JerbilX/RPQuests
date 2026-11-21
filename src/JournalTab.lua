@@ -698,7 +698,7 @@ function JournalTab:BuildEditorPane(parent)
     end
 
     -- Sección 1: Objetivo (NPC) y Área de Búsqueda
-    local targetSec = CreateAccordionSection("target", "LABEL_TARGET_SECTION", 124)
+    local targetSec = CreateAccordionSection("target", "LABEL_TARGET_SECTION", 256)
     local targetBody = targetSec.body
 
     local lblCapturedTarget = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblCapturedTarget", targetBody, CT_LABEL)
@@ -708,6 +708,7 @@ function JournalTab:BuildEditorPane(parent)
     self.lblCapturedTarget = lblCapturedTarget
 
     self.btnClearTargets = CreateStyledButton(PANEL_NAME .. "_BtnClearTargets", targetBody, 140, 24, Addon.Locale:Get("BTN_CLEAR_TARGETS"), function()
+        self.selectedTargetIndex = nil
         Addon.QuestRepository:ClearDraftTargets()
     end)
     self.btnClearTargets:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 370, 0)
@@ -741,6 +742,130 @@ function JournalTab:BuildEditorPane(parent)
         Addon.QuestRepository:UpdateDraftFields({ hideMapArea = not (d and d.hideMapArea) })
     end)
     self.btnHideMapArea:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 94)
+
+    -- Configuración por objetivo (ubicación condicional + mensaje custom)
+    self.btnTargetPrev = CreateStyledButton(PANEL_NAME .. "_BtnTargetPrev", targetBody, 28, 24, "<", function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local total = #(draft.targets or {})
+        if total > 0 then
+            local cur = self.selectedTargetIndex or 1
+            self.selectedTargetIndex = (cur > 1) and (cur - 1) or total
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnTargetPrev:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 130)
+    self.btnTargetPrev:SetHidden(true)
+
+    local lblTargetCfgIndex = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetCfgIndex", targetBody, CT_LABEL)
+    lblTargetCfgIndex:SetDimensions(440, 24)
+    lblTargetCfgIndex:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 34, 132)
+    if lblTargetCfgIndex.SetFont then lblTargetCfgIndex:SetFont("ZoFontGameBold") end
+    self.lblTargetCfgIndex = lblTargetCfgIndex
+    self.lblTargetCfgIndex:SetHidden(true)
+
+    self.btnTargetNext = CreateStyledButton(PANEL_NAME .. "_BtnTargetNext", targetBody, 28, 24, ">", function()
+        local draft = Addon.QuestRepository:GetDraft()
+        local total = #(draft.targets or {})
+        if total > 0 then
+            local cur = self.selectedTargetIndex or 1
+            self.selectedTargetIndex = (cur < total) and (cur + 1) or 1
+            self:RefreshEditorPane()
+        end
+    end)
+    self.btnTargetNext:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 480, 130)
+    self.btnTargetNext:SetHidden(true)
+
+    self.btnCaptureTargetLoc = CreateStyledButton(PANEL_NAME .. "_BtnCaptureTargetLoc", targetBody, 136, 24, Addon.Locale:Get("BTN_CAPTURE_TARGET_LOC"), function()
+        local idx = self.selectedTargetIndex
+        local draft = Addon.QuestRepository:GetDraft()
+        local target = idx and draft.targets and draft.targets[idx]
+        if not target then return end
+        if not GetUnitWorldPosition then return end
+        local zoneId, worldX, _, worldZ = GetUnitWorldPosition("player")
+        if not zoneId or zoneId == 0 or not worldX or not worldZ then
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_DISCOVERY_INVALID_POS"), true)
+            return
+        end
+        local updated = Addon.QuestRepository:CaptureDraftTargetLocation(idx, zoneId, worldX, worldZ)
+        if updated then
+            local meters = math.floor((updated.radius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM) / 100)
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_TARGET_LOC_CAPTURED", updated.name or "", meters), false)
+        end
+    end)
+    self.btnCaptureTargetLoc:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 160)
+    self.btnCaptureTargetLoc:SetHidden(true)
+
+    self.btnClearTargetLoc = CreateStyledButton(PANEL_NAME .. "_BtnClearTargetLoc", targetBody, 114, 24, Addon.Locale:Get("BTN_CLEAR_TARGET_LOC"), function()
+        local idx = self.selectedTargetIndex
+        if idx then
+            Addon.QuestRepository:ClearDraftTargetLocation(idx)
+        end
+    end)
+    self.btnClearTargetLoc:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 144, 160)
+    self.btnClearTargetLoc:SetHidden(true)
+
+    self.btnTargetLocRequired = CreateStyledButton(PANEL_NAME .. "_BtnTargetLocReq", targetBody, 170, 24, "", function()
+        local idx = self.selectedTargetIndex
+        local draft = Addon.QuestRepository:GetDraft()
+        local target = idx and draft.targets and draft.targets[idx]
+        if not target then return end
+        Addon.QuestRepository:UpdateDraftTarget(idx, { locationRequired = not (target.locationRequired == true) })
+    end)
+    self.btnTargetLocRequired:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 266, 160)
+    self.btnTargetLocRequired:SetHidden(true)
+
+    local discRadiiRef = Addon.Constants.DISCOVERY_RADIUS
+    local function SetSelectedTargetLocRadius(rad)
+        local idx = self.selectedTargetIndex
+        if idx then
+            Addon.QuestRepository:UpdateDraftTarget(idx, { radius = rad })
+        end
+    end
+
+    self.btnTargetRadSmall = CreateStyledButton(PANEL_NAME .. "_BtnTargetRadSmall", targetBody, 68, 22, "", function()
+        SetSelectedTargetLocRadius(discRadiiRef.SMALL)
+    end)
+    self.btnTargetRadSmall:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 190)
+    self.btnTargetRadSmall:SetHidden(true)
+
+    self.btnTargetRadMedium = CreateStyledButton(PANEL_NAME .. "_BtnTargetRadMedium", targetBody, 68, 22, "", function()
+        SetSelectedTargetLocRadius(discRadiiRef.MEDIUM)
+    end)
+    self.btnTargetRadMedium:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 74, 190)
+    self.btnTargetRadMedium:SetHidden(true)
+
+    self.btnTargetRadLarge = CreateStyledButton(PANEL_NAME .. "_BtnTargetRadLarge", targetBody, 68, 22, "", function()
+        SetSelectedTargetLocRadius(discRadiiRef.LARGE)
+    end)
+    self.btnTargetRadLarge:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 148, 190)
+    self.btnTargetRadLarge:SetHidden(true)
+
+    local lblTargetLocStatus = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblTargetLocStatus", targetBody, CT_LABEL)
+    lblTargetLocStatus:SetDimensions(286, 22)
+    lblTargetLocStatus:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 224, 192)
+    if lblTargetLocStatus.SetFont then lblTargetLocStatus:SetFont("ZoFontGame") end
+    self.lblTargetLocStatus = lblTargetLocStatus
+    self.lblTargetLocStatus:SetHidden(true)
+
+    local targetCustomBg, targetCustomEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_TargetCustomMsgEdit",
+        targetBody,
+        510,
+        30,
+        160,
+        false,
+        function(val)
+            local idx = self.selectedTargetIndex
+            if idx then
+                Addon.QuestRepository:UpdateDraftTarget(idx, { customMessage = val }, true)
+            end
+        end,
+        Addon.Locale:Get("HINT_TARGET_CUSTOM_MSG")
+    )
+    targetCustomBg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 218)
+    targetCustomBg:SetHidden(true)
+    self.targetCustomBg = targetCustomBg
+    self.targetCustomEdit = targetCustomEdit
 
     -- Sección 2: Puntos de Descubrimiento Ocultos
     local discoverySec = CreateAccordionSection("discovery", "LABEL_DISCOVERY_SECTION", 142)
@@ -1478,10 +1603,11 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
                 prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
                 selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
             end
+            local suffix = q.failed and Addon.Locale:Get("LIST_FAILED_SUFFIX") or ""
             table.insert(displayRows, {
                 isHeader = false,
                 questId = q.id,
-                text = prefix .. selColor .. (q.title or "") .. "|r",
+                text = prefix .. selColor .. (q.title or "") .. "|r" .. suffix,
             })
         end
     end
@@ -1614,7 +1740,10 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     local activateLabel = isPrepared and Addon.Locale:Get("BTN_TEST_QUEST") or Addon.Locale:Get("BTN_ACTIVATE")
     local deactivateLabel = isPrepared and Addon.Locale:Get("BTN_STOP_TEST") or Addon.Locale:Get("BTN_DEACTIVATE")
 
-    if isCurrentActive then
+    if selectedQuest.failed then
+        self.detailStatus:SetText(Addon.Locale:Get("STATUS_FAILED"))
+        self.btnActivate:SetText(activateLabel)
+    elseif isCurrentActive then
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_ACTIVE"))
         self.btnActivate:SetText(deactivateLabel)
     elseif selectedQuest.completed then
@@ -1649,6 +1778,9 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         line = line:gsub("^•%s*", "|t16:16:/esoui/art/miscellaneous/bullet.dds|t ")
         if (t.currentCount or 0) >= (t.requiredCount or 1) then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+        elseif isPrepared and Addon.QuestRepository:HasTargetLocation(t) then
+            local locKey = t.locationRequired and "TARGET_DETAIL_LOC_REQUIRED" or "TARGET_DETAIL_LOC_OPTIONAL"
+            line = line .. Addon.Locale:Get(locKey)
         end
         objLines[i] = line
     end
@@ -1730,10 +1862,14 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.validateResultLabel:SetHidden(false)
     else
         local showCompletion = selectedQuest.completed and true or false
-        self.btnActivate:SetHidden(showCompletion)
+        local showFailed = selectedQuest.failed and true or false
+        self.btnActivate:SetHidden(showCompletion or showFailed)
         self.btnEdit:SetHidden(true)
-        self.btnReset:SetHidden(true)
-        if showCompletion then
+        self.btnReset:SetHidden(not showFailed)
+        if showFailed then
+            self.btnReset:SetAnchor(TOPLEFT, self.detailObjText, BOTTOMLEFT, -25, 16)
+            self.codeDivider:SetAnchor(TOPLEFT, self.btnReset, BOTTOMLEFT, 0, 14)
+        elseif showCompletion then
             self.codeDivider:SetAnchor(TOPLEFT, self.detailObjText, BOTTOMLEFT, -25, 16)
         else
             self.codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 14)
@@ -1877,6 +2013,69 @@ function JournalTab:RefreshEditorPane()
     self.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
     self.btnRadiusMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_MEDIUM"), math.abs(curRad - radii.MEDIUM) < 0.005))
     self.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
+
+    local totalTargets = #targets
+    if totalTargets > 0 then
+        if not self.selectedTargetIndex or self.selectedTargetIndex < 1 or self.selectedTargetIndex > totalTargets then
+            self.selectedTargetIndex = totalTargets
+        end
+    else
+        self.selectedTargetIndex = nil
+    end
+
+    local showTargetCfg = totalTargets > 0
+    local selTarget = self.selectedTargetIndex and targets[self.selectedTargetIndex] or nil
+    local hasTargetLoc = selTarget and Addon.QuestRepository:HasTargetLocation(selTarget) or false
+
+    if self.btnTargetPrev then self.btnTargetPrev:SetHidden(not showTargetCfg) end
+    if self.btnTargetNext then self.btnTargetNext:SetHidden(not showTargetCfg) end
+    if self.lblTargetCfgIndex then
+        self.lblTargetCfgIndex:SetHidden(not showTargetCfg)
+        if showTargetCfg and selTarget then
+            self.lblTargetCfgIndex:SetText(Addon.Locale:Get("TARGET_CFG_HEADER", self.selectedTargetIndex, totalTargets, selTarget.name or ""))
+        end
+    end
+    if self.btnCaptureTargetLoc then self.btnCaptureTargetLoc:SetHidden(not showTargetCfg) end
+    if self.btnClearTargetLoc then self.btnClearTargetLoc:SetHidden(not (showTargetCfg and hasTargetLoc)) end
+    if self.btnTargetLocRequired then
+        self.btnTargetLocRequired:SetHidden(not (showTargetCfg and hasTargetLoc))
+        if selTarget then
+            local reqKey = selTarget.locationRequired and "BTN_TARGET_LOC_REQUIRED" or "BTN_TARGET_LOC_OPTIONAL"
+            self.btnTargetLocRequired:SetText(FormatSelected(Addon.Locale:Get(reqKey), selTarget.locationRequired == true))
+        end
+    end
+    local discRadii = Addon.Constants.DISCOVERY_RADIUS
+    local curTargetRad = (selTarget and selTarget.radius) or discRadii.MEDIUM
+    if self.btnTargetRadSmall then
+        self.btnTargetRadSmall:SetHidden(not (showTargetCfg and hasTargetLoc))
+        self.btnTargetRadSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_SMALL"), curTargetRad == discRadii.SMALL))
+    end
+    if self.btnTargetRadMedium then
+        self.btnTargetRadMedium:SetHidden(not (showTargetCfg and hasTargetLoc))
+        self.btnTargetRadMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_MEDIUM"), curTargetRad == discRadii.MEDIUM))
+    end
+    if self.btnTargetRadLarge then
+        self.btnTargetRadLarge:SetHidden(not (showTargetCfg and hasTargetLoc))
+        self.btnTargetRadLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_LARGE"), curTargetRad == discRadii.LARGE))
+    end
+    if self.lblTargetLocStatus then
+        self.lblTargetLocStatus:SetHidden(not showTargetCfg)
+        if showTargetCfg then
+            if hasTargetLoc then
+                local meters = math.floor(curTargetRad / 100)
+                self.lblTargetLocStatus:SetText(Addon.Locale:Get("TARGET_LOC_STATUS_SET", meters))
+            else
+                self.lblTargetLocStatus:SetText(Addon.Locale:Get("TARGET_LOC_STATUS_NONE"))
+            end
+        end
+    end
+    if self.targetCustomBg then self.targetCustomBg:SetHidden(not showTargetCfg) end
+    if self.targetCustomEdit then
+        local activeCustomMsg = (selTarget and selTarget.customMessage) or ""
+        if not self.targetCustomEdit._focused and self.targetCustomEdit:GetText() ~= activeCustomMsg then
+            self.targetCustomEdit:SetText(activeCustomMsg)
+        end
+    end
 
     local discoveries = draft.discoveries or {}
     local totalDisc = #discoveries
