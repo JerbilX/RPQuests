@@ -11,11 +11,9 @@ Addon.ShareCodec = {}
 local ShareCodec = Addon.ShareCodec
 
 local function GetClientLanguage()
-    if GetCVar then
-        local lang = GetCVar("language.2") or GetCVar("Language.2")
-        if type(lang) == "string" and lang ~= "" then
-            return lang:lower()
-        end
+    local lang = GetCVar("language.2") or GetCVar("Language.2")
+    if type(lang) == "string" and lang ~= "" then
+        return lang:lower()
     end
     if Addon.Locale and Addon.Locale.GetLanguage then
         return (Addon.Locale:GetLanguage() or "en"):lower()

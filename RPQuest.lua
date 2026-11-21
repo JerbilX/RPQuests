@@ -62,12 +62,8 @@ local function OnAddOnLoaded(eventCode, addOnName)
     if addOnName ~= Addon.name then
         return
     end
-    if EVENT_MANAGER then
-        EVENT_MANAGER:UnregisterForEvent(Addon.name, EVENT_ADD_ON_LOADED)
-    end
+    EVENT_MANAGER:UnregisterForEvent(Addon.name, EVENT_ADD_ON_LOADED)
     Addon:Initialize()
 end
 
-if EVENT_MANAGER and EVENT_ADD_ON_LOADED then
-    EVENT_MANAGER:RegisterForEvent(Addon.name, EVENT_ADD_ON_LOADED, OnAddOnLoaded)
-end
+EVENT_MANAGER:RegisterForEvent(Addon.name, EVENT_ADD_ON_LOADED, OnAddOnLoaded)
