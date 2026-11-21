@@ -25,6 +25,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
 - **Code Sharing & Completion Proof (`RPQ3` / `RPQC1`):**
   - Export any prepared quest as a compact, LZSS-compressed, Discord-safe Base85 share code (`RPQ3:...`, backwards-compatible with `RPQ2`/`RPQ1`) for other players to import.
+  - **In-Game Mail Transport:** Send quests directly to 1–4 `@AccountName` recipients with an optional roleplay message and receive/accept them from the **Mail** inbox in RPQuest (works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU).
   - Completed quests generate a delivery validation code (`RPQC1:...`) to prove completion back to the Quest Master.
 - **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
 

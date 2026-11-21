@@ -223,6 +223,9 @@ function QuestRepository:GetDefaults()
         activeQuestId = nil,
         quests = {},
         draft = CreateDefaultDraft(),
+        settings = {
+            autoDeleteMail = true,
+        },
     }
 end
 
@@ -230,6 +233,11 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars = savedVars or self:GetDefaults()
     self.savedVars.nextId = self.savedVars.nextId or 1
     self.savedVars.quests = self.savedVars.quests or {}
+    if type(self.savedVars.settings) ~= "table" then
+        self.savedVars.settings = { autoDeleteMail = true }
+    elseif self.savedVars.settings.autoDeleteMail == nil then
+        self.savedVars.settings.autoDeleteMail = true
+    end
     if not self.savedVars.draft then
         self.savedVars.draft = CreateDefaultDraft()
     else
@@ -876,6 +884,22 @@ function QuestRepository:ValidateCompletionCode(questId, codeString)
         return false, "VALIDATE_ERR_INVALID_CODE"
     end
     return Addon.ShareCodec:ValidateCompletionForQuest(quest, codeString)
+end
+
+function QuestRepository:GetSetting(key)
+    if not self.savedVars or type(self.savedVars.settings) ~= "table" then
+        return nil
+    end
+    return self.savedVars.settings[key]
+end
+
+function QuestRepository:SetSetting(key, value)
+    if not self.savedVars then return end
+    if type(self.savedVars.settings) ~= "table" then
+        self.savedVars.settings = {}
+    end
+    self.savedVars.settings[key] = value
+    self:NotifyListeners("SETTINGS_UPDATED", self.savedVars.settings)
 end
 
 function QuestRepository:IsPreparedQuest(quest)

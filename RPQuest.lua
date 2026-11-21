@@ -23,6 +23,9 @@ function Addon:Initialize()
     Addon.DiscoveryTracker:Initialize()
     Addon.DialogueInjector:Initialize()
     Addon.WorldMapArea:Initialize()
+    if Addon.MailTransport then
+        Addon.MailTransport:Initialize()
+    end
     Addon.JournalTab:Initialize()
 
     SLASH_COMMANDS["/rpquest"] = function(args)
