@@ -14,6 +14,7 @@ RPQuest.Locales["en"] = {
 
     -- Tab & General
     TAB_TITLE = "RPQuests",
+    SECTION_PENDING_QUESTS = "PENDING (%d)",
     SECTION_ACTIVE_QUESTS = "QUESTS (%d)",
     SECTION_PREPARED_QUESTS = "PREPARING (%d)",
     SECTION_COMPLETED_QUESTS = "COMPLETED (%d)",
@@ -49,6 +50,7 @@ RPQuest.Locales["en"] = {
     BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
+    STATUS_PENDING = "Status: |cFFD155Pending (Accept or Reject)|r",
     STATUS_ACTIVE = "Status: |c33FF33Active (Tracked)|r",
     STATUS_AVAILABLE = "Status: |cE8D5A0Available|r",
     STATUS_COMPLETED = "Status: |c00CCFFCompleted|r",
@@ -186,6 +188,8 @@ RPQuest.Locales["en"] = {
     BTN_MAIL_AUTO_ACCEPT_ON = "Auto-Accept Mail: ON",
     BTN_MAIL_AUTO_ACCEPT_OFF = "Auto-Accept Mail: OFF",
     ALERT_MAIL_QUEST_RECEIVED = "RPQuest mail received: \"%s\" from %s (open RPQuest -> Mail Inbox).",
+    ALERT_MAIL_QUEST_OFFERED = "New RPQuest available: \"%s\" from %s (open RPQuest Journal to Accept or Reject).",
+    ALERT_QUEST_REJECTED = "Quest rejected: \"%s\".",
     MAIL_SEND_TITLE = "Send Quest by Mail: %s",
     MAIL_RECIPIENTS_LABEL = "Recipient (1 @AccountName):",
     HINT_MAIL_RECIPIENTS = "@PlayerName",

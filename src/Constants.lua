@@ -30,6 +30,10 @@ Addon.Constants = {
         PREPARED = "prepared",
         RECEIVED = "received",
     },
+    QUEST_STATUS = {
+        OFFERED = "offered",
+        ACTIVE = "active",
+    },
     AREA_RADIUS = {
         SMALL = 0.045,
         MEDIUM = 0.075,

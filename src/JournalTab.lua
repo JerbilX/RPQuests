@@ -190,14 +190,22 @@ function JournalTab:Initialize()
                 self.selectedQuestId = quest.id
             end
             self.viewMode = VIEW_MODE.DETAIL
-        elseif eventType == "QUEST_IMPORTED" then
+        elseif eventType == "QUEST_IMPORTED" or eventType == "QUEST_ACCEPTED" then
             if quest and quest.id then
                 self.collapsedSections.missions = false
                 self.listOffset = 0
                 self.selectedQuestId = quest.id
             end
             self.viewMode = VIEW_MODE.DETAIL
-        elseif eventType == "QUEST_DELETED" then
+        elseif eventType == "QUEST_OFFERED" then
+            if quest and quest.id then
+                self.collapsedSections.pending = false
+                self.listOffset = 0
+                if not self.selectedQuestId then
+                    self.selectedQuestId = quest.id
+                end
+            end
+        elseif eventType == "QUEST_DELETED" or eventType == "QUEST_REJECTED" then
             if quest and self.selectedQuestId == quest.id then
                 self.selectedQuestId = nil
             end
@@ -459,6 +467,18 @@ function JournalTab:BuildDetailPane(parent)
         end
     end)
     self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
+
+    self.btnAcceptOffered = CreateStyledButton(PANEL_NAME .. "_BtnAcceptOffered", contentParent, 160, 32, Addon.Locale:Get("BTN_MAIL_ACCEPT"), function()
+        self:AcceptSelectedOfferedQuest()
+    end)
+    self.btnAcceptOffered:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -25, 16)
+    self.btnAcceptOffered:SetHidden(true)
+
+    self.btnRejectOffered = CreateStyledButton(PANEL_NAME .. "_BtnRejectOffered", contentParent, 160, 32, Addon.Locale:Get("BTN_MAIL_REJECT"), function()
+        self:RejectSelectedOfferedQuest()
+    end)
+    self.btnRejectOffered:SetAnchor(TOPLEFT, self.btnAcceptOffered, TOPRIGHT, 12, 0)
+    self.btnRejectOffered:SetHidden(true)
 
     if not ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
         ESO_Dialogs["RPQUEST_ABANDON_QUEST"] = {
@@ -1508,6 +1528,26 @@ function JournalTab:OnMailTransportEvent(evType, payload)
     end
 end
 
+function JournalTab:AcceptSelectedOfferedQuest()
+    if not self.selectedQuestId then return false end
+    local ok, q = Addon.QuestRepository:AcceptOfferedQuest(self.selectedQuestId)
+    if ok and q then
+        Addon.Announcements:AnnounceQuestAccepted(q)
+        return true
+    end
+    return false
+end
+
+function JournalTab:RejectSelectedOfferedQuest()
+    if not self.selectedQuestId then return false end
+    local ok, q = Addon.QuestRepository:RejectOfferedQuest(self.selectedQuestId)
+    if ok and q then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_REJECTED", q.title or ""), false)
+        return true
+    end
+    return false
+end
+
 function JournalTab:OpenMailSendView()
     local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
     if not quest then return end
@@ -1958,12 +1998,15 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     activeQuest = activeQuest or Addon.QuestRepository:GetActiveQuest()
 
     local roles = Addon.Constants.QUEST_ROLE
+    local offeredMissions = {}
     local activeMissions = {}
     local completedMissions = {}
     local preparingMissions = {}
     for _, q in ipairs(allQuests) do
         if q.role == roles.PREPARED then
             table.insert(preparingMissions, q)
+        elseif Addon.QuestRepository:IsOfferedQuest(q) then
+            table.insert(offeredMissions, q)
         elseif q.completed then
             table.insert(completedMissions, q)
         else
@@ -2010,6 +2053,9 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
             if isCompleted then
                 prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
                 selColor = isSelected and "|cFFFFFF" or "|c8899AA"
+            elseif Addon.QuestRepository:IsOfferedQuest(q) then
+                prefix = "      |t18:18:/esoui/art/mail/mail_tabicon_inbox_up.dds|t "
+                selColor = isSelected and "|cFFFFFF" or "|cFFD155"
             else
                 local isAct = (activeQuest and activeQuest.id == q.id)
                 prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
@@ -2024,6 +2070,7 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
         end
     end
 
+    AppendSection("pending", "SECTION_PENDING_QUESTS", offeredMissions, false)
     AppendSection("missions", "SECTION_ACTIVE_QUESTS", activeMissions, false)
     AppendSection("completed", "SECTION_COMPLETED_QUESTS", completedMissions, true)
     AppendSection("preparing", "SECTION_PREPARED_QUESTS", preparingMissions, false)
@@ -2151,6 +2198,8 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.validateBg:SetHidden(true)
         self.validateResultLabel:SetHidden(true)
         self.btnActivate:SetHidden(true)
+        if self.btnAcceptOffered then self.btnAcceptOffered:SetHidden(true) end
+        if self.btnRejectOffered then self.btnRejectOffered:SetHidden(true) end
         if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(true) end
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
@@ -2165,11 +2214,17 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.detailTitle:SetText((selectedQuest.title or ""):upper())
 
     local isPrepared = Addon.QuestRepository:IsPreparedQuest(selectedQuest)
+    local isOffered = Addon.QuestRepository:IsOfferedQuest(selectedQuest)
     local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
     local activateLabel = isPrepared and Addon.Locale:Get("BTN_TEST_QUEST") or Addon.Locale:Get("BTN_ACTIVATE")
     local deactivateLabel = isPrepared and Addon.Locale:Get("BTN_STOP_TEST") or Addon.Locale:Get("BTN_DEACTIVATE")
 
-    if selectedQuest.failed then
+    if isOffered then
+        local senderSuffix = (type(selectedQuest.senderDisplayName) == "string" and selectedQuest.senderDisplayName ~= "")
+            and (" (" .. Addon.Locale:Get("MAIL_FROM_LABEL", selectedQuest.senderDisplayName) .. ")")
+            or ""
+        self.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING") .. senderSuffix)
+    elseif selectedQuest.failed then
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_FAILED"))
         self.btnActivate:SetText(activateLabel)
     elseif isCurrentActive then
@@ -2278,7 +2333,21 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     end
     self.btnReset:ClearAnchors()
     self.codeDivider:ClearAnchors()
-    if isPrepared then
+    if self.btnAcceptOffered then self.btnAcceptOffered:SetHidden(not isOffered) end
+    if self.btnRejectOffered then self.btnRejectOffered:SetHidden(not isOffered) end
+    if isOffered then
+        self.btnActivate:SetHidden(true)
+        self.btnEdit:SetHidden(true)
+        self.btnReset:SetHidden(true)
+        self.codeDivider:SetAnchor(TOPLEFT, self.btnAcceptOffered, BOTTOMLEFT, 0, 14)
+        self.validateHeader:SetHidden(true)
+        self.validateBg:SetHidden(true)
+        self.btnValidateDelivery:SetHidden(true)
+        self.validateResultLabel:SetHidden(true)
+        self.deliveryHeader:SetHidden(true)
+        self.deliveryBg:SetHidden(true)
+        if self.btnReportCompletionMail then self.btnReportCompletionMail:SetHidden(true) end
+    elseif isPrepared then
         self.btnActivate:SetHidden(false)
         self.btnEdit:SetHidden(false)
         self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
