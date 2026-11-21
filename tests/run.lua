@@ -149,6 +149,10 @@ DoesUnitExist = function(tag)
     return true
 end
 
+GetTimeStamp = function()
+    return os.time()
+end
+
 GetUnitName = function(tag)
     if tag == "reticleover" then return mockState.reticleName end
     return "Jugador"
@@ -2993,7 +2997,11 @@ RunTest("1-to-1 model: group sharing disabled, group tracking ignored, and Dialo
 
     -- DialogueInjector injects option immediately after mail quest import even while grouped
     local origUnitName = _G.GetUnitName
-    _G.GetUnitName = function(tag)
+    _G.GetTimeStamp = function()
+    return os.time()
+end
+
+GetUnitName = function(tag)
         if tag == "interact" then return "Informante" end
         return origUnitName(tag)
     end
@@ -3179,6 +3187,78 @@ RunTest("38. Auto-report rejection and completion results to Master via mail (Is
     _G.ReadMail = origReadMail
     _G.DeleteMail = origDeleteMail
     RPQuest.Announcements.ShowAlert = origShowAlert
+end)
+
+RunTest("39. Master single recipient persistence, direct send, and status transitions (Issue #145)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+    RPQuest.JournalTab:Initialize()
+
+    -- Create prepared quest with single recipient (normalized with @)
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Mercenario",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local prepared = RPQuest.QuestRepository:SaveDraft("Contrato Directo", "Cuerpo", nil, "", false, "PlayerTarget")
+    AssertEqual(prepared.recipientAccount, "@PlayerTarget", "Recipient normalized and persisted on prepared quest")
+
+    local status1 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status1, "draft", "Initial status is draft")
+
+    RPQuest.JournalTab:SelectQuest(prepared.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.btnSendDirect:IsHidden(), false, "Direct send button visible on prepared quest")
+    AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@PlayerTarget", 1, true) ~= nil, "Detail status shows assigned recipient in draft")
+
+    -- Direct send from prepared quest detail view
+    local sentMails = {}
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    _G.SendMail = function(to, subject, body) table.insert(sentMails, { to = to, subject = subject, body = body }) end
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+
+    local okSend = RPQuest.JournalTab:SendSelectedPreparedQuest()
+    AssertEqual(okSend, true, "SendSelectedPreparedQuest starts send directly")
+    RPQuest.MailTransport:OnMailboxOpened()
+    AssertEqual(#sentMails, 1, "Mail dispatched to assigned recipient")
+    AssertEqual(sentMails[1].to, "@PlayerTarget", "Mail sent to @PlayerTarget")
+    RPQuest.MailTransport:OnMailSendSuccess("@PlayerTarget")
+
+    local status2 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status2, "sent", "Status transitions to sent after mail dispatch")
+    AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@PlayerTarget", 1, true) ~= nil, "Detail status shows sent recipient")
+
+    -- Transition to completed
+    RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerTarget", {
+        characterName = "TargetChar",
+        completedAt = 999,
+        completed = true,
+        wasDetected = false,
+    })
+    local status3 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status3, "completed", "Status transitions to completed")
+    AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("TargetChar", 1, true) ~= nil, "Detail status includes character name")
+
+    -- Transition to rejected
+    RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerTarget", {
+        characterName = "TargetChar",
+        completedAt = 1000,
+        completed = false,
+    })
+    local status4 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status4, "rejected", "Status transitions to rejected")
+
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
 end)
 
 if failed > 0 then

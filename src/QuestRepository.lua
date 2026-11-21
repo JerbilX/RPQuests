@@ -88,11 +88,22 @@ local function AreAllObjectivesCompleted(targets, discoveries)
     return true
 end
 
+local function NormalizeAccountName(raw)
+    if type(raw) ~= "string" then return "" end
+    local clean = raw:gsub("^%s+", ""):gsub("%s+$", "")
+    if clean == "" then return "" end
+    if clean:sub(1, 1) ~= "@" then
+        clean = "@" .. clean
+    end
+    return clean
+end
+
 local function CreateDefaultDraft()
     return {
         editingQuestId = nil,
         title = "",
         description = "",
+        recipientAccount = "",
         clue = "",
         completionMessage = "",
         targets = {},
@@ -161,6 +172,10 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
+        recipientAccount = NormalizeAccountName(data.recipientAccount),
+        sentTo = type(data.sentTo) == "string" and data.sentTo or nil,
+        sentAt = data.sentAt,
+        lastResult = type(data.lastResult) == "table" and data.lastResult or nil,
         status = data.status,
         sourceMailId = data.sourceMailId,
         completionReported = (data.completionReported == true),
@@ -552,6 +567,7 @@ function QuestRepository:LoadQuestIntoDraft(questId)
         editingQuestId = quest.id,
         title = quest.title or "",
         description = quest.description or "",
+        recipientAccount = quest.recipientAccount or "",
         clue = quest.clue or "",
         completionMessage = quest.completionMessage or "",
         targets = CloneTargetsList(quest.targets),
@@ -581,6 +597,7 @@ function QuestRepository:UpdateDraftFields(fields, silent)
 
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
+    if fields.recipientAccount ~= nil then draft.recipientAccount = tostring(fields.recipientAccount) end
     if fields.clue ~= nil then draft.clue = tostring(fields.clue) end
     if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
     if fields.hideMapArea ~= nil then draft.hideMapArea = (fields.hideMapArea == true) end
@@ -677,11 +694,12 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return draft
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput)
     local draft = self:GetDraft()
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
     if descriptionInput ~= nil then draft.description = tostring(descriptionInput) end
+    if recipientAccountInput ~= nil then draft.recipientAccount = tostring(recipientAccountInput) end
     if completionMessageInput ~= nil then draft.completionMessage = tostring(completionMessageInput) end
     if requireUndetectedInput ~= nil then draft.requireUndetected = (requireUndetectedInput == true) end
     if areaRadiusInput ~= nil and tonumber(areaRadiusInput) and tonumber(areaRadiusInput) > 0 then
@@ -713,8 +731,10 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     local cleanDesc = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", "")
     local cleanClue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", "")
     local cleanCompMsg = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local cleanRecipient = NormalizeAccountName(draft.recipientAccount)
     draft.clue = cleanClue
     draft.completionMessage = cleanCompMsg
+    draft.recipientAccount = cleanRecipient
 
     if existing then
         local prevProgress = {}
@@ -724,6 +744,12 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
 
         existing.title = cleanTitle
         existing.description = cleanDesc
+        existing.recipientAccount = cleanRecipient
+        if existing.sentTo and existing.sentTo:lower() ~= cleanRecipient:lower() then
+            existing.sentTo = nil
+            existing.sentAt = nil
+            existing.lastResult = nil
+        end
         existing.clue = cleanClue
         existing.completionMessage = cleanCompMsg
         existing.targets = CloneTargetsList(draft.targets, prevProgress)
@@ -761,6 +787,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     self.savedVars.nextId = targetId + 1
 
     local questData = {
+        recipientAccount = cleanRecipient,
         clue = cleanClue,
         completionMessage = draft.completionMessage,
         discoveries = CloneDiscoveriesList(draft.discoveries, false),
@@ -1017,6 +1044,39 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
     quest.lastResult = entry
     self:NotifyListeners("DELIVERY_RECORDED", { quest = quest, delivery = entry })
     return entry, true
+end
+
+function QuestRepository:MarkPreparedQuestSent(questId, recipient)
+    local quest = self:GetQuestById(questId)
+    if not quest then return false end
+    local cleanRecipient = NormalizeAccountName(recipient)
+    if cleanRecipient == "" then return false end
+    quest.sentTo = cleanRecipient
+    if (quest.recipientAccount or "") == "" then
+        quest.recipientAccount = cleanRecipient
+    end
+    quest.sentAt = GetTimeStamp()
+    self:NotifyListeners("QUEST_SENT", quest)
+    return true
+end
+
+function QuestRepository:GetPreparedQuestStatus(quest)
+    if type(quest) ~= "table" then
+        return "draft", nil
+    end
+    if type(quest.lastResult) == "table" then
+        if quest.lastResult.status == "rejected" then
+            return "rejected", quest.lastResult
+        end
+        return "completed", quest.lastResult
+    end
+    if type(quest.deliveries) == "table" and #quest.deliveries > 0 then
+        return "completed", quest.deliveries[#quest.deliveries]
+    end
+    if type(quest.sentTo) == "string" and quest.sentTo ~= "" then
+        return "sent", { recipient = quest.sentTo, sentAt = quest.sentAt }
+    end
+    return "draft", nil
 end
 
 function QuestRepository:MarkCompletionReported(questId)

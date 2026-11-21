@@ -213,6 +213,8 @@ function JournalTab:Initialize()
             SetReadOnlyEditText(self.deliveryEdit, "")
             if self.validateEdit then self.validateEdit:SetText("") end
             if self.validateResultLabel then self.validateResultLabel:SetText("") end
+        elseif eventType == "QUEST_SENT" or eventType == "DELIVERY_RECORDED" then
+            -- Refresh detail pane to reflect updated send/delivery status
         elseif eventType == "DRAFT_TARGET_CAPTURED" then
             if self.viewMode ~= VIEW_MODE.EDITOR then
                 self.viewMode = VIEW_MODE.EDITOR
@@ -468,6 +470,12 @@ function JournalTab:BuildDetailPane(parent)
     end)
     self.btnReset:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 10)
 
+    self.btnSendDirect = CreateStyledButton(PANEL_NAME .. "_BtnSendDirect", contentParent, 160, 32, Addon.Locale:Get("BTN_SEND_QUEST"), function()
+        self:SendSelectedPreparedQuest()
+    end)
+    self.btnSendDirect:SetAnchor(TOPLEFT, self.btnReset, TOPRIGHT, 12, 0)
+    self.btnSendDirect:SetHidden(true)
+
     self.btnAcceptOffered = CreateStyledButton(PANEL_NAME .. "_BtnAcceptOffered", contentParent, 160, 32, Addon.Locale:Get("BTN_MAIL_ACCEPT"), function()
         self:AcceptSelectedOfferedQuest()
     end)
@@ -704,6 +712,27 @@ function JournalTab:BuildEditorPane(parent)
     descBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 86)
     self.descBg = descBg
     self.descEdit = descEdit
+
+    local lblRecipient = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_LblInputRecipient", formParent, CT_LABEL)
+    lblRecipient:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 166)
+    if lblRecipient.SetFont then lblRecipient:SetFont("ZoFontGameBold") end
+    lblRecipient:SetText(Addon.Locale:Get("LABEL_INPUT_RECIPIENT"))
+    self.lblInputRecipient = lblRecipient
+
+    local recipientBg, recipientEdit = CreateEditBoxWithBackdrop(
+        PANEL_NAME .. "_RecipientEdit",
+        formParent,
+        260,
+        30,
+        64,
+        false,
+        function(val)
+            Addon.QuestRepository:UpdateDraftFields({ recipientAccount = val }, true)
+        end
+    )
+    recipientBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 188)
+    self.recipientBg = recipientBg
+    self.recipientEdit = recipientEdit
 
     self.editorSections = {}
     self.editorSectionsByKey = {}
@@ -1548,11 +1577,34 @@ function JournalTab:RejectSelectedOfferedQuest()
     return false
 end
 
+function JournalTab:SendSelectedPreparedQuest()
+    local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not quest then return false end
+    local recipient = type(quest.recipientAccount) == "string"
+        and quest.recipientAccount:gsub("^%s+", ""):gsub("%s+$", "")
+        or ""
+    if recipient ~= "" and Addon.MailTransport then
+        local ok, errKey = Addon.MailTransport:SendQuestToRecipients(quest, recipient, "")
+        if ok then
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_SENDING_TO", quest.title or "", recipient), false)
+            return true
+        elseif errKey then
+            Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
+            return false
+        end
+    end
+    self:OpenMailSendView()
+    return false
+end
+
 function JournalTab:OpenMailSendView()
     local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
     if not quest then return end
     self._mailSendQuestId = quest.id
     self.viewMode = VIEW_MODE.MAIL_SEND
+    if self.mailRecEdit then
+        self.mailRecEdit:SetText(quest.recipientAccount or "")
+    end
     if self.mailSendHeader then
         self.mailSendHeader:SetText(Addon.Locale:Get("MAIL_SEND_TITLE", quest.title or ""))
     end
@@ -1761,6 +1813,7 @@ function JournalTab:OpenCreateEditor()
     self.selectedDiscoveryIndex = nil
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
+    if self.recipientEdit then self.recipientEdit:SetText(draft.recipientAccount or "") end
     if self.clueEdit then self.clueEdit:SetText("") end
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
@@ -1819,6 +1872,7 @@ function JournalTab:OpenEditEditor(questId)
     end
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
+    if self.recipientEdit then self.recipientEdit:SetText(draft.recipientAccount or "") end
     if self.clueEdit then self.clueEdit:SetText("") end
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
@@ -1847,6 +1901,7 @@ end
 function JournalTab:ClearEditorInputs()
     if self.titleEdit then self.titleEdit:SetText("") end
     if self.descEdit then self.descEdit:SetText("") end
+    if self.recipientEdit then self.recipientEdit:SetText("") end
     if self.clueEdit then self.clueEdit:SetText("") end
     if self.completionEdit then self.completionEdit:SetText("") end
     if self.discoveryMsgEdit then self.discoveryMsgEdit:SetText("") end
@@ -1858,6 +1913,7 @@ end
 function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
+    local recipientText = self.recipientEdit and self.recipientEdit:GetText() or ""
     local compMsgText = self.completionEdit and self.completionEdit:GetText() or ""
     local draft = Addon.QuestRepository:GetDraft()
     local dlgIdx = self.selectedDialogueIndex
@@ -1868,7 +1924,7 @@ function JournalTab:OnSaveDraftClicked()
         Addon.QuestRepository:UpdateDraftDialogue(dlgIdx, dlgFields, true)
     end
 
-    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText)
+    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText, nil, recipientText)
     if not savedQuest then
         Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
         return
@@ -2203,6 +2259,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(true) end
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
+        if self.btnSendDirect then self.btnSendDirect:SetHidden(true) end
         self.btnValidateDelivery:SetHidden(true)
         if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
@@ -2224,6 +2281,31 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
             and (" (" .. Addon.Locale:Get("MAIL_FROM_LABEL", selectedQuest.senderDisplayName) .. ")")
             or ""
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING") .. senderSuffix)
+    elseif isPrepared then
+        local pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(selectedQuest)
+        local recLabel = (type(selectedQuest.recipientAccount) == "string" and selectedQuest.recipientAccount ~= "")
+            and selectedQuest.recipientAccount
+            or Addon.Locale:Get("LABEL_NO_RECIPIENT")
+        if pStatus == "completed" and type(pInfo) == "table" then
+            local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
+            local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
+            local stealthPart = ""
+            if pInfo.wasDetected == false then
+                stealthPart = " " .. Addon.Locale:Get("VALIDATE_STEALTH_UNDETECTED")
+            elseif pInfo.wasDetected == true then
+                stealthPart = " " .. Addon.Locale:Get("VALIDATE_STEALTH_DETECTED")
+            end
+            self.detailStatus:SetText(Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart))
+        elseif pStatus == "rejected" and type(pInfo) == "table" then
+            local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
+            local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
+            self.detailStatus:SetText(Addon.Locale:Get("PREPARED_STATUS_REJECTED", who .. charPart))
+        elseif pStatus == "sent" then
+            self.detailStatus:SetText(Addon.Locale:Get("PREPARED_STATUS_SENT", (pInfo and pInfo.recipient) or recLabel))
+        else
+            self.detailStatus:SetText(Addon.Locale:Get("PREPARED_STATUS_DRAFT", recLabel))
+        end
+        self.btnActivate:SetText(isCurrentActive and deactivateLabel or activateLabel)
     elseif selectedQuest.failed then
         self.detailStatus:SetText(Addon.Locale:Get("STATUS_FAILED"))
         self.btnActivate:SetText(activateLabel)
@@ -2335,6 +2417,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
     self.codeDivider:ClearAnchors()
     if self.btnAcceptOffered then self.btnAcceptOffered:SetHidden(not isOffered) end
     if self.btnRejectOffered then self.btnRejectOffered:SetHidden(not isOffered) end
+    if self.btnSendDirect then self.btnSendDirect:SetHidden(not isPrepared) end
     if isOffered then
         self.btnActivate:SetHidden(true)
         self.btnEdit:SetHidden(true)
@@ -2423,7 +2506,7 @@ function JournalTab:LayoutEditorSections()
     if not self.editorSections or not self.editorFormParent then return end
     local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft() or {}
     local collapsedMap = self.editorSectionsCollapsed or {}
-    local y = 172
+    local y = 228
 
     local function GetSectionBadge(key)
         if key == "target" then
