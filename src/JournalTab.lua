@@ -1853,14 +1853,22 @@ function JournalTab:OpenTab()
         qj:SetMode(self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR)
     end
 
+    local wasShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
+
     if SCENE_MANAGER and SCENE_MANAGER.Show then
         SCENE_MANAGER:Show("questJournal")
     end
 
-    if qj and qj.tabs and qj.tabs.SelectFragment and self.tabCategoryName then
-        qj.tabs:SelectFragment(self.tabCategoryName)
-    elseif self.panel then
-        self.panel:SetHidden(false)
+    -- Solo seleccionar el fragmento de forma síncrona si questJournal ya está visible;
+    -- si estamos transicionando desde otra escena (p. ej. Notificaciones o Correo),
+    -- OnShowing lo seleccionará cuando la escena previa termine de ocultarse y libere su keybind strip.
+    local isShowingNow = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
+    if wasShowing or isShowingNow or not SCENE_MANAGER or not SCENE_MANAGER.Show then
+        if qj and qj.tabs and qj.tabs.SelectFragment and self.tabCategoryName then
+            qj.tabs:SelectFragment(self.tabCategoryName)
+        elseif self.panel then
+            self.panel:SetHidden(false)
+        end
     end
 
     if self._dirty then
