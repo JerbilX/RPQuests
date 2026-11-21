@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Use ESOUI updatetest endpoint instead of live update'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -41,3 +47,39 @@ jobs:
         with:
           files: dist/RPQuest-*.zip
           generate_release_notes: true
+
+      - name: Publish to ESOUI
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          ESOUI_API_TOKEN: ${{ secrets.ESOUI_API_TOKEN }}
+          IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ -z "$ESOUI_API_TOKEN" ]; then
+            echo "ESOUI_API_TOKEN secret is not set; skipping ESOUI upload."
+            exit 0
+          fi
+          ZIP_PATH=$(ls dist/RPQuest-*.zip | head -n 1)
+          VERSION=$(basename "$ZIP_PATH" | sed -E 's/^RPQuest-(.+)\.zip$/\1/')
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          if [ -n "$PREV_TAG" ]; then
+            git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"- %s" > changelog.txt
+          else
+            git log -n 10 --no-merges --pretty=format:"- %s" > changelog.txt
+          fi
+          if [ ! -s changelog.txt ]; then
+            echo "Release ${VERSION}" > changelog.txt
+          fi
+
+          ENDPOINT="https://api.esoui.com/addons/update"
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            ENDPOINT="https://api.esoui.com/addons/updatetest"
+          fi
+
+          echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}) to ${ENDPOINT}..."
+          curl --fail-with-body -sS -X POST "$ENDPOINT" \
+            -H "x-api-token: ${ESOUI_API_TOKEN}" \
+            -F "id=5080" \
+            -F "version=${VERSION}" \
+            -F "file=@${ZIP_PATH}" \
+            -F "changelog=<changelog.txt" \
+            -F "description=<docs/esoui-description.bbcode"
