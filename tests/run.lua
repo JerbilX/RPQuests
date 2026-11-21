@@ -2726,6 +2726,24 @@ RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incom
     AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after Accept")
 end)
 
+RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes and JournalTab shows version", function()
+    RPQuest.JournalTab:Initialize()
+    AssertTrue(RPQuest.JournalTab.versionLabel ~= nil, "JournalTab creates versionLabel")
+    AssertEqual(RPQuest.JournalTab.versionLabel:GetText(), "v" .. RPQuest.Constants.METADATA.VERSION, "versionLabel displays addon version")
+
+    local dec1, err1 = RPQuest.ShareCodec:DecodeQuest("RPQ4:1234:abcd")
+    AssertEqual(dec1, nil, "RPQ4 standard envelope rejected")
+    AssertEqual(err1, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ4 returns ERR_IMPORT_UNSUPPORTED_VERSION")
+
+    local dec2, err2 = RPQuest.ShareCodec:DecodeQuest("RPQ99:future_format_payload")
+    AssertEqual(dec2, nil, "RPQ99 arbitrary format rejected")
+    AssertEqual(err2, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ99 returns ERR_IMPORT_UNSUPPORTED_VERSION")
+
+    local imp, impErr = RPQuest.QuestRepository:ImportQuestFromCode("RPQ4:1234:abcd")
+    AssertEqual(imp, nil, "ImportQuestFromCode fails for RPQ4")
+    AssertEqual(impErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized unsupported version error")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
