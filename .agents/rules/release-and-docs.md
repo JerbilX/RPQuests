@@ -15,5 +15,6 @@ trigger: always_on
    - Tras crear el tag `vX.Y.Z` sobre `main` (y antes de volver a `dev`), ejecutar `./scripts/package.sh` para regenerar la distribución local en `dist/RPQuest-X.Y.Z.zip` (el script limpia versiones anteriores automáticamente).
    - Nota: `scripts/package.sh` calcula e inyecta automáticamente `## Version:` (desde el tag `vX.Y.Z`) y `## AddOnVersion:` (desde `git rev-list --count HEAD`) en el `.zip` de release, por lo que no es necesario editar manualmente `RPQuest.txt` en cada release salvo que se quiera mantener sincronizado su valor base.
 
-3. **Descripción Pública en ESOUI (BBCode):**
+3. **Descripción y Changelog Público en ESOUI (BBCode / Inglés por defecto):**
    - Al redactar o actualizar **`docs/esoui-description.bbcode`** (formato BBCode), **nunca incluir slash commands** (como `/rpquest` o `/rpq`); documentar únicamente los **keybinds** (`Settings -> Controls -> RPQuest`).
+   - **Títulos de commits y PRs en inglés:** El workflow `.github/workflows/release.yml` genera el changelog de ESOUI a partir de `git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"- %s"`, y GitHub Release lo genera desde los títulos de PR. Por lo tanto, todos los títulos de commits (`git commit`) y de Pull Requests (`gh pr create`) deben redactarse en **inglés** para que el changelog público salga en inglés por defecto.
