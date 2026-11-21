@@ -574,6 +574,17 @@ function JournalTab:BuildDetailPane(parent)
     self.deliveryBg = deliveryBg
     self.deliveryEdit = deliveryEdit
 
+    self.btnReportCompletionMail = CreateStyledButton(PANEL_NAME .. "_BtnReportCompMail", contentParent, 260, 28, Addon.Locale:Get("BTN_REPORT_COMPLETION_MAIL"), function()
+        local q = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        if not q or not Addon.MailTransport then return end
+        local ok, errKey = Addon.MailTransport:SendCompletionReport(q)
+        if not ok and errKey then
+            Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
+        end
+    end)
+    self.btnReportCompletionMail:SetAnchor(TOPLEFT, deliveryBg, BOTTOMLEFT, 0, 8)
+    self.btnReportCompletionMail:SetHidden(true)
+
     local validateHeader = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ValidateHeader", contentParent, CT_LABEL)
     validateHeader:SetDimensions(520, 20)
     validateHeader:SetAnchor(TOPLEFT, shareBg, BOTTOMLEFT, 0, 8)
@@ -1275,7 +1286,7 @@ function JournalTab:BuildMailSendPane(parent)
     lblRec:SetText(Addon.Locale:Get("MAIL_RECIPIENTS_LABEL"))
 
     local recBg, recEdit = CreateEditBoxWithBackdrop(
-        PANEL_NAME .. "_MailRecEdit", pane, 510, 32, 200, false, nil, Addon.Locale:Get("HINT_MAIL_RECIPIENTS")
+        PANEL_NAME .. "_MailRecEdit", pane, 510, 32, 200, false, nil, false
     )
     recBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 68)
     self.mailRecEdit = recEdit
@@ -1289,7 +1300,7 @@ function JournalTab:BuildMailSendPane(parent)
     local roleBg, roleEdit = CreateEditBoxWithBackdrop(
         PANEL_NAME .. "_MailRoleEdit", pane, 510, 110, 700, true, function()
             self:RefreshMailSendCounter()
-        end, Addon.Locale:Get("HINT_MAIL_ROLE_MSG")
+        end, false
     )
     roleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 138)
     self.mailRoleEdit = roleEdit
@@ -1341,6 +1352,9 @@ function JournalTab:BuildMailInboxPane(parent)
     self.btnMailRefresh:SetAnchor(TOPLEFT, pane, TOPLEFT, 348, 0)
 
     self.btnMailBack = CreateStyledButton(PANEL_NAME .. "_BtnMailBack", pane, 70, 28, Addon.Locale:Get("BTN_CANCEL"), function()
+        if Addon.MailTransport then
+            Addon.MailTransport:CloseMailboxIfOwned()
+        end
         self.viewMode = VIEW_MODE.DETAIL
         self:Refresh()
     end)
@@ -1352,6 +1366,13 @@ function JournalTab:BuildMailInboxPane(parent)
         self:RefreshMailInboxPane()
     end)
     self.btnToggleAutoDeleteMail:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 42)
+
+    self.btnToggleAutoReportMail = CreateStyledButton(PANEL_NAME .. "_BtnAutoReportMail", pane, 260, 26, "", function()
+        local cur = Addon.QuestRepository:GetSetting("autoSendCompletionMail")
+        Addon.QuestRepository:SetSetting("autoSendCompletionMail", not cur)
+        self:RefreshMailInboxPane()
+    end)
+    self.btnToggleAutoReportMail:SetAnchor(TOPLEFT, pane, TOPLEFT, 250, 42)
 
     local lblEmpty = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailInboxEmpty", pane, CT_LABEL)
     lblEmpty:SetDimensions(510, 40)
@@ -1449,6 +1470,11 @@ function JournalTab:OnMailTransportEvent(evType, payload)
         Addon.Announcements:ShowAlert(msg, (payload.failed or 0) > 0)
     elseif evType == "MAIL_INBOX_UPDATED" and self.viewMode == VIEW_MODE.MAIL_INBOX then
         self:RefreshMailInboxPane()
+    elseif evType == "MAIL_COMPLETION_SENT" and type(payload) == "table" then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_COMPLETION_SENT", payload.to or ""), false)
+        if self.viewMode == VIEW_MODE.DETAIL then
+            self:RefreshDetailPane()
+        end
     end
 end
 
@@ -1510,6 +1536,10 @@ function JournalTab:RefreshMailInboxPane()
     local autoDel = Addon.QuestRepository:GetSetting("autoDeleteMail")
     if self.btnToggleAutoDeleteMail then
         self.btnToggleAutoDeleteMail:SetText(Addon.Locale:Get(autoDel and "BTN_MAIL_AUTO_DELETE_ON" or "BTN_MAIL_AUTO_DELETE_OFF"))
+    end
+    local autoRep = Addon.QuestRepository:GetSetting("autoSendCompletionMail")
+    if self.btnToggleAutoReportMail then
+        self.btnToggleAutoReportMail:SetText(Addon.Locale:Get(autoRep and "BTN_AUTO_REPORT_ON" or "BTN_AUTO_REPORT_OFF"))
     end
     local mails = Addon.MailTransport and Addon.MailTransport:GetReceivedMails() or {}
     local total = #mails
@@ -2051,6 +2081,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.shareBg:SetHidden(true)
         self.deliveryHeader:SetHidden(true)
         self.deliveryBg:SetHidden(true)
+        if self.btnReportCompletionMail then self.btnReportCompletionMail:SetHidden(true) end
         self.validateHeader:SetHidden(true)
         self.validateBg:SetHidden(true)
         self.validateResultLabel:SetHidden(true)
@@ -2190,10 +2221,23 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.codeDivider:SetAnchor(TOPLEFT, self.btnActivate, BOTTOMLEFT, 0, 48)
         self.deliveryHeader:SetHidden(true)
         self.deliveryBg:SetHidden(true)
+        if self.btnReportCompletionMail then self.btnReportCompletionMail:SetHidden(true) end
         self.validateHeader:SetHidden(false)
         self.validateBg:SetHidden(false)
         self.btnValidateDelivery:SetHidden(false)
         self.validateResultLabel:SetHidden(false)
+        if self.btnReportCompletionMail then self.btnReportCompletionMail:SetHidden(true) end
+        local deliveries = selectedQuest.deliveries or {}
+        if #deliveries > 0 and self.validateResultLabel:GetText() == "" then
+            local names = {}
+            for _, d in ipairs(deliveries) do
+                local who = (d.senderDisplayName and d.senderDisplayName ~= "")
+                    and string.format("%s (%s)", d.senderDisplayName, d.characterName or "")
+                    or (d.characterName or "")
+                table.insert(names, who)
+            end
+            self.validateResultLabel:SetText(Addon.Locale:Get("LABEL_MAIL_DELIVERIES", #deliveries, table.concat(names, ", ")))
+        end
     else
         local showCompletion = selectedQuest.completed and true or false
         local showFailed = selectedQuest.failed and true or false
@@ -2214,6 +2258,12 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.validateResultLabel:SetHidden(true)
         self.deliveryHeader:SetHidden(not showCompletion)
         self.deliveryBg:SetHidden(not showCompletion)
+        local hasMailSender = type(selectedQuest.senderDisplayName) == "string" and selectedQuest.senderDisplayName ~= ""
+        local isAutoReport = Addon.QuestRepository:GetSetting("autoSendCompletionMail") == true
+        local showReportBtn = showCompletion and hasMailSender and (not isAutoReport) and (not selectedQuest.completionReported)
+        if self.btnReportCompletionMail then
+            self.btnReportCompletionMail:SetHidden(not showReportBtn)
+        end
         if showCompletion then
             local deliveryCode = Addon.QuestRepository:ExportCompletionCode(selectedQuest.id) or ""
             if not self.deliveryEdit._focused and self.deliveryEdit:GetText() ~= deliveryCode then

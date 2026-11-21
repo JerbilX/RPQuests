@@ -198,4 +198,10 @@ RPQuest.Locales["en"] = {
     ERR_MAIL_BODY_TOO_LONG = "Mail exceeds the character limit. Shorten the roleplay message or share the RPQ3 code via Discord.",
     ERR_MAIL_SEND_IN_PROGRESS = "Another mail batch is already being sent.",
     ERR_MAIL_API_UNAVAILABLE = "Mail API is unavailable right now.",
+    BTN_REPORT_COMPLETION_MAIL = "Report Completion to Creator",
+    BTN_AUTO_REPORT_ON = "Completion Report: Auto",
+    BTN_AUTO_REPORT_OFF = "Completion Report: Manual",
+    ALERT_MAIL_COMPLETION_SENT = "RPQuest: Completion report sent to %s.",
+    ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: Delivery verified from %s for '%s'!",
+    LABEL_MAIL_DELIVERIES = "|c33FF33Verified mail deliveries (%d):|r %s",
 }

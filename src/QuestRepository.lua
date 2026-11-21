@@ -161,6 +161,9 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         requireUndetected = data.requireUndetected and true or false,
         wasDetected = false,
         failed = false,
+        senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
+        completionReported = (data.completionReported == true),
+        deliveries = type(data.deliveries) == "table" and data.deliveries or {},
     }
 end
 
@@ -225,6 +228,7 @@ function QuestRepository:GetDefaults()
         draft = CreateDefaultDraft(),
         settings = {
             autoDeleteMail = true,
+            autoSendCompletionMail = false,
         },
     }
 end
@@ -234,9 +238,14 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars.nextId = self.savedVars.nextId or 1
     self.savedVars.quests = self.savedVars.quests or {}
     if type(self.savedVars.settings) ~= "table" then
-        self.savedVars.settings = { autoDeleteMail = true }
-    elseif self.savedVars.settings.autoDeleteMail == nil then
-        self.savedVars.settings.autoDeleteMail = true
+        self.savedVars.settings = { autoDeleteMail = true, autoSendCompletionMail = false }
+    else
+        if self.savedVars.settings.autoDeleteMail == nil then
+            self.savedVars.settings.autoDeleteMail = true
+        end
+        if self.savedVars.settings.autoSendCompletionMail == nil then
+            self.savedVars.settings.autoSendCompletionMail = false
+        end
     end
     if not self.savedVars.draft then
         self.savedVars.draft = CreateDefaultDraft()
@@ -776,7 +785,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     return newQuest
 end
 
-function QuestRepository:ImportQuestFromCode(codeString)
+function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName)
     local decoded, errKey = Addon.ShareCodec:DecodeQuest(codeString)
     if not decoded then
         return nil, Addon.Locale:Get(type(errKey) == "string" and errKey or "ERR_INVALID_CODE")
@@ -814,6 +823,9 @@ function QuestRepository:ImportQuestFromCode(codeString)
 
     decoded.discoveries = CloneDiscoveriesList(decoded.discoveries, false)
     decoded.dialogues = CloneDialoguesList(decoded.dialogues)
+    if type(senderDisplayName) == "string" and senderDisplayName ~= "" then
+        decoded.senderDisplayName = senderDisplayName
+    end
 
     local importedQuest = BuildQuestRecord(
         newId,
@@ -884,6 +896,37 @@ function QuestRepository:ValidateCompletionCode(questId, codeString)
         return false, "VALIDATE_ERR_INVALID_CODE"
     end
     return Addon.ShareCodec:ValidateCompletionForQuest(quest, codeString)
+end
+
+function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validationResult)
+    local quest = self:GetQuestById(questId)
+    if not quest or type(validationResult) ~= "table" then
+        return nil
+    end
+    quest.deliveries = quest.deliveries or {}
+    local entry = {
+        senderDisplayName = type(senderDisplayName) == "string" and senderDisplayName or "",
+        characterName = validationResult.characterName or "",
+        completedAt = tonumber(validationResult.completedAt) or 0,
+        wasDetected = validationResult.wasDetected,
+    }
+    -- Avoid duplicate entries for same characterName + completedAt
+    for _, existing in ipairs(quest.deliveries) do
+        if existing.characterName == entry.characterName and existing.completedAt == entry.completedAt then
+            return existing, false
+        end
+    end
+    table.insert(quest.deliveries, entry)
+    self:NotifyListeners("DELIVERY_RECORDED", { quest = quest, delivery = entry })
+    return entry, true
+end
+
+function QuestRepository:MarkCompletionReported(questId)
+    local quest = self:GetQuestById(questId)
+    if not quest then return false end
+    quest.completionReported = true
+    self:NotifyListeners("COMPLETION_REPORTED", quest)
+    return true
 end
 
 function QuestRepository:GetSetting(key)
@@ -1073,6 +1116,7 @@ function QuestRepository:ResetQuest(questId)
     q.completed = false
     q.failed = false
     q.wasDetected = false
+    q.completionReported = false
     if self._completionCodeCache then
         self._completionCodeCache[questId] = nil
     end

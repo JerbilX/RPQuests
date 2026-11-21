@@ -2396,6 +2396,108 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     _G.SCENE_MANAGER = origScene
 end)
 
+RunTest("MailTransport completion report (manual/auto) and creator auto-validation (Issue #102)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    local sentMails = {}
+    local deletedMails = {}
+    local origSendMail = _G.SendMail
+    local origDeleteMail = _G.DeleteMail
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReadMail = _G.ReadMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.DeleteMail = function(mailId) table.insert(deletedMails, mailId) end
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+
+    -- Creator prepares quest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local preparedQuest = RPQuest.QuestRepository:SaveDraft("Entrega por Correo", "Desc")
+    local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(preparedQuest.id)
+
+    -- Player receives quest via mail from @Creator
+    _G.GetNextMailId = function(lastId) return (lastId == nil) and 201 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 201 then return "@Creator", "CreatorChar", "[RPQuest] Entrega por Correo", "", true, false, false, false, 0, 0, 0, 30, 5, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 201) and rpq3Code or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    local imported = RPQuest.MailTransport:AcceptReceivedMail(201)
+    AssertTrue(imported ~= nil, "Quest accepted from mail")
+    AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
+
+    -- Manual mode (default): completing quest does NOT auto-send, shows manual button
+    AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), false, "autoSendCompletionMail defaults to false")
+    RPQuest.QuestRepository:SetActiveQuest(imported.id)
+    RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
+    AssertEqual(imported.completed, true, "Imported quest completed")
+    AssertEqual(#sentMails, 0, "Manual mode does NOT auto-send completion mail")
+
+    RPQuest.JournalTab:SelectQuest(imported.id)
+    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), false, "Manual report button visible in manual mode")
+
+    -- 1-click manual send
+    local okManual = RPQuest.MailTransport:SendCompletionReport(imported)
+    AssertEqual(okManual, true, "SendCompletionReport succeeds in manual mode")
+    AssertEqual(#sentMails, 1, "Completion mail sent to creator")
+    AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
+    AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
+    local rpqc1Code = sentMails[1].body
+    AssertTrue(rpqc1Code:sub(1, 6) == "RPQC1:", "Body contains RPQC1 code")
+    RPQuest.MailTransport:OnMailSendSuccess("@Creator")
+    AssertEqual(imported.completionReported, true, "completionReported marked true after send success")
+
+    -- Automatic mode: reset quest, enable autoSendCompletionMail, complete again
+    RPQuest.QuestRepository:ResetQuest(imported.id)
+    RPQuest.QuestRepository:SetSetting("autoSendCompletionMail", true)
+    RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
+    AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
+    RPQuest.JournalTab:SelectQuest(imported.id)
+    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), true, "Manual report button hidden in automatic mode")
+    RPQuest.MailTransport:OnMailSendSuccess("@Creator")
+
+    -- Creator receives [RPQuest:Done] mail and auto-validates RPQC1
+    deletedMails = {}
+    _G.GetNextMailId = function(lastId) return (lastId == nil) and 301 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 301 then return "@Finisher", "FinisherChar", "[RPQuest:Done] Entrega por Correo", "", true, false, false, false, 0, 0, 0, 30, 2, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 301) and rpqc1Code or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#(preparedQuest.deliveries or {}), 1, "Creator recorded 1 verified delivery from [RPQuest:Done] mail")
+    AssertEqual(preparedQuest.deliveries[1].senderDisplayName, "@Finisher", "Recorded finisher @AccountName")
+    AssertEqual(#deletedMails, 1, "Completion mail auto-deleted when autoDeleteMail is true")
+    AssertEqual(deletedMails[1], 301, "Deleted completion mail 301")
+
+    _G.SendMail = origSendMail
+    _G.DeleteMail = origDeleteMail
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.ReadMail = origReadMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
