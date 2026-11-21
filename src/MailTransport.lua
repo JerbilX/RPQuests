@@ -59,6 +59,20 @@ function MailTransport:Initialize()
         self._eventsRegistered = true
     end
 
+    if not self._repoListenerAdded and Addon.QuestRepository and Addon.QuestRepository.RegisterListener then
+        Addon.QuestRepository:RegisterListener(function(evType, payload)
+            if evType == "QUEST_COMPLETED" and type(payload) == "table" then
+                if Addon.QuestRepository:GetSetting("autoSendCompletionMail")
+                    and type(payload.senderDisplayName) == "string"
+                    and payload.senderDisplayName ~= ""
+                    and not payload.completionReported then
+                    self:SendCompletionReport(payload)
+                end
+            end
+        end)
+        self._repoListenerAdded = true
+    end
+
     self.isInitialized = true
 end
 
@@ -206,6 +220,7 @@ function MailTransport:DispatchNextQueuedMail()
         return
     end
 
+    self._currentSendItem = nextItem
     self._currentSendTarget = nextItem.to
     self:NotifyListeners("MAIL_SEND_PROGRESS", {
         current = self._sendDone + 1,
@@ -215,8 +230,60 @@ function MailTransport:DispatchNextQueuedMail()
     SendMail(nextItem.to, nextItem.subject, nextItem.body)
 end
 
+function MailTransport:SendCompletionReport(quest)
+    if type(quest) ~= "table" or not quest.completed then
+        return false, "ERR_INVALID_CODE"
+    end
+    local recipient = type(quest.senderDisplayName) == "string"
+        and quest.senderDisplayName:gsub("^%s+", ""):gsub("%s+$", "")
+        or ""
+    if recipient == "" then
+        return false, "ERR_MAIL_NO_RECIPIENTS"
+    end
+    if not SendMail then
+        return false, "ERR_MAIL_API_UNAVAILABLE"
+    end
+
+    local rpqc1Code, err = Addon.QuestRepository:ExportCompletionCode(quest.id)
+    if not rpqc1Code or rpqc1Code == "" then
+        return false, err or "ERR_INVALID_CODE"
+    end
+
+    local subject = COMPLETION_SUBJECT_PREFIX .. (quest.title or "RPQuest")
+    local item = {
+        to = recipient,
+        subject = subject,
+        body = rpqc1Code,
+        completionQuestId = quest.id,
+    }
+
+    if self._isSending then
+        table.insert(self._sendQueue, item)
+        self._sendTotal = self._sendTotal + 1
+        return true
+    end
+
+    self._sendQueue = { item }
+    self._isSending = true
+    self._sendTotal = 1
+    self._sendDone = 0
+    self._sendSuccessCount = 0
+    self._sendFailCount = 0
+
+    self:EnsureMailboxOpen()
+    self:DispatchNextQueuedMail()
+    return true
+end
+
 function MailTransport:OnMailSendSuccess(playerName)
     if not self._isSending then return end
+    if self._currentSendItem and self._currentSendItem.completionQuestId then
+        Addon.QuestRepository:MarkCompletionReported(self._currentSendItem.completionQuestId)
+        self:NotifyListeners("MAIL_COMPLETION_SENT", {
+            questId = self._currentSendItem.completionQuestId,
+            to = self._currentSendItem.to,
+        })
+    end
     self._sendDone = self._sendDone + 1
     self._sendSuccessCount = self._sendSuccessCount + 1
     self:DispatchNextQueuedMail()
@@ -254,6 +321,52 @@ function MailTransport:IsQuestMailSubject(subject)
         return false
     end
     return string.sub(subject, 1, #QUEST_SUBJECT_PREFIX) == QUEST_SUBJECT_PREFIX
+end
+
+function MailTransport:IsCompletionMailSubject(subject)
+    if type(subject) ~= "string" then return false end
+    return string.sub(subject, 1, #COMPLETION_SUBJECT_PREFIX) == COMPLETION_SUBJECT_PREFIX
+end
+
+function MailTransport:ParseCompletionMailBody(body)
+    if type(body) ~= "string" or body == "" then
+        return nil
+    end
+    local _, _, code = string.find(body, "(RPQC1:[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]:[^%s]+)")
+    return code
+end
+
+function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+    local idKey = tostring(mailId)
+    if self._dismissedMailIds and self._dismissedMailIds[idKey] then
+        return false
+    end
+
+    local rpqc1Code = self:ParseCompletionMailBody(body)
+    if not rpqc1Code then
+        return false
+    end
+
+    local preparedQuests = Addon.QuestRepository:GetQuestsByRole(Addon.Constants.QUEST_ROLE.PREPARED)
+    for _, q in ipairs(preparedQuests) do
+        local ok, res = Addon.QuestRepository:ValidateCompletionCode(q.id, rpqc1Code)
+        if ok and type(res) == "table" then
+            local _, isNew = Addon.QuestRepository:RecordMailDelivery(q.id, senderDisplayName, res)
+            if isNew and Addon.Announcements and Addon.Announcements.ShowAlert then
+                local who = (type(senderDisplayName) == "string" and senderDisplayName ~= "")
+                    and senderDisplayName
+                    or (res.characterName or "")
+                Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_DELIVERY_VALIDATED", who, q.title or ""), false)
+            end
+            if Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail then
+                DeleteMail(mailId)
+            else
+                self._dismissedMailIds[idKey] = true
+            end
+            return true
+        end
+    end
+    return false
 end
 
 function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
@@ -314,10 +427,16 @@ function MailTransport:ScanInbox(requestOpen)
     local mailId = GetNextMailId(nil)
     while mailId ~= nil do
         local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
-        if self:IsQuestMailSubject(subject) then
+        local isQuest = self:IsQuestMailSubject(subject)
+        local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
+        if isQuest or isCompletion then
             local body = ReadMail and ReadMail(mailId) or ""
             if type(body) == "string" and body ~= "" then
-                self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+                if isQuest then
+                    self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+                else
+                    self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+                end
             elseif RequestReadMail then
                 RequestReadMail(mailId)
             end
@@ -331,10 +450,16 @@ end
 function MailTransport:OnMailReadable(mailId)
     if not mailId or not GetMailItemInfo or not ReadMail then return end
     local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
-    if self:IsQuestMailSubject(subject) then
+    local isQuest = self:IsQuestMailSubject(subject)
+    local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
+    if isQuest or isCompletion then
         local body = ReadMail(mailId)
         if type(body) == "string" and body ~= "" then
-            self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+            if isQuest then
+                self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
+            else
+                self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+            end
         end
     end
 end
@@ -373,7 +498,7 @@ function MailTransport:AcceptReceivedMail(mailId)
         return nil, "ERR_INVALID_CODE"
     end
 
-    local imported, err = Addon.QuestRepository:ImportQuestFromCode(entry.questCode)
+    local imported, err = Addon.QuestRepository:ImportQuestFromCode(entry.questCode, entry.senderDisplayName)
     if not imported then
         table.insert(self._receivedMails, entry)
         self:RebuildReceivedIndex()

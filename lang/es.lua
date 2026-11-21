@@ -198,4 +198,10 @@ RPQuest.Locales["es"] = {
     ERR_MAIL_BODY_TOO_LONG = "El correo supera el límite de caracteres. Acorta el mensaje de rol o comparte el código RPQ3 por Discord.",
     ERR_MAIL_SEND_IN_PROGRESS = "Ya hay un envío de correos en curso.",
     ERR_MAIL_API_UNAVAILABLE = "La API de correo no está disponible en este momento.",
+    BTN_REPORT_COMPLETION_MAIL = "Reportar Finalización al Creador",
+    BTN_AUTO_REPORT_ON = "Reporte Finalización: Auto",
+    BTN_AUTO_REPORT_OFF = "Reporte Finalización: Manual",
+    ALERT_MAIL_COMPLETION_SENT = "RPQuest: Reporte de finalización enviado a %s.",
+    ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: ¡Entrega verificada de %s para '%s'!",
+    LABEL_MAIL_DELIVERIES = "|c33FF33Entregas verificadas por correo (%d):|r %s",
 }

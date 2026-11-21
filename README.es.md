@@ -25,7 +25,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
 - **Compartición y Validación por Código (`RPQ3` / `RPQC1`):**
   - Exporta misiones en códigos compactos comprimidos con LZSS y Base85 seguro para Discord (`RPQ3:...`, retrocompatible con `RPQ2`/`RPQ1`) listos para copiar y compartir.
-  - **Envío y Recepción por Correo In-Game:** Envía misiones directamente a 1–4 destinatarios (`@Cuenta`) con un mensaje de rol opcional y acéptalas/recházalas desde la bandeja de **Correo** de RPQuest (funciona únicamente dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU).
+  - **Envío y Recepción por Correo In-Game:** Envía misiones directamente a 1–4 destinatarios (`@Cuenta`) con un mensaje de rol opcional, acéptalas/recházalas desde la bandeja de **Correo** de RPQuest y reporta/valida la finalización (`RPQC1`) al creador por correo (funciona únicamente dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU).
   - Al completar una misión, genera un código de validación de entrega (`RPQC1:...`) para demostrarle al creador que fue completada.
 - **Persistencia por Personaje y Auto-Localización:** Guarda el progreso por personaje con `ZO_SavedVars:NewCharacterIdSettings` y detecta automáticamente el idioma del cliente (`es` / `en`).
 
