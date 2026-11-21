@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -20,7 +20,8 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo (`Keybind` o `/rpquest discovery`) con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_PinBlob`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto. Desaparece automáticamente al completar o desactivar la misión.
-- **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
+- **Inyección de Diálogos en NPCs Nativos:** Asocia líneas de diálogo personalizadas de RPQuest a NPCs nativos de ESO (mediante captura por retícula o nombre), inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
+- **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` (incluyendo al aceptar una misión compartida por código) y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
 - **Compartición y Validación por Código (`RPQ1` / `RPQC1`):**
   - Exporta misiones en códigos compactos con suma de verificación `CRC16` (`RPQ1:...`) listos para copiar y compartir.
@@ -45,7 +46,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 1. **Crear una Misión (Quest Master):**
    - Abre el Diario de Misiones (`J`) y entra en la pestaña **RPQuest** (o escribe `/rpquest`).
-   - Pulsa **Crear Misión**, define **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`) y opcionalmente activa **No ser detectado**.
+   - Pulsa **Crear Misión**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`), opcionalmente activar **No ser detectado** y configurar líneas de **Diálogo de NPC**.
    - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo** (`/rpquest capture`), o párate en un lugar y usa **Capturar Punto de Descubrimiento** (`/rpquest discovery`).
 2. **Compartir con Jugadores:**
    - Selecciona la misión preparada y copia el código `RPQ1:...` generado.
@@ -103,6 +104,7 @@ RPQuest/
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
 │   ├── CombatTracker.lua    # Seguimiento de bajas y sigilo (EVENT_COMBAT_EVENT)
 │   ├── DiscoveryTracker.lua # Sondeo de proximidad a puntos de descubrimiento ocultos
+│   ├── DialogueInjector.lua # Inyección de diálogos en NPCs nativos
 │   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
 │   └── JournalTab.lua       # Pestaña en el Diario de Misiones y mini-tracker HUD
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)

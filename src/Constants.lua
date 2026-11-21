@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
+-- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -16,9 +17,13 @@ Addon.Constants = {
         VERSION = 1,
     },
     SHARE_CODEC = {
-        PREFIX = "RPQ1",
+        PREFIX = "RPQ2",
+        LEGACY_PREFIX = "RPQ1",
         COMPLETION_PREFIX = "RPQC1",
-        VERSION = 1,
+        VERSION = 2,
+    },
+    DIALOGUE = {
+        MAX_NPCS = 3,
     },
     QUEST_ROLE = {
         PREPARED = "prepared",

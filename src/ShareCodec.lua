@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
+-- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -22,27 +23,39 @@ for b = 0, 255 do
     BYTE_TO_CHAR[b] = string.char(b)
 end
 
+local ESCAPE_MAP = {
+    ["%"] = "%25",
+    ["|"] = "%7C",
+    [";"] = "%3B",
+    ["~"] = "%7E",
+    ["\r"] = "",
+    ["\n"] = "%0A",
+}
+
+local UNESCAPE_MAP = {
+    ["%0A"] = "\n",
+    ["%7E"] = "~",
+    ["%3B"] = ";",
+    ["%7C"] = "|",
+    ["%25"] = "%",
+}
+
 local function EscapeField(str)
     if str == nil then return "" end
     local s = tostring(str)
-    s = s:gsub("%%", "%%25")
-    s = s:gsub("|", "%%7C")
-    s = s:gsub(";", "%%3B")
-    s = s:gsub("~", "%%7E")
-    s = s:gsub("\r", "")
-    s = s:gsub("\n", "%%0A")
-    return s
+    if not s:find("[%%|;~\r\n]") then
+        return s
+    end
+    return (s:gsub("[%%|;~\r\n]", ESCAPE_MAP))
 end
 
 local function UnescapeField(str)
     if str == nil then return "" end
     local s = tostring(str)
-    s = s:gsub("%%0A", "\n")
-    s = s:gsub("%%7E", "~")
-    s = s:gsub("%%3B", ";")
-    s = s:gsub("%%7C", "|")
-    s = s:gsub("%%25", "%%")
-    return s
+    if not s:find("%", 1, true) then
+        return s
+    end
+    return (s:gsub("%%[0-9A-F][0-9A-F]", UNESCAPE_MAP))
 end
 
 local function SplitByChar(raw, sep)
@@ -158,6 +171,50 @@ local function DecodeDiscoveriesList(rawDiscoveries)
     return discoveries
 end
 
+local function EncodeDialoguesList(dialogues)
+    if type(dialogues) ~= "table" or #dialogues == 0 then
+        return ""
+    end
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local items = {}
+    for _, d in ipairs(dialogues) do
+        if #items >= maxNpcs then break end
+        if type(d) == "table" and type(d.npcName) == "string" and d.npcName ~= "" then
+            local parts = {
+                EscapeField(d.npcName),
+                tostring(math.floor(tonumber(d.zoneId) or 0)),
+                EscapeField(d.response or ""),
+            }
+            table.insert(items, table.concat(parts, "~"))
+        end
+    end
+    return table.concat(items, ";")
+end
+
+local function DecodeDialoguesList(rawDialogues)
+    if type(rawDialogues) ~= "string" or rawDialogues == "" then
+        return {}
+    end
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local entries = SplitByChar(rawDialogues, ";")
+    local dialogues = {}
+    for _, item in ipairs(entries) do
+        if #dialogues >= maxNpcs then break end
+        if item ~= "" then
+            local kv = SplitByChar(item, "~")
+            local npcName = UnescapeField(kv[1] or "")
+            if npcName ~= "" then
+                table.insert(dialogues, {
+                    npcName = npcName,
+                    zoneId = math.floor(tonumber(kv[2]) or 0),
+                    response = UnescapeField(kv[3] or ""),
+                })
+            end
+        end
+    end
+    return dialogues
+end
+
 local function ComputeChecksum16(data)
     local sum1 = 0x5A
     local sum2 = 0xA5
@@ -210,6 +267,9 @@ local function BuildQuestPayloadString(quest)
         EscapeField(quest.completionMessage or ""),
         quest.requireUndetected and "1" or "0",
         encodedDiscoveries,
+        EscapeField(quest.clue or ""),
+        quest.hideMapArea and "1" or "0",
+        EncodeDialoguesList(quest.dialogues),
     }
 
     return table.concat(fields, "|")
@@ -312,27 +372,50 @@ function ShareCodec:EncodeQuest(quest)
     return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
 end
 
+local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, badChecksumErr, allowedPrefixes)
+    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
+    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
+    if not pfx or not checksum or #checksum ~= 4 or not encodedPayload then
+        return nil, nil, invalidFormatErr
+    end
+    if allowedPrefixes then
+        local errOrAllowed = allowedPrefixes[pfx]
+        if errOrAllowed == nil then
+            return nil, nil, invalidFormatErr
+        elseif type(errOrAllowed) == "string" then
+            return nil, nil, errOrAllowed
+        end
+    end
+
+    local rawPayload = Base64UrlDecode(encodedPayload)
+    if not rawPayload then
+        return nil, nil, badB64Err
+    end
+
+    local expectedChecksum = ComputeChecksum16(rawPayload)
+    if checksum:upper() ~= expectedChecksum:upper() then
+        return nil, nil, badChecksumErr
+    end
+
+    return pfx, rawPayload, nil
+end
+
 function ShareCodec:DecodeQuest(codeString)
     if type(codeString) ~= "string" then
         return nil, "Code must be a string"
     end
 
-    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
-
-    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
-    if not pfx or pfx ~= prefix or not checksum or #checksum ~= 4 or not encodedPayload then
-        return nil, "Invalid code format"
-    end
-
-    local rawPayload = Base64UrlDecode(encodedPayload)
+    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
+    local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
+        codeString,
+        "Invalid code format",
+        "Corrupted base64 payload",
+        "Checksum mismatch",
+        { [prefix] = true, [legacyPrefix] = true }
+    )
     if not rawPayload then
-        return nil, "Corrupted base64 payload"
-    end
-
-    local expectedChecksum = ComputeChecksum16(rawPayload)
-    if checksum:upper() ~= expectedChecksum:upper() then
-        return nil, "Checksum mismatch"
+        return nil, envErr
     end
 
     local fields = SplitByChar(rawPayload, "|")
@@ -354,6 +437,9 @@ function ShareCodec:DecodeQuest(codeString)
     local completionMessage = fields[12] and UnescapeField(fields[12]) or ""
     local requireUndetected = (fields[13] == "1")
     local decodedDiscoveries = fields[14] and DecodeDiscoveriesList(fields[14]) or {}
+    local clue = fields[15] and UnescapeField(fields[15]) or ""
+    local hideMapArea = (fields[16] == "1")
+    local decodedDialogues = fields[17] and DecodeDialoguesList(fields[17]) or {}
 
     if #decodedTargets == 0 and #decodedDiscoveries == 0 then
         return nil, "Invalid target data in code"
@@ -366,9 +452,11 @@ function ShareCodec:DecodeQuest(codeString)
     return {
         title = title,
         description = description,
+        clue = clue,
         completionMessage = completionMessage,
         targets = decodedTargets,
         discoveries = decodedDiscoveries,
+        dialogues = decodedDialogues,
         mapId = math.floor(mapId or 0),
         zoneId = math.floor(zoneId or 0),
         mapName = mapName,
@@ -377,6 +465,7 @@ function ShareCodec:DecodeQuest(codeString)
         areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
         areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
         areaRadius = areaRadius or 0.075,
+        hideMapArea = hideMapArea,
         requireUndetected = requireUndetected,
     }
 end
@@ -432,30 +521,23 @@ function ShareCodec:DecodeCompletion(codeString)
         return nil, "VALIDATE_ERR_INVALID_CODE"
     end
 
-    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local questPrefix = Addon.Constants.SHARE_CODEC.PREFIX
+    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
     local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
 
-    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
-    if not pfx or not checksum or #checksum ~= 4 or not encodedPayload then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
-    end
-
-    if pfx == questPrefix then
-        return nil, "VALIDATE_ERR_NOT_COMPLETION_CODE"
-    end
-    if pfx ~= compPrefix then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
-    end
-
-    local rawPayload = Base64UrlDecode(encodedPayload)
+    local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
+        codeString,
+        "VALIDATE_ERR_INVALID_CODE",
+        "VALIDATE_ERR_INVALID_CODE",
+        "VALIDATE_ERR_INVALID_CODE",
+        {
+            [compPrefix] = true,
+            [questPrefix] = "VALIDATE_ERR_NOT_COMPLETION_CODE",
+            [legacyPrefix] = "VALIDATE_ERR_NOT_COMPLETION_CODE",
+        }
+    )
     if not rawPayload then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
-    end
-
-    local expectedChecksum = ComputeChecksum16(rawPayload)
-    if checksum:upper() ~= expectedChecksum:upper() then
-        return nil, "VALIDATE_ERR_INVALID_CODE"
+        return nil, envErr
     end
 
     local fields = SplitByChar(rawPayload, "|")

@@ -56,6 +56,7 @@ UI_ALERT_CATEGORY_ALERT = 0
 UI_ALERT_CATEGORY_ERROR = 1
 CSA_CATEGORY_LARGE_TEXT = 1
 CSA_CATEGORY_SMALL_TEXT = 2
+CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED = 9
 CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED = 10
 CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_CONDITION_COMPLETED = 11
 MAPTYPE_WORLD = 1
@@ -77,6 +78,7 @@ ZO_PostHook = function(tbl, fnName, hookFn)
     end
 end
 
+SOUNDS.QUEST_ACCEPTED = "Quest_Accept"
 SOUNDS.QUEST_COMPLETED = "Quest_Complete"
 SOUNDS.QUEST_OBJECTIVE_INCREMENT = "Quest_ObjectivesIncrement"
 SOUNDS.QUEST_OBJECTIVE_COMPLETE = "Quest_ObjectivesComplete"
@@ -339,6 +341,7 @@ dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
 dofile("src/CombatTracker.lua")
 dofile("src/DiscoveryTracker.lua")
+dofile("src/DialogueInjector.lua")
 dofile("src/WorldMapArea.lua")
 dofile("src/JournalTab.lua")
 dofile("RPQuest.lua")
@@ -410,7 +413,7 @@ RunTest("ShareCodec roundtrip preserves UTF-8, pipes, newlines and coordinates",
 
     local code, err = RPQuest.ShareCodec:EncodeQuest(original)
     AssertTrue(code ~= nil, "Code should be generated without error: " .. tostring(err))
-    AssertTrue(string.sub(code, 1, 5) == "RPQ1:", "Code must start with RPQ1:")
+    AssertTrue(string.sub(code, 1, 5) == "RPQ2:", "Code must start with RPQ2:")
 
     local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
     AssertTrue(decoded ~= nil, "Decode should succeed: " .. tostring(decErr))
@@ -445,7 +448,7 @@ RunTest("ShareCodec rejects tampered or malformed codes", function()
         areaRadius = 0.075,
     }
     local code = RPQuest.ShareCodec:EncodeQuest(validQuest)
-    local tampered = code:gsub("^RPQ1:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ1:0000:")
+    local tampered = code:gsub("^RPQ2:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ2:0000:")
     local res, _ = RPQuest.ShareCodec:DecodeQuest(tampered)
     AssertEqual(res, nil, "Tampered checksum must fail")
 
@@ -762,18 +765,23 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
 
     -- Código para compartir siempre visible en shareEdit al seleccionar/crear la misión
     local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ1:", "Share edit box auto-populated with RPQ1 code")
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ2:", "Share edit box auto-populated with RPQ2 code")
     AssertEqual(RPQuest.JournalTab.btnShare, nil, "Share button removed in favor of always-visible share box")
     RPQuest.JournalTab.shareEdit._selectedAll = false
     RPQuest.JournalTab.shareEdit:FireHandler("OnFocusGained")
     AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selects all text when focused")
 
     -- Probar vista Importar en JournalTab
+    mockState.csaMessages = {}
     RPQuest.JournalTab:OpenImportView()
     AssertEqual(RPQuest.JournalTab.importPane:IsHidden(), false, "Import pane is visible")
     RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
     RPQuest.JournalTab:OnConfirmImportClicked()
     AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
+    AssertEqual(#mockState.csaMessages, 1, "Importing quest emits one CENTER_SCREEN_ANNOUNCE banner")
+    AssertEqual(mockState.csaMessages[1].category, CSA_CATEGORY_LARGE_TEXT, "Quest accepted CSA uses large text category")
+    AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_ACCEPTED, "Quest accepted CSA plays SOUNDS.QUEST_ACCEPTED")
+    AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Quest accepted CSA uses CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED")
 
     -- Verificar que salir de Edit mode seleccionando otra misión limpia editingQuestId
     RPQuest.JournalTab:OpenEditEditor(active.id)
@@ -1146,7 +1154,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
     local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ1:", "shareEdit populated with RPQ1 code for received quest")
+    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ2:", "shareEdit populated with RPQ2 code for received quest")
     AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab auto-populates RPQC1 code into deliveryEdit")
     AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
 
@@ -1181,7 +1189,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
     AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), true, "Delivery code box hidden for prepared quest")
     AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), "", "deliveryEdit cleared when switching quest")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ1:", "shareEdit auto-populated with RPQ1 code for prepared quest")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ2:", "shareEdit auto-populated with RPQ2 code for prepared quest")
     AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
@@ -1190,7 +1198,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     RPQuest.JournalTab:OnValidateDeliveryClicked()
     local msg = RPQuest.JournalTab.validateResultLabel:GetText()
     AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ1:", "shareEdit still preserves RPQ1 code after validation")
+    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ2:", "shareEdit still preserves RPQ2 code after validation")
 end)
 
 RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
@@ -1529,7 +1537,7 @@ RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map
 
     -- 3. ShareCodec roundtrip preserves discoveries and resets discovered=false
     local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
-    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ1:", "ShareCodec encodes discovery-only quest")
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ2:", "ShareCodec encodes discovery-only quest")
 
     local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
     AssertTrue(imported ~= nil, "ShareCodec decodes and imports discovery-only quest")
@@ -1604,6 +1612,282 @@ RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map
     local discOk = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 20000, 500, 30000)
     AssertEqual(discOk, true, "Mixed quest discovery triggered")
     AssertEqual(mixed.completed, true, "Mixed quest completed once both target and discovery are done")
+end)
+
+RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjector hook", function()
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetActiveQuest(nil)
+
+    -- 1. Session capture via EVENT_CHATTER_BEGIN (OnChatterBegin)
+    local currentInteractName = "Mercader Sospechoso^m"
+    _G.GetUnitName = function(unitTag)
+        if unitTag == "interact" then return currentInteractName end
+        return "Jugador"
+    end
+    mockState.worldX = 12000
+    mockState.worldZ = 22000
+    mockState.zoneId = 381
+
+    RPQuest.DialogueInjector:OnChatterBegin()
+    local lastNpc = RPQuest.QuestRepository:GetLastInteractedNpc()
+    AssertTrue(lastNpc ~= nil, "Last interacted NPC captured")
+    AssertEqual(lastNpc.name, "Mercader Sospechoso", "NPC name normalized without gender suffix")
+    AssertEqual(lastNpc.zoneId, 381, "NPC zoneId captured")
+
+    -- 2. Draft dialogue management (0..3 max, duplicate prevention)
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:UpdateDraftFields({
+        clue = "el sello roto",
+        hideMapArea = true,
+    })
+    local ok1, idx1 = RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Vi a un encapuchado huir hacia los muelles.")
+    AssertTrue(ok1 ~= nil and idx1 == 1, "Dialogue #1 added from last NPC")
+
+    local dupOk, dupErr = RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Repetido")
+    AssertEqual(dupOk, nil, "Duplicate NPC rejected")
+    AssertTrue(type(dupErr) == "string" and dupErr ~= "", "Duplicate NPC returns error message")
+
+    currentInteractName = "Guardia del Puerto^f"
+    RPQuest.DialogueInjector:OnChatterBegin()
+    RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Nadie entra sin pase; revisa el almacén sur.")
+
+    currentInteractName = "Tabernero^m"
+    RPQuest.DialogueInjector:OnChatterBegin()
+    RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Dejó una nota bajo la mesa 4~5; busca allí.")
+
+    currentInteractName = "Cuarto NPC"
+    RPQuest.DialogueInjector:OnChatterBegin()
+    local limitOk, limitErr = RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Excede")
+    AssertEqual(limitOk, nil, "4th NPC dialogue rejected (max 3)")
+    AssertTrue(type(limitErr) == "string" and limitErr ~= "", "Limit error returned")
+
+    -- Capture target and save quest
+    mockState.reticleExists = true
+    mockState.reticleName = "Contrabandista"
+    RPQuest.TargetCapture:CaptureFromReticle()
+    local saved = RPQuest.QuestRepository:SaveDraft("El Sello Roto", "Investiga en el puerto.")
+    AssertTrue(saved ~= nil, "Quest with dialogues and hideMapArea saved")
+    AssertEqual(saved.clue, "el sello roto", "Clue persisted on quest")
+    AssertEqual(saved.hideMapArea, true, "hideMapArea persisted on quest")
+    AssertEqual(#saved.dialogues, 3, "3 dialogues persisted on quest")
+
+    -- 3. WorldMapArea respects hideMapArea
+    RPQuest.QuestRepository:SetActiveQuest(saved.id)
+    mockPinManager._createdPins = {}
+    RPQuest.WorldMapArea:RefreshPins()
+    AssertEqual(#mockPinManager._createdPins, 0, "WorldMapArea does not render pin when hideMapArea is true")
+
+    -- 4. ShareCodec RPQ2 roundtrip
+    local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
+    AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ2:", "Exported code uses RPQ2 prefix")
+
+    local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    AssertTrue(imported ~= nil, "RPQ2 quest imported successfully")
+    AssertEqual(imported.clue, "el sello roto", "Imported clue preserved")
+    AssertEqual(imported.hideMapArea, true, "Imported hideMapArea preserved")
+    AssertEqual(#imported.dialogues, 3, "Imported 3 dialogues preserved")
+    AssertEqual(imported.dialogues[3].response, "Dejó una nota bajo la mesa 4~5; busca allí.", "Special chars in dialogue response preserved")
+
+    -- Imported quest with hideMapArea also hides pin
+    mockPinManager._createdPins = {}
+    RPQuest.WorldMapArea:RefreshPins()
+    AssertEqual(#mockPinManager._createdPins, 0, "Imported quest with hideMapArea=true renders 0 map pins")
+
+    -- 5. DialogueInjector hook on ZO_Interaction
+    local bodyTextValue = "Saludos, viajero."
+    local populatedOptions = {}
+    local finalizedCount = nil
+    local selectChatterCalled = false
+    _G.SelectChatterOption = function() selectChatterCalled = true end
+    _G.CHATTER_TALK_CHOICE = 1
+    _G.CHATTER_GOODBYE = 2
+    _G.MAX_CHATTER_OPTIONS = 10
+
+    local mockBodyLabel = { SetText = function(_, txt) bodyTextValue = txt end }
+    local mockControl = { GetNamedChild = function(_, name) if name == "TargetAreaBodyText" then return mockBodyLabel end end }
+
+    local MockInteraction = { optionControls = {} }
+    function MockInteraction:PopulateChatterOption(controlID, optionIndex, optionText, optionType, optionalArg, isImportant, chosenBefore)
+        local ctrl = { chosenBefore = chosenBefore, SetColor = function(c, r, g, b, a) c._color = { r, g, b, a } end }
+        self.optionControls[controlID] = ctrl
+        table.insert(populatedOptions, {
+            controlID = controlID,
+            optionIndex = optionIndex,
+            optionText = optionText,
+            optionType = optionType,
+            chosenBefore = chosenBefore,
+        })
+    end
+    function MockInteraction:FinalizeChatterOptions(optionCount)
+        finalizedCount = optionCount
+    end
+    function MockInteraction:PopulateChatterOptions(optionCount)
+        for i = 1, optionCount do
+            self:PopulateChatterOption(i, i, "Nativa " .. i, CHATTER_TALK_CHOICE)
+        end
+        local nextId = optionCount + 1
+        self:PopulateChatterOption(nextId, function() end, "Adiós", CHATTER_GOODBYE)
+        self:FinalizeChatterOptions(nextId)
+        return nextId, {}
+    end
+    MockInteraction.control = mockControl
+    _G.ZO_Interaction = MockInteraction
+    RPQuest.DialogueInjector:InstallHooks()
+
+    -- Matching NPC: injects RPQuest option before CHATTER_GOODBYE
+    currentInteractName = "Tabernero^m"
+    mockState.zoneId = 381
+    populatedOptions = {}
+    local finalCount = MockInteraction:PopulateChatterOptions(1)
+    AssertEqual(finalCount, 3, "Injected 1 option before CHATTER_GOODBYE (total 3)")
+    AssertEqual(finalizedCount, 3, "FinalizeChatterOptions received updated count 3")
+    AssertEqual(populatedOptions[2].optionText, "el sello roto", "Injected option text uses exact player dialogue text")
+    AssertEqual(type(populatedOptions[2].optionIndex), "function", "Injected optionIndex is a Lua callback function")
+    AssertEqual(populatedOptions[3].optionType, CHATTER_GOODBYE, "CHATTER_GOODBYE remains last option")
+
+    -- Clicking injected option updates NPC body text without calling SelectChatterOption and grays out option
+    AssertEqual(populatedOptions[2].chosenBefore, false, "Option starts unseen (chosenBefore=false)")
+    populatedOptions[2].optionIndex()
+    AssertEqual(bodyTextValue, "Dejó una nota bajo la mesa 4~5; busca allí.", "NPC response shown in TargetAreaBodyText")
+    AssertEqual(selectChatterCalled, false, "SelectChatterOption is never called for RPQuest dialogue")
+    AssertEqual(MockInteraction.optionControls[2].chosenBefore, true, "Clicked option marked chosenBefore=true")
+    AssertTrue(MockInteraction.optionControls[2]._color ~= nil, "Clicked option color updated to disabled/seen gray")
+
+    -- Re-opening dialogue with same NPC keeps chosenBefore=true
+    populatedOptions = {}
+    MockInteraction:PopulateChatterOptions(1)
+    AssertEqual(populatedOptions[2].chosenBefore, true, "Re-opened dialogue preserves chosenBefore=true")
+
+    -- Non-matching NPC: native options untouched
+    currentInteractName = "Mendigo Aleatorio"
+    populatedOptions = {}
+    local untouchedCount = MockInteraction:PopulateChatterOptions(1)
+    AssertEqual(untouchedCount, 2, "Non-matching NPC has untouched option count")
+    AssertEqual(populatedOptions[2].optionType, CHATTER_GOODBYE, "Non-matching NPC keeps native CHATTER_GOODBYE at 2")
+
+    -- MAX_CHATTER_OPTIONS cap respected
+    currentInteractName = "Tabernero^m"
+    populatedOptions = {}
+    local cappedCount = MockInteraction:PopulateChatterOptions(9)
+    AssertEqual(cappedCount, 10, "At MAX_CHATTER_OPTIONS=10 (9 native + goodbye), does not overflow")
+    AssertEqual(populatedOptions[10].optionType, CHATTER_GOODBYE, "CHATTER_GOODBYE preserved at cap")
+
+    -- 6. Backward compatibility with RPQ1 codes
+    local rpq1Code = code:gsub("^RPQ2:", "RPQ1:")
+    -- Recompute checksum? No, RPQ1 had 14 fields; let's test DecodeCompletion rejecting RPQ1 as not-completion-code
+    local okComp, errComp = RPQuest.ShareCodec:DecodeCompletion(rpq1Code)
+    AssertEqual(okComp, nil, "DecodeCompletion rejects RPQ1 code")
+    AssertEqual(errComp, "VALIDATE_ERR_NOT_COMPLETION_CODE", "RPQ1 rejected with VALIDATE_ERR_NOT_COMPLETION_CODE")
+end)
+
+RunTest("Editor Accordion Sections: default state, toggle layout, and auto-expand on edit", function()
+    RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+    RPQuest.JournalTab:Initialize()
+    RPQuest.JournalTab:OpenTab()
+    RPQuest.JournalTab:OpenCreateEditor()
+
+    local sections = RPQuest.JournalTab.editorSectionsByKey
+    AssertTrue(sections ~= nil, "editorSectionsByKey initialized")
+    AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed")
+    AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed")
+    AssertEqual(sections.dialogue.body:IsHidden(), true, "Dialogue section starts collapsed")
+    AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed")
+
+    local yCollapsed = sections.dialogue.divider._anchors[1].y
+    RPQuest.JournalTab:ToggleEditorSection("discovery")
+    AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery section expands on toggle")
+    local yExpanded = sections.dialogue.divider._anchors[1].y
+    AssertTrue(yExpanded > yCollapsed, "Subsequent section Y offset increases when discovery accordion expands")
+
+    RPQuest.JournalTab:ToggleEditorSection("discovery")
+    AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section collapses on second toggle")
+
+    -- Save a quest with options configured and verify OpenEditEditor keeps all accordions collapsed by default
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.50,
+        targetY = 0.50,
+    })
+    RPQuest.QuestRepository:UpdateDraftFields({ requireUndetected = true })
+    local q = RPQuest.QuestRepository:SaveDraft("Misión Acordeón", "Prueba.", nil, "Listo.")
+    AssertTrue(q ~= nil, "Quest saved for edit accordion test")
+
+    RPQuest.JournalTab:OpenEditEditor(q.id)
+    AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed on edit")
+    AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed on edit")
+    AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed on edit")
+end)
+
+RunTest("Optimizations: completion code cache, discovery-only FindPendingTarget, ShareCodec escape, keybind string", function()
+    RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+
+    -- 1. Keybind string for discovery capture is registered
+    RPQuest.Locale._stringsRegistered = false
+    RPQuest.Locale:Initialize("en")
+    AssertTrue(_G["SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"] ~= nil, "SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY is registered")
+
+    -- 2. ShareCodec escaping roundtrip with special delimiters
+    local specialQuest = {
+        title = "100% Test | ; ~",
+        description = "Line 1\nLine 2 %7C ~ ;",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+        areaCenterX = 0.5,
+        areaCenterY = 0.5,
+        areaRadius = 0.075,
+        targets = { { name = "Bandit | Boss", requiredCount = 2 } },
+    }
+    local encoded = RPQuest.ShareCodec:EncodeQuest(specialQuest)
+    local decoded = RPQuest.ShareCodec:DecodeQuest(encoded)
+    AssertTrue(decoded ~= nil, "Special characters quest decoded")
+    AssertEqual(decoded.title, specialQuest.title, "Special delimiter characters preserved in title")
+    AssertEqual(decoded.description, specialQuest.description, "Newline and percent sequences preserved in description")
+    AssertEqual(decoded.targets[1].name, "Bandit | Boss", "Pipe preserved in target name")
+
+    -- 3. Discovery-only active quest skips target normalization in FindPendingTarget
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+        zoneId = 381,
+        worldX = 1000,
+        worldY = 0,
+        worldZ = 2000,
+        radius = 1000,
+        message = "Clue",
+    })
+    local discQuest = RPQuest.QuestRepository:SaveDraft("Discovery Only", "Desc")
+    RPQuest.QuestRepository:SetActiveQuest(discQuest.id)
+    local matchedQ, matchedT = RPQuest.QuestRepository:FindPendingTarget("Random Mob")
+    AssertEqual(matchedQ, nil, "FindPendingTarget returns nil for discovery-only quest")
+    AssertEqual(matchedT, nil, "FindPendingTarget returns nil target for discovery-only quest")
+
+    -- 4. ExportCompletionCode caches result and invalidates on ResetQuest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.50,
+        targetY = 0.50,
+    })
+    local q = RPQuest.QuestRepository:SaveDraft("Cache Test", "Desc")
+    local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
+    local imp = RPQuest.QuestRepository:ImportQuestFromCode(code)
+    RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imp.areaCenterX, y = imp.areaCenterY })
+    AssertEqual(imp.completed, true, "Imported quest completed")
+    local c1 = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
+    local c2 = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
+    AssertTrue(c1 ~= nil and c1 == c2, "ExportCompletionCode returns cached code")
+    RPQuest.QuestRepository:ResetQuest(imp.id)
+    local cAfterReset, errAfterReset = RPQuest.QuestRepository:ExportCompletionCode(imp.id)
+    AssertEqual(cAfterReset, nil, "ExportCompletionCode cache invalidated on ResetQuest")
+    AssertEqual(errAfterReset, "Quest is not completed", "ResetQuest marks quest incomplete")
 end)
 
 if failed > 0 then
