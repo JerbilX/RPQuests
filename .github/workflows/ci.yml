@@ -26,7 +26,7 @@ jobs:
         run: luacheck .
 
       - name: Run ESOUI compliance checks
-        run: ./scripts/check-esoui.sh
+        run: ./scripts/check-esoui.sh --skip-package
 
       - name: Verify package build
         run: ./scripts/package.sh

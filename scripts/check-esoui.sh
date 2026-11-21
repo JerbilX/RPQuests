@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+SKIP_PACKAGE=0
+if [[ "${1:-}" == "--skip-package" ]]; then
+  SKIP_PACKAGE=1
+fi
+
 ERRORS=0
 
 fail() {
@@ -87,11 +92,13 @@ else
   pass "$BBCODE_FILE contains no slash commands."
 fi
 
-# 7. Package build must succeed cleanly
-if ./scripts/package.sh >/dev/null; then
-  pass "./scripts/package.sh built cleanly."
-else
-  fail "./scripts/package.sh failed."
+# 7. Package build must succeed cleanly (unless --skip-package is passed, e.g. in CI)
+if [[ "$SKIP_PACKAGE" -eq 0 ]]; then
+  if ./scripts/package.sh >/dev/null; then
+    pass "./scripts/package.sh built cleanly."
+  else
+    fail "./scripts/package.sh failed."
+  fi
 fi
 
 if [[ "$ERRORS" -gt 0 ]]; then
