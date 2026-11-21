@@ -372,7 +372,7 @@ function ShareCodec:EncodeQuest(quest)
     return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
 end
 
-local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, badChecksumErr, allowedPrefixes)
+local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, badChecksumErr, allowedPrefixes, unknownPrefixErr)
     local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
     local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([A-Za-z0-9%-_]+)$")
     if not pfx or not checksum or #checksum ~= 4 or not encodedPayload then
@@ -381,7 +381,7 @@ local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, 
     if allowedPrefixes then
         local errOrAllowed = allowedPrefixes[pfx]
         if errOrAllowed == nil then
-            return nil, nil, invalidFormatErr
+            return nil, nil, unknownPrefixErr or invalidFormatErr
         elseif type(errOrAllowed) == "string" then
             return nil, nil, errOrAllowed
         end
@@ -402,17 +402,28 @@ end
 
 function ShareCodec:DecodeQuest(codeString)
     if type(codeString) ~= "string" then
-        return nil, "Code must be a string"
+        return nil, "ERR_IMPORT_EMPTY"
+    end
+
+    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed == "" then
+        return nil, "ERR_IMPORT_EMPTY"
     end
 
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
     local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
+    local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
     local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
-        codeString,
-        "Invalid code format",
-        "Corrupted base64 payload",
-        "Checksum mismatch",
-        { [prefix] = true, [legacyPrefix] = true }
+        trimmed,
+        "ERR_IMPORT_INVALID_FORMAT",
+        "ERR_IMPORT_TRUNCATED_OR_CORRUPT",
+        "ERR_IMPORT_TRUNCATED_OR_CORRUPT",
+        {
+            [prefix] = true,
+            [legacyPrefix] = true,
+            [compPrefix] = "ERR_IMPORT_NOT_QUEST_CODE",
+        },
+        "ERR_IMPORT_UNSUPPORTED_VERSION"
     )
     if not rawPayload then
         return nil, envErr
@@ -420,7 +431,7 @@ function ShareCodec:DecodeQuest(codeString)
 
     local fields = SplitByChar(rawPayload, "|")
     if #fields < 11 then
-        return nil, "Incomplete quest payload"
+        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
 
     local title = UnescapeField(fields[1])
@@ -442,11 +453,11 @@ function ShareCodec:DecodeQuest(codeString)
     local decodedDialogues = fields[17] and DecodeDialoguesList(fields[17]) or {}
 
     if #decodedTargets == 0 and #decodedDiscoveries == 0 then
-        return nil, "Invalid target data in code"
+        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
 
     if #decodedTargets > 0 and (not areaCenterX or not areaCenterY or not areaRadius or areaRadius <= 0) then
-        return nil, "Invalid area coordinates in code"
+        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
 
     return {
