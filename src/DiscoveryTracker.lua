@@ -75,7 +75,7 @@ function DiscoveryTracker:OnUpdateTick()
     end
 end
 
-function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, worldY, worldZ, preloadedQuest)
+function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, _worldY, worldZ, preloadedQuest)
     local activeQuest = preloadedQuest or Addon.QuestRepository:GetActiveQuest()
     if not preloadedQuest and not Addon.QuestRepository:HasPendingDiscoveries(activeQuest) then
         self:UpdatePollingState()

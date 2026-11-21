@@ -52,7 +52,7 @@ function Announcements:AnnounceQuestAccepted(quest)
     emitLargeBanner(mainText, nil, SOUNDS.QUEST_ACCEPTED, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED)
 end
 
-function Announcements:AnnounceQuestCompleted(quest, matchedTarget)
+function Announcements:AnnounceQuestCompleted(quest, _matchedTarget)
     if not quest then return end
 
     local mainText = Addon.Locale:Get("CSA_QUEST_COMPLETED", quest.title or "")
@@ -70,14 +70,14 @@ local function emitDiscoveryStyleMessage(text)
     CHAT_SYSTEM:AddMessage(Addon.Constants.UI.CHAT_PREFIX .. text)
 end
 
-function Announcements:AnnounceDiscovery(quest, point)
+function Announcements:AnnounceDiscovery(_quest, point)
     if not point or type(point.message) ~= "string" or point.message == "" then
         return
     end
     emitDiscoveryStyleMessage(point.message)
 end
 
-function Announcements:AnnounceTargetCustomMessage(quest, target)
+function Announcements:AnnounceTargetCustomMessage(_quest, target)
     if not target or type(target.customMessage) ~= "string" then
         return
     end

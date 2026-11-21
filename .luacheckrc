@@ -1,13 +1,18 @@
 -- Luacheck configuration for RPQuest (ESO Lua 5.1 / LuaJIT)
 std = "luajit"
+max_line_length = false
+self = false
 
 exclude_files = {
     "tests/**",
 }
 
--- Addon global namespace (initialized as `RPQuest = RPQuest or {}` across modules)
+-- Addon global namespace and EsoUI tables mutated by addon registration
 globals = {
     "RPQuest",
+    "ESO_Dialogs",
+    "SLASH_COMMANDS",
+    "ZO_MapPin",
 }
 
 -- Official Elder Scrolls Online (EsoUI) read-only globals
@@ -21,7 +26,6 @@ read_globals = {
     "CALLBACK_MANAGER",
     "CENTER_SCREEN_ANNOUNCE",
     "CHAT_SYSTEM",
-    "ESO_Dialogs",
     "EVENT_MANAGER",
     "GAMEPAD_WORLD_MAP_SCENE",
     "GuiRoot",
@@ -32,13 +36,11 @@ read_globals = {
     "MAIN_MENU_KEYBOARD",
     "QUEST_JOURNAL_KEYBOARD",
     "SCENE_MANAGER",
-    "SLASH_COMMANDS",
     "SOUNDS",
     "SYSTEMS",
     "WINDOW_MANAGER",
     "WORLD_MAP_MANAGER",
     "WORLD_MAP_SCENE",
-    "ZO_MapPin",
     "ZO_QuestJournal",
     "ZO_SavedVars",
     "ZO_SimpleSceneFragment",
@@ -136,6 +138,7 @@ read_globals = {
     "MAIL_MAX_BODY_CHARACTERS",
     "MAPTYPE_COSMIC",
     "MAPTYPE_WORLD",
+    "MAX_CHATTER_OPTIONS",
     "MENU_CATEGORY_MAP",
     "MODIFY_TEXT_TYPE_UPPERCASE",
     "REGISTER_FILTER_COMBAT_RESULT",
@@ -157,6 +160,8 @@ read_globals = {
     "TEXT_ALIGN_TOP",
     "TOPLEFT",
     "TOPRIGHT",
+    "UI_ALERT_CATEGORY_ALERT",
+    "UI_ALERT_CATEGORY_ERROR",
     "UNIT_REACTION_COMPANION",
     "UNIT_REACTION_HOSTILE",
     "UNIT_REACTION_NPC_ALLY",

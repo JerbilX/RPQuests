@@ -442,7 +442,7 @@ function MailTransport:SendCompletionReport(quest)
     return true
 end
 
-function MailTransport:OnMailSendSuccess(playerName)
+function MailTransport:OnMailSendSuccess(_playerName)
     if not self._isSending then return end
     if self._currentSendItem and self._currentSendItem.completionQuestId then
         Addon.QuestRepository:MarkCompletionReported(self._currentSendItem.completionQuestId)
@@ -474,7 +474,7 @@ function MailTransport:ParseQuestMailBody(body)
         return nil, ""
     end
 
-    local sIdx, eIdx, code = string.find(body, "(RPQ%d+:[^%s]+)")
+    local sIdx, _, code = string.find(body, "(RPQ%d+:[^%s]+)")
     if not code then
         return nil, ""
     end
@@ -524,7 +524,7 @@ function MailTransport:ParseCompletionMailBody(body)
     return code
 end
 
-function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, _subject, body)
     local idKey = tostring(mailId)
     if self._dismissedMailIds and self._dismissedMailIds[idKey] then
         return false

@@ -138,10 +138,10 @@ local function GetAreaContextIfNeeded(quest)
     return Addon.TargetCapture:GetPlayerMapContext(false, false)
 end
 
-function CombatTracker:OnCombatEvent(eventCode, result, isError, abilityName, abilityGraphic,
-                                     abilityActionSlotType, sourceName, sourceType, targetName,
-                                     targetType, hitValue, powerType, damageType, log,
-                                     sourceUnitId, targetUnitId, abilityId)
+function CombatTracker:OnCombatEvent(_eventCode, result, isError, _abilityName, _abilityGraphic,
+                                     _abilityActionSlotType, _sourceName, sourceType, targetName,
+                                     _targetType, _hitValue, _powerType, _damageType, _log,
+                                     _sourceUnitId, targetUnitId, _abilityId)
     if isError then return end
 
     local isDeath = (ACTION_RESULT_DIED and result == ACTION_RESULT_DIED)
@@ -240,7 +240,7 @@ function CombatTracker:HandleJusticeViolation()
     end
 end
 
-function CombatTracker:OnJusticeBountyUpdated(eventCode, oldBounty, newBounty, isInitialize)
+function CombatTracker:OnJusticeBountyUpdated(_eventCode, oldBounty, newBounty, isInitialize)
     if isInitialize then return end
     if type(newBounty) ~= "number" or type(oldBounty) ~= "number" or newBounty <= oldBounty then
         return
@@ -248,13 +248,13 @@ function CombatTracker:OnJusticeBountyUpdated(eventCode, oldBounty, newBounty, i
     self:HandleJusticeViolation()
 end
 
-function CombatTracker:OnJusticeInfamyUpdated(eventCode, oldInfamy, newInfamy, oldInfamyLevel, newInfamyLevel)
+function CombatTracker:OnJusticeInfamyUpdated(_eventCode, oldInfamy, newInfamy, _oldInfamyLevel, _newInfamyLevel)
     if type(newInfamy) ~= "number" or type(oldInfamy) ~= "number" or newInfamy <= oldInfamy then
         return
     end
     self:HandleJusticeViolation()
 end
 
-function CombatTracker:OnJusticePickpocketFailed(eventCode)
+function CombatTracker:OnJusticePickpocketFailed(_eventCode)
     self:HandleJusticeViolation()
 end

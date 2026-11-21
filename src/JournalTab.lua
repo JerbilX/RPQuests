@@ -865,7 +865,7 @@ function JournalTab:BuildEditorPane(parent)
         local draft = Addon.QuestRepository:GetDraft()
         local target = idx and draft.targets and draft.targets[idx]
         if not target then return end
-        Addon.QuestRepository:UpdateDraftTarget(idx, { locationRequired = not (target.locationRequired == true) })
+        Addon.QuestRepository:UpdateDraftTarget(idx, { locationRequired = target.locationRequired ~= true })
     end)
     self.btnTargetLocRequired:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 266, 160)
     self.btnTargetLocRequired:SetHidden(true)
@@ -2573,7 +2573,6 @@ function JournalTab:RefreshEditorPane()
         self.discoveryMsgEdit:SetText(activeDiscMsg)
     end
 
-    local discRadii = Addon.Constants.DISCOVERY_RADIUS
     local curDiscRad = (selectedPoint and selectedPoint.radius) or draft.discoveryRadius or discRadii.MEDIUM
     if self.btnDiscRadSmall then
         self.btnDiscRadSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_SMALL"), curDiscRad == discRadii.SMALL))

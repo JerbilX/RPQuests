@@ -58,7 +58,7 @@ function Addon:HandleSlashCommand(args)
     end
 end
 
-local function OnAddOnLoaded(eventCode, addOnName)
+local function OnAddOnLoaded(_eventCode, addOnName)
     if addOnName ~= Addon.name then
         return
     end
