@@ -59,6 +59,11 @@ EVENT_MAIL_SEND_FAILED = 131303
 EVENT_MAIL_INBOX_UPDATE = 131304
 EVENT_MAIL_READABLE = 131305
 EVENT_MAIL_REMOVED = 131306
+MAIL_SEND_RESULT_CANCELED = 1
+MAIL_SEND_RESULT_CANT_SEND_TO_SELF = 2
+MAIL_SEND_RESULT_MAILBOX_NOT_OPEN = 11
+MAIL_SEND_RESULT_RECIPIENT_NOT_FOUND = 15
+GetDisplayName = GetDisplayName or function() return mockState.displayName or "@TestPlayer" end
 EVENT_CHATTER_BEGIN = 131400
 EVENT_GROUP_UPDATE = 131500
 MODIFY_TEXT_TYPE_UPPERCASE = 1
@@ -3226,6 +3231,125 @@ RunTest("39. Master single recipient persistence, direct send, and status transi
     _G.SendMail = origSendMail
     _G.RequestOpenMailbox = origReqOpen
     _G.CloseMailbox = origClose
+end)
+
+RunTest("40. Issue #162: Completion mail normalization, mailbox retry, self-mail & error alerts", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+    RPQuest.JournalTab:Initialize()
+
+    local sentMails = {}
+    local openCalls = 0
+    local nativeMailOpen = false
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReadMail = _G.ReadMail
+    local origDeleteMail = _G.DeleteMail
+    local origScene = _G.SCENE_MANAGER
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+
+    local alerts = {}
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+
+    _G.SCENE_MANAGER = {
+        IsShowing = function(_, name)
+            return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
+        end,
+    }
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.RequestOpenMailbox = function() openCalls = openCalls + 1 end
+    _G.CloseMailbox = function() end
+    _G.DeleteMail = function() end
+
+    -- 1. senderDisplayName without @ and with spaces is normalized on import and completion send
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Lobo",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local prep = RPQuest.QuestRepository:SaveDraft("Misión Normalizada", "Desc")
+    local code = RPQuest.QuestRepository:ExportQuestToCode(prep.id)
+
+    _G.GetNextMailId = function(lastId) return (lastId == nil) and 401 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 401 then return "  QuestMaster  ", "MasterChar", "[RPQuest] Misión Normalizada", "", true, false, false, false, 0, 0, 0, 30, 1, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 401) and code or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    local received = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    local q = received[1]
+    AssertEqual(q.senderDisplayName, "@QuestMaster", "senderDisplayName normalized on import")
+    RPQuest.QuestRepository:AcceptOfferedQuest(q.id)
+
+    -- 2. Simulate native scene showing before EVENT_MAIL_OPEN_MAILBOX -> MAIL_SEND_RESULT_MAILBOX_NOT_OPEN retry
+    nativeMailOpen = true
+    RPQuest.QuestRepository:SetActiveQuest(q.id)
+    RPQuest.QuestRepository:RecordTargetEliminated("Lobo", { mapId = 32, zoneId = 381, x = q.areaCenterX, y = q.areaCenterY })
+    AssertEqual(#sentMails, 1, "Initial SendMail attempted when native UI reported open")
+    AssertEqual(sentMails[1].to, "@QuestMaster", "Normalized @QuestMaster used as recipient")
+
+    -- Server rejects first attempt with MAIL_SEND_RESULT_MAILBOX_NOT_OPEN -> should re-queue and RequestOpenMailbox
+    RPQuest.MailTransport:OnMailSendFailed(MAIL_SEND_RESULT_MAILBOX_NOT_OPEN)
+    AssertEqual(openCalls, 1, "RequestOpenMailbox called on MAIL_SEND_RESULT_MAILBOX_NOT_OPEN retry")
+    AssertEqual(RPQuest.MailTransport._isSending, true, "Send queue remains active during mailbox retry")
+
+    RPQuest.MailTransport:OnMailboxOpened()
+    AssertEqual(#sentMails, 2, "SendMail retried after EVENT_MAIL_OPEN_MAILBOX")
+    RPQuest.MailTransport:OnMailSendSuccess("@QuestMaster")
+    AssertEqual(q.completionReported, true, "completionReported marked true after retry succeeds")
+
+    -- 3. Self-mail on QUEST_COMPLETED surfaces actionable error instead of failing silently
+    local mailErrors = {}
+    RPQuest.MailTransport:RegisterListener(function(evType, payload)
+        if evType == "MAIL_SEND_ERROR" then
+            table.insert(mailErrors, payload)
+        end
+    end)
+
+    nativeMailOpen = false
+    alerts = {}
+    RPQuest.QuestRepository:ResetQuest(q.id)
+    q.completionReported = false
+    q.senderDisplayName = "@TestPlayer" -- matches GetDisplayName()
+    RPQuest.QuestRepository:RecordTargetEliminated("Lobo", { mapId = 32, zoneId = 381, x = q.areaCenterX, y = q.areaCenterY })
+    AssertEqual(#mailErrors, 1, "Self-mail emits MAIL_SEND_ERROR instead of failing silently")
+    AssertEqual(mailErrors[1].reason, "ERR_MAIL_SELF_RECIPIENT", "Self-mail reason is ERR_MAIL_SELF_RECIPIENT")
+    AssertEqual(mailErrors[1].to, "@TestPlayer", "MAIL_SEND_ERROR includes recipient")
+    AssertTrue(#alerts >= 1 and alerts[#alerts].isErr == true, "Self-mail surfaces error alert")
+
+    -- 4. Mailbox closed mid-wait emits MAIL_SEND_ERROR with non-nil target
+    q.senderDisplayName = "@OtherMaster"
+    RPQuest.QuestRepository:ResetQuest(q.id)
+    q.completionReported = false
+    RPQuest.QuestRepository:RecordTargetEliminated("Lobo", { mapId = 32, zoneId = 381, x = q.areaCenterX, y = q.areaCenterY })
+    RPQuest.MailTransport:OnMailboxClosed()
+    AssertEqual(#mailErrors, 2, "Mailbox close during wait emits MAIL_SEND_ERROR")
+    AssertEqual(mailErrors[2].to, "@OtherMaster", "MAIL_SEND_ERROR preserves target while waiting for mailbox")
+    AssertEqual(mailErrors[2].reason, "MAILBOX_CLOSED", "MAIL_SEND_ERROR reports MAILBOX_CLOSED")
+
+    RPQuest.Announcements.ShowAlert = origShowAlert
+    _G.SCENE_MANAGER = origScene
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.ReadMail = origReadMail
+    _G.DeleteMail = origDeleteMail
 end)
 
 if failed > 0 then

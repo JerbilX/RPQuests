@@ -893,8 +893,14 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
 
     decoded.discoveries = CloneDiscoveriesList(decoded.discoveries, false)
     decoded.dialogues = CloneDialoguesList(decoded.dialogues, decoded.clue)
-    if type(senderDisplayName) == "string" and senderDisplayName ~= "" then
-        decoded.senderDisplayName = senderDisplayName
+    if type(senderDisplayName) == "string" then
+        local cleanSender = senderDisplayName:gsub("^%s+", ""):gsub("%s+$", "")
+        if cleanSender ~= "" then
+            if cleanSender:sub(1, 1) ~= "@" then
+                cleanSender = "@" .. cleanSender
+            end
+            decoded.senderDisplayName = cleanSender
+        end
     end
     decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
     decoded.sourceMailId = options.sourceMailId

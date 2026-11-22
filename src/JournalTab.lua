@@ -1210,6 +1210,10 @@ end
 function JournalTab:OnMailTransportEvent(evType, payload)
     if evType == "MAIL_SEND_PROGRESS" and self.mailSendStatusLabel and type(payload) == "table" then
         self.mailSendStatusLabel:SetText(Addon.Locale:Get("MAIL_SENDING_PROGRESS", payload.current, payload.total, payload.to or ""))
+    elseif evType == "MAIL_SEND_ERROR" and self.mailSendStatusLabel and type(payload) == "table" then
+        if type(payload.message) == "string" and payload.message ~= "" then
+            self.mailSendStatusLabel:SetText(payload.message)
+        end
     elseif evType == "MAIL_SEND_COMPLETE" and type(payload) == "table" then
         local msg = (payload.failed and payload.failed > 0)
             and Addon.Locale:Get("MAIL_SEND_DONE_ERRORS", payload.sent, payload.total, payload.failed)
