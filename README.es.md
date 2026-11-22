@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.5.0-blue)
+![Version](https://img.shields.io/badge/version-1.5.1-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -100,8 +100,11 @@ RPQuest/
 ├── src/
 │   ├── Constants.lua        # Constantes, radios y metadatos
 │   ├── Locale.lua           # Selector de idioma del cliente e i18n
-│   ├── ShareCodec.lua       # Codificador/decodificador RPQ3 / RPQ2 / RPQ1 y RPQC1 con LZSS + CRC16
+│   ├── BinaryCodec.lua      # Primitivas binarias Base85, Base64Url, LZSS y Varint
+│   ├── ShareCodec.lua       # Serialización de misiones/resultados RPQ3 / RPQ2 / RPQ1 y RPQC1
+│   ├── MailInbox.lua        # Escaneo de bandeja, reensamblado RPQP e ingesta de correos
 │   ├── MailTransport.lua    # Envío y recepción de misiones y reportes por correo in-game
+│   ├── QuestDraftStore.lua  # Estado de borrador de creación y normalización de objetivos
 │   ├── QuestRepository.lua  # CRUD por personaje y cálculo de offset del círculo
 │   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
@@ -109,7 +112,11 @@ RPQuest/
 │   ├── DiscoveryTracker.lua # Sondeo de proximidad a puntos de descubrimiento ocultos
 │   ├── DialogueInjector.lua # Inyección de diálogos en NPCs nativos
 │   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
-│   └── JournalTab.lua       # Pestaña en el Diario de Misiones y mini-tracker HUD
+│   ├── JournalWidgets.lua   # Helpers de widgets UI y formato reutilizables para JournalTab
+│   ├── JournalDetailPane.lua# Panel de detalle de misión y actualización de acciones
+│   ├── JournalEditorPane.lua# Panel editor multi-sección para misiones preparadas
+│   ├── JournalMailSendPane.lua# Panel de envío por correo in-game y progreso de transporte
+│   └── JournalTab.lua       # Coordinador de la pestaña en el Diario de Misiones
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)
 └── tests/
     ├── run.lua              # Suite de pruebas unitarias herméticas (LuaJIT)

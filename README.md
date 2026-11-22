@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.5.0-blue)
+![Version](https://img.shields.io/badge/version-1.5.1-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -100,8 +100,11 @@ RPQuest/
 ├── src/
 │   ├── Constants.lua        # Constants, radii, and metadata
 │   ├── Locale.lua           # Client language selector & i18n
-│   ├── ShareCodec.lua       # RPQ3 / RPQ2 / RPQ1 & RPQC1 codec with LZSS + CRC16
+│   ├── BinaryCodec.lua      # Base85, Base64Url, LZSS, and Varint binary primitives
+│   ├── ShareCodec.lua       # RPQ3 / RPQ2 / RPQ1 & RPQC1 quest/result serialization
+│   ├── MailInbox.lua        # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
+│   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
 │   ├── QuestRepository.lua  # Per-character CRUD & search area offset logic
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
@@ -109,7 +112,11 @@ RPQuest/
 │   ├── DiscoveryTracker.lua # Hidden discovery proximity polling
 │   ├── DialogueInjector.lua # Native NPC dialogue injection
 │   ├── WorldMapArea.lua     # Native search circle on ZO_WorldMap
-│   └── JournalTab.lua       # Native Quest Journal tab & HUD mini-tracker
+│   ├── JournalWidgets.lua   # Reusable UI widget & formatting helpers for JournalTab
+│   ├── JournalDetailPane.lua# Quest detail pane & action button builders/refresh
+│   ├── JournalEditorPane.lua# Multi-section quest editor pane builders/refresh
+│   ├── JournalMailSendPane.lua# In-game mail send pane & transport event UI
+│   └── JournalTab.lua       # Native Quest Journal tab coordinator
 ├── docs/adr/                # Architecture Decision Records (MADR)
 └── tests/
     ├── run.lua              # Hermetic unit test suite (LuaJIT)
