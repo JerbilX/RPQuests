@@ -27,7 +27,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
   - Assign a single `@AccountName` recipient directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU).
   - **Auto-Ingested Pending Quests:** Incoming quest mails are automatically ingested into the player's **Pending** list with a visible alert and **Accept** / **Reject** actions directly in the RPQuest Journal.
   - **Automatic Completion & Rejection Reports:** Completing or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Completed` / `Rejected`).
-- **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
+- **Account-Wide Persistence & Auto-Localization:** Stores quests and progress account-wide via `ZO_SavedVars:NewAccountWide` (matching ESO's account-wide mail, with automatic non-destructive migration from legacy per-character data) and auto-detects client language (`en` / `es`).
 
 ---
 
@@ -82,7 +82,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 
 - **Game Version:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **External Libraries:** None (`Zero-Dependency`)
-- **SavedVariables:** `RPQuest_SavedVariables` (per character)
+- **SavedVariables:** `RPQuest_SavedVariables` (account-wide)
 - **Supported Languages:** English (`en`), Spanish (`es`)
 
 ---
@@ -105,7 +105,7 @@ RPQuest/
 │   ├── MailInbox.lua        # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
 │   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
-│   ├── QuestRepository.lua  # Per-character CRUD & search area offset logic
+│   ├── QuestRepository.lua  # Account-wide CRUD, migration & search area offset logic
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
 │   ├── CombatTracker.lua    # Kill & stealth tracking (EVENT_COMBAT_EVENT)

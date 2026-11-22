@@ -27,7 +27,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
   - Asigna un único destinatario (`@Cuenta`) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU).
   - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario.
   - **Reportes Automáticos de Completado y Rechazo:** Al completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Completada` / `Rechazada`).
-- **Persistencia por Personaje y Auto-Localización:** Guarda el progreso por personaje con `ZO_SavedVars:NewCharacterIdSettings` y detecta automáticamente el idioma del cliente (`es` / `en`).
+- **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente el idioma del cliente (`es` / `en`).
 
 ---
 
@@ -82,7 +82,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 - **Versión del Juego:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **Librerías Externas:** Ninguna (`Zero-Dependency`)
-- **SavedVariables:** `RPQuest_SavedVariables` (por personaje)
+- **SavedVariables:** `RPQuest_SavedVariables` (por cuenta / account-wide)
 - **Idiomas Soportados:** Español (`es`), Inglés (`en`)
 
 ---
@@ -105,7 +105,7 @@ RPQuest/
 │   ├── MailInbox.lua        # Escaneo de bandeja, reensamblado RPQP e ingesta de correos
 │   ├── MailTransport.lua    # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestDraftStore.lua  # Estado de borrador de creación y normalización de objetivos
-│   ├── QuestRepository.lua  # CRUD por personaje y cálculo de offset del círculo
+│   ├── QuestRepository.lua  # CRUD account-wide, migración y cálculo de offset del círculo
 │   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
 │   ├── CombatTracker.lua    # Seguimiento de bajas y sigilo (EVENT_COMBAT_EVENT)

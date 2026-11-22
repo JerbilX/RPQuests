@@ -8,12 +8,12 @@ return function(T)
     local mockState = T.mockState
     local mockPinManager = T.mockPinManager
 
-    RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars and JournalTab", function()
+    RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Account-Wide SavedVars and JournalTab", function()
         mockState.language = "es"
         RPQuest.Locale:Initialize()
         EVENT_MANAGER:FireEvent(EVENT_ADD_ON_LOADED, "RPQuest")
 
-        AssertTrue(RPQuest.savedVars ~= nil, "Character SavedVars initialized")
+        AssertTrue(RPQuest.savedVars ~= nil, "Account-Wide SavedVars initialized")
         AssertTrue(RPQuest.JournalTab.isInitialized, "JournalTab initialized")
         AssertTrue(RPQuest.JournalTab.isTabAdded, "Custom Quests tab registered in QUEST_JOURNAL_KEYBOARD.tabs")
 
