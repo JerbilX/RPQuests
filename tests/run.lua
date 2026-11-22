@@ -3352,6 +3352,89 @@ RunTest("40. Issue #162: Completion mail normalization, mailbox retry, self-mail
     _G.DeleteMail = origDeleteMail
 end)
 
+RunTest("41. Show On Map keybind prompt visibility across quest selection, accept, activate, and modes (Issue #165)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.JournalTab:Initialize()
+    RPQuest.JournalTab.panel:SetHidden(false)
+
+    -- 1. No quest selected -> hidden
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden when no quest selected")
+    AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false when no quest selected")
+
+    -- 2. Import and select offered quest -> visible
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Bandido",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local prepared = RPQuest.QuestRepository:SaveDraft("Misión Mapa", "Prueba Show On Map.")
+    local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+    local offered = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_map_1",
+    })
+    RPQuest.JournalTab:SelectQuest(offered.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible for selected offered quest")
+    AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible true for selected offered quest")
+
+    -- 3. Accept offered quest -> still visible immediately after accept
+    local accepted = RPQuest.JournalTab:AcceptSelectedOfferedQuest()
+    AssertEqual(accepted, true, "AcceptSelectedOfferedQuest succeeds")
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map remains visible after accepting quest")
+    AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible remains true after accepting quest")
+
+    -- 4. Quest with hideMapArea=true -> still visible when selected in DETAIL mode
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Cultista",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.3,
+        targetY = 0.3,
+    })
+    RPQuest.QuestRepository:UpdateDraftFields({ hideMapArea = true })
+    local hiddenAreaQuest = RPQuest.QuestRepository:SaveDraft("Misión Sin Área", "Área oculta.")
+    RPQuest.JournalTab:SelectQuest(hiddenAreaQuest.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible even when hideMapArea is true")
+    AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible true even when hideMapArea is true")
+
+    -- 5. Callback invokes WorldMapArea:ShowQuestOnMap with selected quest
+    local origShowQuestOnMap = RPQuest.WorldMapArea.ShowQuestOnMap
+    local shownQuestId = nil
+    RPQuest.WorldMapArea.ShowQuestOnMap = function(_, q)
+        shownQuestId = q and q.id or nil
+        return true
+    end
+    RPQuest.JournalTab.showOnMapDescriptor.callback()
+    AssertEqual(shownQuestId, hiddenAreaQuest.id, "showOnMapDescriptor callback calls ShowQuestOnMap with selected quest")
+    RPQuest.WorldMapArea.ShowQuestOnMap = origShowQuestOnMap
+
+    -- 6. Editor mode -> hidden
+    RPQuest.JournalTab:OpenCreateEditor()
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Editor mode")
+    AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false in Editor mode")
+
+    -- 7. Mail Send mode -> hidden
+    RPQuest.JournalTab:SelectQuest(hiddenAreaQuest.id)
+    RPQuest.JournalTab:OpenMailSendView()
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Mail Send mode")
+    AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false in Mail Send mode")
+
+    -- Restore detail mode
+    RPQuest.JournalTab:SelectQuest(hiddenAreaQuest.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible again when returning to Detail mode")
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
