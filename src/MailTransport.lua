@@ -131,7 +131,7 @@ function MailTransport:GenerateTxId(seedText)
     if Addon.ShareCodec and Addon.ShareCodec.ComputeCRC16 and type(seedText) == "string" then
         hash = Addon.ShareCodec:ComputeCRC16(seedText) or 0
     end
-    local ts = GetTimeStamp and GetTimeStamp() or 0
+    local ts = GetTimeStamp() or 0
     local mixed = (hash + ts + self._txSeq * 7919) % 65536
     return string.format("%04X", mixed)
 end
@@ -243,9 +243,6 @@ function MailTransport:ParseRecipients(rawInput)
 end
 
 function MailTransport:IsNativeMailboxOpen()
-    if not SCENE_MANAGER or not SCENE_MANAGER.IsShowing then
-        return false
-    end
     return SCENE_MANAGER:IsShowing("mailInbox")
         or SCENE_MANAGER:IsShowing("mailSend")
         or false
@@ -256,14 +253,14 @@ function MailTransport:IsMailboxReady()
 end
 
 function MailTransport:EnsureMailboxOpen(forceRequest)
-    if (forceRequest or not self:IsMailboxReady()) and RequestOpenMailbox then
+    if forceRequest or not self:IsMailboxReady() then
         RequestOpenMailbox()
         self._openedMailbox = true
     end
 end
 
 function MailTransport:CloseMailboxIfOwned()
-    if self._openedMailbox and not self._isSending and not self:IsNativeMailboxOpen() and CloseMailbox then
+    if self._openedMailbox and not self._isSending and not self:IsNativeMailboxOpen() then
         CloseMailbox()
         self._openedMailbox = false
         self._isMailboxOpen = false
@@ -404,10 +401,6 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
         return false, "ERR_MAIL_BODY_TOO_LONG", plan.totalLen, plan.maxTotalChars
     end
 
-    if not SendMail or (not self:IsMailboxReady() and not RequestOpenMailbox) then
-        return false, "ERR_MAIL_API_UNAVAILABLE"
-    end
-
     self._sendQueue = {}
     for _, to in ipairs(recipients) do
         local numPackets = #plan.packets
@@ -469,9 +462,6 @@ function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, isRejection
     end
     if self:IsSelfRecipient(recipient) then
         return false, "ERR_MAIL_SELF_RECIPIENT"
-    end
-    if not SendMail or (not self:IsMailboxReady() and not RequestOpenMailbox) then
-        return false, "ERR_MAIL_API_UNAVAILABLE"
     end
 
     local item = {
@@ -636,7 +626,7 @@ function MailTransport:ProcessCompletionMail(mailId, senderDisplayName, _subject
                 local alertKey = (res.completed == false) and "ALERT_MAIL_REJECTION_RECEIVED" or "ALERT_MAIL_DELIVERY_VALIDATED"
                 Addon.Announcements:ShowAlert(Addon.Locale:Get(alertKey, who, q.title or ""), false)
             end
-            if Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail then
+            if Addon.QuestRepository:GetSetting("autoDeleteMail") then
                 DeleteMail(mailId)
             else
                 self._dismissedMailIds[idKey] = true
@@ -870,7 +860,7 @@ function MailTransport:ProcessMailItem(mailId, senderDisplayName, senderCharacte
     local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
     if not (isQuest or isCompletion) then return end
 
-    local body = ReadMail and ReadMail(mailId) or ""
+    local body = ReadMail(mailId) or ""
     if type(body) == "string" and body ~= "" then
         if isQuest then
             local ok, errKey, errorKey = self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
@@ -880,7 +870,7 @@ function MailTransport:ProcessMailItem(mailId, senderDisplayName, senderCharacte
         else
             self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
         end
-    elseif allowRequestRead and RequestReadMail then
+    elseif allowRequestRead then
         RequestReadMail(mailId)
     end
 end
@@ -888,9 +878,6 @@ end
 function MailTransport:ScanInbox(requestOpen)
     if requestOpen then
         self:EnsureMailboxOpen()
-    end
-    if not GetNextMailId or not GetMailItemInfo then
-        return self._receivedMails
     end
 
     local mailId = GetNextMailId(nil)
@@ -904,7 +891,7 @@ function MailTransport:ScanInbox(requestOpen)
 end
 
 function MailTransport:OnMailReadable(mailId)
-    if not mailId or not GetMailItemInfo or not ReadMail then return end
+    if not mailId then return end
     local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
     self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, false)
 end
@@ -978,7 +965,7 @@ end
 
 function MailTransport:DisposeEntryMails(entry)
     local ids = (type(entry.mailIds) == "table" and #entry.mailIds > 0) and entry.mailIds or { entry.mailId }
-    local shouldDelete = Addon.QuestRepository:GetSetting("autoDeleteMail") and DeleteMail
+    local shouldDelete = Addon.QuestRepository:GetSetting("autoDeleteMail")
     for _, mid in ipairs(ids) do
         if shouldDelete then
             DeleteMail(mid)

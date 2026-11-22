@@ -78,7 +78,7 @@ function JournalTab:RegisterRepositoryListener()
 end
 
 function JournalTab:Initialize()
-    if self.isInitialized or not WINDOW_MANAGER or not GuiRoot then
+    if self.isInitialized then
         return
     end
 
@@ -109,7 +109,7 @@ function JournalTab:Initialize()
     versionLabel:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -33, 38)
     if versionLabel.SetFont then versionLabel:SetFont("ZoFontGameSmall") end
     if versionLabel.SetColor then versionLabel:SetColor(0.68, 0.68, 0.68, 1) end
-    if versionLabel.SetHorizontalAlignment and TEXT_ALIGN_RIGHT then
+    if versionLabel.SetHorizontalAlignment then
         versionLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
     end
     local versionStr = (Addon.Constants and Addon.Constants.METADATA and Addon.Constants.METADATA.VERSION) or ""
@@ -175,10 +175,10 @@ function JournalTab:BuildLeftColumn(panel)
         rowBtn:SetDimensions(320, 28)
         rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 42 + ((i - 1) * 30))
         if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
-        if rowBtn.SetHorizontalAlignment and TEXT_ALIGN_LEFT then
+        if rowBtn.SetHorizontalAlignment then
             rowBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         end
-        if rowBtn.SetVerticalAlignment and TEXT_ALIGN_CENTER then
+        if rowBtn.SetVerticalAlignment then
             rowBtn:SetVerticalAlignment(TEXT_ALIGN_CENTER)
         end
         local rowIndex = i
@@ -427,7 +427,7 @@ function JournalTab:OnConfirmSendMailClicked()
 end
 
 function JournalTab:IntegrateIntoQuestJournalModeBar()
-    local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
+    local qj = QUEST_JOURNAL_KEYBOARD or SYSTEMS:GetKeyboardObject("questJournal")
     if not qj then return end
 
     local tabDescriptor = Addon.Constants.UI.TAB_DESCRIPTOR
@@ -635,20 +635,20 @@ function JournalTab:OpenTab()
         self:Initialize()
     end
 
-    local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
+    local qj = QUEST_JOURNAL_KEYBOARD or SYSTEMS:GetKeyboardObject("questJournal")
     if qj and qj.SetMode then
         qj:SetMode(self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR)
     end
 
-    local wasShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
+    local wasShowing = SCENE_MANAGER:IsShowing("questJournal")
 
     SCENE_MANAGER:Show("questJournal")
 
     -- Solo seleccionar el fragmento de forma síncrona si questJournal ya está visible;
     -- si estamos transicionando desde otra escena (p. ej. Notificaciones o Correo),
     -- OnShowing lo seleccionará cuando la escena previa termine de ocultarse y libere su keybind strip.
-    local isShowingNow = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
-    if wasShowing or isShowingNow or not SCENE_MANAGER or not SCENE_MANAGER.Show then
+    local isShowingNow = SCENE_MANAGER:IsShowing("questJournal")
+    if wasShowing or isShowingNow then
         if qj and qj.tabs and qj.tabs.SelectFragment and self.tabCategoryName then
             qj.tabs:SelectFragment(self.tabCategoryName)
         elseif self.panel then
@@ -666,8 +666,8 @@ function JournalTab:ToggleTab()
         self:Initialize()
     end
 
-    local qj = QUEST_JOURNAL_KEYBOARD or (SYSTEMS and SYSTEMS.GetKeyboardObject and SYSTEMS:GetKeyboardObject("questJournal"))
-    local sceneShowing = SCENE_MANAGER and SCENE_MANAGER.IsShowing and SCENE_MANAGER:IsShowing("questJournal")
+    local qj = QUEST_JOURNAL_KEYBOARD or SYSTEMS:GetKeyboardObject("questJournal")
+    local sceneShowing = SCENE_MANAGER:IsShowing("questJournal")
 
     if sceneShowing and qj and qj.mode == (self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR) then
         SCENE_MANAGER:Hide("questJournal")

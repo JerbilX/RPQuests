@@ -46,7 +46,7 @@ function DiscoveryTracker:UpdatePollingState()
 end
 
 function DiscoveryTracker:OnUpdateTick()
-    if not self._isPolling or not GetUnitWorldPosition then return end
+    if not self._isPolling then return end
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
     if not Addon.QuestRepository:HasPendingDiscoveries(activeQuest) then
         self:UpdatePollingState()
