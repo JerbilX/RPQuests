@@ -1,9 +1,9 @@
 ---
-status: accepted
+status: superseded by ADR-0012
 date: 2026-11-18
 decision-makers: [JerbilX, Antigravity]
 supersedes: []
-superseded-by: []
+superseded-by: ["0012-savedvars-account-wide-y-migracion-por-personaje.md"]
 ---
 
 # 0001 - Arquitectura Modular Zero-Dependency, Persistencia por Personaje e Internacionalización

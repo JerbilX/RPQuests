@@ -55,6 +55,7 @@ read_globals = {
     "DoesUnitExist",
     "GetCVar",
     "GetClientLanguage",
+    "GetCurrentCharacterId",
     "GetCurrentMapId",
     "GetCurrentMapZoneIndex",
     "GetDisplayName",

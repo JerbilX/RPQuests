@@ -453,4 +453,102 @@ return function(T)
         end
     end)
 
+    RunTest("QuestRepository:MigrateCharacterSavedVars migrates multiple characters non-destructively and resolves ID collisions", function()
+        local rawRoot = {
+            Default = {
+                ["@TestPlayer"] = {
+                    ["char-A"] = {
+                        nextId = 3,
+                        activeQuestId = 2,
+                        quests = {
+                            { id = 1, title = "Char A Prepared", description = "Desc A1", role = "prepared", targets = {}, discoveries = {} },
+                            { id = 2, title = "Char A Received", description = "Desc A2", role = "received", targets = {}, discoveries = {} },
+                        },
+                        ingestedMailIds = { ["mail-100"] = true },
+                        settings = { autoDeleteMail = false, autoAcceptMail = true, autoSendCompletionMail = false },
+                        draft = { title = "Draft A", description = "In progress", targets = {}, discoveries = {}, dialogues = {}, editingQuestId = 1 },
+                    },
+                    ["char-B"] = {
+                        nextId = 2,
+                        activeQuestId = 1,
+                        quests = {
+                            { id = 1, title = "Char B Quest", description = "Desc B1", role = "prepared", targets = {}, discoveries = {} },
+                        },
+                        ingestedMailIds = { ["mail-200"] = true },
+                        settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = true },
+                    },
+                },
+            },
+        }
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        local migrated = RPQuest.QuestRepository:MigrateCharacterSavedVars(rawRoot, "@TestPlayer", sv, "char-A")
+        AssertEqual(migrated, 3, "Migrated all 3 quests across both characters")
+        AssertEqual(#sv.quests, 3, "Account-wide quests table has 3 quests")
+        AssertEqual(sv.nextId, 4, "nextId advanced past resolved collision ID")
+        AssertEqual(sv.activeQuestId, 2, "Current character activeQuestId preserved")
+        AssertTrue(sv.ingestedMailIds["mail-100"] == true, "Char A ingestedMailIds merged")
+        AssertTrue(sv.ingestedMailIds["mail-200"] == true, "Char B ingestedMailIds merged")
+        AssertEqual(sv.settings.autoDeleteMail, false, "Current character settings preserved")
+        AssertEqual(sv.settings.autoAcceptMail, true, "Current character autoAcceptMail preserved")
+        AssertEqual(sv.draft.title, "Draft A", "Current character draft preserved")
+        AssertEqual(sv.draft.editingQuestId, 1, "Draft editingQuestId preserved")
+
+        -- Verify IDs are unique
+        local seenIds = {}
+        for _, q in ipairs(sv.quests) do
+            AssertTrue(not seenIds[q.id], "Quest ID " .. tostring(q.id) .. " is unique")
+            seenIds[q.id] = true
+        end
+
+        -- Verify original character tables are untouched (non-destructive)
+        AssertEqual(#rawRoot.Default["@TestPlayer"]["char-A"].quests, 2, "Original char-A quests preserved")
+        AssertEqual(#rawRoot.Default["@TestPlayer"]["char-B"].quests, 1, "Original char-B quests preserved")
+
+        -- Verify idempotency: running migration again does not duplicate
+        local secondRun = RPQuest.QuestRepository:MigrateCharacterSavedVars(rawRoot, "@TestPlayer", sv, "char-B")
+        AssertEqual(secondRun, 0, "Second migration run is idempotent (0 quests added)")
+        AssertEqual(#sv.quests, 3, "Quest count remains 3 after second migration")
+    end)
+
+    RunTest("Account-wide SavedVars allows Character B to find and update quest prepared on Character A", function()
+        local rawRoot = {
+            Default = {
+                ["@TestPlayer"] = {
+                    ["char-A"] = {
+                        nextId = 2,
+                        quests = {
+                            {
+                                id = 1,
+                                title = "Cross-Char Contract",
+                                description = "Sent from Char A",
+                                role = "prepared",
+                                targets = { { name = "Bandit", requiredCount = 1, currentCount = 0 } },
+                                discoveries = {},
+                                deliveries = {},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:MigrateCharacterSavedVars(rawRoot, "@TestPlayer", sv, "char-B")
+        RPQuest.QuestRepository:Initialize(sv)
+
+        local found = RPQuest.QuestRepository:GetQuestById(1)
+        AssertTrue(found ~= nil, "Character B finds quest prepared on Character A")
+        AssertEqual(found.title, "Cross-Char Contract", "Quest title matches")
+
+        local delivery = RPQuest.QuestRepository:RecordMailDelivery(1, "@Recipient", {
+            characterName = "RecipientAlt",
+            completedAt = 1234567890,
+            completed = true,
+            wasDetected = false,
+        })
+        AssertTrue(delivery ~= nil, "Character B records completion delivery on quest prepared by Character A")
+        AssertEqual(#found.deliveries, 1, "Delivery recorded on shared quest")
+    end)
+
 end
