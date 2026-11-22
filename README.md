@@ -111,7 +111,10 @@ RPQuest/
 │   ├── DiscoveryTracker.lua # Hidden discovery proximity polling
 │   ├── DialogueInjector.lua # Native NPC dialogue injection
 │   ├── WorldMapArea.lua     # Native search circle on ZO_WorldMap
-│   └── JournalTab.lua       # Native Quest Journal tab & HUD mini-tracker
+│   ├── JournalWidgets.lua   # Reusable UI widget & formatting helpers for JournalTab
+│   ├── JournalDetailPane.lua# Quest detail pane & action button builders/refresh
+│   ├── JournalEditorPane.lua# Multi-section quest editor pane builders/refresh
+│   └── JournalTab.lua       # Native Quest Journal tab coordinator
 ├── docs/adr/                # Architecture Decision Records (MADR)
 └── tests/
     ├── run.lua              # Hermetic unit test suite (LuaJIT)

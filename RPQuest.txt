@@ -21,6 +21,9 @@ src/DiscoveryTracker.lua
 src/DialogueInjector.lua
 src/WorldMapArea.lua
 src/MailTransport.lua
+src/JournalWidgets.lua
+src/JournalDetailPane.lua
+src/JournalEditorPane.lua
 src/JournalTab.lua
 RPQuest.lua
 Bindings.xml
