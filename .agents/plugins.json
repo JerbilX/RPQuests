@@ -1,7 +1,7 @@
 {
   "entries": [
     {
-      "path": "~/Proyectos-IA-V3/Dotfiles-v3/plugins",
+      "path": "../Dotfiles-v3/plugins",
       "include_only": ["eso-addon-suite"]
     }
   ]
