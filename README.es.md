@@ -111,7 +111,10 @@ RPQuest/
 │   ├── DiscoveryTracker.lua # Sondeo de proximidad a puntos de descubrimiento ocultos
 │   ├── DialogueInjector.lua # Inyección de diálogos en NPCs nativos
 │   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
-│   └── JournalTab.lua       # Pestaña en el Diario de Misiones y mini-tracker HUD
+│   ├── JournalWidgets.lua   # Helpers de widgets UI y formato reutilizables para JournalTab
+│   ├── JournalDetailPane.lua# Panel de detalle de misión y actualización de acciones
+│   ├── JournalEditorPane.lua# Panel editor multi-sección para misiones preparadas
+│   └── JournalTab.lua       # Coordinador de la pestaña en el Diario de Misiones
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)
 └── tests/
     ├── run.lua              # Suite de pruebas unitarias herméticas (LuaJIT)
