@@ -154,7 +154,7 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
     end
 
     tab.abandonQuestDescriptor = {
-        name = (GetString and SI_QUEST_JOURNAL_ABANDON) and GetString(SI_QUEST_JOURNAL_ABANDON) or Addon.Locale:Get("BTN_DELETE"),
+        name = GetString(SI_QUEST_JOURNAL_ABANDON),
         keybind = "UI_SHORTCUT_NEGATIVE",
         callback = function()
             if CanAbandonSelectedQuest() then
@@ -166,7 +166,7 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
     }
 
     tab.showOnMapDescriptor = {
-        name = (GetString and SI_QUEST_JOURNAL_SHOW_ON_MAP) and GetString(SI_QUEST_JOURNAL_SHOW_ON_MAP) or Addon.Locale:Get("BTN_SHOW_ON_MAP"),
+        name = GetString(SI_QUEST_JOURNAL_SHOW_ON_MAP),
         keybind = "UI_SHORTCUT_SHOW_QUEST_ON_MAP",
         ethereal = true,
         callback = function()
@@ -182,7 +182,7 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
         end,
     }
     tab.keybindStripDescriptor = {
-        alignment = KEYBIND_STRIP_ALIGN_CENTER or 1,
+        alignment = KEYBIND_STRIP_ALIGN_CENTER,
         tab.abandonQuestDescriptor,
         tab.showOnMapDescriptor,
     }

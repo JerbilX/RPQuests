@@ -87,8 +87,6 @@ function CombatTracker:UpdateRegistration()
 end
 
 function CombatTracker:Initialize()
-    if not EVENT_MANAGER or not EVENT_COMBAT_EVENT then return end
-
     self._isRegistered = false
     self._isJusticeRegistered = false
     self._recentKilledOrder = {}
@@ -137,8 +135,7 @@ function CombatTracker:OnCombatEvent(_eventCode, result, isError, _abilityName, 
                                      _sourceUnitId, targetUnitId, _abilityId)
     if isError then return end
 
-    local isDeath = (ACTION_RESULT_DIED and result == ACTION_RESULT_DIED)
-        or (ACTION_RESULT_DIED_XP and result == ACTION_RESULT_DIED_XP)
+    local isDeath = (result == ACTION_RESULT_DIED) or (result == ACTION_RESULT_DIED_XP)
 
     if not isDeath then
         return
@@ -158,7 +155,7 @@ function CombatTracker:OnCombatEvent(_eventCode, result, isError, _abilityName, 
     end
 
     local playerContext = GetAreaContextIfNeeded(activeQuest)
-    if Addon.QuestRepository:HasTargetLocation(matchedTarget) and GetUnitWorldPosition then
+    if Addon.QuestRepository:HasTargetLocation(matchedTarget) then
         local pZone, pWorldX, _, pWorldZ = GetUnitWorldPosition("player")
         playerContext = playerContext or {}
         playerContext.worldZoneId = pZone

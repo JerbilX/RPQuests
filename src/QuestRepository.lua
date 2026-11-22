@@ -487,12 +487,9 @@ function QuestRepository:ExportCompletionCode(questId)
         return cached
     end
 
-    local rawName = GetUnitName and GetUnitName("player") or ""
-    local charName = rawName
-    if zo_strformat and rawName ~= "" then
-        charName = zo_strformat("<<C:1>>", rawName)
-    end
-    local ts = GetTimeStamp and GetTimeStamp() or 0
+    local rawName = GetUnitName("player") or ""
+    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
+    local ts = GetTimeStamp() or 0
 
     local code, err = Addon.ShareCodec:EncodeCompletion(quest, charName, ts)
     if code then
@@ -506,8 +503,8 @@ function QuestRepository:ExportRejectionCode(quest)
         return nil, "Invalid quest"
     end
     local rawName = GetUnitName("player") or ""
-    local charName = (rawName ~= "" and zo_strformat) and zo_strformat("<<C:1>>", rawName) or rawName
-    local ts = GetTimeStamp and GetTimeStamp() or 0
+    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
+    local ts = GetTimeStamp() or 0
     return Addon.ShareCodec:EncodeRejection(quest, charName, ts)
 end
 

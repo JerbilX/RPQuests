@@ -104,6 +104,23 @@ SOUNDS = SOUNDS or {}
 SLASH_COMMANDS = SLASH_COMMANDS or {}
 d = d or function(...) end
 
+TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT or 0
+TEXT_ALIGN_CENTER = TEXT_ALIGN_CENTER or 1
+TEXT_ALIGN_RIGHT = TEXT_ALIGN_RIGHT or 2
+KEYBIND_STRIP_ALIGN_CENTER = KEYBIND_STRIP_ALIGN_CENTER or 1
+
+SI_QUEST_JOURNAL_ABANDON = SI_QUEST_JOURNAL_ABANDON or "SI_QUEST_JOURNAL_ABANDON"
+SI_QUEST_JOURNAL_SHOW_ON_MAP = SI_QUEST_JOURNAL_SHOW_ON_MAP or "SI_QUEST_JOURNAL_SHOW_ON_MAP"
+
+RequestOpenMailbox = RequestOpenMailbox or function() end
+CloseMailbox = CloseMailbox or function() end
+SendMail = SendMail or function() end
+DeleteMail = DeleteMail or function() end
+ReadMail = ReadMail or function() return "" end
+RequestReadMail = RequestReadMail or function() end
+GetNextMailId = GetNextMailId or function() return nil end
+GetMailItemInfo = GetMailItemInfo or function() return nil end
+
 -- 4. Native Control Hierarchy (GuiRoot, CreateControl)
 local function CreateControlMock(name, parent, controlType)
     local ctrl = {
@@ -399,6 +416,7 @@ SYSTEMS = SYSTEMS or {
     _systems = {},
     RegisterKeyword = function(self, keyword, obj) self._systems[keyword] = obj end,
     GetObject = function(self, keyword) return self._systems[keyword] end,
+    GetKeyboardObject = function(self, keyword) return self._systems[keyword] end,
 }
 
 CENTER_SCREEN_ANNOUNCE = CENTER_SCREEN_ANNOUNCE or {

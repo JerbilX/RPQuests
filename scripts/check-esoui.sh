@@ -23,12 +23,19 @@ pass() {
 LUA_PROD_FILES=(RPQuest.lua src/*.lua)
 LUA_ALL_FILES=(RPQuest.lua src/*.lua lang/*.lua)
 
-# 1. No redundant `if <ESO_GLOBAL> then` guards in production Lua files
-ESO_GUARD_REGEX='^[[:space:]]*if[[:space:]]+(not[[:space:]]+)?(ZO_[A-Za-z0-9_]+|EVENT_[A-Za-z0-9_]+|SI_[A-Za-z0-9_]+|Get[A-Z][A-Za-z0-9_]+|Set[A-Z][A-Za-z0-9_]+|Is[A-Z][A-Za-z0-9_]+|Does[A-Z][A-Za-z0-9_]+|PlaySound|SLASH_COMMANDS|WINDOW_MANAGER|SCENE_MANAGER|CALLBACK_MANAGER|CENTER_SCREEN_ANNOUNCE|QUEST_JOURNAL_KEYBOARD|MAIN_MENU_KEYBOARD|WORLD_MAP_SCENE|GAMEPAD_WORLD_MAP_SCENE|WORLD_MAP_MANAGER|MAIL_INBOX|MAIL_SEND|CHAT_SYSTEM|KEYBIND_STRIP|SOUNDS|SYSTEMS|GuiRoot|InformationTooltip|zo_strformat|zo_callLater)[[:space:]]+then([[:space:]]|$)'
-if grep -rnE "$ESO_GUARD_REGEX" "${LUA_PROD_FILES[@]}"; then
-  fail "Redundant 'if <ESO_GLOBAL> then' guard found in production Lua code."
+# 1. No redundant ESO global existence guards (`if <ESO_GLOBAL> then`, `<ESO_GLOBAL> and ...`, `... and <ESO_GLOBAL>`, `not <ESO_GLOBAL>`) in production Lua files
+ESO_GLOBAL_IDENT='(ZO_[A-Za-z0-9_]+|EVENT_[A-Za-z0-9_]+|SI_[A-Za-z0-9_]+|ACTION_RESULT_[A-Za-z0-9_]+|TEXT_ALIGN_[A-Z]+|KEYBIND_STRIP_ALIGN_[A-Z]+|Get[A-Z][A-Za-z0-9_]+|Set[A-Z][A-Za-z0-9_]+|Is[A-Z][A-Za-z0-9_]+|Does[A-Z][A-Za-z0-9_]+|PlaySound|SLASH_COMMANDS|WINDOW_MANAGER|SCENE_MANAGER|CALLBACK_MANAGER|CENTER_SCREEN_ANNOUNCE|MAIN_MENU_KEYBOARD|WORLD_MAP_SCENE|GAMEPAD_WORLD_MAP_SCENE|WORLD_MAP_MANAGER|MAIL_INBOX|MAIL_SEND|CHAT_SYSTEM|KEYBIND_STRIP|SOUNDS|SYSTEMS|GuiRoot|InformationTooltip|zo_strformat|zo_callLater|SendMail|DeleteMail|ReadMail|RequestOpenMailbox|CloseMailbox|RequestReadMail|GetNextMailId|GetMailItemInfo)'
+ESO_GUARD_REGEX="^[[:space:]]*if[[:space:]]+(not[[:space:]]+)?${ESO_GLOBAL_IDENT}[[:space:]]+then([[:space:]]|\$)"
+ESO_INLINE_AND_LEFT_REGEX="(^|[^A-Za-z0-9_.:])${ESO_GLOBAL_IDENT}[[:space:]]+and([[:space:]]|\$)"
+ESO_INLINE_AND_RIGHT_REGEX="\\band[[:space:]]+${ESO_GLOBAL_IDENT}([[:space:]]|\\)|\$)"
+ESO_INLINE_NOT_REGEX="\\bnot[[:space:]]+${ESO_GLOBAL_IDENT}([[:space:]]|\\)|\$)"
+if grep -rnE "$ESO_GUARD_REGEX" "${LUA_PROD_FILES[@]}" \
+  || grep -rnE "$ESO_INLINE_AND_LEFT_REGEX" "${LUA_PROD_FILES[@]}" \
+  || grep -rnE "$ESO_INLINE_AND_RIGHT_REGEX" "${LUA_PROD_FILES[@]}" \
+  || grep -rnE "$ESO_INLINE_NOT_REGEX" "${LUA_PROD_FILES[@]}"; then
+  fail "Redundant ESO global existence guard found in production Lua code."
 else
-  pass "No redundant 'if <ESO_GLOBAL> then' guards in production Lua code."
+  pass "No redundant ESO global existence guards in production Lua code."
 fi
 
 # 2. No unjustified pcall( / xpcall( in production Lua files

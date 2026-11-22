@@ -19,7 +19,7 @@ local function CreateAccordionSection(tab, formParent, panelName, key, localeKey
     headerBtn:SetDimensions(510, 28)
     headerBtn:SetMouseEnabled(true)
     headerBtn:SetFont("ZoFontGameBold")
-    if headerBtn.SetHorizontalAlignment and TEXT_ALIGN_LEFT then
+    if headerBtn.SetHorizontalAlignment then
         headerBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
     end
     headerBtn:SetNormalFontColor(0.91, 0.83, 0.63, 1)
