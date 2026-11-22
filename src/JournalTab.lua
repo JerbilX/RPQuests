@@ -464,7 +464,9 @@ function JournalTab:BuildDetailPane(parent)
             end
         end,
         visible = function()
-            return self.viewMode == VIEW_MODE.DETAIL and self.selectedQuestId ~= nil
+            return self.viewMode == VIEW_MODE.DETAIL
+                and self.selectedQuestId ~= nil
+                and Addon.QuestRepository:GetQuestById(self.selectedQuestId) ~= nil
         end,
     }
 
@@ -480,7 +482,9 @@ function JournalTab:BuildDetailPane(parent)
             end
         end,
         visible = function()
-            return self.viewMode == VIEW_MODE.DETAIL and self.selectedQuestId ~= nil
+            return self.viewMode == VIEW_MODE.DETAIL
+                and self.selectedQuestId ~= nil
+                and Addon.QuestRepository:GetQuestById(self.selectedQuestId) ~= nil
         end,
     }
     self.keybindStripDescriptor = {
@@ -1692,6 +1696,22 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     end
 end
 
+function JournalTab:UpdateShowOnMapVisibility()
+    if not self.showOnMapKeybindButton then return end
+    if self.showOnMapKeybindButton.UpdateVisibility then
+        self.showOnMapKeybindButton:UpdateVisibility()
+    else
+        local visible = self.showOnMapDescriptor and self.showOnMapDescriptor.visible
+        local isVisible
+        if type(visible) == "function" then
+            isVisible = visible(self.showOnMapKeybindButton) ~= false
+        else
+            isVisible = visible ~= false
+        end
+        self.showOnMapKeybindButton:SetHidden(not isVisible)
+    end
+end
+
 function JournalTab:Refresh()
     if not self.panel then return end
 
@@ -1727,12 +1747,14 @@ function JournalTab:Refresh()
     if self.viewMode == VIEW_MODE.EDITOR then
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
+        self:UpdateShowOnMapVisibility()
         if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
     elseif self.viewMode == VIEW_MODE.MAIL_SEND and self.mailSendPane then
         self.mailSendPane:SetHidden(false)
         self:RefreshMailSendCounter()
+        self:UpdateShowOnMapVisibility()
         if self.keybindStripDescriptor then
             KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
         end
@@ -1756,7 +1778,8 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.btnActivate:SetHidden(true)
         if self.btnAcceptOffered then self.btnAcceptOffered:SetHidden(true) end
         if self.btnRejectOffered then self.btnRejectOffered:SetHidden(true) end
-        if self.showOnMapKeybindButton then self.showOnMapKeybindButton:SetHidden(true) end
+        self.selectedQuestId = nil
+        self:UpdateShowOnMapVisibility()
         self.btnEdit:SetHidden(true)
         self.btnReset:SetHidden(true)
         if self.btnSendDirect then self.btnSendDirect:SetHidden(true) end
@@ -1898,10 +1921,7 @@ function JournalTab:RefreshDetailPane(selectedQuest, activeQuest)
         self.detailScrollChild:SetDimensions(526, math.max(650, 540 + objHeight))
     end
 
-    if self.showOnMapKeybindButton then
-        local canShowMap = not selectedQuest.hideMapArea and selectedQuest.mapId and selectedQuest.mapId > 0 and selectedQuest.areaCenterX and selectedQuest.areaCenterY
-        self.showOnMapKeybindButton:SetHidden(not canShowMap)
-    end
+    self:UpdateShowOnMapVisibility()
     self.btnReset:ClearAnchors()
     if self.btnAcceptOffered then self.btnAcceptOffered:SetHidden(not isOffered) end
     if self.btnRejectOffered then self.btnRejectOffered:SetHidden(not isOffered) end
