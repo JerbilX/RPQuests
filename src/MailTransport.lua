@@ -15,7 +15,6 @@ local LISTENER_INBOX_UPDATE = "RPQuest_Mail_InboxUpdate"
 local LISTENER_MAIL_READABLE = "RPQuest_Mail_Readable"
 local LISTENER_MAIL_REMOVED = "RPQuest_Mail_Removed"
 
-local MAX_RECIPIENTS = 1
 local DEFAULT_MAX_BODY_CHARS = 700
 local MAX_MAIL_PARTS = 6
 local PART_HEADER_RESERVE = 16
@@ -223,26 +222,24 @@ function MailTransport:ParseRecipients(rawInput)
         return {}, "ERR_MAIL_NO_RECIPIENTS"
     end
 
-    local recipients = {}
-    local seen = {}
+    local first, firstKey
     for token in string.gmatch(rawInput, "[^,;\r\n]+") do
         local clean = self:NormalizeDisplayName(token)
         if clean ~= "" then
             local key = clean:lower()
-            if not seen[key] then
-                seen[key] = true
-                table.insert(recipients, clean)
+            if not first then
+                first = clean
+                firstKey = key
+            elseif key ~= firstKey then
+                return {}, "ERR_MAIL_TOO_MANY_RECIPIENTS"
             end
         end
     end
 
-    if #recipients == 0 then
+    if not first then
         return {}, "ERR_MAIL_NO_RECIPIENTS"
     end
-    if #recipients > MAX_RECIPIENTS then
-        return {}, "ERR_MAIL_TOO_MANY_RECIPIENTS"
-    end
-    return recipients, nil
+    return { first }, nil
 end
 
 function MailTransport:IsNativeMailboxOpen()
@@ -676,7 +673,6 @@ function MailTransport:IngestReceivedMail(mailId)
     end
 
     self:DisposeEntryMails(entry)
-    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
     return imported, nil, entry, isDuplicate
 end
 
@@ -688,7 +684,6 @@ function MailTransport:UpsertReceivedEntry(entry)
         table.insert(self._receivedMails, entry)
         self._receivedById[entry.idKey] = #self._receivedMails
     end
-    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
 
     if not entry.isIncomplete then
         self._notifiedMailIds = self._notifiedMailIds or {}
@@ -927,7 +922,6 @@ function MailTransport:OnMailRemoved(mailId)
     if idx then
         table.remove(self._receivedMails, idx)
         self:RebuildReceivedIndex()
-        self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
         return
     end
 
@@ -963,7 +957,6 @@ function MailTransport:OnMailRemoved(mailId)
                         e.decodedQuest = nil
                     end
                 end
-                self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
                 return
             end
         end

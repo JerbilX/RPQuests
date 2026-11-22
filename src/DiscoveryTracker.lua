@@ -1,5 +1,4 @@
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
--- Ref: docs/adr/0010-comparticion-grupo-y-objetivos-compartidos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest

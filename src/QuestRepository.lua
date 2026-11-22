@@ -511,14 +511,6 @@ function QuestRepository:ExportRejectionCode(quest)
     return Addon.ShareCodec:EncodeRejection(quest, charName, ts)
 end
 
-function QuestRepository:ValidateCompletionCode(questId, codeString)
-    local quest = self:GetQuestById(questId)
-    if not quest then
-        return false, "VALIDATE_ERR_INVALID_CODE"
-    end
-    return Addon.ShareCodec:ValidateCompletionForQuest(quest, codeString)
-end
-
 function QuestRepository:ValidateResultCode(questId, codeString)
     local quest = self:GetQuestById(questId)
     if not quest then
@@ -625,16 +617,6 @@ function QuestRepository:GetQuestsByRole(role)
     local result = {}
     for _, q in ipairs(self:GetAllQuests()) do
         if q.role == role then
-            table.insert(result, q)
-        end
-    end
-    return result
-end
-
-function QuestRepository:GetActiveAndAvailableQuests()
-    local result = {}
-    for _, q in ipairs(self:GetAllQuests()) do
-        if not q.completed then
             table.insert(result, q)
         end
     end
