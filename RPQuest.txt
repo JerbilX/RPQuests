@@ -20,6 +20,7 @@ src/CombatTracker.lua
 src/DiscoveryTracker.lua
 src/DialogueInjector.lua
 src/WorldMapArea.lua
+src/MailInbox.lua
 src/MailTransport.lua
 src/JournalWidgets.lua
 src/JournalDetailPane.lua
