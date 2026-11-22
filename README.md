@@ -102,6 +102,7 @@ RPQuest/
 │   ├── Locale.lua           # Client language selector & i18n
 │   ├── ShareCodec.lua       # RPQ3 / RPQ2 / RPQ1 & RPQC1 codec with LZSS + CRC16
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
+│   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
 │   ├── QuestRepository.lua  # Per-character CRUD & search area offset logic
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
