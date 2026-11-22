@@ -115,6 +115,7 @@ RPQuest/
 │   ├── JournalWidgets.lua   # Reusable UI widget & formatting helpers for JournalTab
 │   ├── JournalDetailPane.lua# Quest detail pane & action button builders/refresh
 │   ├── JournalEditorPane.lua# Multi-section quest editor pane builders/refresh
+│   ├── JournalMailSendPane.lua# In-game mail send pane & transport event UI
 │   └── JournalTab.lua       # Native Quest Journal tab coordinator
 ├── docs/adr/                # Architecture Decision Records (MADR)
 └── tests/
