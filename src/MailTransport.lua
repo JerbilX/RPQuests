@@ -206,14 +206,7 @@ function MailTransport:BuildQuestMailPackets(roleMessage, questCode, title)
 end
 
 function MailTransport:NormalizeDisplayName(rawName)
-    if type(rawName) ~= "string" then
-        return ""
-    end
-    local clean = rawName:gsub("^%s+", ""):gsub("%s+$", "")
-    if clean ~= "" and clean:sub(1, 1) ~= "@" then
-        clean = "@" .. clean
-    end
-    return clean
+    return Addon.QuestRepository:NormalizeAccountName(rawName)
 end
 
 function MailTransport:IsSelfRecipient(recipient)

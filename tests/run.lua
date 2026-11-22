@@ -3441,6 +3441,28 @@ RunTest("41. Show On Map keybind prompt visibility across quest selection, accep
     AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible again when returning to Detail mode")
 end)
 
+RunTest("QuestRepository:NormalizeAccountName and MailTransport:NormalizeDisplayName share identical edge-case behavior", function()
+    local cases = {
+        { input = nil, expected = "" },
+        { input = 123, expected = "" },
+        { input = {}, expected = "" },
+        { input = "", expected = "" },
+        { input = "   \t\n  ", expected = "" },
+        { input = "PlayerOne", expected = "@PlayerOne" },
+        { input = "  PlayerOne  ", expected = "@PlayerOne" },
+        { input = "@PlayerOne", expected = "@PlayerOne" },
+        { input = "  @PlayerOne  ", expected = "@PlayerOne" },
+    }
+
+    for _, c in ipairs(cases) do
+        local label = tostring(c.input)
+        local repoRes = RPQuest.QuestRepository:NormalizeAccountName(c.input)
+        local mailRes = RPQuest.MailTransport:NormalizeDisplayName(c.input)
+        AssertEqual(repoRes, c.expected, "QuestRepository:NormalizeAccountName(" .. label .. ")")
+        AssertEqual(mailRes, c.expected, "MailTransport:NormalizeDisplayName(" .. label .. ")")
+    end
+end)
+
 if failed > 0 then
     for _, f in ipairs(failures) do
         print(f)
