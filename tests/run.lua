@@ -3048,12 +3048,17 @@ RunTest("37. OFFERED pending quest UI in JournalTab: Accept activates and Reject
     AssertEqual(RPQuest.JournalTab.btnAcceptOffered:IsHidden(), false, "Accept button visible for OFFERED quest")
     AssertEqual(RPQuest.JournalTab.btnRejectOffered:IsHidden(), false, "Reject button visible for OFFERED quest")
     AssertEqual(RPQuest.JournalTab.btnActivate:IsHidden(), true, "Activate button hidden for OFFERED quest")
+    AssertEqual(RPQuest.JournalTab.abandonQuestDescriptor.visible(), false, "Abandon keybind hidden for OFFERED pending quest")
+    AssertEqual(RPQuest.JournalTab.abandonQuestDescriptor.enabled(), false, "Abandon keybind disabled for OFFERED pending quest")
+    AssertEqual(RPQuest.JournalTab:ConfirmAbandonQuest(offered.id), false, "ConfirmAbandonQuest blocked for OFFERED pending quest")
 
     -- Accept activates quest
     local accepted = RPQuest.JournalTab:AcceptSelectedOfferedQuest()
     AssertEqual(accepted, true, "AcceptSelectedOfferedQuest succeeds")
     AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, offered.id, "Quest becomes active after Accept")
     AssertEqual(RPQuest.JournalTab.btnAcceptOffered:IsHidden(), true, "Accept button hidden after Accept")
+    AssertEqual(RPQuest.JournalTab.abandonQuestDescriptor.visible(), true, "Abandon keybind visible after accepting quest")
+    AssertEqual(RPQuest.JournalTab.abandonQuestDescriptor.enabled(), true, "Abandon keybind enabled after accepting quest")
 
     -- Reject removes another offered quest
     local offered2 = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
