@@ -25,6 +25,7 @@ src/MailTransport.lua
 src/JournalWidgets.lua
 src/JournalDetailPane.lua
 src/JournalEditorPane.lua
+src/JournalMailSendPane.lua
 src/JournalTab.lua
 RPQuest.lua
 Bindings.xml

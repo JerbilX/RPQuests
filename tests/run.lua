@@ -412,6 +412,7 @@ dofile("src/MailTransport.lua")
 dofile("src/JournalWidgets.lua")
 dofile("src/JournalDetailPane.lua")
 dofile("src/JournalEditorPane.lua")
+dofile("src/JournalMailSendPane.lua")
 dofile("src/JournalTab.lua")
 dofile("RPQuest.lua")
 

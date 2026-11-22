@@ -115,6 +115,7 @@ RPQuest/
 │   ├── JournalWidgets.lua   # Helpers de widgets UI y formato reutilizables para JournalTab
 │   ├── JournalDetailPane.lua# Panel de detalle de misión y actualización de acciones
 │   ├── JournalEditorPane.lua# Panel editor multi-sección para misiones preparadas
+│   ├── JournalMailSendPane.lua# Panel de envío por correo in-game y progreso de transporte
 │   └── JournalTab.lua       # Coordinador de la pestaña en el Diario de Misiones
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)
 └── tests/

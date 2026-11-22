@@ -21,7 +21,6 @@ local VIEW_MODE = {
 JournalTab.VIEW_MODE = VIEW_MODE
 
 local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
-local CreateEditBoxWithBackdrop = Addon.JournalWidgets.CreateEditBoxWithBackdrop
 
 function JournalTab:RegisterRepositoryListener()
     Addon.QuestRepository:RegisterListener(function(eventType, quest)
@@ -250,90 +249,11 @@ function JournalTab:BuildEditorPane(parent)
 end
 
 function JournalTab:BuildMailSendPane(parent)
-    local pane = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendPane", parent, CT_CONTROL)
-    pane:SetDimensions(550, 580)
-    pane:SetAnchor(TOPLEFT, parent, TOPLEFT, 0, 0)
-    pane:SetHidden(true)
-    self.mailSendPane = pane
-
-    local header = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendHeader", pane, CT_LABEL)
-    header:SetDimensions(520, 30)
-    header:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 0)
-    if header.SetFont then header:SetFont("ZoFontWinH2") end
-    if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
-    self.mailSendHeader = header
-
-    local lblRec = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailRecLbl", pane, CT_LABEL)
-    lblRec:SetDimensions(520, 22)
-    lblRec:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 44)
-    if lblRec.SetFont then lblRec:SetFont("ZoFontGameBold") end
-    lblRec:SetText(Addon.Locale:Get("MAIL_RECIPIENTS_LABEL"))
-
-    local recBg, recEdit = CreateEditBoxWithBackdrop(
-        PANEL_NAME .. "_MailRecEdit", pane, 510, 32, 200, false, nil, false
-    )
-    recBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 68)
-    self.mailRecEdit = recEdit
-
-    local lblRole = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailRoleLbl", pane, CT_LABEL)
-    lblRole:SetDimensions(520, 22)
-    lblRole:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 114)
-    if lblRole.SetFont then lblRole:SetFont("ZoFontGameBold") end
-    lblRole:SetText(Addon.Locale:Get("MAIL_ROLE_MSG_LABEL"))
-
-    local roleBg, roleEdit = CreateEditBoxWithBackdrop(
-        PANEL_NAME .. "_MailRoleEdit", pane, 510, 110, 700, true, function()
-            self:RefreshMailSendCounter()
-        end, false
-    )
-    roleBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 138)
-    self.mailRoleEdit = roleEdit
-
-    local lblCounter = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailCounterLbl", pane, CT_LABEL)
-    lblCounter:SetDimensions(510, 44)
-    lblCounter:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 256)
-    if lblCounter.SetFont then lblCounter:SetFont("ZoFontGame") end
-    self.mailCounterLabel = lblCounter
-
-    local lblStatus = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_MailSendStatusLbl", pane, CT_LABEL)
-    lblStatus:SetDimensions(510, 28)
-    lblStatus:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 304)
-    if lblStatus.SetFont then lblStatus:SetFont("ZoFontGameBold") end
-    self.mailSendStatusLabel = lblStatus
-
-    self.btnConfirmMailSend = CreateStyledButton(PANEL_NAME .. "_BtnConfirmMailSend", pane, 165, 36, Addon.Locale:Get("BTN_MAIL_SEND_CONFIRM"), function()
-        self:OnConfirmSendMailClicked()
-    end)
-    self.btnConfirmMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 340)
-
-    self.btnCancelMailSend = CreateStyledButton(PANEL_NAME .. "_BtnCancelMailSend", pane, 155, 36, Addon.Locale:Get("BTN_CANCEL"), function()
-        self.viewMode = VIEW_MODE.DETAIL
-        self:Refresh()
-    end)
-    self.btnCancelMailSend:SetAnchor(TOPLEFT, pane, TOPLEFT, 175, 340)
+    Addon.JournalMailSendPane.Build(self, parent)
 end
 
 function JournalTab:OnMailTransportEvent(evType, payload)
-    if evType == "MAIL_SEND_PROGRESS" and self.mailSendStatusLabel and type(payload) == "table" then
-        self.mailSendStatusLabel:SetText(Addon.Locale:Get("MAIL_SENDING_PROGRESS", payload.current, payload.total, payload.to or ""))
-    elseif evType == "MAIL_SEND_ERROR" and self.mailSendStatusLabel and type(payload) == "table" then
-        if type(payload.message) == "string" and payload.message ~= "" then
-            self.mailSendStatusLabel:SetText(payload.message)
-        end
-    elseif evType == "MAIL_SEND_COMPLETE" and type(payload) == "table" then
-        local msg = (payload.failed and payload.failed > 0)
-            and Addon.Locale:Get("MAIL_SEND_DONE_ERRORS", payload.sent, payload.total, payload.failed)
-            or Addon.Locale:Get("MAIL_SEND_DONE", payload.sent, payload.total)
-        if self.mailSendStatusLabel then
-            self.mailSendStatusLabel:SetText(msg)
-        end
-        Addon.Announcements:ShowAlert(msg, (payload.failed or 0) > 0)
-    elseif evType == "MAIL_COMPLETION_SENT" and type(payload) == "table" then
-        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_COMPLETION_SENT", payload.to or ""), false)
-        if self.viewMode == VIEW_MODE.DETAIL then
-            self:RefreshDetailPane()
-        end
-    end
+    Addon.JournalMailSendPane.OnTransportEvent(self, evType, payload)
 end
 
 function JournalTab:AcceptSelectedOfferedQuest()
@@ -357,73 +277,19 @@ function JournalTab:RejectSelectedOfferedQuest()
 end
 
 function JournalTab:SendSelectedPreparedQuest()
-    local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-    if not quest then return false end
-    local recipient = type(quest.recipientAccount) == "string"
-        and quest.recipientAccount:gsub("^%s+", ""):gsub("%s+$", "")
-        or ""
-    if recipient ~= "" and Addon.MailTransport then
-        local ok, errKey = Addon.MailTransport:SendQuestToRecipients(quest, recipient, "")
-        if ok then
-            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_SENDING_TO", quest.title or "", recipient), false)
-            return true
-        elseif errKey then
-            Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
-            return false
-        end
-    end
-    self:OpenMailSendView()
-    return false
+    return Addon.JournalMailSendPane.SendSelectedPrepared(self)
 end
 
 function JournalTab:OpenMailSendView()
-    local quest = self.selectedQuestId and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-    if not quest then return end
-    self._mailSendQuestId = quest.id
-    self.viewMode = VIEW_MODE.MAIL_SEND
-    if self.mailRecEdit then
-        self.mailRecEdit:SetText(quest.recipientAccount or "")
-    end
-    if self.mailSendHeader then
-        self.mailSendHeader:SetText(Addon.Locale:Get("MAIL_SEND_TITLE", quest.title or ""))
-    end
-    if self.mailSendStatusLabel then
-        self.mailSendStatusLabel:SetText("")
-    end
-    self:Refresh()
-    self:RefreshMailSendCounter()
+    Addon.JournalMailSendPane.OpenView(self)
 end
 
 function JournalTab:RefreshMailSendCounter()
-    if not Addon.MailTransport or not self.mailCounterLabel then return end
-    local quest = self._mailSendQuestId and Addon.QuestRepository:GetQuestById(self._mailSendQuestId)
-    if not quest then return end
-    local code = Addon.QuestRepository:ExportQuestToCode(quest.id) or ""
-    local roleMsg = self.mailRoleEdit and self.mailRoleEdit:GetText() or ""
-    local plan = Addon.MailTransport:BuildQuestMailPackets(roleMsg, code, quest.title)
-    if plan.partCount == 1 then
-        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER", plan.totalLen, plan.maxLen))
-    elseif plan.fits then
-        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER_MULTI", plan.totalLen, plan.partCount, plan.maxParts))
-    else
-        self.mailCounterLabel:SetText(Addon.Locale:Get("MAIL_CHAR_COUNTER_OVER", plan.totalLen, plan.maxTotalChars, plan.maxParts))
-    end
+    Addon.JournalMailSendPane.RefreshCounter(self)
 end
 
 function JournalTab:OnConfirmSendMailClicked()
-    if not Addon.MailTransport then return end
-    local quest = self._mailSendQuestId and Addon.QuestRepository:GetQuestById(self._mailSendQuestId)
-    if not quest then return end
-    local rawRec = self.mailRecEdit and self.mailRecEdit:GetText() or ""
-    local roleMsg = self.mailRoleEdit and self.mailRoleEdit:GetText() or ""
-    local ok, errKey = Addon.MailTransport:SendQuestToRecipients(quest, rawRec, roleMsg)
-    if not ok and errKey then
-        local errMsg = Addon.Locale:Get(errKey)
-        if self.mailSendStatusLabel then
-            self.mailSendStatusLabel:SetText("|cFF4444" .. errMsg .. "|r")
-        end
-        Addon.Announcements:ShowAlert(errMsg, true)
-    end
+    Addon.JournalMailSendPane.OnConfirmSendClicked(self)
 end
 
 function JournalTab:IntegrateIntoQuestJournalModeBar()
@@ -491,8 +357,7 @@ function JournalTab:SelectQuest(questId)
     self:Refresh()
 end
 
-function JournalTab:OpenCreateEditor()
-    local draft = Addon.QuestRepository:ResetDraft()
+local function ApplyDraftToEditor(self, draft)
     self.selectedDiscoveryIndex = nil
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
@@ -508,6 +373,11 @@ function JournalTab:OpenCreateEditor()
     }
     self.viewMode = VIEW_MODE.EDITOR
     self:Refresh()
+end
+
+function JournalTab:OpenCreateEditor()
+    local draft = Addon.QuestRepository:ResetDraft()
+    ApplyDraftToEditor(self, draft)
 end
 
 local function GetQuestSectionKey(quest)
@@ -553,20 +423,7 @@ function JournalTab:OpenEditEditor(questId)
         end
         return
     end
-    self.titleEdit:SetText(draft.title or "")
-    self.descEdit:SetText(draft.description or "")
-    if self.recipientEdit then self.recipientEdit:SetText(draft.recipientAccount or "") end
-    if self.clueEdit then self.clueEdit:SetText("") end
-    self.completionEdit:SetText(draft.completionMessage or "")
-    self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
-    self.editorSectionsCollapsed = {
-        target = true,
-        discovery = true,
-        dialogue = true,
-        options = true,
-    }
-    self.viewMode = VIEW_MODE.EDITOR
-    self:Refresh()
+    ApplyDraftToEditor(self, draft)
 end
 
 function JournalTab:ClearEditorInputs()
