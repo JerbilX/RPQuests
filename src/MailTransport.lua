@@ -977,10 +977,6 @@ function MailTransport:OnMailRemoved(mailId)
     end
 end
 
-function MailTransport:GetReceivedMails()
-    return self._receivedMails or {}
-end
-
 function MailTransport:GetReceivedMailCount()
     return #(self._receivedMails or {})
 end
@@ -1007,40 +1003,4 @@ function MailTransport:DisposeEntryMails(entry)
     if self._partGroups and entry.idKey then
         self._partGroups[entry.idKey] = nil
     end
-end
-
-function MailTransport:AcceptReceivedMail(mailId)
-    local idKey = tostring(mailId)
-    local idx = self._receivedById and self._receivedById[idKey]
-    local existing = idx and self._receivedMails[idx]
-    if existing and existing.isIncomplete then
-        return nil, "ERR_MAIL_INCOMPLETE"
-    end
-
-    local entry = self:RemoveEntryById(mailId)
-    if not entry then
-        return nil, "ERR_INVALID_CODE"
-    end
-
-    local imported, err = Addon.QuestRepository:ImportQuestFromCode(entry.questCode, entry.senderDisplayName)
-    if not imported then
-        table.insert(self._receivedMails, entry)
-        self:RebuildReceivedIndex()
-        return nil, err
-    end
-
-    self:DisposeEntryMails(entry)
-    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
-    return imported, nil, entry
-end
-
-function MailTransport:RejectReceivedMail(mailId)
-    local entry = self:RemoveEntryById(mailId)
-    if not entry then
-        return false
-    end
-
-    self:DisposeEntryMails(entry)
-    self:NotifyListeners("MAIL_INBOX_UPDATED", self._receivedMails)
-    return true
 end

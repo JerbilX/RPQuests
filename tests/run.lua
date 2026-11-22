@@ -2725,14 +2725,15 @@ RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incom
         secs = 5,
     }
     RPQuest.MailTransport:ScanInbox(false)
-    local mailsPartial = RPQuest.MailTransport:GetReceivedMails()
-    AssertEqual(#mailsPartial, 1, "Shows 1 partial entry in inbox")
-    AssertEqual(mailsPartial[1].isIncomplete, true, "Entry marked incomplete while missing parts")
-    AssertEqual(mailsPartial[1].partsReceived, 1, "1 part received so far")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "Shows 1 partial entry in inbox")
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 0, "Incomplete multi-part mail is not auto-ingested")
+    local partialEntry = RPQuest.MailTransport._receivedMails[1]
+    AssertEqual(partialEntry.isIncomplete, true, "Entry marked incomplete while missing parts")
+    AssertEqual(partialEntry.partsReceived, 1, "1 part received so far")
 
-    local accFail, accErr = RPQuest.MailTransport:AcceptReceivedMail(mailsPartial[1].mailId)
-    AssertEqual(accFail, nil, "Cannot accept incomplete multi-part mail")
-    AssertEqual(accErr, "ERR_MAIL_INCOMPLETE", "Returns ERR_MAIL_INCOMPLETE")
+    local ingFail, ingErr = RPQuest.MailTransport:IngestReceivedMail(partialEntry.mailId)
+    AssertEqual(ingFail, nil, "Cannot ingest incomplete multi-part mail")
+    AssertEqual(ingErr, "ERR_MAIL_INCOMPLETE", "Returns ERR_MAIL_INCOMPLETE")
 
     -- Deliver remaining parts
     for i = 1, plan.partCount - 1 do
