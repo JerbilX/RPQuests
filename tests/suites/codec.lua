@@ -1,0 +1,315 @@
+-- ============================================================================
+-- RPQuest Test Suite: ShareCodec & BinaryCodec Suites
+-- ============================================================================
+return function(T)
+    local RunTest = T.RunTest
+    local AssertEqual = T.AssertEqual
+    local AssertTrue = T.AssertTrue
+    local mockState = T.mockState
+
+    RunTest("ShareCodec roundtrip preserves UTF-8, pipes, newlines and coordinates", function()
+        local original = {
+            title = "Caza en Auridon: El Traidor | Parte 1",
+            description = "Busca al capitán cerca del muelle.\nNo tengas piedad con él.",
+            targets = {
+                { name = "Capitán Pirata", currentCount = 0, requiredCount = 3 },
+                { name = "Contramaestre", currentCount = 0, requiredCount = 1 },
+            },
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.4215,
+            targetY = 0.6180,
+            areaCenterX = 0.4510,
+            areaCenterY = 0.5920,
+            areaRadius = 0.0750,
+        }
+
+        local code, err = RPQuest.ShareCodec:EncodeQuest(original)
+        AssertTrue(code ~= nil, "Code should be generated without error: " .. tostring(err))
+        AssertTrue(string.sub(code, 1, 5) == "RPQ3:", "Code must start with RPQ3:")
+
+        local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(decoded ~= nil, "Decode should succeed: " .. tostring(decErr))
+        AssertEqual(decoded.title, original.title, "Title matches")
+        AssertEqual(decoded.description, original.description, "Description with newline matches")
+        AssertEqual(#decoded.targets, 2, "Decoded targets count matches")
+        AssertEqual(decoded.targets[1].name, "Capitán Pirata", "Target 1 name matches")
+        AssertEqual(decoded.targets[1].requiredCount, 3, "Target 1 required count matches")
+        AssertEqual(decoded.targets[2].name, "Contramaestre", "Target 2 name matches")
+        AssertEqual(decoded.mapId, 32, "MapId matches")
+        AssertEqual(decoded.zoneId, 381, "ZoneId matches")
+        AssertEqual(decoded.mapName, "Auridon", "MapName matches")
+        AssertTrue(math.abs(decoded.areaCenterX - original.areaCenterX) < 0.001, "AreaCenterX matches")
+        AssertTrue(math.abs(decoded.areaCenterY - original.areaCenterY) < 0.001, "AreaCenterY matches")
+        AssertTrue(math.abs(decoded.areaRadius - original.areaRadius) < 0.001, "AreaRadius matches")
+    end)
+
+    RunTest("ShareCodec rejects tampered or malformed codes", function()
+        local validQuest = {
+            title = "Test",
+            description = "Desc",
+            targets = {
+                { name = "Goblin", currentCount = 0, requiredCount = 1 },
+            },
+            mapId = 10,
+            zoneId = 20,
+            mapName = "Glenumbra",
+            targetX = 0.5,
+            targetY = 0.5,
+            areaCenterX = 0.52,
+            areaCenterY = 0.48,
+            areaRadius = 0.075,
+        }
+        local code = RPQuest.ShareCodec:EncodeQuest(validQuest)
+        local tampered = code:gsub("^RPQ3:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:", "RPQ3:0000:")
+        local res, tamperErr = RPQuest.ShareCodec:DecodeQuest(tampered)
+        AssertEqual(res, nil, "Tampered checksum must fail")
+        AssertEqual(tamperErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Tampered checksum returns specific error key")
+
+        local malformed, malformedErr = RPQuest.ShareCodec:DecodeQuest("INVALID_STRING")
+        AssertEqual(malformed, nil, "Malformed string must fail")
+        AssertEqual(malformedErr, "ERR_IMPORT_INVALID_FORMAT", "Malformed string returns format error key")
+
+        local emptyRes, emptyErr = RPQuest.ShareCodec:DecodeQuest("   ")
+        AssertEqual(emptyRes, nil, "Empty string must fail")
+        AssertEqual(emptyErr, "ERR_IMPORT_EMPTY", "Empty string returns empty error key")
+
+        local futureCode = code:gsub("^RPQ3:", "RPQ9:")
+        local futureRes, futureErr = RPQuest.ShareCodec:DecodeQuest(futureCode)
+        AssertEqual(futureRes, nil, "Unknown version prefix must fail")
+        AssertEqual(futureErr, "ERR_IMPORT_UNSUPPORTED_VERSION", "Unknown version prefix returns version error key")
+
+        validQuest.completed = true
+        local compCode = RPQuest.ShareCodec:EncodeCompletion(validQuest, "Tester", 12345)
+        AssertTrue(compCode ~= nil, "Completion code should be generated")
+        local compRes, compErr = RPQuest.ShareCodec:DecodeQuest(compCode)
+        AssertEqual(compRes, nil, "Completion code in quest importer must fail")
+        AssertEqual(compErr, "ERR_IMPORT_NOT_QUEST_CODE", "Completion code returns not-quest-code error key")
+
+        local importedBad, importedErr = RPQuest.QuestRepository:ImportQuestFromCode(futureCode)
+        AssertEqual(importedBad, nil, "ImportQuestFromCode must fail on incompatible version")
+        AssertEqual(importedErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized specific error")
+    end)
+
+    RunTest("ShareCodec rejects quests created in another client language", function()
+        local prevLang = mockState.language
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize({})
+
+        local enQuest = {
+            title = "Wool Hunt",
+            description = "Hunt sheep",
+            targets = {
+                { name = "Sheep", currentCount = 0, requiredCount = 1 },
+            },
+            mapId = 1,
+            zoneId = 2,
+            mapName = "Glenumbra",
+            targetX = 0.5,
+            targetY = 0.5,
+            areaCenterX = 0.52,
+            areaCenterY = 0.48,
+            areaRadius = 0.075,
+        }
+        local enCode = RPQuest.ShareCodec:EncodeQuest(enQuest)
+        AssertTrue(enCode ~= nil, "EncodeQuest must succeed in EN")
+
+        -- Switch client to Spanish
+        mockState.language = "es"
+        RPQuest.Locale:Initialize("es")
+
+        local decoded, errKey = RPQuest.ShareCodec:DecodeQuest(enCode)
+        AssertEqual(decoded, nil, "DecodeQuest must reject quest from another language")
+        AssertEqual(errKey, "ERR_IMPORT_LANGUAGE_MISMATCH", "DecodeQuest returns ERR_IMPORT_LANGUAGE_MISMATCH")
+
+        local imported, importErr = RPQuest.QuestRepository:ImportQuestFromCode(enCode)
+        AssertEqual(imported, nil, "ImportQuestFromCode must reject quest from another language")
+        AssertEqual(importErr, "Misión inválida: creada en otro idioma.", "ImportQuestFromCode returns localized Spanish mismatch error")
+
+        -- Same language (ES -> ES) must succeed
+        local esCode = RPQuest.ShareCodec:EncodeQuest(enQuest)
+        local decodedEs, errEs = RPQuest.ShareCodec:DecodeQuest(esCode)
+        AssertTrue(decodedEs ~= nil, "DecodeQuest must accept quest in same language")
+        AssertEqual(errEs, nil, "No error when language matches")
+        AssertEqual(decodedEs.language, "es", "Decoded quest preserves source language")
+
+        -- Restore
+        mockState.language = prevLang
+        RPQuest.Locale:Initialize(prevLang)
+    end)
+
+    RunTest("RPQ3 compact codec: compression ratio, negative varints, Discord safety, corrupt inputs (Issue #100)", function()
+        local complexQuest = {
+            title = "La Conspiración de Auridon — Año Nuevo (Ñoño)",
+            description = "Investiga las ruinas antiguas al norte de Vulkhel Guard. "
+                .. "Los agentes del Veiled Heritance han estado reuniendo suministros y "
+                .. "enviando mensajeros secretos entre los campamentos de la costa. "
+                .. "Elimina a los exploradores en el puente y recoge las pistas ocultas.",
+            clue = "Busca el sello roto junto al muelle de los contrabandistas.",
+            completionMessage = "¡Misión completada! Regresa con el capitán para recibir tu recompensa.",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.432149,
+            targetY = 0.678951,
+            areaCenterX = 0.451249,
+            areaCenterY = 0.654351,
+            areaRadius = 0.075,
+            hideMapArea = true,
+            requireUndetected = true,
+            targets = {
+                {
+                    name = "Explorador del Velo",
+                    requiredCount = 3,
+                    zoneId = 381,
+                    worldX = -123456,
+                    worldZ = -78901,
+                    radius = 1500,
+                    locationRequired = true,
+                    customMessage = "Has interceptado al explorador en el puente secreto.",
+                },
+                {
+                    name = "Capitán Contrabandista",
+                    requiredCount = 1,
+                    locationRequired = false,
+                    customMessage = "El capitán cae tras una breve escaramuza.",
+                },
+            },
+            discoveries = {
+                {
+                    zoneId = 381,
+                    worldX = -45000,
+                    worldY = 1200,
+                    worldZ = 98765,
+                    mapId = 32,
+                    x = 0.4123,
+                    y = 0.6123,
+                    radius = 1500,
+                    message = "Notas huellas recientes que conducen hacia la cueva oculta.",
+                },
+                {
+                    zoneId = 381,
+                    worldX = -46000,
+                    worldY = 1250,
+                    worldZ = 99500,
+                    mapId = 32,
+                    x = 0.4223,
+                    y = 0.6223,
+                    radius = 800,
+                    message = "Encuentras una carta cifrada con el emblema del Velo.",
+                },
+            },
+            dialogues = {
+                { npcName = "Tabernero Orin", zoneId = 381, response = "Los contrabandistas suelen reunirse al anochecer cerca del muelle." },
+                { npcName = "Guardia Elara", zoneId = 381, response = "Ten cuidado, los exploradores vigilan el puente norte." },
+            },
+        }
+
+        local rpq3 = RPQuest.ShareCodec:EncodeQuest(complexQuest)
+        AssertTrue(type(rpq3) == "string" and rpq3:sub(1, 5) == "RPQ3:", "EncodeQuest emits RPQ3 prefix")
+
+        -- Verify Discord-safe Base85 payload (no *, _, ~, `, |, >, <, \, :, or whitespace)
+        local payload = rpq3:match("^RPQ3:[0-9A-F][0-9A-F][0-9A-F][0-9A-F]:(.+)$")
+        AssertTrue(payload ~= nil and #payload > 0, "RPQ3 envelope matches RPQ3:<CRC16>:<PAYLOAD>")
+        AssertEqual(payload:find("[*_~`|>\\:<%s]"), nil, "RPQ3 Base85 payload contains no Discord-unsafe or delimiter chars")
+
+        -- Verify >= 45% length reduction vs RPQ2 on a medium/large quest
+        local repeatedQuest = {
+            title = "Patrulla del Velo en Auridon",
+            description = string.rep("Los exploradores del Velo vigilan los caminos del norte de Auridon. ", 6),
+            clue = "Busca los campamentos del Velo en la costa norte.",
+            completionMessage = "Los campamentos del Velo han sido despejados.",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+            areaCenterX = 0.52,
+            areaCenterY = 0.48,
+            areaRadius = 0.075,
+            targets = {
+                { name = "Explorador del Velo", requiredCount = 3, zoneId = 381, worldX = 10000, worldZ = 20000, radius = 1500, locationRequired = true, customMessage = "Explorador del Velo eliminado en el campamento." },
+                { name = "Guardia del Velo", requiredCount = 2, zoneId = 381, worldX = 10500, worldZ = 20500, radius = 1500, locationRequired = false, customMessage = "Guardia del Velo eliminado en el campamento." },
+                { name = "Capitán del Velo", requiredCount = 1, zoneId = 381, worldX = 11000, worldZ = 21000, radius = 1500, locationRequired = true, customMessage = "Capitán del Velo eliminado en el campamento." },
+            },
+            discoveries = {
+                { zoneId = 381, worldX = 10000, worldY = 100, worldZ = 20000, mapId = 32, x = 0.5, y = 0.5, radius = 1500, message = "Campamento norte descubierto." },
+                { zoneId = 381, worldX = 11000, worldY = 100, worldZ = 21000, mapId = 32, x = 0.55, y = 0.55, radius = 1500, message = "Campamento sur descubierto." },
+            },
+        }
+        local rpq3Rep = RPQuest.ShareCodec:EncodeQuest(repeatedQuest)
+        -- Compute exact RPQ2 length for repeatedQuest (18-field pipe string * 4/3 Base64Url)
+        local rpq2RawLen = #repeatedQuest.title + #repeatedQuest.description + #repeatedQuest.clue + #repeatedQuest.completionMessage
+            + #repeatedQuest.mapName + 5 * 6 + 17 + 3 * 70 + 2 * 75
+        local rpq2Len = 10 + math.ceil(rpq2RawLen * 4 / 3)
+        local reduction = 1 - (#rpq3Rep / rpq2Len)
+        AssertTrue(reduction >= 0.45, string.format("RPQ3 achieves >= 45%% reduction vs RPQ2 (actual: %.1f%%, len=%d vs rpq2=%d)", reduction * 100, #rpq3Rep, rpq2Len))
+
+        -- Verify exact round-trip (coords <= 0.0001)
+        local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(rpq3)
+        AssertTrue(decoded ~= nil, "RPQ3 decodes cleanly: " .. tostring(decErr))
+        AssertEqual(decoded.title, complexQuest.title, "UTF-8 title preserved")
+        AssertEqual(decoded.description, complexQuest.description, "UTF-8 description preserved")
+        AssertEqual(decoded.clue, complexQuest.clue, "Clue preserved")
+        AssertEqual(decoded.completionMessage, complexQuest.completionMessage, "Completion message preserved")
+        AssertTrue(math.abs(decoded.targetX - complexQuest.targetX) <= 0.0001, "targetX uint16 precision <= 0.0001")
+        AssertTrue(math.abs(decoded.targetY - complexQuest.targetY) <= 0.0001, "targetY uint16 precision <= 0.0001")
+        AssertTrue(math.abs(decoded.areaCenterX - complexQuest.areaCenterX) <= 0.0001, "areaCenterX uint16 precision <= 0.0001")
+        AssertTrue(math.abs(decoded.areaCenterY - complexQuest.areaCenterY) <= 0.0001, "areaCenterY uint16 precision <= 0.0001")
+        AssertTrue(math.abs(decoded.areaRadius - complexQuest.areaRadius) <= 0.0001, "areaRadius uint16 precision <= 0.0001")
+        AssertEqual(decoded.hideMapArea, true, "hideMapArea preserved")
+        AssertEqual(decoded.requireUndetected, true, "requireUndetected preserved")
+        AssertEqual(#decoded.targets, 2, "2 targets preserved")
+        AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
+        AssertEqual(decoded.targets[1].worldZ, -78901, "Negative worldZ preserved via ZigZag varint")
+        AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved")
+        AssertEqual(decoded.targets[1].customMessage, complexQuest.targets[1].customMessage, "Target customMessage preserved")
+        AssertEqual(decoded.targets[2].worldX, nil, "Target without location has nil worldX")
+        AssertEqual(#decoded.discoveries, 2, "2 discoveries preserved")
+        AssertEqual(decoded.discoveries[1].worldX, -45000, "Discovery negative worldX preserved")
+        AssertEqual(#decoded.dialogues, 2, "2 dialogues preserved")
+
+        -- Truncated/corrupted RPQ3 rejection
+        local trunc = rpq3:sub(1, #rpq3 - 5)
+        local tRes, tErr = RPQuest.ShareCodec:DecodeQuest(trunc)
+        AssertEqual(tRes, nil, "Truncated RPQ3 rejected")
+        AssertEqual(tErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Truncated RPQ3 returns corrupt error")
+
+        local badChar = "RPQ3:0000:INVALID*CHAR"
+        local bRes, bErr = RPQuest.ShareCodec:DecodeQuest(badChar)
+        AssertEqual(bRes, nil, "Invalid Base85 char rejected")
+        AssertEqual(bErr, "ERR_IMPORT_TRUNCATED_OR_CORRUPT", "Invalid Base85 char returns corrupt error")
+
+        -- ComputeQuestSignature remains deterministic across RPQ3
+        local sig1 = RPQuest.ShareCodec:ComputeQuestSignature(complexQuest)
+        local sig2 = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+        AssertTrue(sig1 ~= nil and #sig1 == 8, "ComputeQuestSignature returns 8-char hex")
+        AssertEqual(sig1, sig2, "ComputeQuestSignature matches between original and RPQ3-decoded quest")
+        decoded.completed = true
+        local compCode = RPQuest.ShareCodec:EncodeCompletion(decoded, "Player", 1000)
+        AssertTrue(compCode ~= nil and compCode:sub(1, 6) == "RPQC1:", "RPQC1 completion code works for RPQ3-decoded quest")
+        local okVal, valRes = RPQuest.ShareCodec:ValidateCompletionForQuest(complexQuest, compCode)
+        AssertEqual(okVal, true, "Original quest validates RPQC1 from RPQ3-decoded quest: " .. tostring(valRes))
+    end)
+
+    RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes and JournalTab shows version", function()
+        RPQuest.JournalTab:Initialize()
+        AssertTrue(RPQuest.JournalTab.versionLabel ~= nil, "JournalTab creates versionLabel")
+        AssertEqual(RPQuest.JournalTab.versionLabel:GetText(), "v" .. RPQuest.Constants.METADATA.VERSION, "versionLabel displays addon version")
+
+        local dec1, err1 = RPQuest.ShareCodec:DecodeQuest("RPQ4:1234:abcd")
+        AssertEqual(dec1, nil, "RPQ4 standard envelope rejected")
+        AssertEqual(err1, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ4 returns ERR_IMPORT_UNSUPPORTED_VERSION")
+
+        local dec2, err2 = RPQuest.ShareCodec:DecodeQuest("RPQ99:future_format_payload")
+        AssertEqual(dec2, nil, "RPQ99 arbitrary format rejected")
+        AssertEqual(err2, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ99 returns ERR_IMPORT_UNSUPPORTED_VERSION")
+
+        local imp, impErr = RPQuest.QuestRepository:ImportQuestFromCode("RPQ4:1234:abcd")
+        AssertEqual(imp, nil, "ImportQuestFromCode fails for RPQ4")
+        AssertEqual(impErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized unsupported version error")
+    end)
+
+end
