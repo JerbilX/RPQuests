@@ -24,6 +24,16 @@ function QuestRepository:NormalizeName(name)
     return clean
 end
 
+function QuestRepository:NormalizeAccountName(raw)
+    if type(raw) ~= "string" then return "" end
+    local clean = raw:gsub("^%s+", ""):gsub("%s+$", "")
+    if clean == "" then return "" end
+    if clean:sub(1, 1) ~= "@" then
+        clean = "@" .. clean
+    end
+    return clean
+end
+
 function QuestRepository:FormatTargetEntry(target)
     if type(target) ~= "table" or not target.name or target.name == "" then
         return ""
@@ -86,16 +96,6 @@ local function AreAllObjectivesCompleted(targets, discoveries)
         return false
     end
     return true
-end
-
-local function NormalizeAccountName(raw)
-    if type(raw) ~= "string" then return "" end
-    local clean = raw:gsub("^%s+", ""):gsub("%s+$", "")
-    if clean == "" then return "" end
-    if clean:sub(1, 1) ~= "@" then
-        clean = "@" .. clean
-    end
-    return clean
 end
 
 local function CreateDefaultDraft()
@@ -172,7 +172,7 @@ local function BuildQuestRecord(id, title, description, targets, data, role)
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
-        recipientAccount = NormalizeAccountName(data.recipientAccount),
+        recipientAccount = QuestRepository:NormalizeAccountName(data.recipientAccount),
         sentTo = type(data.sentTo) == "string" and data.sentTo or nil,
         sentAt = data.sentAt,
         lastResult = type(data.lastResult) == "table" and data.lastResult or nil,
@@ -731,7 +731,7 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
     local cleanDesc = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", "")
     local cleanClue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", "")
     local cleanCompMsg = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    local cleanRecipient = NormalizeAccountName(draft.recipientAccount)
+    local cleanRecipient = self:NormalizeAccountName(draft.recipientAccount)
     draft.clue = cleanClue
     draft.completionMessage = cleanCompMsg
     draft.recipientAccount = cleanRecipient
@@ -893,14 +893,9 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
 
     decoded.discoveries = CloneDiscoveriesList(decoded.discoveries, false)
     decoded.dialogues = CloneDialoguesList(decoded.dialogues, decoded.clue)
-    if type(senderDisplayName) == "string" then
-        local cleanSender = senderDisplayName:gsub("^%s+", ""):gsub("%s+$", "")
-        if cleanSender ~= "" then
-            if cleanSender:sub(1, 1) ~= "@" then
-                cleanSender = "@" .. cleanSender
-            end
-            decoded.senderDisplayName = cleanSender
-        end
+    local cleanSender = self:NormalizeAccountName(senderDisplayName)
+    if cleanSender ~= "" then
+        decoded.senderDisplayName = cleanSender
     end
     decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
     decoded.sourceMailId = options.sourceMailId
@@ -1056,7 +1051,7 @@ end
 function QuestRepository:MarkPreparedQuestSent(questId, recipient)
     local quest = self:GetQuestById(questId)
     if not quest then return false end
-    local cleanRecipient = NormalizeAccountName(recipient)
+    local cleanRecipient = self:NormalizeAccountName(recipient)
     if cleanRecipient == "" then return false end
     quest.sentTo = cleanRecipient
     if (quest.recipientAccount or "") == "" then
