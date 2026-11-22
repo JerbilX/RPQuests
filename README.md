@@ -24,7 +24,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
 - **1-to-1 In-Game Mail Flow (Zero Copy/Paste):**
-  - Assign a single `@AccountName` recipient directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU).
+  - Assign a single `@AccountName` recipient (and optional `To (Character)` name) directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU). Both `From:` and `To:` character names are displayed below `Status:` in the quest details.
   - **Auto-Ingested Pending Quests:** Incoming quest mails are automatically ingested into the player's **Pending** list with a visible alert and **Accept** / **Reject** actions directly in the RPQuest Journal.
   - **Automatic Completion & Rejection Reports:** Completing or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Completed` / `Rejected`).
 - **Account-Wide Persistence & Auto-Localization:** Stores quests and progress account-wide via `ZO_SavedVars:NewAccountWide` (matching ESO's account-wide mail, with automatic non-destructive migration from legacy per-character data) and auto-detects client language (`en` / `es`).
@@ -50,7 +50,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
    - Click **Create Quest**, use the collapsible form sections to set **Title**, **Description / Lore**, **Search Area** size (`Small`, `Medium`, `Large`), optional **Do not be detected**, and optional **NPC Dialogue** lines.
    - In the world, aim at NPCs and press your **Capture Target** keybind (or `/rpquest capture`), or stand at a location and press **Capture Discovery Point** (or `/rpquest discovery`).
 2. **Send to a Player (1-to-1 Mail):**
-   - Set the target `@AccountName` in the quest editor and click **Send Quest** from the prepared quest details.
+   - Set the target `@AccountName` (and optional character name) in the quest editor and click **Send Quest** from the prepared quest details.
    - The player receives an alert and sees the quest under **Pending** in their **RPQuest** tab to **Accept** or **Reject**.
    - **Same-language requirement:** Quests should be played on a game client using the same language as the creator so NPC names and dialogue targets match.
 3. **Play & Auto-Report:**

@@ -42,16 +42,30 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
     if statusLabel.SetFont then statusLabel:SetFont("ZoFontWinH4") end
     tab.detailStatus = statusLabel
 
+    local fromLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailFrom", contentParent, CT_LABEL)
+    fromLabel:SetDimensions(500, 20)
+    fromLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
+    if fromLabel.SetFont then fromLabel:SetFont("ZoFontWinH4") end
+    if fromLabel.SetColor then fromLabel:SetColor(0.77, 0.76, 0.62, 1) end
+    tab.detailFrom = fromLabel
+
+    local toLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailTo", contentParent, CT_LABEL)
+    toLabel:SetDimensions(500, 20)
+    toLabel:SetAnchor(TOPLEFT, fromLabel, BOTTOMLEFT, 0, 2)
+    if toLabel.SetFont then toLabel:SetFont("ZoFontWinH4") end
+    if toLabel.SetColor then toLabel:SetColor(0.77, 0.76, 0.62, 1) end
+    tab.detailTo = toLabel
+
     local locLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailLoc", contentParent, CT_LABEL)
     locLabel:SetDimensions(500, 22)
-    locLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
+    locLabel:SetAnchor(TOPLEFT, toLabel, BOTTOMLEFT, 0, 8)
     if locLabel.SetFont then locLabel:SetFont("ZoFontWinH4") end
     if locLabel.SetColor then locLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailLocation = locLabel
 
     local descBody = WINDOW_MANAGER:CreateControl(panelName .. "_DetailDescBody", contentParent, CT_LABEL)
     descBody:SetDimensions(495, 104)
-    descBody:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 25, 54)
+    descBody:SetAnchor(TOPLEFT, locLabel, BOTTOMLEFT, 25, 8)
     if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
     if descBody.SetColor then descBody:SetColor(0.77, 0.76, 0.62, 1) end
     if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
@@ -59,7 +73,7 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
 
     local divider = WINDOW_MANAGER:CreateControl(panelName .. "_DetailDivider", contentParent, CT_TEXTURE)
     divider:SetDimensions(512, 4)
-    divider:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 210)
+    divider:SetAnchor(TOPLEFT, descBody, BOTTOMLEFT, -25, 14)
     divider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
 
     local objHeader = WINDOW_MANAGER:CreateControl(panelName .. "_DetailObjHeader", contentParent, CT_LABEL)
@@ -242,10 +256,7 @@ local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, 
     local deactivateLabel = isPrepared and Addon.Locale:Get("BTN_STOP_TEST") or Addon.Locale:Get("BTN_DEACTIVATE")
 
     if isOffered then
-        local senderSuffix = (type(selectedQuest.senderDisplayName) == "string" and selectedQuest.senderDisplayName ~= "")
-            and (" (" .. Addon.Locale:Get("MAIL_FROM_LABEL", selectedQuest.senderDisplayName) .. ")")
-            or ""
-        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING") .. senderSuffix)
+        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING"))
     elseif isPrepared then
         tab.detailStatus:SetText(FormatPreparedStatusText(selectedQuest))
         tab.btnActivate:SetText(isCurrentActive and deactivateLabel or activateLabel)
@@ -367,6 +378,8 @@ end
 local function RenderEmptyDetailPane(tab)
     tab.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
     tab.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
+    tab.detailFrom:SetText("")
+    tab.detailTo:SetText("")
     tab.detailLocation:SetText("")
     tab.detailDescBody:SetText("")
     tab.detailObjHeader:SetHidden(true)
@@ -402,6 +415,24 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
 
     ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
 
+    local fromName = (type(selectedQuest.senderCharacterName) == "string" and selectedQuest.senderCharacterName ~= "")
+        and selectedQuest.senderCharacterName
+        or ((type(selectedQuest.senderDisplayName) == "string" and selectedQuest.senderDisplayName ~= "")
+            and selectedQuest.senderDisplayName
+            or nil)
+    if not fromName and isPrepared then
+        local playerChar = Addon.QuestRepository:GetPlayerCharacterName()
+        if playerChar ~= "" then
+            fromName = playerChar
+        end
+    end
+    tab.detailFrom:SetText(Addon.Locale:Get("MAIL_FROM_LABEL", fromName or Addon.Locale:Get("LABEL_NO_RECIPIENT")))
+
+    local toName = (type(selectedQuest.recipientCharacterName) == "string" and selectedQuest.recipientCharacterName ~= "")
+        and selectedQuest.recipientCharacterName
+        or Addon.Locale:Get("LABEL_NO_RECIPIENT")
+    tab.detailTo:SetText(Addon.Locale:Get("MAIL_TO_LABEL", toName))
+
     local locText = (selectedQuest.mapName and selectedQuest.mapName ~= "" and selectedQuest.mapName)
         or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
     tab.detailLocation:SetText(Addon.Locale:Get("LABEL_LOCATION", locText))
@@ -417,7 +448,7 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local objHeight = textHeight and (textHeight + 16) or (#objLines * 24)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
     if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 540 + objHeight))
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 580 + objHeight))
     end
 
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared)

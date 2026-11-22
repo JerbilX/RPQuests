@@ -131,6 +131,7 @@ function MailInbox:IngestReceivedMail(mailId)
     local imported, err, isDuplicate = Addon.QuestRepository:ImportQuestFromCode(entry.questCode, entry.senderDisplayName, {
         status = targetStatus,
         sourceMailId = entry.idKey,
+        senderCharacterName = entry.senderCharacterName,
     })
     if not imported and not isDuplicate then
         table.insert(self._receivedMails, entry)

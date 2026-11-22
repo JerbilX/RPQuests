@@ -362,6 +362,7 @@ local function ApplyDraftToEditor(self, draft)
     self.titleEdit:SetText(draft.title or "")
     self.descEdit:SetText(draft.description or "")
     if self.recipientEdit then self.recipientEdit:SetText(draft.recipientAccount or "") end
+    if self.recipientCharEdit then self.recipientCharEdit:SetText(draft.recipientCharacterName or "") end
     if self.clueEdit then self.clueEdit:SetText("") end
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
@@ -430,6 +431,7 @@ function JournalTab:ClearEditorInputs()
     if self.titleEdit then self.titleEdit:SetText("") end
     if self.descEdit then self.descEdit:SetText("") end
     if self.recipientEdit then self.recipientEdit:SetText("") end
+    if self.recipientCharEdit then self.recipientCharEdit:SetText("") end
     if self.clueEdit then self.clueEdit:SetText("") end
     if self.completionEdit then self.completionEdit:SetText("") end
     if self.discoveryMsgEdit then self.discoveryMsgEdit:SetText("") end
@@ -442,6 +444,7 @@ function JournalTab:OnSaveDraftClicked()
     local titleText = self.titleEdit:GetText()
     local descText = self.descEdit:GetText()
     local recipientText = self.recipientEdit and self.recipientEdit:GetText() or ""
+    local recipientCharText = self.recipientCharEdit and self.recipientCharEdit:GetText() or ""
     local compMsgText = self.completionEdit and self.completionEdit:GetText() or ""
     local draft = Addon.QuestRepository:GetDraft()
     local dlgIdx = self.selectedDialogueIndex
@@ -452,7 +455,7 @@ function JournalTab:OnSaveDraftClicked()
         Addon.QuestRepository:UpdateDraftDialogue(dlgIdx, dlgFields, true)
     end
 
-    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText, nil, recipientText)
+    local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText, nil, recipientText, recipientCharText)
     if not savedQuest then
         Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
         return

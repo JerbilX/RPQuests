@@ -24,7 +24,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
 - **Flujo 100% por Correo In-Game 1-a-1 (Sin Copiar/Pegar):**
-  - Asigna un único destinatario (`@Cuenta`) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU).
+  - Asigna un único destinatario (`@Cuenta`) (y opcionalmente el nombre del personaje **Para (Personaje)**) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU). Los nombres de personaje `De:` y `Para:` se muestran debajo del estado en el detalle de la misión.
   - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario.
   - **Reportes Automáticos de Completado y Rechazo:** Al completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Completada` / `Rechazada`).
 - **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente el idioma del cliente (`es` / `en`).
@@ -50,7 +50,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
    - Pulsa **Crear Misión**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`), opcionalmente activar **No ser detectado** y configurar líneas de **Diálogo de NPC**.
    - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo** (`/rpquest capture`), o párate en un lugar y usa **Capturar Punto de Descubrimiento** (`/rpquest discovery`).
 2. **Enviar al Jugador (Correo 1-a-1):**
-   - Define el destinatario `@Cuenta` en el editor de la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
+   - Define el destinatario `@Cuenta` (y opcionalmente el personaje destinatario) en el editor de la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
    - El jugador recibe una alerta y ve la misión en **Pendientes** dentro de su pestaña **RPQuest** para **Aceptar** o **Rechazar**.
    - **Mismo idioma requerido:** Las misiones deben jugarse en un cliente del juego con el mismo idioma que el creador para que coincidan los nombres de NPCs y diálogos.
 3. **Jugar y Reporte Automático:**
