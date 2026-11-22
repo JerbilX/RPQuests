@@ -133,6 +133,9 @@ zo_strformat = function(fmt, ...)
     return tostring(arg1 or fmt)
 end
 
+zo_callLater = function()
+end
+
 ZO_Alert = function(cat, sound, text)
     table.insert(mockState.alerts, { category = cat, sound = sound, text = text })
 end
@@ -144,6 +147,10 @@ end
 DoesUnitExist = function(tag)
     if tag == "reticleover" then return mockState.reticleExists end
     return true
+end
+
+GetTimeStamp = function()
+    return os.time()
 end
 
 GetUnitName = function(tag)
@@ -821,7 +828,7 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
     )
     AssertEqual(q.targets[1].currentCount, 1, "Group unit kill ignored when solo")
 
-    -- En grupo, muerte de miembro del grupo (distinto targetUnitId) sí cuenta y completa
+    -- En grupo, muerte de miembro del grupo sigue siendo ignorada (flujo 1-a-1)
     mockState.isGrouped = true
     EVENT_MANAGER:FireEvent(
         EVENT_COMBAT_EVENT,
@@ -830,6 +837,15 @@ RunTest("CombatTracker + WorldMapArea integration: area pin shown when active, h
         1500, 0, 0, false, 98, 2004, 100
     )
     mockState.isGrouped = false
+    AssertEqual(q.targets[1].currentCount, 1, "Group unit kill ignored even when grouped")
+
+    -- Muerte del jugador completa la misión
+    EVENT_MANAGER:FireEvent(
+        EVENT_COMBAT_EVENT,
+        ACTION_RESULT_DIED_XP, false, "Ataque", 0, 0,
+        "Jugador", COMBAT_UNIT_TYPE_PLAYER, "Cultista de Gusano", COMBAT_UNIT_TYPE_OTHER,
+        1500, 0, 0, false, 1, 2005, 100
+    )
     AssertTrue(q.completed, "Quest completed on second kill")
     AssertEqual(#mockState.csaMessages, 2, "CSA completion message emitted")
     AssertEqual(mockState.csaMessages[2].sound, SOUNDS.QUEST_COMPLETED, "Played QUEST_COMPLETED sound")
@@ -884,22 +900,23 @@ RunTest("RPQuest Initialize via EVENT_ADD_ON_LOADED sets up Character SavedVars 
     local active = RPQuest.QuestRepository:GetActiveQuest()
     AssertTrue(active ~= nil and active.id == preparedQuest.id, "Prepared quest activated for local testing via JournalTab")
 
-    -- Código para compartir siempre visible en shareEdit al seleccionar/crear la misión
-    local generatedCode = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ3:", "Share edit box auto-populated with RPQ3 code")
-    AssertEqual(RPQuest.JournalTab.btnShare, nil, "Share button removed in favor of always-visible share box")
-    RPQuest.JournalTab.shareEdit._selectedAll = false
-    RPQuest.JournalTab.shareEdit:FireHandler("OnFocusGained")
-    AssertTrue(RPQuest.JournalTab.shareEdit._selectedAll, "Share edit box selects all text when focused")
+    -- ShareCodec sigue funcionando como capa interna de serialización para MailTransport
+    local generatedCode = RPQuest.QuestRepository:ExportQuestToCode(preparedQuest.id)
+    AssertTrue(string.sub(generatedCode, 1, 5) == "RPQ3:", "Internal ExportQuestToCode produces RPQ3 code")
+    AssertEqual(RPQuest.JournalTab.importPane, nil, "Manual importPane removed")
+    AssertEqual(RPQuest.JournalTab.shareEdit, nil, "Manual shareEdit removed")
+    AssertEqual(RPQuest.JournalTab.mailInboxPane, nil, "Manual mailInboxPane removed")
 
-    -- Probar vista Importar en JournalTab
+    -- Verificar que ImportQuestFromCode + AcceptOfferedQuest emite banner CSA
     mockState.csaMessages = {}
-    RPQuest.JournalTab:OpenImportView()
-    AssertEqual(RPQuest.JournalTab.importPane:IsHidden(), false, "Import pane is visible")
-    RPQuest.JournalTab.importCodeEdit:SetText(generatedCode)
-    RPQuest.JournalTab:OnConfirmImportClicked()
-    AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via UI")
-    AssertEqual(#mockState.csaMessages, 1, "Importing quest emits one CENTER_SCREEN_ANNOUNCE banner")
+    local offeredQ = RPQuest.QuestRepository:ImportQuestFromCode(generatedCode, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "test_import_901",
+    })
+    RPQuest.QuestRepository:AcceptOfferedQuest(offeredQ.id)
+    RPQuest.Announcements:AnnounceQuestAccepted(offeredQ)
+    AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 2, "Second quest imported via internal repository flow")
+    AssertEqual(#mockState.csaMessages, 1, "Accepting quest emits one CENTER_SCREEN_ANNOUNCE banner")
     AssertEqual(mockState.csaMessages[1].category, CSA_CATEGORY_LARGE_TEXT, "Quest accepted CSA uses large text category")
     AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_ACCEPTED, "Quest accepted CSA plays SOUNDS.QUEST_ACCEPTED")
     AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Quest accepted CSA uses CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED")
@@ -1035,12 +1052,12 @@ RunTest("12. Higiene UI: anclaje dinámico de botones, título único tras borra
     local qc = RPQuest.QuestRepository:SaveDraft("", "", 0.05)
     AssertTrue(qb.title ~= qc.title, "Default title uses nextId and does not collide after deletion")
 
-    -- 2. Separador de código, cuadro de compartir y cuadro de validación visibles en detalle de misión
+    -- 2. Detalle de misión preparada muestra botón de envío directo sin cajas de código manual
     RPQuest.JournalTab:SelectQuest(qc.id)
-    AssertEqual(RPQuest.JournalTab.codeDivider:IsHidden(), false, "codeDivider visible when quest selected")
-    AssertEqual(RPQuest.JournalTab.shareBg:IsHidden(), false, "shareBg always visible in code section when quest selected")
-    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "validateBg visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.shareHeader._anchors[1].relTo, RPQuest.JournalTab.codeDivider, "shareHeader anchored below codeDivider")
+    AssertEqual(RPQuest.JournalTab.codeDivider, nil, "Manual codeDivider removed")
+    AssertEqual(RPQuest.JournalTab.shareBg, nil, "Manual shareBg removed")
+    AssertEqual(RPQuest.JournalTab.validateBg, nil, "Manual validateBg removed")
+    AssertEqual(RPQuest.JournalTab.btnSendDirect:IsHidden(), false, "Direct mail send button visible for prepared quest")
 
     -- 3. _dirty se marca cuando panel está oculto y se limpia al abrir
     RPQuest.JournalTab.panel:SetHidden(true)
@@ -1268,16 +1285,12 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertEqual(okWrong, false, "RPQC1 from another quest rejected")
     AssertEqual(errWrong, "VALIDATE_ERR_WRONG_QUEST", "Specific error returned for wrong quest")
 
-    -- Flujo UI en JournalTab: delivery code se genera automáticamente al completarse la misión
+    -- Flujo UI en JournalTab: sin cajas de código manual ni validación por pegado
     RPQuest.JournalTab:SelectQuest(playerQuest.id)
     AssertEqual(RPQuest.JournalTab.btnCompletionCode, nil, "On-demand completion code button removed")
     AssertEqual(RPQuest.JournalTab.btnActivate:IsHidden(), true, "Set Active button hidden for completed player quest")
-    AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), false, "Delivery code box visible for completed received quest")
-    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), true, "Validate box hidden for received quest")
-    local initialShareText = RPQuest.JournalTab.shareEdit:GetText()
-    AssertTrue(string.sub(initialShareText, 1, 5) == "RPQ3:", "shareEdit populated with RPQ3 code for received quest")
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "JournalTab auto-populates RPQC1 code into deliveryEdit")
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit is not overwritten by delivery code")
+    AssertEqual(RPQuest.JournalTab.deliveryBg, nil, "Manual deliveryBg removed")
+    AssertEqual(RPQuest.JournalTab.validateBg, nil, "Manual validateBg removed")
 
     -- Keybind X Abandon presente en keybindStripDescriptor
     AssertTrue(RPQuest.JournalTab.abandonQuestDescriptor ~= nil, "Abandon quest keybind descriptor exists")
@@ -1288,38 +1301,9 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     RPQuest.JournalTab:ToggleSection("completed")
     AssertEqual(RPQuest.JournalTab.collapsedSections.completed, false, "Section with selected quest cannot be collapsed")
 
-    -- Los textbox de código generado son readonly (revierten ediciones del usuario)
-    RPQuest.JournalTab.shareEdit:SetText("MODIFIED")
-    if RPQuest.JournalTab.shareEdit._handlers and RPQuest.JournalTab.shareEdit._handlers.OnTextChanged then
-        RPQuest.JournalTab.shareEdit._handlers.OnTextChanged(RPQuest.JournalTab.shareEdit)
-    end
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), initialShareText, "shareEdit reverts manual edits (readonly)")
-
-    RPQuest.JournalTab.deliveryEdit:SetText("MODIFIED")
-    if RPQuest.JournalTab.deliveryEdit._handlers and RPQuest.JournalTab.deliveryEdit._handlers.OnTextChanged then
-        RPQuest.JournalTab.deliveryEdit._handlers.OnTextChanged(RPQuest.JournalTab.deliveryEdit)
-    end
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), completionCode, "deliveryEdit reverts manual edits (readonly)")
-
-    -- Alerta amigable al generar código de entrega (no clave cruda)
-    local readyAlert = RPQuest.Locale:Get("ALERT_COMPLETION_CODE_READY")
-    AssertTrue(readyAlert ~= "ALERT_COMPLETION_CODE_READY", "ALERT_COMPLETION_CODE_READY is localized")
-
     RPQuest.JournalTab:SelectQuest(masterQuest.id)
-    AssertEqual(RPQuest.JournalTab.btnValidateDelivery:IsHidden(), false, "Validate delivery button visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.validateBg:IsHidden(), false, "Validate box visible for prepared quest")
-    AssertEqual(RPQuest.JournalTab.deliveryBg:IsHidden(), true, "Delivery code box hidden for prepared quest")
-    AssertEqual(RPQuest.JournalTab.deliveryEdit:GetText(), "", "deliveryEdit cleared when switching quest")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit auto-populated with RPQ3 code for prepared quest")
-    AssertEqual(RPQuest.JournalTab.validateEdit:GetText(), "", "validateEdit cleared when switching quest")
-    RPQuest.JournalTab:OnValidateDeliveryClicked()
-    local emptyMsg = RPQuest.JournalTab.validateResultLabel:GetText()
-    AssertEqual(emptyMsg, RPQuest.Locale:Get("VALIDATE_ERR_EMPTY"), "Validate UI prompts when validate box is empty (ignores shareEdit)")
-    RPQuest.JournalTab.validateEdit:SetText(completionCode)
-    RPQuest.JournalTab:OnValidateDeliveryClicked()
-    local msg = RPQuest.JournalTab.validateResultLabel:GetText()
-    AssertTrue(msg:find("Jugador", 1, true) ~= nil, "Validate UI shows character name on success")
-    AssertTrue(string.sub(RPQuest.JournalTab.shareEdit:GetText(), 1, 5) == "RPQ3:", "shareEdit still preserves RPQ3 code after validation")
+    AssertEqual(RPQuest.JournalTab.btnValidateDelivery, nil, "Manual validate delivery button removed")
+    AssertEqual(RPQuest.JournalTab.btnSendDirect:IsHidden(), false, "Direct send button visible for prepared quest")
 end)
 
 RunTest("16. Marca del mapa visible en preparacion y actualizada al instante al editar tamano", function()
@@ -1497,11 +1481,10 @@ RunTest("18. Issue 47: Deep optimization, overflow caps, deferred map pins and O
     local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
     AssertTrue(type(code) == "string" and #code > 100 and code:sub(1, 5) == "RPQ3:", "Exported RPQ3 code generated cleanly")
 
-    -- Verificar que maxChars >= 4096 en importCodeEdit y shareEdit
+    -- Verificar que detailObjText tiene altura acotada (<= 96px)
     RPQuest.JournalTab:SelectQuest(q.id)
     local _, objHeight = RPQuest.JournalTab.detailObjText:GetDimensions()
     AssertTrue(objHeight <= 96, "detailObjText height capped at <= 96px to prevent vertical overflow")
-    AssertEqual(RPQuest.JournalTab.shareEdit:GetText(), code, "Long share code is not truncated in shareEdit")
 
     -- Verificar invalidación de caché de ExportQuestToCode al editar
     RPQuest.QuestRepository:LoadQuestIntoDraft(q.id)
@@ -2345,9 +2328,9 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     })
     local q = RPQuest.QuestRepository:SaveDraft("Misión por Correo", "Descripción corta")
 
-    -- 1. Reject > 4 recipients
-    local okMany, errMany = RPQuest.MailTransport:SendQuestToRecipients(q, "@A, @B, @C, @D, @E", "Hola")
-    AssertEqual(okMany, false, "Rejects more than 4 recipients")
+    -- 1. Reject > 1 recipient (1-to-1 model)
+    local okMany, errMany = RPQuest.MailTransport:SendQuestToRecipients(q, "@A, @B", "Hola")
+    AssertEqual(okMany, false, "Rejects more than 1 recipient")
     AssertEqual(errMany, "ERR_MAIL_TOO_MANY_RECIPIENTS", "Returns too many recipients error")
 
     -- 2. Reject body exceeding max multi-part limit (MAX_MAIL_PARTS * chunkSize)
@@ -2356,25 +2339,19 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     AssertEqual(okLong, false, "Rejects mail exceeding multi-part mail limit")
     AssertEqual(errLong, "ERR_MAIL_BODY_TOO_LONG", "Returns body too long error")
 
-    -- 3. Sequential queue for 3 recipients (waits for EVENT_MAIL_OPEN_MAILBOX, normalizes @ prefix, deduplicates)
-    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, Two, @one, @Three", "Mensaje de rol.")
-    AssertEqual(okSend, true, "Sequential mail send started: " .. tostring(errSend))
+    -- 3. Single recipient send (waits for EVENT_MAIL_OPEN_MAILBOX, normalizes @ prefix, deduplicates)
+    local okSend, errSend = RPQuest.MailTransport:SendQuestToRecipients(q, "One, @one", "Mensaje de rol.")
+    AssertEqual(okSend, true, "Single recipient mail send started: " .. tostring(errSend))
     AssertEqual(openCalls, 1, "RequestOpenMailbox called when native UI closed")
     AssertEqual(#sentMails, 0, "SendMail deferred until EVENT_MAIL_OPEN_MAILBOX fires")
     AssertEqual(closeCalls, 0, "CloseMailbox not called while waiting for mailbox open")
 
     RPQuest.MailTransport:OnMailboxOpened()
-    AssertEqual(#sentMails, 1, "1st mail dispatched after EVENT_MAIL_OPEN_MAILBOX")
-    AssertEqual(sentMails[1].to, "@One", "First recipient normalized")
+    AssertEqual(#sentMails, 1, "Mail dispatched after EVENT_MAIL_OPEN_MAILBOX")
+    AssertEqual(sentMails[1].to, "@One", "Recipient normalized with @ prefix")
     AssertEqual(sentMails[1].subject, "[RPQuest] Misión por Correo", "Subject uses [RPQuest] prefix")
 
     RPQuest.MailTransport:OnMailSendSuccess("@One")
-    AssertEqual(#sentMails, 2, "Second mail dispatched after EVENT_MAIL_SEND_SUCCESS")
-    AssertEqual(sentMails[2].to, "@Two", "Second recipient received @ prefix")
-
-    RPQuest.MailTransport:OnMailSendSuccess("@Two")
-    AssertEqual(#sentMails, 3, "Third mail dispatched sequentially")
-    RPQuest.MailTransport:OnMailSendSuccess("@Three")
     AssertEqual(closeCalls, 1, "CloseMailbox called after queue finishes when native UI is closed")
 
     -- 3b. Unexpected mailbox close mid-send aborts cleanly without hanging
@@ -2384,11 +2361,11 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
             lastComplete = payload
         end
     end)
-    local okAbort = RPQuest.MailTransport:SendQuestToRecipients(q, "@One, @Two", "Hola")
+    local okAbort = RPQuest.MailTransport:SendQuestToRecipients(q, "@One", "Hola")
     AssertEqual(okAbort, true, "Second send batch started")
     RPQuest.MailTransport:OnMailboxClosed()
     AssertEqual(RPQuest.MailTransport._isSending, false, "Sending flag cleared on unexpected mailbox close")
-    AssertTrue(lastComplete ~= nil and lastComplete.failed == 2 and lastComplete.sent == 0, "MAIL_SEND_COMPLETE reports remaining mails as failed")
+    AssertTrue(lastComplete ~= nil and lastComplete.failed == 1 and lastComplete.sent == 0, "MAIL_SEND_COMPLETE reports remaining mail as failed")
 
     -- 4. Native mailbox open coordination: do not close if native UI is showing
     nativeMailOpen = true
@@ -2427,28 +2404,33 @@ RunTest("MailTransport: sequential send queue, body limit, inbox parsing, Accept
     end
 
     RPQuest.MailTransport:ScanInbox(false)
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "101 parsed immediately, 102 ignored")
-    local mails = RPQuest.MailTransport:GetReceivedMails()
-    AssertEqual(mails[1].senderDisplayName, "@QuestMaster", "Sender displayName preserved")
-    AssertEqual(mails[1].roleMessage, "Te encomiendo esta tarea.", "Role message extracted")
-
-    -- Simulate async readable for 103
-    _G.ReadMail = function(id) return mockInbox[id] and mockInbox[id].body or "" end
-    RPQuest.MailTransport:OnMailReadable(103)
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 2, "103 parsed via OnMailReadable")
-
-    -- Accept 101 with autoDeleteMail = true (default)
-    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(101)
-    AssertTrue(imported ~= nil, "AcceptReceivedMail imports quest: " .. tostring(impErr))
-    AssertEqual(#deletedMails, 1, "DeleteMail called when autoDeleteMail is true")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "101 auto-ingested from inbox, 102 ignored")
+    local receivedQuests = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#receivedQuests, 1, "101 auto-ingested as OFFERED quest")
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(receivedQuests[1]), true, "Ingested quest has OFFERED status")
+    AssertEqual(receivedQuests[1].senderDisplayName, "@QuestMaster", "Sender displayName preserved")
+    AssertEqual(#deletedMails, 1, "DeleteMail called on auto-ingest when autoDeleteMail is true")
     AssertEqual(deletedMails[1], 101, "Deleted mail 101")
 
-    -- Reject 103 with autoDeleteMail = false
+    -- Simulate async readable for 103 with autoDeleteMail = false
     RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
-    local rejOk = RPQuest.MailTransport:RejectReceivedMail(103)
-    AssertEqual(rejOk, true, "RejectReceivedMail returns true")
+    _G.ReadMail = function(id) return mockInbox[id] and mockInbox[id].body or "" end
+    RPQuest.MailTransport:OnMailReadable(103)
+    receivedQuests = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#receivedQuests, 2, "103 auto-ingested via OnMailReadable")
     AssertEqual(#deletedMails, 1, "DeleteMail NOT called when autoDeleteMail is false")
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after accept & reject")
+
+    -- Re-scan does not duplicate 103
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 2, "No duplicate on re-scan")
+
+    -- Accept 101 and Reject 103
+    local accOk = RPQuest.QuestRepository:AcceptOfferedQuest(receivedQuests[1].id)
+    AssertEqual(accOk, true, "AcceptOfferedQuest succeeds")
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(receivedQuests[1]), false, "Accepted quest is no longer OFFERED")
+    local rejOk = RPQuest.QuestRepository:RejectOfferedQuest(receivedQuests[2].id)
+    AssertEqual(rejOk, true, "RejectOfferedQuest succeeds")
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 1, "Rejected quest removed from list")
 
     -- Restore globals
     _G.SendMail = origSendMail
@@ -2507,25 +2489,19 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     _G.ReadMail = function(id) return (id == 201) and rpq3Code or "" end
 
     RPQuest.MailTransport:ScanInbox(false)
-    local imported = RPQuest.MailTransport:AcceptReceivedMail(201)
-    AssertTrue(imported ~= nil, "Quest accepted from mail")
+    local receivedList = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    local imported = receivedList[1]
+    AssertTrue(imported ~= nil, "Quest auto-ingested from mail")
+    RPQuest.QuestRepository:AcceptOfferedQuest(imported.id)
     AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
 
-    -- Manual mode (default): completing quest does NOT auto-send, shows manual button
-    AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), false, "autoSendCompletionMail defaults to false")
+    -- Automatic mode (default): completing quest auto-sends completion report to @Creator
+    AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), true, "autoSendCompletionMail defaults to true")
     RPQuest.QuestRepository:SetActiveQuest(imported.id)
     RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
     AssertEqual(imported.completed, true, "Imported quest completed")
-    AssertEqual(#sentMails, 0, "Manual mode does NOT auto-send completion mail")
-
-    RPQuest.JournalTab:SelectQuest(imported.id)
-    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), false, "Manual report button visible in manual mode")
-
-    -- 1-click manual send
-    local okManual = RPQuest.MailTransport:SendCompletionReport(imported)
-    AssertEqual(okManual, true, "SendCompletionReport succeeds in manual mode")
     RPQuest.MailTransport:OnMailboxOpened()
-    AssertEqual(#sentMails, 1, "Completion mail sent to creator")
+    AssertEqual(#sentMails, 1, "Completion mail auto-sent to creator")
     AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
     AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
     local rpqc1Code = sentMails[1].body
@@ -2533,14 +2509,14 @@ RunTest("MailTransport completion report (manual/auto) and creator auto-validati
     RPQuest.MailTransport:OnMailSendSuccess("@Creator")
     AssertEqual(imported.completionReported, true, "completionReported marked true after send success")
 
-    -- Automatic mode: reset quest, enable autoSendCompletionMail, complete again
+    -- Manual re-send if reset & not yet reported
     RPQuest.QuestRepository:ResetQuest(imported.id)
-    RPQuest.QuestRepository:SetSetting("autoSendCompletionMail", true)
+    imported.completionReported = false
     RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
     RPQuest.MailTransport:OnMailboxOpened()
     AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
     RPQuest.JournalTab:SelectQuest(imported.id)
-    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail:IsHidden(), true, "Manual report button hidden in automatic mode")
+    AssertEqual(RPQuest.JournalTab.btnReportCompletionMail, nil, "Manual report button removed in mail-only UX")
     RPQuest.MailTransport:OnMailSendSuccess("@Creator")
 
     -- Creator receives [RPQuest:Done] mail and auto-validates RPQC1
@@ -2764,17 +2740,13 @@ RunTest("MailTransport: multi-part RPQP chunking, out-of-order reassembly, incom
         }
     end
     RPQuest.MailTransport:ScanInbox(false)
-    local mailsReady = RPQuest.MailTransport:GetReceivedMails()
-    AssertEqual(#mailsReady, 1, "Still 1 consolidated entry after all parts arrive")
-    AssertEqual(mailsReady[1].isIncomplete, false, "Entry marked complete")
-    AssertEqual(mailsReady[1].title, q.title, "Decoded title matches original")
-
-    -- Accept and verify all part mails are deleted
-    local imported, impErr = RPQuest.MailTransport:AcceptReceivedMail(mailsReady[1].mailId)
-    AssertTrue(imported ~= nil, "Multi-part quest imported: " .. tostring(impErr))
-    AssertEqual(imported.title, q.title, "Imported quest title matches")
-    AssertEqual(#deletedIds, plan.partCount, "All part mails deleted on Accept")
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after Accept")
+    local receivedMulti = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#receivedMulti, 1, "Multi-part quest auto-ingested once all parts arrive")
+    local imported = receivedMulti[1]
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(imported), true, "Multi-part quest starts in OFFERED status")
+    AssertEqual(imported.title, q.title, "Decoded title matches original")
+    AssertEqual(#deletedIds, plan.partCount, "All part mails deleted on auto-ingest")
+    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "Inbox empty after auto-ingest")
 end)
 
 RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes and JournalTab shows version", function()
@@ -2886,15 +2858,18 @@ RunTest("MailTransport: alerts on incoming quest mail without duplicates and sup
         table.insert(alerts, { msg = msg, isErr = isErr })
     end
 
-    -- 1. Manual mode (autoAcceptMail = false)
+    -- 1. Manual mode (autoAcceptMail = false): auto-ingests as OFFERED
     RPQuest.MailTransport:ScanInbox(false)
-    AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 1, "Mail stored in inbox in manual mode")
+    local offeredList = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+    AssertEqual(#offeredList, 1, "Quest auto-ingested as OFFERED in manual mode")
+    AssertEqual(RPQuest.QuestRepository:IsOfferedQuest(offeredList[1]), true, "Ingested quest is OFFERED")
     AssertEqual(#alerts, 1, "1 notification alert shown")
     AssertEqual(alerts[1].isErr, false, "Notification alert is not an error")
-    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_QUEST_RECEIVED", "Misión de Correo", "@SenderA"), "Notification message matches")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_QUEST_OFFERED", "Misión de Correo", "@SenderA"), "Notification message matches")
 
-    -- Re-scan does not duplicate alert
+    -- Re-scan does not duplicate quest or alert
     RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED), 1, "No duplicate OFFERED quest on re-scan")
     AssertEqual(#alerts, 1, "No duplicate notification alert on re-scan")
 
     -- 2. Auto-accept mode (autoAcceptMail = true)
@@ -2913,27 +2888,28 @@ RunTest("MailTransport: alerts on incoming quest mail without duplicates and sup
     RPQuest.MailTransport:ScanInbox(false)
     local qCountAfter = #RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
     AssertEqual(qCountAfter, qCountBefore + 1, "Quest auto-imported when autoAcceptMail=true")
-    AssertEqual(#deletedIds, 1, "Auto-accepted mail deleted when autoDeleteMail=true")
-    AssertEqual(deletedIds[1], 952, "Deleted mailId matches auto-accepted mail")
+    AssertEqual(#deletedIds, 2, "Both ingested and auto-accepted mails deleted when autoDeleteMail=true")
+    AssertEqual(deletedIds[2], 952, "Deleted mailId matches auto-accepted mail")
     AssertEqual(acceptedCount, 1, "AnnounceQuestAccepted called on auto-accept")
 
     RPQuest.Announcements.ShowAlert = origShowAlert
     RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
 end)
 
-RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Discovery/Combat tracking (Issue #103)", function()
+RunTest("1-to-1 model: group sharing disabled, group tracking ignored, and DialogueInjector works after mail accept without /reloadui (Issue #142)", function()
     local sv = RPQuest.QuestRepository:GetDefaults()
     RPQuest.QuestRepository:Initialize(sv)
     RPQuest.MailTransport:Initialize()
     RPQuest.JournalTab:Initialize()
     RPQuest.DiscoveryTracker:Initialize()
     RPQuest.CombatTracker:Initialize()
+    RPQuest.DialogueInjector:Initialize()
 
-    -- Create quest with targetLocation and discovery point
+    -- Create quest with targetLocation, discovery point, and NPC dialogue
     local zId = mockState.zoneId
     local code = RPQuest.ShareCodec:EncodeQuest({
-        title = "Grupo en Tamriel",
-        description = "Objetivo compartido.",
+        title = "Misión 1-a-1",
+        description = "Objetivo individual.",
         mapId = mockState.mapId,
         zoneId = zId,
         mapName = "Auridon",
@@ -2943,44 +2919,31 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
         discoveries = {
             { name = "Ruinas", zoneId = zId, worldX = 20000, worldZ = 20000, radius = 1000 },
         },
+        dialogues = {
+            { npcName = "Informante", zoneId = zId, clue = "¿Qué sabes del bandido?", response = "Está al sur." },
+        },
     })
+
+    -- Verify group sharing APIs/UI are removed
+    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor, nil, "Group share keybind descriptor removed")
+    AssertEqual(RPQuest.MailTransport.ShareQuestWithGroup, nil, "MailTransport:ShareQuestWithGroup removed")
+    AssertEqual(RPQuest.MailTransport.GetGroupMemberDisplayNames, nil, "MailTransport:GetGroupMemberDisplayNames removed")
+
+    -- Simulate grouped player receiving and accepting quest via mail without /reloadui
+    local isGrouped = true
+    _G.IsUnitGrouped = function() return isGrouped end
+    _G.GetGroupSize = function() return 2 end
+    _G.GetGroupUnitTagByIndex = function(i)
+        local tags = { "player", "group1" }
+        return tags[i]
+    end
+    _G.AreUnitsEqual = function(a, b) return a == b end
+
+    -- Group DiscoveryTracker & CombatTracker ignore group1
     local saved = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Creator")
     RPQuest.QuestRepository:SetActiveQuest(saved.id)
     RPQuest.JournalTab:SelectQuest(saved.id)
 
-    -- Mock group APIs: player + @Ally1 + @Ally2
-    local isGrouped = false
-    _G.IsUnitGrouped = function() return isGrouped end
-    _G.GetGroupSize = function() return isGrouped and 3 or 0 end
-    _G.GetGroupUnitTagByIndex = function(i)
-        local tags = { "player", "group1", "group2" }
-        return tags[i]
-    end
-    _G.AreUnitsEqual = function(a, b) return a == b end
-    _G.GetDisplayName = function() return "@PlayerSelf" end
-    _G.GetUnitDisplayName = function(tag)
-        if tag == "player" then return "@PlayerSelf" end
-        if tag == "group1" then return "@Ally1" end
-        if tag == "group2" then return "@Ally2" end
-        return ""
-    end
-
-    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), false, "Share keybind hidden when ungrouped")
-    isGrouped = true
-    AssertEqual(RPQuest.JournalTab.shareWithGroupDescriptor.visible(), true, "Share keybind visible when grouped in detail view")
-
-    local members = RPQuest.MailTransport:GetGroupMemberDisplayNames()
-    AssertEqual(#members, 2, "2 group members returned (excluding player)")
-    AssertEqual(members[1], "@Ally1", "First group member @Ally1")
-    AssertEqual(members[2], "@Ally2", "Second group member @Ally2")
-
-    local sentRecipients = {}
-    _G.SendMail = function(to) table.insert(sentRecipients, to) end
-    local okShare, errShare, countShare = RPQuest.MailTransport:ShareQuestWithGroup(saved)
-    AssertEqual(okShare, true, "ShareQuestWithGroup succeeds: " .. tostring(errShare))
-    AssertEqual(countShare, 2, "Shared with 2 group members")
-
-    -- Group DiscoveryTracker: player far away, group1 at discovery point (20000, 20000)
     _G.GetUnitWorldPosition = function(tag)
         if tag == "player" then return zId, 0, 0, 0 end
         if tag == "group1" then return zId, 20000, 0, 20000 end
@@ -2988,9 +2951,8 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
     end
     RPQuest.DiscoveryTracker:UpdatePollingState()
     RPQuest.DiscoveryTracker:OnUpdateTick()
-    AssertEqual(saved.discoveries[1].discovered, true, "Discovery triggered by group1 position")
+    AssertEqual(saved.discoveries[1].discovered, false, "Discovery NOT triggered by group1 position")
 
-    -- Group CombatTracker: player outside targetLocation (0,0), group1 inside (5000, 5000)
     _G.GetUnitWorldPosition = function(tag)
         if tag == "player" then return zId, 0, 0, 0 end
         if tag == "group1" then return zId, 5000, 0, 5000 end
@@ -2998,8 +2960,39 @@ RunTest("Group share keybind, MailTransport:ShareQuestWithGroup, and group Disco
     end
     _G.GetMapPlayerPosition = function() return 0.5, 0.5 end
     RPQuest.CombatTracker:OnCombatEvent(nil, _G.ACTION_RESULT_DIED, false, "", 0, 0, "Ally1", _G.COMBAT_UNIT_TYPE_GROUP, "Bandido", 0, 0, 0, 0, false, 1, 777, 0)
-    AssertEqual(saved.targets[1].currentCount, 1, "Group kill recorded using group1 targetLocation")
-    AssertEqual(saved.failed, false, "Quest did not fail when group1 was inside targetLocation")
+    AssertEqual(saved.targets[1].currentCount, 0, "Group kill NOT recorded in 1-to-1 mode")
+
+    -- DialogueInjector injects option immediately after mail quest import even while grouped
+    local origUnitName = _G.GetUnitName
+    _G.GetTimeStamp = function()
+    return os.time()
+end
+
+GetUnitName = function(tag)
+        if tag == "interact" then return "Informante" end
+        return origUnitName(tag)
+    end
+    local injectedOptions = {}
+    local fakeInteraction = {
+        optionControls = {},
+        PopulateChatterOption = function(selfObj, controlID, optionIndex, optionText, optionType)
+            table.insert(injectedOptions, { controlID = controlID, text = optionText, optionType = optionType })
+        end,
+        PopulateChatterOptions = function(selfObj, optionCount)
+            selfObj:PopulateChatterOption(1, function() end, "Adiós", _G.CHATTER_GOODBYE)
+            selfObj:FinalizeChatterOptions(optionCount)
+            return optionCount
+        end,
+        FinalizeChatterOptions = function(selfObj, optionCount)
+            return optionCount
+        end,
+    }
+    _G.ZO_Interaction = fakeInteraction
+    RPQuest.DialogueInjector:InstallHooks()
+    fakeInteraction:PopulateChatterOptions(0)
+    AssertEqual(#injectedOptions, 2, "DialogueInjector injects clue + goodbye immediately without /reloadui")
+    AssertEqual(injectedOptions[1].text, "¿Qué sabes del bandido?", "Injected option has expected clue text")
+    _G.GetUnitName = origUnitName
 end)
 
 RunTest("36. Locale fallback to English for unsupported client languages and direct formatting", function()
@@ -3011,6 +3004,228 @@ RunTest("36. Locale fallback to English for unsupported client languages and dir
     AssertEqual(RPQuest.Locale:Get("SECTION_ACTIVE_QUESTS", 3), "QUESTS (3)", "Locale:Get formats placeholders directly")
     mockState.language = origLang
     RPQuest.Locale:Initialize(origLang)
+end)
+
+RunTest("37. OFFERED pending quest UI in JournalTab: Accept activates and Reject removes (Issue #143)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.JournalTab:Initialize()
+
+    local code = RPQuest.ShareCodec:EncodeQuest({
+        title = "Contrato Pendiente",
+        description = "Acepta o rechaza.",
+        mapId = mockState.mapId,
+        zoneId = mockState.zoneId,
+        mapName = "Auridon",
+        targets = { { name = "Lobo", requiredCount = 1 } },
+    })
+
+    local offered, _, isDup = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_pending_1",
+    })
+    AssertTrue(offered ~= nil, "Offered quest imported")
+    AssertEqual(isDup, false, "First import is not duplicate")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Offered quest is not active yet")
+    AssertEqual(RPQuest.QuestRepository:SetActiveQuest(offered.id), false, "Cannot set OFFERED quest active directly")
+
+    -- Duplicate prevention by sourceMailId
+    local dupQ, _, isDup2 = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_pending_1",
+    })
+    AssertEqual(isDup2, true, "Second import with same sourceMailId detected as duplicate")
+    AssertEqual(dupQ.id, offered.id, "Returns existing quest on duplicate")
+
+    -- JournalTab shows Accept and Reject buttons for OFFERED quest
+    RPQuest.JournalTab:SelectQuest(offered.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.btnAcceptOffered:IsHidden(), false, "Accept button visible for OFFERED quest")
+    AssertEqual(RPQuest.JournalTab.btnRejectOffered:IsHidden(), false, "Reject button visible for OFFERED quest")
+    AssertEqual(RPQuest.JournalTab.btnActivate:IsHidden(), true, "Activate button hidden for OFFERED quest")
+
+    -- Accept activates quest
+    local accepted = RPQuest.JournalTab:AcceptSelectedOfferedQuest()
+    AssertEqual(accepted, true, "AcceptSelectedOfferedQuest succeeds")
+    AssertEqual(RPQuest.QuestRepository:GetActiveQuest().id, offered.id, "Quest becomes active after Accept")
+    AssertEqual(RPQuest.JournalTab.btnAcceptOffered:IsHidden(), true, "Accept button hidden after Accept")
+
+    -- Reject removes another offered quest
+    local offered2 = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_pending_2",
+    })
+    RPQuest.JournalTab:SelectQuest(offered2.id)
+    local rejected = RPQuest.JournalTab:RejectSelectedOfferedQuest()
+    AssertEqual(rejected, true, "RejectSelectedOfferedQuest succeeds")
+    AssertEqual(RPQuest.QuestRepository:GetQuestById(offered2.id), nil, "Rejected quest removed from repository")
+end)
+
+RunTest("38. Auto-report rejection and completion results to Master via mail (Issue #144)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+
+    -- Master creates prepared quest
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Esqueleto",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.4,
+        targetY = 0.4,
+    })
+    local prepared = RPQuest.QuestRepository:SaveDraft("Misión Rechazo", "Prueba de rechazo.")
+    local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+
+    -- Encode/Decode rejection via ShareCodec
+    local rejCode, rejErr = RPQuest.ShareCodec:EncodeRejection(prepared, "JugadorUno", 123456)
+    AssertTrue(rejCode ~= nil and rejCode:sub(1, 6) == "RPQC1:", "EncodeRejection produces RPQC1 code: " .. tostring(rejErr))
+    local decodedRej = RPQuest.ShareCodec:DecodeCompletion(rejCode)
+    AssertTrue(decodedRej ~= nil, "DecodeCompletion decodes rejection payload")
+    AssertEqual(decodedRej.completed, false, "Rejection has completed=false")
+    AssertEqual(decodedRej.rejected, true, "Rejection has rejected=true")
+    AssertEqual(decodedRej.characterName, "JugadorUno", "Rejection preserves characterName")
+    AssertEqual(decodedRej.completedAt, 123456, "Rejection preserves timestamp")
+
+    local okCompOnly, errCompOnly = RPQuest.ShareCodec:ValidateCompletionForQuest(prepared, rejCode)
+    AssertEqual(okCompOnly, false, "ValidateCompletionForQuest rejects a rejection code")
+    AssertEqual(errCompOnly, "VALIDATE_ERR_NOT_COMPLETED", "Returns VALIDATE_ERR_NOT_COMPLETED")
+
+    local okResult, resPayload = RPQuest.ShareCodec:ValidateResultForQuest(prepared, rejCode)
+    AssertEqual(okResult, true, "ValidateResultForQuest accepts rejection code")
+    AssertEqual(resPayload.rejected, true, "ValidateResultForQuest returns rejected=true")
+
+    -- Player receives quest as OFFERED and rejects it -> auto-sends rejection mail to @Master
+    local sentMails = {}
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    local origGetNext = _G.GetNextMailId
+    local origGetInfo = _G.GetMailItemInfo
+    local origReadMail = _G.ReadMail
+    local origDeleteMail = _G.DeleteMail
+    local origShowAlert = RPQuest.Announcements.ShowAlert
+
+    _G.SendMail = function(to, subject, body)
+        table.insert(sentMails, { to = to, subject = subject, body = body })
+    end
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+
+    local offered = RPQuest.QuestRepository:ImportQuestFromCode(rpq3Code, "@Master", {
+        status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+        sourceMailId = "mail_rej_1",
+    })
+    RPQuest.QuestRepository:RejectOfferedQuest(offered.id)
+    RPQuest.MailTransport:OnMailboxOpened()
+    AssertEqual(#sentMails, 1, "Rejection mail auto-queued and sent on RejectOfferedQuest")
+    AssertEqual(sentMails[1].to, "@Master", "Rejection mail sent to @Master")
+    AssertEqual(sentMails[1].subject, "[RPQuest:Rejected] Misión Rechazo", "Uses [RPQuest:Rejected] subject")
+    RPQuest.MailTransport:OnMailSendSuccess("@Master")
+
+    -- Master receives rejection mail -> auto-records result and shows alert
+    local alerts = {}
+    RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+        table.insert(alerts, { msg = msg, isErr = isErr })
+    end
+    local deletedIds = {}
+    _G.DeleteMail = function(id) table.insert(deletedIds, id) end
+    _G.GetNextMailId = function(cur) return (cur == nil) and 401 or nil end
+    _G.GetMailItemInfo = function(id)
+        if id == 401 then return "@PlayerRej", "PlayerRejChar", sentMails[1].subject, "", true, false, false, false, 0, 0, 0, 30, 1, 0 end
+        return nil
+    end
+    _G.ReadMail = function(id) return (id == 401) and sentMails[1].body or "" end
+
+    RPQuest.MailTransport:ScanInbox(false)
+    AssertEqual(#alerts, 1, "Master receives alert for rejection mail")
+    AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_REJECTION_RECEIVED", "@PlayerRej", prepared.title), "Rejection alert text matches")
+    AssertTrue(prepared.lastResult ~= nil and prepared.lastResult.status == "rejected", "Prepared quest records lastResult.status == 'rejected'")
+    AssertEqual(prepared.lastResult.senderDisplayName, "@PlayerRej", "Prepared quest records rejecting player")
+    AssertEqual(#deletedIds, 1, "Rejection mail auto-deleted on Master")
+
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
+    _G.GetNextMailId = origGetNext
+    _G.GetMailItemInfo = origGetInfo
+    _G.ReadMail = origReadMail
+    _G.DeleteMail = origDeleteMail
+    RPQuest.Announcements.ShowAlert = origShowAlert
+end)
+
+RunTest("39. Master single recipient persistence, direct send, and status transitions (Issue #145)", function()
+    local sv = RPQuest.QuestRepository:GetDefaults()
+    RPQuest.QuestRepository:Initialize(sv)
+    RPQuest.MailTransport:Initialize()
+    RPQuest.JournalTab:Initialize()
+
+    -- Create prepared quest with single recipient (normalized with @)
+    RPQuest.QuestRepository:ResetDraft()
+    RPQuest.QuestRepository:SetDraftCapturedTarget({
+        targetName = "Mercenario",
+        mapId = 32,
+        zoneId = 381,
+        mapName = "Auridon",
+        targetX = 0.5,
+        targetY = 0.5,
+    })
+    local prepared = RPQuest.QuestRepository:SaveDraft("Contrato Directo", "Cuerpo", nil, "", false, "PlayerTarget")
+    AssertEqual(prepared.recipientAccount, "@PlayerTarget", "Recipient normalized and persisted on prepared quest")
+
+    local status1 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status1, "draft", "Initial status is draft")
+
+    RPQuest.JournalTab:SelectQuest(prepared.id)
+    RPQuest.JournalTab:Refresh()
+    AssertEqual(RPQuest.JournalTab.btnSendDirect:IsHidden(), false, "Direct send button visible on prepared quest")
+    AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@PlayerTarget", 1, true) ~= nil, "Detail status shows assigned recipient in draft")
+
+    -- Direct send from prepared quest detail view
+    local sentMails = {}
+    local origSendMail = _G.SendMail
+    local origReqOpen = _G.RequestOpenMailbox
+    local origClose = _G.CloseMailbox
+    _G.SendMail = function(to, subject, body) table.insert(sentMails, { to = to, subject = subject, body = body }) end
+    _G.RequestOpenMailbox = function() end
+    _G.CloseMailbox = function() end
+
+    local okSend = RPQuest.JournalTab:SendSelectedPreparedQuest()
+    AssertEqual(okSend, true, "SendSelectedPreparedQuest starts send directly")
+    RPQuest.MailTransport:OnMailboxOpened()
+    AssertEqual(#sentMails, 1, "Mail dispatched to assigned recipient")
+    AssertEqual(sentMails[1].to, "@PlayerTarget", "Mail sent to @PlayerTarget")
+    RPQuest.MailTransport:OnMailSendSuccess("@PlayerTarget")
+
+    local status2 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status2, "sent", "Status transitions to sent after mail dispatch")
+    AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@PlayerTarget", 1, true) ~= nil, "Detail status shows sent recipient")
+
+    -- Transition to completed
+    RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerTarget", {
+        characterName = "TargetChar",
+        completedAt = 999,
+        completed = true,
+        wasDetected = false,
+    })
+    local status3 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status3, "completed", "Status transitions to completed")
+    AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("TargetChar", 1, true) ~= nil, "Detail status includes character name")
+
+    -- Transition to rejected
+    RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerTarget", {
+        characterName = "TargetChar",
+        completedAt = 1000,
+        completed = false,
+    })
+    local status4 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
+    AssertEqual(status4, "rejected", "Status transitions to rejected")
+
+    _G.SendMail = origSendMail
+    _G.RequestOpenMailbox = origReqOpen
+    _G.CloseMailbox = origClose
 end)
 
 if failed > 0 then

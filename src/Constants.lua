@@ -9,7 +9,7 @@ Addon.Constants = {
     METADATA = {
         NAME = "RPQuest",
         TITLE = "RPQuest",
-        VERSION = "1.4.1",
+        VERSION = "1.5.0",
         AUTHOR = "JerbilX",
     },
     SAVED_VARS = {
@@ -29,6 +29,10 @@ Addon.Constants = {
     QUEST_ROLE = {
         PREPARED = "prepared",
         RECEIVED = "received",
+    },
+    QUEST_STATUS = {
+        OFFERED = "offered",
+        ACTIVE = "active",
     },
     AREA_RADIUS = {
         SMALL = 0.045,

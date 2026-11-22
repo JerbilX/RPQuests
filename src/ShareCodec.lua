@@ -1130,8 +1130,11 @@ function ShareCodec:ComputeQuestSignature(quest)
     return ComputeSignature32(rawPayload)
 end
 
-function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
-    if type(quest) ~= "table" or not quest.completed then
+local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
+    if type(quest) ~= "table" then
+        return nil, "Invalid quest"
+    end
+    if isCompleted and not quest.completed then
         return nil, "Quest is not completed"
     end
 
@@ -1143,20 +1146,20 @@ function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
         return nil, "Invalid character name"
     end
 
-    local signature, err = self:ComputeQuestSignature(quest)
+    local signature, err = ShareCodec:ComputeQuestSignature(quest)
     if not signature then
         return nil, err
     end
 
-    local ts = math.max(0, math.floor(tonumber(completedAt) or 0))
+    local ts = math.max(0, math.floor(tonumber(timestamp) or 0))
     local stealthFlag = ""
-    if quest.requireUndetected then
+    if isCompleted and quest.requireUndetected then
         stealthFlag = quest.wasDetected and "1" or "0"
     end
     local rawPayload = table.concat({
         signature,
         EscapeField(cleanName),
-        "1",
+        isCompleted and "1" or "0",
         tostring(ts),
         stealthFlag,
     }, "|")
@@ -1166,6 +1169,14 @@ function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
     local encodedPayload = Base64UrlEncode(rawPayload)
 
     return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
+end
+
+function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
+    return EncodeResultCode(quest, characterName, completedAt, true)
+end
+
+function ShareCodec:EncodeRejection(quest, characterName, rejectedAt)
+    return EncodeResultCode(quest, characterName, rejectedAt, false)
 end
 
 function ShareCodec:DecodeCompletion(codeString)
@@ -1224,12 +1235,14 @@ function ShareCodec:DecodeCompletion(codeString)
         questSignature = questSignature:upper(),
         characterName = characterName,
         completed = completed,
+        rejected = (fields[3] == "0"),
+        resultType = completed and "completed" or "rejected",
         completedAt = math.max(0, math.floor(completedAt)),
         wasDetected = wasDetected,
     }
 end
 
-function ShareCodec:ValidateCompletionForQuest(quest, codeString)
+function ShareCodec:ValidateResultForQuest(quest, codeString)
     local expectedSignature, sigErr = self:ComputeQuestSignature(quest)
     if not expectedSignature then
         return false, "VALIDATE_ERR_INVALID_CODE", sigErr
@@ -1240,13 +1253,22 @@ function ShareCodec:ValidateCompletionForQuest(quest, codeString)
         return false, errKey
     end
 
-    if not decoded.completed then
-        return false, "VALIDATE_ERR_NOT_COMPLETED"
-    end
-
     if decoded.questSignature ~= expectedSignature then
         return false, "VALIDATE_ERR_WRONG_QUEST"
     end
 
     return true, decoded
+end
+
+function ShareCodec:ValidateCompletionForQuest(quest, codeString)
+    local ok, resOrErr, extra = self:ValidateResultForQuest(quest, codeString)
+    if not ok then
+        return false, resOrErr, extra
+    end
+
+    if not resOrErr.completed then
+        return false, "VALIDATE_ERR_NOT_COMPLETED"
+    end
+
+    return true, resOrErr
 end

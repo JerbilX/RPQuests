@@ -14,19 +14,15 @@ if [[ ! -f "$MANIFEST_FILE" ]]; then
 fi
 
 # Auto-compute AddOnVersion (monotonically increasing integer from git commit count)
-# and Version from exact SemVer tag (e.g. v1.0.0 -> 1.0.0), falling back to manifest Version.
+# and Version from exact SemVer tag (e.g. v1.0.0 -> 1.0.0) on releases,
+# falling back to manifest Version on dev/working branches.
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   ADDON_VERSION="$(git rev-list --count HEAD)"
   EXACT_TAG="$(git describe --tags --exact-match 2>/dev/null || true)"
   if [[ -n "$EXACT_TAG" ]]; then
     DISPLAY_VERSION="${EXACT_TAG#v}"
   else
-    LATEST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-    if [[ -n "$LATEST_TAG" ]]; then
-      DISPLAY_VERSION="${LATEST_TAG#v}"
-    else
-      DISPLAY_VERSION="$(awk -F': *' '/^## Version:/{print $2; exit}' "$MANIFEST_FILE" | tr -d '\r')"
-    fi
+    DISPLAY_VERSION="$(awk -F': *' '/^## Version:/{print $2; exit}' "$MANIFEST_FILE" | tr -d '\r')"
   fi
 else
   ADDON_VERSION="$(awk -F': *' '/^## AddOnVersion:/{print $2; exit}' "$MANIFEST_FILE" | tr -d '\r')"

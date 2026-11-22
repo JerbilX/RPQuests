@@ -1,0 +1,8 @@
+{
+  "entries": [
+    {
+      "path": "../Dotfiles-v3/plugins",
+      "include_only": ["eso-addon-suite"]
+    }
+  ]
+}

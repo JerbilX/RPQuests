@@ -12,7 +12,10 @@ Manual Installation:
 
 Usage:
 - Open the Quest Journal (J) and select the RPQuest tab in the top-right icons.
-- Use /rpq help in chat or bind keys under Controls -> RPQuest.
+- Assign a recipient (@AccountName) in the quest editor and send via in-game mail.
+- Incoming quests appear automatically in Pending (Accept or Reject), and results
+  are reported back to the Quest Master automatically via mail.
+- Bind keys under Settings -> Controls -> RPQuest.
 
 AI Disclosure & Credits:
 - Author: JerbilX
