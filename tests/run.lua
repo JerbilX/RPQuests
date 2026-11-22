@@ -1273,17 +1273,17 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     AssertTrue(type(completionCode) == "string" and completionCode:match("^RPQC1:") ~= nil, "Completion code has RPQC1 prefix")
 
     -- Master valida el código contra su misión en preparación
-    local ok, result = RPQuest.QuestRepository:ValidateCompletionCode(masterQuest.id, completionCode)
+    local ok, result = RPQuest.QuestRepository:ValidateResultCode(masterQuest.id, completionCode)
     AssertTrue(ok, "Completion code validates against master prepared quest")
     AssertEqual(result.characterName, "Jugador", "Completion code preserves characterName")
 
     -- Rechaza un código RPQ1 como si fuera entrega
-    local okQuestCode, errQuestCode = RPQuest.QuestRepository:ValidateCompletionCode(masterQuest.id, shareCode)
+    local okQuestCode, errQuestCode = RPQuest.QuestRepository:ValidateResultCode(masterQuest.id, shareCode)
     AssertEqual(okQuestCode, false, "RPQ1 code rejected in delivery validator")
     AssertEqual(errQuestCode, "VALIDATE_ERR_NOT_COMPLETION_CODE", "Specific error returned for RPQ1 code")
 
     -- Rechaza un código corrupto
-    local okBad, errBad = RPQuest.QuestRepository:ValidateCompletionCode(masterQuest.id, completionCode .. "X")
+    local okBad, errBad = RPQuest.QuestRepository:ValidateResultCode(masterQuest.id, completionCode .. "X")
     AssertEqual(okBad, false, "Corrupted RPQC1 code rejected")
     AssertEqual(errBad, "VALIDATE_ERR_INVALID_CODE", "Specific error returned for corrupted code")
 
@@ -1291,7 +1291,7 @@ RunTest("15. Codigo de entrega RPQC1 y validacion por el Master", function()
     RPQuest.TargetCapture:CaptureFromReticle()
     RPQuest.QuestRepository:UpdateDraftFields({ title = "Otra Misión Distinta" })
     local otherMasterQuest = RPQuest.QuestRepository:SaveDraft()
-    local okWrong, errWrong = RPQuest.QuestRepository:ValidateCompletionCode(otherMasterQuest.id, completionCode)
+    local okWrong, errWrong = RPQuest.QuestRepository:ValidateResultCode(otherMasterQuest.id, completionCode)
     AssertEqual(okWrong, false, "RPQC1 from another quest rejected")
     AssertEqual(errWrong, "VALIDATE_ERR_WRONG_QUEST", "Specific error returned for wrong quest")
 
@@ -1579,7 +1579,7 @@ RunTest("Undetected (stealth) quest option, Justice events, area check, and comp
     AssertEqual(justCompleted, true, "Quest still completes normally after detection")
 
     local compCodeDetected = RPQuest.QuestRepository:ExportCompletionCode(imported.id)
-    local okDet, decodedDet = RPQuest.QuestRepository:ValidateCompletionCode(prepared.id, compCodeDetected)
+    local okDet, decodedDet = RPQuest.QuestRepository:ValidateResultCode(prepared.id, compCodeDetected)
     AssertEqual(okDet, true, "Completion code with detection is still valid")
     AssertEqual(decodedDet.wasDetected, true, "Completion code records wasDetected = true")
 
@@ -1595,7 +1595,7 @@ RunTest("Undetected (stealth) quest option, Justice events, area check, and comp
         y = imported.areaCenterY,
     })
     local compCodeClean = RPQuest.QuestRepository:ExportCompletionCode(imported.id)
-    local okClean, decodedClean = RPQuest.QuestRepository:ValidateCompletionCode(prepared.id, compCodeClean)
+    local okClean, decodedClean = RPQuest.QuestRepository:ValidateResultCode(prepared.id, compCodeClean)
     AssertEqual(okClean, true, "Completion code without detection is valid")
     AssertEqual(decodedClean.wasDetected, false, "Completion code records wasDetected = false")
 
