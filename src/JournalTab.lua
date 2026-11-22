@@ -455,19 +455,24 @@ function JournalTab:BuildDetailPane(parent)
         }
     end
 
+    local function CanAbandonSelectedQuest()
+        if self.viewMode ~= VIEW_MODE.DETAIL or not self.selectedQuestId then
+            return false
+        end
+        local quest = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        return quest ~= nil and not Addon.QuestRepository:IsOfferedQuest(quest)
+    end
+
     self.abandonQuestDescriptor = {
         name = (GetString and SI_QUEST_JOURNAL_ABANDON) and GetString(SI_QUEST_JOURNAL_ABANDON) or Addon.Locale:Get("BTN_DELETE"),
         keybind = "UI_SHORTCUT_NEGATIVE",
         callback = function()
-            if self.selectedQuestId then
+            if CanAbandonSelectedQuest() then
                 self:ConfirmAbandonQuest(self.selectedQuestId)
             end
         end,
-        visible = function()
-            return self.viewMode == VIEW_MODE.DETAIL
-                and self.selectedQuestId ~= nil
-                and Addon.QuestRepository:GetQuestById(self.selectedQuestId) ~= nil
-        end,
+        visible = CanAbandonSelectedQuest,
+        enabled = CanAbandonSelectedQuest,
     }
 
     -- Keybind nativo [M] Show On Map (igual al Quest Journal vanilla)
@@ -1522,7 +1527,7 @@ end
 
 function JournalTab:ConfirmAbandonQuest(questId)
     local q = Addon.QuestRepository:GetQuestById(questId)
-    if not q then return false end
+    if not q or Addon.QuestRepository:IsOfferedQuest(q) then return false end
 
     ZO_Dialogs_ShowDialog("RPQUEST_ABANDON_QUEST", { questId = questId }, { mainTextParams = { q.title or "" } })
     return true
