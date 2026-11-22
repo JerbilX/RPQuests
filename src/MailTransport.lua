@@ -76,16 +76,24 @@ function MailTransport:Initialize()
             if evType == "QUEST_COMPLETED" and type(payload) == "table" then
                 if Addon.QuestRepository:GetSetting("autoSendCompletionMail")
                     and payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
-                    and type(payload.senderDisplayName) == "string"
-                    and payload.senderDisplayName ~= ""
                     and not payload.completionReported then
-                    self:SendCompletionReport(payload)
+                    local sender = self:NormalizeDisplayName(payload.senderDisplayName)
+                    if sender ~= "" then
+                        local ok, errKey = self:SendCompletionReport(payload)
+                        if not ok and errKey then
+                            self:NotifySendError(sender, errKey)
+                        end
+                    end
                 end
             elseif evType == "QUEST_REJECTED" and type(payload) == "table" then
-                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
-                    and type(payload.senderDisplayName) == "string"
-                    and payload.senderDisplayName ~= "" then
-                    self:SendRejectionReport(payload)
+                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED then
+                    local sender = self:NormalizeDisplayName(payload.senderDisplayName)
+                    if sender ~= "" then
+                        local ok, errKey = self:SendRejectionReport(payload)
+                        if not ok and errKey then
+                            self:NotifySendError(sender, errKey)
+                        end
+                    end
                 end
             end
         end)
@@ -197,6 +205,26 @@ function MailTransport:BuildQuestMailPackets(roleMessage, questCode, title)
     }
 end
 
+function MailTransport:NormalizeDisplayName(rawName)
+    if type(rawName) ~= "string" then
+        return ""
+    end
+    local clean = rawName:gsub("^%s+", ""):gsub("%s+$", "")
+    if clean ~= "" and clean:sub(1, 1) ~= "@" then
+        clean = "@" .. clean
+    end
+    return clean
+end
+
+function MailTransport:IsSelfRecipient(recipient)
+    local normRecipient = self:NormalizeDisplayName(recipient)
+    if normRecipient == "" then
+        return false
+    end
+    local selfName = self:NormalizeDisplayName(GetDisplayName())
+    return selfName ~= "" and normRecipient:lower() == selfName:lower()
+end
+
 function MailTransport:ParseRecipients(rawInput)
     if type(rawInput) ~= "string" then
         return {}, "ERR_MAIL_NO_RECIPIENTS"
@@ -205,11 +233,8 @@ function MailTransport:ParseRecipients(rawInput)
     local recipients = {}
     local seen = {}
     for token in string.gmatch(rawInput, "[^,;\r\n]+") do
-        local clean = token:gsub("^%s+", ""):gsub("%s+$", "")
+        local clean = self:NormalizeDisplayName(token)
         if clean ~= "" then
-            if clean:sub(1, 1) ~= "@" then
-                clean = "@" .. clean
-            end
             local key = clean:lower()
             if not seen[key] then
                 seen[key] = true
@@ -240,8 +265,8 @@ function MailTransport:IsMailboxReady()
     return self._isMailboxOpen or self:IsNativeMailboxOpen()
 end
 
-function MailTransport:EnsureMailboxOpen()
-    if not self:IsMailboxReady() and RequestOpenMailbox then
+function MailTransport:EnsureMailboxOpen(forceRequest)
+    if (forceRequest or not self:IsMailboxReady()) and RequestOpenMailbox then
         RequestOpenMailbox()
         self._openedMailbox = true
     end
@@ -267,9 +292,46 @@ function MailTransport:ScheduleSendTimeout(delayMs, gen, doneCount)
     end, delayMs)
 end
 
-function MailTransport:StartSendQueue()
+function MailTransport:FormatSendFailureMessage(to, reason)
+    local detail
+    if reason == MAIL_SEND_RESULT_CANT_SEND_TO_SELF or reason == "ERR_MAIL_SELF_RECIPIENT" then
+        detail = Addon.Locale:Get("ERR_MAIL_SELF_RECIPIENT")
+    elseif reason == "MAILBOX_OPEN_TIMEOUT" then
+        detail = Addon.Locale:Get("ERR_MAIL_MAILBOX_TIMEOUT")
+    elseif reason == "MAILBOX_CLOSED" then
+        detail = Addon.Locale:Get("ERR_MAIL_MAILBOX_CLOSED")
+    elseif reason == "TIMEOUT" then
+        detail = Addon.Locale:Get("ERR_MAIL_SEND_TIMEOUT")
+    elseif type(reason) == "number" then
+        local esoMsg = GetString("SI_SENDMAILRESULT", reason)
+        detail = (type(esoMsg) == "string" and esoMsg ~= "") and esoMsg or ("Error " .. tostring(reason))
+    elseif type(reason) == "string" and reason ~= "" then
+        detail = Addon.Locale:Get(reason)
+    else
+        detail = Addon.Locale:Get("ERR_MAIL_API_UNAVAILABLE")
+    end
+    local target = (type(to) == "string" and to ~= "") and to or "?"
+    return Addon.Locale:Get("ALERT_MAIL_SEND_FAILED", target, detail)
+end
+
+function MailTransport:NotifySendError(to, reason)
+    if reason == MAIL_SEND_RESULT_CANCELED then
+        return
+    end
+    local message = self:FormatSendFailureMessage(to, reason)
+    if Addon.Announcements and Addon.Announcements.ShowAlert then
+        Addon.Announcements:ShowAlert(message, true)
+    end
+    self:NotifyListeners("MAIL_SEND_ERROR", {
+        to = to,
+        reason = reason,
+        message = message,
+    })
+end
+
+function MailTransport:StartSendQueue(forceWaitForOpen)
     self._sendGen = (self._sendGen or 0) + 1
-    if self:IsMailboxReady() then
+    if not forceWaitForOpen and self:IsMailboxReady() then
         self._waitingForMailboxOpen = false
         self:DispatchNextQueuedMail()
         return
@@ -277,14 +339,15 @@ function MailTransport:StartSendQueue()
     self._waitingForMailboxOpen = true
     local firstItem = self._sendQueue[1]
     if firstItem then
+        self._currentSendTarget = firstItem.to
         self:NotifyListeners("MAIL_SEND_PROGRESS", {
-            current = 1,
+            current = self._sendDone + 1,
             total = self._sendTotal,
             to = firstItem.to,
         })
     end
-    self:EnsureMailboxOpen()
     self:ScheduleSendTimeout(MAILBOX_OPEN_TIMEOUT_MS, self._sendGen, self._sendDone)
+    self:EnsureMailboxOpen(forceWaitForOpen)
 end
 
 function MailTransport:OnMailboxOpened()
@@ -310,15 +373,14 @@ function MailTransport:AbortSendQueue(reason)
         self._sendFailCount = self._sendFailCount + remaining
         self._sendDone = self._sendDone + remaining
     end
+    local target = (self._currentSendItem and self._currentSendItem.to) or self._currentSendTarget
     self._sendQueue = {}
     self._currentSendItem = nil
+    self._currentSendTarget = nil
     self._waitingForMailboxOpen = false
     self._isSending = false
     self._sendGen = (self._sendGen or 0) + 1
-    self:NotifyListeners("MAIL_SEND_ERROR", {
-        to = self._currentSendTarget,
-        reason = reason,
-    })
+    self:NotifySendError(target, reason)
     self:NotifyListeners("MAIL_SEND_COMPLETE", {
         total = self._sendTotal,
         sent = self._sendSuccessCount,
@@ -337,6 +399,9 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
     local recipients, recErr = self:ParseRecipients(rawRecipients)
     if recErr then
         return false, recErr
+    end
+    if self:IsSelfRecipient(recipients[1]) then
+        return false, "ERR_MAIL_SELF_RECIPIENT"
     end
 
     local questCode = Addon.QuestRepository:ExportQuestToCode(quest.id)
@@ -384,6 +449,7 @@ function MailTransport:DispatchNextQueuedMail()
     if not nextItem then
         self._isSending = false
         self._currentSendItem = nil
+        self._currentSendTarget = nil
         self._waitingForMailboxOpen = false
         local summary = {
             total = self._sendTotal,
@@ -407,11 +473,12 @@ function MailTransport:DispatchNextQueuedMail()
 end
 
 function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, isRejection)
-    local recipient = type(quest.senderDisplayName) == "string"
-        and quest.senderDisplayName:gsub("^%s+", ""):gsub("%s+$", "")
-        or ""
+    local recipient = self:NormalizeDisplayName(quest.senderDisplayName)
     if recipient == "" then
         return false, "ERR_MAIL_NO_RECIPIENTS"
+    end
+    if self:IsSelfRecipient(recipient) then
+        return false, "ERR_MAIL_SELF_RECIPIENT"
     end
     if not SendMail or (not self:IsMailboxReady() and not RequestOpenMailbox) then
         return false, "ERR_MAIL_API_UNAVAILABLE"
@@ -484,13 +551,19 @@ end
 
 function MailTransport:OnMailSendFailed(reason)
     if not self._isSending then return end
+    if reason == MAIL_SEND_RESULT_MAILBOX_NOT_OPEN and self._currentSendItem and not self._currentSendItem._retriedMailbox then
+        self._currentSendItem._retriedMailbox = true
+        table.insert(self._sendQueue, 1, self._currentSendItem)
+        self._currentSendItem = nil
+        self._isMailboxOpen = false
+        self:StartSendQueue(true)
+        return
+    end
+    local target = (self._currentSendItem and self._currentSendItem.to) or self._currentSendTarget
     self._currentSendItem = nil
     self._sendDone = self._sendDone + 1
     self._sendFailCount = self._sendFailCount + 1
-    self:NotifyListeners("MAIL_SEND_ERROR", {
-        to = self._currentSendTarget,
-        reason = reason,
-    })
+    self:NotifySendError(target, reason)
     self:DispatchNextQueuedMail()
 end
 
@@ -651,15 +724,16 @@ function MailTransport:UpsertPartMail(mailId, idKey, senderDisplayName, senderCh
         return nil
     end
 
+    local normSender = self:NormalizeDisplayName(senderDisplayName)
     self._partGroups = self._partGroups or {}
-    local groupKey = string.format("part:%s:%s:%d", (senderDisplayName or ""):lower(), txId, total)
+    local groupKey = string.format("part:%s:%s:%d", normSender:lower(), txId, total)
     local group = self._partGroups[groupKey]
     if not group then
         group = {
             groupKey = groupKey,
             txId = txId,
             total = total,
-            senderDisplayName = senderDisplayName or "",
+            senderDisplayName = normSender,
             senderCharacterName = senderCharacterName or "",
             subject = subject or "",
             parts = {},
@@ -762,7 +836,7 @@ function MailTransport:UpsertReceivedMail(mailId, senderDisplayName, senderChara
         mailId = mailId,
         idKey = idKey,
         mailIds = { mailId },
-        senderDisplayName = senderDisplayName or "",
+        senderDisplayName = self:NormalizeDisplayName(senderDisplayName),
         senderCharacterName = senderCharacterName or "",
         subject = subject or "",
         title = decoded.title or "",
