@@ -501,6 +501,95 @@ function QuestDraftStore:ClearDraftTargetLocation(repo, index)
     return self:UpdateDraftTarget(repo, index, { clearLocation = true })
 end
 
+local function ApplyDraftToExistingQuest(store, repo, existing, draft, fields)
+    local prevProgress = {}
+    for _, t in ipairs(existing.targets or {}) do
+        prevProgress[t.name:lower()] = t.currentCount or 0
+    end
+
+    existing.title = fields.title
+    existing.description = fields.description
+    existing.recipientAccount = fields.recipientAccount
+    if existing.sentTo and existing.sentTo:lower() ~= fields.recipientAccount:lower() then
+        existing.sentTo = nil
+        existing.sentAt = nil
+        existing.lastResult = nil
+        existing.deliveries = {}
+    end
+    existing.clue = fields.clue
+    existing.completionMessage = fields.completionMessage
+    existing.targets = store:CloneTargetsList(draft.targets, prevProgress)
+    existing.discoveries = store:CloneDiscoveriesList(draft.discoveries, false)
+    existing.dialogues = store:CloneDialoguesList(draft.dialogues, fields.clue)
+    existing.mapId = draft.mapId or 0
+    existing.zoneId = draft.zoneId or 0
+    existing.mapName = draft.mapName or ""
+    existing.targetX = draft.targetX
+    existing.targetY = draft.targetY
+    existing.areaCenterX = draft.areaCenterX
+    existing.areaCenterY = draft.areaCenterY
+    existing.areaRadius = draft.areaRadius
+    existing.hideMapArea = draft.hideMapArea and true or false
+    local reqUndetected = draft.requireUndetected and true or false
+    existing.requireUndetected = reqUndetected
+    if not reqUndetected then
+        existing.wasDetected = false
+    end
+    existing.failed = false
+    existing.completed = repo:AreAllObjectivesCompleted(existing.targets, existing.discoveries)
+
+    if repo._shareCodeCache then
+        repo._shareCodeCache[existing.id] = nil
+    end
+    if repo._activeTargetCache and repo._activeTargetCache.questId == existing.id then
+        repo:InvalidateActiveTargetCache()
+    end
+
+    store:ResetDraft(repo)
+    repo:NotifyListeners("QUEST_UPDATED", existing)
+    return existing
+end
+
+local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
+    repo.savedVars.nextId = targetId + 1
+
+    local questData = {
+        recipientAccount = fields.recipientAccount,
+        clue = fields.clue,
+        completionMessage = draft.completionMessage,
+        discoveries = store:CloneDiscoveriesList(draft.discoveries, false),
+        dialogues = store:CloneDialoguesList(draft.dialogues),
+        mapId = draft.mapId,
+        zoneId = draft.zoneId,
+        mapName = draft.mapName,
+        targetX = draft.targetX,
+        targetY = draft.targetY,
+        areaCenterX = draft.areaCenterX,
+        areaCenterY = draft.areaCenterY,
+        areaRadius = draft.areaRadius,
+        hideMapArea = draft.hideMapArea,
+        requireUndetected = draft.requireUndetected,
+    }
+
+    local newQuest = repo:BuildQuestRecord(
+        targetId,
+        fields.title,
+        fields.description,
+        store:CloneTargetsList(draft.targets),
+        questData,
+        Addon.Constants.QUEST_ROLE.PREPARED
+    )
+
+    table.insert(repo.savedVars.quests, newQuest)
+    if repo._questById then
+        repo._questById[newQuest.id] = newQuest
+    end
+
+    store:ResetDraft(repo)
+    repo:NotifyListeners("QUEST_CREATED", newQuest)
+    return newQuest
+end
+
 function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput)
     local draft = self:GetDraft(repo)
 
@@ -535,98 +624,20 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
         cleanTitle = Addon.Locale:Get("DEFAULT_QUEST_TITLE", targetId)
     end
 
-    local cleanDesc = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    local cleanClue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    local cleanCompMsg = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    local cleanRecipient = repo:NormalizeAccountName(draft.recipientAccount)
-    draft.clue = cleanClue
-    draft.completionMessage = cleanCompMsg
-    draft.recipientAccount = cleanRecipient
+    local fields = {
+        title = cleanTitle,
+        description = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", ""),
+        clue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", ""),
+        completionMessage = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", ""),
+        recipientAccount = repo:NormalizeAccountName(draft.recipientAccount),
+    }
+    draft.clue = fields.clue
+    draft.completionMessage = fields.completionMessage
+    draft.recipientAccount = fields.recipientAccount
 
     if existing then
-        local prevProgress = {}
-        for _, t in ipairs(existing.targets or {}) do
-            prevProgress[t.name:lower()] = t.currentCount or 0
-        end
-
-        existing.title = cleanTitle
-        existing.description = cleanDesc
-        existing.recipientAccount = cleanRecipient
-        if existing.sentTo and existing.sentTo:lower() ~= cleanRecipient:lower() then
-            existing.sentTo = nil
-            existing.sentAt = nil
-            existing.lastResult = nil
-            existing.deliveries = {}
-        end
-        existing.clue = cleanClue
-        existing.completionMessage = cleanCompMsg
-        existing.targets = self:CloneTargetsList(draft.targets, prevProgress)
-        existing.discoveries = self:CloneDiscoveriesList(draft.discoveries, false)
-        existing.dialogues = self:CloneDialoguesList(draft.dialogues, cleanClue)
-        existing.mapId = draft.mapId or 0
-        existing.zoneId = draft.zoneId or 0
-        existing.mapName = draft.mapName or ""
-        existing.targetX = draft.targetX
-        existing.targetY = draft.targetY
-        existing.areaCenterX = draft.areaCenterX
-        existing.areaCenterY = draft.areaCenterY
-        existing.areaRadius = draft.areaRadius
-        existing.hideMapArea = draft.hideMapArea and true or false
-        local reqUndetected = draft.requireUndetected and true or false
-        existing.requireUndetected = reqUndetected
-        if not reqUndetected then
-            existing.wasDetected = false
-        end
-        existing.failed = false
-        existing.completed = repo:AreAllObjectivesCompleted(existing.targets, existing.discoveries)
-
-        if repo._shareCodeCache then
-            repo._shareCodeCache[existing.id] = nil
-        end
-        if repo._activeTargetCache and repo._activeTargetCache.questId == existing.id then
-            repo:InvalidateActiveTargetCache()
-        end
-
-        self:ResetDraft(repo)
-        repo:NotifyListeners("QUEST_UPDATED", existing)
-        return existing
+        return ApplyDraftToExistingQuest(self, repo, existing, draft, fields)
     end
 
-    repo.savedVars.nextId = targetId + 1
-
-    local questData = {
-        recipientAccount = cleanRecipient,
-        clue = cleanClue,
-        completionMessage = draft.completionMessage,
-        discoveries = self:CloneDiscoveriesList(draft.discoveries, false),
-        dialogues = self:CloneDialoguesList(draft.dialogues),
-        mapId = draft.mapId,
-        zoneId = draft.zoneId,
-        mapName = draft.mapName,
-        targetX = draft.targetX,
-        targetY = draft.targetY,
-        areaCenterX = draft.areaCenterX,
-        areaCenterY = draft.areaCenterY,
-        areaRadius = draft.areaRadius,
-        hideMapArea = draft.hideMapArea,
-        requireUndetected = draft.requireUndetected,
-    }
-
-    local newQuest = repo:BuildQuestRecord(
-        targetId,
-        cleanTitle,
-        cleanDesc,
-        self:CloneTargetsList(draft.targets),
-        questData,
-        Addon.Constants.QUEST_ROLE.PREPARED
-    )
-
-    table.insert(repo.savedVars.quests, newQuest)
-    if repo._questById then
-        repo._questById[newQuest.id] = newQuest
-    end
-
-    self:ResetDraft(repo)
-    repo:NotifyListeners("QUEST_CREATED", newQuest)
-    return newQuest
+    return CreateQuestFromDraft(self, repo, targetId, draft, fields)
 end
