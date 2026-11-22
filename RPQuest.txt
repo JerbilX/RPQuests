@@ -10,6 +10,7 @@ src/Constants.lua
 lang/en.lua
 lang/$(language).lua
 src/Locale.lua
+src/BinaryCodec.lua
 src/ShareCodec.lua
 src/QuestDraftStore.lua
 src/QuestRepository.lua

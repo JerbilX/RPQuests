@@ -9,6 +9,7 @@ local Addon = RPQuest
 
 Addon.ShareCodec = {}
 local ShareCodec = Addon.ShareCodec
+local BinaryCodec = Addon.BinaryCodec
 
 local function GetClientLanguage()
     local lang = GetCVar("language.2") or GetCVar("Language.2")
@@ -19,20 +20,6 @@ local function GetClientLanguage()
         return (Addon.Locale:GetLanguage() or "en"):lower()
     end
     return "en"
-end
-
-local B64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-local B64_LOOKUP = {}
-local B64_CHARS = {}
-for i = 1, #B64_ALPHABET do
-    local ch = string.sub(B64_ALPHABET, i, i)
-    B64_LOOKUP[ch] = i - 1
-    B64_CHARS[i - 1] = ch
-end
-
-local BYTE_TO_CHAR = {}
-for b = 0, 255 do
-    BYTE_TO_CHAR[b] = string.char(b)
 end
 
 local ESCAPE_MAP = {
@@ -318,352 +305,75 @@ local function BuildQuestPayloadString(quest)
     return table.concat(fields, "|")
 end
 
-local function Base64UrlEncode(input)
-    local out = {}
-    local outLen = 0
-    local len = #input
-    local i = 1
-    local strByte = string.byte
-    local floor = math.floor
-    while i <= len do
-        local b1 = strByte(input, i) or 0
-        local b2 = strByte(input, i + 1)
-        local b3 = strByte(input, i + 2)
-
-        local n = (b1 * 65536) + ((b2 or 0) * 256) + (b3 or 0)
-        local c1 = floor(n / 262144) % 64
-        local c2 = floor(n / 4096) % 64
-        local c3 = floor(n / 64) % 64
-        local c4 = n % 64
-
-        outLen = outLen + 1
-        out[outLen] = B64_CHARS[c1]
-        outLen = outLen + 1
-        out[outLen] = B64_CHARS[c2]
-        if b2 then
-            outLen = outLen + 1
-            out[outLen] = B64_CHARS[c3]
+local function PackTargetsBlock(buf, quest, targets, defaultRad)
+    BinaryCodec:WriteUInt16(buf, quest.targetX or 0.5)
+    BinaryCodec:WriteUInt16(buf, quest.targetY or 0.5)
+    BinaryCodec:WriteUInt16(buf, quest.areaCenterX or 0.5)
+    BinaryCodec:WriteUInt16(buf, quest.areaCenterY or 0.5)
+    BinaryCodec:WriteUInt16(buf, quest.areaRadius or 0.075)
+    BinaryCodec:WriteUVarint(buf, #targets)
+    for _, t in ipairs(targets) do
+        local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
+        local reqLoc = (t.locationRequired == true)
+        local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
+        local tFlags = (hasLoc and 1 or 0) + (reqLoc and 2 or 0) + (tMsg ~= "" and 4 or 0)
+        BinaryCodec:WriteByte(buf, tFlags)
+        BinaryCodec:WriteStr(buf, t.name or "")
+        BinaryCodec:WriteUVarint(buf, math.max(1, math.floor(tonumber(t.requiredCount) or 1)))
+        if hasLoc then
+            BinaryCodec:WriteUVarint(buf, t.zoneId or 0)
+            BinaryCodec:WriteSVarint(buf, t.worldX)
+            BinaryCodec:WriteSVarint(buf, t.worldZ)
+            BinaryCodec:WriteUVarint(buf, math.max(100, math.floor(tonumber(t.radius) or defaultRad)))
         end
-        if b3 then
-            outLen = outLen + 1
-            out[outLen] = B64_CHARS[c4]
+        if tMsg ~= "" then
+            BinaryCodec:WriteStr(buf, tMsg)
         end
-
-        i = i + 3
     end
-    return table.concat(out)
 end
 
-local function Base64UrlDecode(encoded)
-    if type(encoded) ~= "string" or encoded == "" then
-        return nil
-    end
-
-    local out = {}
-    local outLen = 0
-    local len = #encoded
-    local i = 1
-    local strSub = string.sub
-    local floor = math.floor
-    while i <= len do
-        local ch1 = strSub(encoded, i, i)
-        local ch2 = strSub(encoded, i + 1, i + 1)
-        local ch3 = (i + 2 <= len) and strSub(encoded, i + 2, i + 2) or nil
-        local ch4 = (i + 3 <= len) and strSub(encoded, i + 3, i + 3) or nil
-
-        local v1 = B64_LOOKUP[ch1]
-        local v2 = B64_LOOKUP[ch2]
-        local v3 = ch3 and B64_LOOKUP[ch3] or 0
-        local v4 = ch4 and B64_LOOKUP[ch4] or 0
-
-        if v1 == nil or v2 == nil or (ch3 and B64_LOOKUP[ch3] == nil) or (ch4 and B64_LOOKUP[ch4] == nil) then
-            return nil
-        end
-
-        local n = (v1 * 262144) + (v2 * 4096) + (v3 * 64) + v4
-        local b1 = floor(n / 65536) % 256
-        local b2 = floor(n / 256) % 256
-        local b3 = n % 256
-
-        outLen = outLen + 1
-        out[outLen] = BYTE_TO_CHAR[b1]
-        if ch3 then
-            outLen = outLen + 1
-            out[outLen] = BYTE_TO_CHAR[b2]
-        end
-        if ch4 then
-            outLen = outLen + 1
-            out[outLen] = BYTE_TO_CHAR[b3]
-        end
-
-        i = i + 4
-    end
-
-    return table.concat(out)
-end
-
-local B85_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!$%&+,-./;=?@^{}()[]#'\""
-local B85_LOOKUP = {}
-local B85_CHARS = {}
-for i = 1, #B85_ALPHABET do
-    local ch = string.sub(B85_ALPHABET, i, i)
-    B85_LOOKUP[ch] = i - 1
-    B85_CHARS[i - 1] = ch
-end
-
-local function Base85Encode(input)
-    local out = {}
-    local outLen = 0
-    local len = #input
-    local i = 1
-    local strByte = string.byte
-    local floor = math.floor
-    while i <= len do
-        local rem = len - i + 1
-        local chunkLen = rem >= 4 and 4 or rem
-        local b1 = strByte(input, i) or 0
-        local b2 = (chunkLen >= 2) and strByte(input, i + 1) or 0
-        local b3 = (chunkLen >= 3) and strByte(input, i + 2) or 0
-        local b4 = (chunkLen >= 4) and strByte(input, i + 3) or 0
-
-        local n = ((b1 * 256 + b2) * 256 + b3) * 256 + b4
-        local d5 = n % 85; n = floor(n / 85)
-        local d4 = n % 85; n = floor(n / 85)
-        local d3 = n % 85; n = floor(n / 85)
-        local d2 = n % 85; n = floor(n / 85)
-        local d1 = n % 85
-
-        local digits = { d1, d2, d3, d4, d5 }
-        local emitCount = chunkLen + 1
-        for k = 1, emitCount do
-            outLen = outLen + 1
-            out[outLen] = B85_CHARS[digits[k]]
-        end
-        i = i + 4
-    end
-    return table.concat(out)
-end
-
-local function Base85Decode(encoded)
-    if type(encoded) ~= "string" then return nil end
-    local len = #encoded
-    if len == 0 then return "" end
-    local out = {}
-    local outLen = 0
-    local i = 1
-    local strSub = string.sub
-    local floor = math.floor
-    while i <= len do
-        local rem = len - i + 1
-        if rem == 1 then
-            return nil
-        end
-        local chunkChars = rem >= 5 and 5 or rem
-        local n = 0
-        for k = 0, chunkChars - 1 do
-            local ch = strSub(encoded, i + k, i + k)
-            local v = B85_LOOKUP[ch]
-            if v == nil then return nil end
-            n = n * 85 + v
-        end
-        for _ = chunkChars + 1, 5 do
-            n = n * 85 + 84
-        end
-        if n > 4294967295 then
-            return nil
-        end
-        local b4 = n % 256; n = floor(n / 256)
-        local b3 = n % 256; n = floor(n / 256)
-        local b2 = n % 256; n = floor(n / 256)
-        local b1 = n % 256
-
-        local emitBytes = chunkChars - 1
-        local bytes = { b1, b2, b3, b4 }
-        for k = 1, emitBytes do
-            outLen = outLen + 1
-            out[outLen] = BYTE_TO_CHAR[bytes[k]]
-        end
-        i = i + 5
-    end
-    return table.concat(out)
-end
-
-local function WriteUVarint(buf, n)
-    n = math.max(0, math.floor(tonumber(n) or 0))
-    while n >= 128 do
-        buf[#buf + 1] = BYTE_TO_CHAR[(n % 128) + 128]
-        n = math.floor(n / 128)
-    end
-    buf[#buf + 1] = BYTE_TO_CHAR[n]
-end
-
-local function ReadUVarint(data, pos, len)
-    local result = 0
-    local mult = 1
-    while pos <= len do
-        local b = string.byte(data, pos)
-        pos = pos + 1
-        result = result + (b % 128) * mult
-        if b < 128 then
-            return result, pos
-        end
-        mult = mult * 128
-        if mult > 2 ^ 49 then return nil, pos end
-    end
-    return nil, pos
-end
-
-local function WriteSVarint(buf, n)
-    n = math.floor(tonumber(n) or 0)
-    local zz = (n >= 0) and (n * 2) or (-n * 2 - 1)
-    WriteUVarint(buf, zz)
-end
-
-local function ReadSVarint(data, pos, len)
-    local zz, nextPos = ReadUVarint(data, pos, len)
-    if not zz then return nil, nextPos end
-    local n = (zz % 2 == 0) and (zz / 2) or -((zz + 1) / 2)
-    return n, nextPos
-end
-
-local function WriteUInt16(buf, val)
-    local snapped = tonumber(string.format("%.4f", tonumber(val) or 0)) or 0
-    local q = math.floor(math.max(0, math.min(1, snapped)) * 65535 + 0.5)
-    buf[#buf + 1] = BYTE_TO_CHAR[math.floor(q / 256)]
-    buf[#buf + 1] = BYTE_TO_CHAR[q % 256]
-end
-
-local function ReadUInt16(data, pos, len)
-    if pos + 1 > len then return nil, pos end
-    local b1, b2 = string.byte(data, pos, pos + 1)
-    return ((b1 * 256) + b2) / 65535, pos + 2
-end
-
-local function WriteStr(buf, str)
-    local s = (str ~= nil) and tostring(str) or ""
-    WriteUVarint(buf, #s)
-    if #s > 0 then
-        buf[#buf + 1] = s
+local function PackDiscoveriesBlock(buf, discoveries, defaultRad)
+    BinaryCodec:WriteUVarint(buf, #discoveries)
+    for _, d in ipairs(discoveries) do
+        BinaryCodec:WriteUVarint(buf, d.zoneId or 0)
+        BinaryCodec:WriteSVarint(buf, d.worldX or 0)
+        BinaryCodec:WriteSVarint(buf, d.worldY or 0)
+        BinaryCodec:WriteSVarint(buf, d.worldZ or 0)
+        BinaryCodec:WriteUVarint(buf, d.mapId or 0)
+        BinaryCodec:WriteUInt16(buf, d.x or 0)
+        BinaryCodec:WriteUInt16(buf, d.y or 0)
+        BinaryCodec:WriteUVarint(buf, math.max(100, math.floor(tonumber(d.radius) or defaultRad)))
+        BinaryCodec:WriteStr(buf, d.message or "")
     end
 end
 
-local function ReadStr(data, pos, len)
-    local sLen, nextPos = ReadUVarint(data, pos, len)
-    if not sLen or nextPos + sLen - 1 > len then return nil, nextPos end
-    if sLen == 0 then return "", nextPos end
-    return string.sub(data, nextPos, nextPos + sLen - 1), nextPos + sLen
+local function PackDialoguesBlock(buf, dialogues)
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local count = math.min(#dialogues, maxNpcs)
+    BinaryCodec:WriteUVarint(buf, count)
+    for idx = 1, count do
+        local dlg = dialogues[idx]
+        BinaryCodec:WriteStr(buf, dlg.npcName or "")
+        BinaryCodec:WriteUVarint(buf, dlg.zoneId or 0)
+        BinaryCodec:WriteStr(buf, dlg.response or "")
+    end
 end
 
-local function CompressLZSS(data)
-    local n = #data
-    if n < 8 then
-        return "\0" .. data
-    end
-
-    local strByte = string.byte
-    local head = {}
-    local out = {}
-    local outLen = 0
-    local i = 1
-
-    while i <= n do
-        local flagPos = outLen + 1
-        outLen = flagPos
-        out[flagPos] = "\0"
-        local flags = 0
-        local bit = 1
-
-        for _ = 1, 8 do
-            if i > n then break end
-            local bestLen = 0
-            local bestOff = 0
-            if i + 2 <= n then
-                local b1, b2, b3 = strByte(data, i, i + 2)
-                local h = (b1 * 65536) + (b2 * 256) + b3
-                local prev = head[h]
-                head[h] = i
-                if prev and (i - prev) <= 4096 then
-                    local maxLen = math.min(18, n - i + 1)
-                    local m = 0
-                    while m < maxLen and strByte(data, prev + m) == strByte(data, i + m) do
-                        m = m + 1
-                    end
-                    if m >= 3 then
-                        bestLen = m
-                        bestOff = i - prev
-                    end
-                end
-            end
-
-            if bestLen >= 3 then
-                flags = flags + bit
-                local offM1 = bestOff - 1
-                local lenM3 = bestLen - 3
-                outLen = outLen + 1
-                out[outLen] = BYTE_TO_CHAR[math.floor(offM1 / 16)]
-                outLen = outLen + 1
-                out[outLen] = BYTE_TO_CHAR[((offM1 % 16) * 16) + lenM3]
-                i = i + bestLen
-            else
-                outLen = outLen + 1
-                out[outLen] = string.sub(data, i, i)
-                i = i + 1
-            end
-            bit = bit * 2
-        end
-        out[flagPos] = BYTE_TO_CHAR[flags]
-    end
-
-    local compressed = table.concat(out)
-    if #compressed + 1 >= n then
-        return "\0" .. data
-    end
-    return "\1" .. compressed
-end
-
-local function DecompressLZSS(data)
-    if type(data) ~= "string" or #data < 1 then return nil end
-    local mode = string.byte(data, 1)
-    if mode == 0 then
-        return string.sub(data, 2)
-    elseif mode ~= 1 then
-        return nil
-    end
-
-    local len = #data
-    local pos = 2
-    local out = {}
-    local outLen = 0
-    local strByte = string.byte
-    local floor = math.floor
-
-    while pos <= len do
-        local flags = strByte(data, pos)
-        pos = pos + 1
-        for k = 0, 7 do
-            if pos > len then break end
-            local isRef = (floor(flags / (2 ^ k)) % 2) == 1
-            if isRef then
-                if pos + 1 > len then return nil end
-                local b1, b2 = strByte(data, pos, pos + 1)
-                pos = pos + 2
-                local offset = (b1 * 16) + floor(b2 / 16) + 1
-                local matchLen = (b2 % 16) + 3
-                if offset < 1 or offset > outLen then return nil end
-                local startIdx = outLen - offset + 1
-                for m = 0, matchLen - 1 do
-                    outLen = outLen + 1
-                    out[outLen] = out[startIdx + m]
-                end
-            else
-                outLen = outLen + 1
-                out[outLen] = BYTE_TO_CHAR[strByte(data, pos)]
-                pos = pos + 1
-            end
+local function PackDialogueCluesBlock(buf, dialogues)
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local count = math.min(#dialogues, maxNpcs)
+    local hasPerNpcClue = false
+    for idx = 1, count do
+        if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
+            hasPerNpcClue = true
+            break
         end
     end
-
-    return table.concat(out)
+    if hasPerNpcClue then
+        for idx = 1, count do
+            BinaryCodec:WriteStr(buf, dialogues[idx].clue or "")
+        end
+    end
 end
 
 local function PackQuestBinary(quest)
@@ -689,97 +399,167 @@ local function PackQuestBinary(quest)
     if clue ~= "" then flags = flags + 64 end
     if lang ~= "" then flags = flags + 128 end
 
-    local buf = { BYTE_TO_CHAR[flags] }
-    WriteStr(buf, quest.title or "")
-    WriteStr(buf, quest.description or "")
-    WriteUVarint(buf, quest.mapId or 0)
-    WriteUVarint(buf, quest.zoneId or 0)
-    WriteStr(buf, quest.mapName or "")
+    local buf = {}
+    BinaryCodec:WriteByte(buf, flags)
+    BinaryCodec:WriteStr(buf, quest.title or "")
+    BinaryCodec:WriteStr(buf, quest.description or "")
+    BinaryCodec:WriteUVarint(buf, quest.mapId or 0)
+    BinaryCodec:WriteUVarint(buf, quest.zoneId or 0)
+    BinaryCodec:WriteStr(buf, quest.mapName or "")
 
     local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
     if #targets > 0 then
-        WriteUInt16(buf, quest.targetX or 0.5)
-        WriteUInt16(buf, quest.targetY or 0.5)
-        WriteUInt16(buf, quest.areaCenterX or 0.5)
-        WriteUInt16(buf, quest.areaCenterY or 0.5)
-        WriteUInt16(buf, quest.areaRadius or 0.075)
-        WriteUVarint(buf, #targets)
-        for _, t in ipairs(targets) do
-            local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
-            local reqLoc = (t.locationRequired == true)
-            local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
-            local tFlags = (hasLoc and 1 or 0) + (reqLoc and 2 or 0) + (tMsg ~= "" and 4 or 0)
-            buf[#buf + 1] = BYTE_TO_CHAR[tFlags]
-            WriteStr(buf, t.name or "")
-            WriteUVarint(buf, math.max(1, math.floor(tonumber(t.requiredCount) or 1)))
-            if hasLoc then
-                WriteUVarint(buf, t.zoneId or 0)
-                WriteSVarint(buf, t.worldX)
-                WriteSVarint(buf, t.worldZ)
-                WriteUVarint(buf, math.max(100, math.floor(tonumber(t.radius) or defaultRad)))
-            end
-            if tMsg ~= "" then
-                WriteStr(buf, tMsg)
-            end
-        end
+        PackTargetsBlock(buf, quest, targets, defaultRad)
     end
-
     if #discoveries > 0 then
-        WriteUVarint(buf, #discoveries)
-        for _, d in ipairs(discoveries) do
-            WriteUVarint(buf, d.zoneId or 0)
-            WriteSVarint(buf, d.worldX or 0)
-            WriteSVarint(buf, d.worldY or 0)
-            WriteSVarint(buf, d.worldZ or 0)
-            WriteUVarint(buf, d.mapId or 0)
-            WriteUInt16(buf, d.x or 0)
-            WriteUInt16(buf, d.y or 0)
-            WriteUVarint(buf, math.max(100, math.floor(tonumber(d.radius) or defaultRad)))
-            WriteStr(buf, d.message or "")
-        end
+        PackDiscoveriesBlock(buf, discoveries, defaultRad)
+    end
+    if #dialogues > 0 then
+        PackDialoguesBlock(buf, dialogues)
     end
 
-    if #dialogues > 0 then
-        local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
-        local count = math.min(#dialogues, maxNpcs)
-        WriteUVarint(buf, count)
-        for idx = 1, count do
-            local dlg = dialogues[idx]
-            WriteStr(buf, dlg.npcName or "")
-            WriteUVarint(buf, dlg.zoneId or 0)
-            WriteStr(buf, dlg.response or "")
-        end
-    end
-
-    if compMsg ~= "" then WriteStr(buf, compMsg) end
-    if clue ~= "" then WriteStr(buf, clue) end
-    if lang ~= "" then WriteStr(buf, lang) end
+    if compMsg ~= "" then BinaryCodec:WriteStr(buf, compMsg) end
+    if clue ~= "" then BinaryCodec:WriteStr(buf, clue) end
+    if lang ~= "" then BinaryCodec:WriteStr(buf, lang) end
 
     if #dialogues > 0 then
-        local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
-        local count = math.min(#dialogues, maxNpcs)
-        local hasPerNpcClue = false
-        for idx = 1, count do
-            if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
-                hasPerNpcClue = true
-                break
-            end
-        end
-        if hasPerNpcClue then
-            for idx = 1, count do
-                WriteStr(buf, dialogues[idx].clue or "")
-            end
-        end
+        PackDialogueCluesBlock(buf, dialogues)
     end
 
     return table.concat(buf)
 end
 
+local function UnpackTargetsBlock(data, pos, len)
+    local targetX; targetX, pos = BinaryCodec:ReadUInt16(data, pos, len)
+    local targetY; targetY, pos = BinaryCodec:ReadUInt16(data, pos, len)
+    local areaCenterX; areaCenterX, pos = BinaryCodec:ReadUInt16(data, pos, len)
+    local areaCenterY; areaCenterY, pos = BinaryCodec:ReadUInt16(data, pos, len)
+    local areaRadius; areaRadius, pos = BinaryCodec:ReadUInt16(data, pos, len)
+    local tCount; tCount, pos = BinaryCodec:ReadUVarint(data, pos, len)
+    if not targetX or not areaRadius or not tCount then
+        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+    end
+
+    local floor = math.floor
+    local decodedTargets = {}
+    for _ = 1, tCount do
+        local tFlags; tFlags, pos = BinaryCodec:ReadByte(data, pos, len)
+        if not tFlags then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+        local tHasLoc = (tFlags % 2) == 1
+        local tReqLoc = (floor(tFlags / 2) % 2) == 1
+        local tHasMsg = (floor(tFlags / 4) % 2) == 1
+        local tName; tName, pos = BinaryCodec:ReadStr(data, pos, len)
+        local tReq; tReq, pos = BinaryCodec:ReadUVarint(data, pos, len)
+        if not tName or not tReq or tName == "" or tReq < 1 then
+            return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+        end
+        local tZone, tWX, tWZ, tRad
+        if tHasLoc then
+            tZone, pos = BinaryCodec:ReadUVarint(data, pos, len)
+            tWX, pos = BinaryCodec:ReadSVarint(data, pos, len)
+            tWZ, pos = BinaryCodec:ReadSVarint(data, pos, len)
+            tRad, pos = BinaryCodec:ReadUVarint(data, pos, len)
+            if not tZone or not tWX or not tWZ or not tRad then
+                return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+            end
+        end
+        local tMsg = ""
+        if tHasMsg then
+            tMsg, pos = BinaryCodec:ReadStr(data, pos, len)
+            if not tMsg then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+        end
+        table.insert(decodedTargets, {
+            name = tName,
+            currentCount = 0,
+            requiredCount = math.max(1, floor(tReq)),
+            zoneId = tHasLoc and floor(tZone) or nil,
+            worldX = tHasLoc and tWX or nil,
+            worldZ = tHasLoc and tWZ or nil,
+            radius = tHasLoc and math.max(100, floor(tRad)) or nil,
+            locationRequired = tReqLoc,
+            customMessage = tMsg,
+        })
+    end
+
+    return {
+        targets = decodedTargets,
+        targetX = targetX,
+        targetY = targetY,
+        areaCenterX = areaCenterX,
+        areaCenterY = areaCenterY,
+        areaRadius = areaRadius,
+    }, pos
+end
+
+local function UnpackDiscoveriesBlock(data, pos, len, defaultRad)
+    local dCount; dCount, pos = BinaryCodec:ReadUVarint(data, pos, len)
+    if not dCount then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+    local decodedDiscoveries = {}
+    for _ = 1, dCount do
+        local dz; dz, pos = BinaryCodec:ReadUVarint(data, pos, len)
+        local dwx; dwx, pos = BinaryCodec:ReadSVarint(data, pos, len)
+        local dwy; dwy, pos = BinaryCodec:ReadSVarint(data, pos, len)
+        local dwz; dwz, pos = BinaryCodec:ReadSVarint(data, pos, len)
+        local dmap; dmap, pos = BinaryCodec:ReadUVarint(data, pos, len)
+        local dx; dx, pos = BinaryCodec:ReadUInt16(data, pos, len)
+        local dy; dy, pos = BinaryCodec:ReadUInt16(data, pos, len)
+        local drad; drad, pos = BinaryCodec:ReadUVarint(data, pos, len)
+        local dmsg; dmsg, pos = BinaryCodec:ReadStr(data, pos, len)
+        if not dz or not dwx or not dwy or not dwz or not dmap or not dx or not dy or not drad or not dmsg then
+            return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+        end
+        table.insert(decodedDiscoveries, {
+            zoneId = math.floor(dz),
+            worldX = math.floor(dwx),
+            worldY = math.floor(dwy),
+            worldZ = math.floor(dwz),
+            mapId = math.floor(dmap),
+            x = dx,
+            y = dy,
+            radius = math.max(100, math.floor(drad or defaultRad)),
+            message = dmsg,
+            discovered = false,
+        })
+    end
+    return decodedDiscoveries, pos
+end
+
+local function UnpackDialoguesBlock(data, pos, len)
+    local dlgCount; dlgCount, pos = BinaryCodec:ReadUVarint(data, pos, len)
+    if not dlgCount then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+    local decodedDialogues = {}
+    for _ = 1, dlgCount do
+        local npc; npc, pos = BinaryCodec:ReadStr(data, pos, len)
+        local dz; dz, pos = BinaryCodec:ReadUVarint(data, pos, len)
+        local resp; resp, pos = BinaryCodec:ReadStr(data, pos, len)
+        if not npc or not dz or not resp then
+            return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+        end
+        if npc ~= "" then
+            table.insert(decodedDialogues, {
+                npcName = npc,
+                zoneId = math.floor(dz),
+                response = resp,
+            })
+        end
+    end
+    return decodedDialogues, pos
+end
+
+local function UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
+    for idx = 1, #decodedDialogues do
+        local dClue
+        dClue, pos = BinaryCodec:ReadStr(data, pos, len)
+        if not dClue then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+        decodedDialogues[idx].clue = dClue
+    end
+    return true, pos
+end
+
 local function UnpackQuestBinary(data)
     if type(data) ~= "string" or #data < 1 then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
     local len = #data
-    local pos = 1
-    local flags = string.byte(data, pos); pos = pos + 1
+    local flags, pos = BinaryCodec:ReadByte(data, 1, len)
     local floor = math.floor
     local requireUndetected = (flags % 2) == 1
     local hideMapArea = (floor(flags / 2) % 2) == 1
@@ -790,145 +570,56 @@ local function UnpackQuestBinary(data)
     local hasClue = (floor(flags / 64) % 2) == 1
     local hasLang = (floor(flags / 128) % 2) == 1
 
-    local title; title, pos = ReadStr(data, pos, len)
-    local description; description, pos = ReadStr(data, pos, len)
-    local mapId; mapId, pos = ReadUVarint(data, pos, len)
-    local zoneId; zoneId, pos = ReadUVarint(data, pos, len)
-    local mapName; mapName, pos = ReadStr(data, pos, len)
+    local title; title, pos = BinaryCodec:ReadStr(data, pos, len)
+    local description; description, pos = BinaryCodec:ReadStr(data, pos, len)
+    local mapId; mapId, pos = BinaryCodec:ReadUVarint(data, pos, len)
+    local zoneId; zoneId, pos = BinaryCodec:ReadUVarint(data, pos, len)
+    local mapName; mapName, pos = BinaryCodec:ReadStr(data, pos, len)
     if not title or not description or not mapId or not zoneId or not mapName then
         return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
 
     local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
-    local targetX, targetY, areaCenterX, areaCenterY, areaRadius
+    local targetsResult
     local decodedTargets = {}
     if hasTargets then
-        targetX, pos = ReadUInt16(data, pos, len)
-        targetY, pos = ReadUInt16(data, pos, len)
-        areaCenterX, pos = ReadUInt16(data, pos, len)
-        areaCenterY, pos = ReadUInt16(data, pos, len)
-        areaRadius, pos = ReadUInt16(data, pos, len)
-        local tCount; tCount, pos = ReadUVarint(data, pos, len)
-        if not targetX or not areaRadius or not tCount then
-            return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-        end
-        for _ = 1, tCount do
-            if pos > len then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-            local tFlags = string.byte(data, pos); pos = pos + 1
-            local tHasLoc = (tFlags % 2) == 1
-            local tReqLoc = (floor(tFlags / 2) % 2) == 1
-            local tHasMsg = (floor(tFlags / 4) % 2) == 1
-            local tName; tName, pos = ReadStr(data, pos, len)
-            local tReq; tReq, pos = ReadUVarint(data, pos, len)
-            if not tName or not tReq or tName == "" or tReq < 1 then
-                return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-            end
-            local tZone, tWX, tWZ, tRad
-            if tHasLoc then
-                tZone, pos = ReadUVarint(data, pos, len)
-                tWX, pos = ReadSVarint(data, pos, len)
-                tWZ, pos = ReadSVarint(data, pos, len)
-                tRad, pos = ReadUVarint(data, pos, len)
-                if not tZone or not tWX or not tWZ or not tRad then
-                    return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-                end
-            end
-            local tMsg = ""
-            if tHasMsg then
-                tMsg, pos = ReadStr(data, pos, len)
-                if not tMsg then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-            end
-            table.insert(decodedTargets, {
-                name = tName,
-                currentCount = 0,
-                requiredCount = math.max(1, math.floor(tReq)),
-                zoneId = tHasLoc and math.floor(tZone) or nil,
-                worldX = tHasLoc and tWX or nil,
-                worldZ = tHasLoc and tWZ or nil,
-                radius = tHasLoc and math.max(100, math.floor(tRad)) or nil,
-                locationRequired = tReqLoc,
-                customMessage = tMsg,
-            })
-        end
+        targetsResult, pos = UnpackTargetsBlock(data, pos, len)
+        if not targetsResult then return nil, pos end
+        decodedTargets = targetsResult.targets
     end
 
     local decodedDiscoveries = {}
     if hasDiscoveries then
-        local dCount; dCount, pos = ReadUVarint(data, pos, len)
-        if not dCount then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-        for _ = 1, dCount do
-            local dz; dz, pos = ReadUVarint(data, pos, len)
-            local dwx; dwx, pos = ReadSVarint(data, pos, len)
-            local dwy; dwy, pos = ReadSVarint(data, pos, len)
-            local dwz; dwz, pos = ReadSVarint(data, pos, len)
-            local dmap; dmap, pos = ReadUVarint(data, pos, len)
-            local dx; dx, pos = ReadUInt16(data, pos, len)
-            local dy; dy, pos = ReadUInt16(data, pos, len)
-            local drad; drad, pos = ReadUVarint(data, pos, len)
-            local dmsg; dmsg, pos = ReadStr(data, pos, len)
-            if not dz or not dwx or not dwy or not dwz or not dmap or not dx or not dy or not drad or not dmsg then
-                return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-            end
-            table.insert(decodedDiscoveries, {
-                zoneId = math.floor(dz),
-                worldX = math.floor(dwx),
-                worldY = math.floor(dwy),
-                worldZ = math.floor(dwz),
-                mapId = math.floor(dmap),
-                x = dx,
-                y = dy,
-                radius = math.max(100, math.floor(drad or defaultRad)),
-                message = dmsg,
-                discovered = false,
-            })
-        end
+        decodedDiscoveries, pos = UnpackDiscoveriesBlock(data, pos, len, defaultRad)
+        if not decodedDiscoveries then return nil, pos end
     end
 
     local decodedDialogues = {}
     if hasDialogues then
-        local dlgCount; dlgCount, pos = ReadUVarint(data, pos, len)
-        if not dlgCount then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-        for _ = 1, dlgCount do
-            local npc; npc, pos = ReadStr(data, pos, len)
-            local dz; dz, pos = ReadUVarint(data, pos, len)
-            local resp; resp, pos = ReadStr(data, pos, len)
-            if not npc or not dz or not resp then
-                return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-            end
-            if npc ~= "" then
-                table.insert(decodedDialogues, {
-                    npcName = npc,
-                    zoneId = math.floor(dz),
-                    response = resp,
-                })
-            end
-        end
+        decodedDialogues, pos = UnpackDialoguesBlock(data, pos, len)
+        if not decodedDialogues then return nil, pos end
     end
 
     local completionMessage = ""
     if hasCompMsg then
-        completionMessage, pos = ReadStr(data, pos, len)
+        completionMessage, pos = BinaryCodec:ReadStr(data, pos, len)
         if not completionMessage then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
     end
     local clue = ""
     if hasClue then
-        clue, pos = ReadStr(data, pos, len)
+        clue, pos = BinaryCodec:ReadStr(data, pos, len)
         if not clue then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
     end
     local sourceLanguage = ""
     if hasLang then
-        sourceLanguage, pos = ReadStr(data, pos, len)
+        sourceLanguage, pos = BinaryCodec:ReadStr(data, pos, len)
         if not sourceLanguage then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
         sourceLanguage = sourceLanguage:lower()
     end
 
     if hasDialogues and pos <= len then
-        for idx = 1, #decodedDialogues do
-            local dClue
-            dClue, pos = ReadStr(data, pos, len)
-            if not dClue then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-            decodedDialogues[idx].clue = dClue
-        end
+        local okClues, clueErr = UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
+        if not okClues then return nil, clueErr end
     end
 
     if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then
@@ -937,6 +628,9 @@ local function UnpackQuestBinary(data)
     if #decodedTargets == 0 and #decodedDiscoveries == 0 then
         return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
+    local areaCenterX = targetsResult and targetsResult.areaCenterX or nil
+    local areaCenterY = targetsResult and targetsResult.areaCenterY or nil
+    local areaRadius = targetsResult and targetsResult.areaRadius or nil
     if #decodedTargets > 0 and (not areaCenterX or not areaCenterY or not areaRadius or areaRadius <= 0) then
         return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
@@ -949,11 +643,11 @@ local function UnpackQuestBinary(data)
         targets = decodedTargets,
         discoveries = decodedDiscoveries,
         dialogues = decodedDialogues,
-        mapId = math.floor(mapId or 0),
-        zoneId = math.floor(zoneId or 0),
+        mapId = floor(mapId or 0),
+        zoneId = floor(zoneId or 0),
         mapName = mapName,
-        targetX = (#decodedTargets > 0) and (targetX or areaCenterX) or nil,
-        targetY = (#decodedTargets > 0) and (targetY or areaCenterY) or nil,
+        targetX = (#decodedTargets > 0) and (targetsResult.targetX or areaCenterX) or nil,
+        targetY = (#decodedTargets > 0) and (targetsResult.targetY or areaCenterY) or nil,
         areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
         areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
         areaRadius = areaRadius or 0.075,
@@ -969,10 +663,10 @@ function ShareCodec:EncodeQuest(quest)
         return nil, err
     end
 
-    local compressed = CompressLZSS(rawBinary)
+    local compressed = BinaryCodec:CompressLZSS(rawBinary)
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
     local checksum = ComputeChecksum16(compressed)
-    local encodedPayload = Base85Encode(compressed)
+    local encodedPayload = BinaryCodec:Base85Encode(compressed)
 
     return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
 end
@@ -995,7 +689,7 @@ local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, 
         return nil, nil, badB64Err
     end
 
-    local rawPayload = Base64UrlDecode(encodedPayload)
+    local rawPayload = BinaryCodec:Base64UrlDecode(encodedPayload)
     if not rawPayload then
         return nil, nil, badB64Err
     end
@@ -1008,46 +702,7 @@ local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, 
     return pfx, rawPayload, nil
 end
 
-function ShareCodec:DecodeQuest(codeString)
-    if type(codeString) ~= "string" then
-        return nil, "ERR_IMPORT_EMPTY"
-    end
-
-    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
-    if trimmed == "" then
-        return nil, "ERR_IMPORT_EMPTY"
-    end
-
-    local prefix = Addon.Constants.SHARE_CODEC.PREFIX
-    local legacyPrefixV2 = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX_V2 or "RPQ2"
-    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
-    local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
-
-    local rpqPrefix = string.match(trimmed, "^(RPQ%d+):")
-    if rpqPrefix and rpqPrefix ~= prefix and rpqPrefix ~= legacyPrefixV2 and rpqPrefix ~= legacyPrefix then
-        return nil, "ERR_IMPORT_UNSUPPORTED_VERSION"
-    end
-
-    if string.sub(trimmed, 1, #prefix + 1) == (prefix .. ":") then
-        local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):(.+)$")
-        if not pfx or not checksum or #checksum ~= 4 or not encodedPayload or encodedPayload:find("%s") then
-            return nil, "ERR_IMPORT_INVALID_FORMAT"
-        end
-        local compressed = Base85Decode(encodedPayload)
-        if not compressed then
-            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
-        end
-        local expectedChecksum = ComputeChecksum16(compressed)
-        if checksum:upper() ~= expectedChecksum:upper() then
-            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
-        end
-        local rawBinary = DecompressLZSS(compressed)
-        if not rawBinary then
-            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
-        end
-        return UnpackQuestBinary(rawBinary)
-    end
-
+local function DecodeLegacyQuest(trimmed, legacyPrefixV2, legacyPrefix, compPrefix)
     local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
         trimmed,
         "ERR_IMPORT_INVALID_FORMAT",
@@ -1122,6 +777,49 @@ function ShareCodec:DecodeQuest(codeString)
     }
 end
 
+function ShareCodec:DecodeQuest(codeString)
+    if type(codeString) ~= "string" then
+        return nil, "ERR_IMPORT_EMPTY"
+    end
+
+    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed == "" then
+        return nil, "ERR_IMPORT_EMPTY"
+    end
+
+    local prefix = Addon.Constants.SHARE_CODEC.PREFIX
+    local legacyPrefixV2 = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX_V2 or "RPQ2"
+    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
+    local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
+
+    local rpqPrefix = string.match(trimmed, "^(RPQ%d+):")
+    if rpqPrefix and rpqPrefix ~= prefix and rpqPrefix ~= legacyPrefixV2 and rpqPrefix ~= legacyPrefix then
+        return nil, "ERR_IMPORT_UNSUPPORTED_VERSION"
+    end
+
+    if string.sub(trimmed, 1, #prefix + 1) == (prefix .. ":") then
+        local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):(.+)$")
+        if not pfx or not checksum or #checksum ~= 4 or not encodedPayload or encodedPayload:find("%s") then
+            return nil, "ERR_IMPORT_INVALID_FORMAT"
+        end
+        local compressed = BinaryCodec:Base85Decode(encodedPayload)
+        if not compressed then
+            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
+        end
+        local expectedChecksum = ComputeChecksum16(compressed)
+        if checksum:upper() ~= expectedChecksum:upper() then
+            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
+        end
+        local rawBinary = BinaryCodec:DecompressLZSS(compressed)
+        if not rawBinary then
+            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
+        end
+        return UnpackQuestBinary(rawBinary)
+    end
+
+    return DecodeLegacyQuest(trimmed, legacyPrefixV2, legacyPrefix, compPrefix)
+end
+
 function ShareCodec:ComputeQuestSignature(quest)
     local rawPayload, err = BuildQuestPayloadString(quest)
     if not rawPayload then
@@ -1166,7 +864,7 @@ local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
 
     local prefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
     local checksum = ComputeChecksum16(rawPayload)
-    local encodedPayload = Base64UrlEncode(rawPayload)
+    local encodedPayload = BinaryCodec:Base64UrlEncode(rawPayload)
 
     return string.format("%s:%s:%s", prefix, checksum, encodedPayload)
 end
