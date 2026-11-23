@@ -825,4 +825,132 @@ return function(T)
         AssertEqual(tab.selectedQuestId, copied.id, "UI selects the newly copied quest")
     end)
 
+    RunTest("Test Quest simulates full lifecycle (start, progress, fail, complete, stop/reset) without sending mail", function()
+        local repo = RPQuest.QuestRepository
+        local defaults = repo:GetDefaults()
+        defaults.settings.autoSendCompletionMail = true
+        repo:Initialize(defaults)
+        RPQuest.CombatTracker:Initialize()
+        RPQuest.DiscoveryTracker:Initialize()
+        RPQuest.DialogueInjector:Initialize()
+        RPQuest.MailTransport:Initialize()
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+
+        local origSentMail = RPQuest.MailTransport.SendCompletionReport
+        local sentMailCount = 0
+        RPQuest.MailTransport.SendCompletionReport = function()
+            sentMailCount = sentMailCount + 1
+            return true
+        end
+
+        mockState.zoneId = 41
+        mockState.mapId = 100
+        mockState.mapX = 0.50
+        mockState.mapY = 0.50
+        mockState.worldZoneId = 41
+        mockState.worldX = 1000
+        mockState.worldZ = 2000
+
+        local prep = repo:BuildQuestRecord(50, "Prueba Completa", "Simulación E2E", {
+            {
+                name = "Bandido",
+                currentCount = 0,
+                requiredCount = 1,
+                customMessage = "Bandido abatido",
+                locationRequired = true,
+                worldZoneId = 41,
+                worldX = 1000,
+                worldZ = 2000,
+                locationRadius = 2500,
+            },
+        }, {
+            mapId = 100,
+            zoneId = 41,
+            areaCenterX = 0.50,
+            areaCenterY = 0.50,
+            areaRadius = 0.10,
+            clue = "Habla con el informante",
+            completionMessage = "¡Prueba completada con éxito!",
+            senderDisplayName = "@AuthorGM",
+            discoveries = {
+                { zoneId = 41, worldX = 1500, worldZ = 2500, radius = 1500, message = "Pista descubierta", discovered = false },
+            },
+            dialogues = {
+                { npcName = "Informante", zoneId = 41, clue = "Pregunta por el campamento", response = "Están al norte." },
+            },
+        }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+
+        table.insert(repo.savedVars.quests, prep)
+        repo._questById[50] = prep
+        tab:SelectQuest(50)
+
+        -- 1. Click Test Quest -> activates quest, enables trackers, emits AnnounceQuestAccepted
+        mockState.csaMessages = {}
+        tab:OnToggleActiveClicked()
+        AssertEqual(repo:GetActiveQuest().id, 50, "Test Quest activates prepared quest")
+        AssertEqual(RPQuest.CombatTracker._isRegistered, true, "CombatTracker registered in Test Quest mode")
+        AssertEqual(RPQuest.DiscoveryTracker._isPolling, true, "DiscoveryTracker polling in Test Quest mode")
+        AssertEqual(#mockState.csaMessages, 1, "Test Quest emits initial Quest Accepted CSA banner")
+        AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_ACCEPTED, "Test Quest plays SOUNDS.QUEST_ACCEPTED")
+        AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Test Quest uses QUEST_ADDED CSA type")
+
+        local dlgMatch = repo:FindDialogueForActiveQuest("Informante", 41)
+        AssertTrue(dlgMatch ~= nil and dlgMatch.clue == "Pregunta por el campamento", "DialogueInjector finds dialogue in Test Quest mode")
+
+        -- 2. Fail condition (kill Bandido outside required target location) -> triggers failure state & banner
+        mockState.worldX = 99999
+        mockState.worldZ = 99999
+        mockState.csaMessages = {}
+        RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", "", 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Bandido", 0, 1, 0, 0, false, 1, 5001, 1)
+        AssertEqual(prep.failed, true, "Prepared quest marked failed when failing condition in Test Quest mode")
+        AssertEqual(repo:GetActiveQuest(), nil, "Failed prepared quest is no longer active")
+        AssertEqual(#mockState.csaMessages, 1, "Failure emits Quest Failed CSA banner")
+        AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_PROGRESSION_CHANGED, "Failure uses progression changed CSA")
+
+        -- 3. Click Test Quest again after failure -> resets failed state, reactivates, and emits Quest Accepted
+        mockState.csaMessages = {}
+        tab:OnToggleActiveClicked()
+        AssertEqual(prep.failed, false, "Clicking Test Quest after failure resets failed flag")
+        AssertEqual(repo:GetActiveQuest().id, 50, "Prepared quest reactivated after failure")
+        AssertEqual(#mockState.csaMessages, 1, "Restarting Test Quest after failure emits Quest Accepted CSA")
+
+        -- 4. Progress target + discovery -> shows intermediate messages and completes without sending mail
+        mockState.worldX = 1000
+        mockState.worldZ = 2000
+        mockState.csaMessages = {}
+        RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", "", 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Bandido", 0, 1, 0, 0, false, 1, 5002, 1)
+        AssertEqual(prep.targets[1].currentCount, 1, "Target progress recorded in Test Quest mode")
+        AssertEqual(prep.completed, false, "Quest waits for pending discovery before completing")
+        AssertEqual(#mockState.csaMessages, 2, "Progress + custom target message emitted")
+
+        RPQuest.DiscoveryTracker:EvaluatePlayerPosition(41, 1500, 0, 2500)
+        AssertEqual(prep.discoveries[1].discovered, true, "Discovery recorded in Test Quest mode")
+        AssertEqual(prep.completed, true, "Prepared quest completes when all objectives are met")
+        AssertEqual(repo:GetActiveQuest(), nil, "Completed prepared quest clears activeQuestId")
+        AssertEqual(#mockState.csaMessages, 4, "Discovery + Quest Completed CSA banners emitted")
+        AssertEqual(mockState.csaMessages[4].sound, SOUNDS.QUEST_COMPLETED, "Final banner plays SOUNDS.QUEST_COMPLETED")
+        AssertEqual(mockState.csaMessages[4].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED, "Final banner uses QUEST_COMPLETED CSA type")
+        AssertEqual(sentMailCount, 0, "Completing quest in Test Quest mode does NOT send external mail")
+
+        -- 5. Start Test Quest again, make partial progress, then Stop Testing -> cleanly clears state without stale CSA
+        tab:OnToggleActiveClicked()
+        RPQuest.DiscoveryTracker:EvaluatePlayerPosition(41, 1500, 0, 2500)
+        AssertEqual(prep.discoveries[1].discovered, true, "Partial discovery recorded before Stop Testing")
+
+        mockState.csaMessages = {}
+        tab:OnToggleActiveClicked() -- BTN_STOP_TEST
+        AssertEqual(repo:GetActiveQuest(), nil, "Stop Testing clears active quest")
+        AssertEqual(prep.discoveries[1].discovered, false, "Stop Testing resets partial discovery state")
+        AssertEqual(prep.targets[1].currentCount, 0, "Stop Testing resets partial target state")
+        AssertEqual(prep.completed, false, "Stop Testing clears completed flag")
+        AssertEqual(prep.failed, false, "Stop Testing clears failed flag")
+        AssertEqual(RPQuest.CombatTracker._isRegistered, false, "Stop Testing unregisters CombatTracker")
+        AssertEqual(RPQuest.DiscoveryTracker._isPolling, false, "Stop Testing stops DiscoveryTracker polling")
+        AssertEqual(#mockState.csaMessages, 0, "Stop Testing emits no stale CSA announcements")
+
+        RPQuest.MailTransport.SendCompletionReport = origSentMail
+    end)
+
 end
