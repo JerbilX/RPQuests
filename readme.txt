@@ -19,6 +19,9 @@ Usage:
   are reported back to the Quest Master automatically via mail.
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
+Supported Languages:
+- English (en), German (de), Spanish (es), French (fr), Japanese (jp), Russian (ru), Simplified Chinese (zh)
+
 AI Disclosure & Credits:
 - Author: JerbilX
 - AI Assistance Disclosure: AI coding assistants were used during development for

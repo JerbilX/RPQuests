@@ -430,7 +430,12 @@ QUEST_JOURNAL_KEYBOARD = {
 -- Load core, gameplay, UI and entrypoint modules under test
 dofile("src/Constants.lua")
 dofile("lang/en.lua")
+dofile("lang/de.lua")
 dofile("lang/es.lua")
+dofile("lang/fr.lua")
+dofile("lang/jp.lua")
+dofile("lang/ru.lua")
+dofile("lang/zh.lua")
 dofile("src/Locale.lua")
 dofile("src/BinaryCodec.lua")
 dofile("src/ShareCodec.lua")
