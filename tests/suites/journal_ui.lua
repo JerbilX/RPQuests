@@ -953,4 +953,33 @@ return function(T)
         RPQuest.MailTransport.SendCompletionReport = origSentMail
     end)
 
+    RunTest("JournalDetailPane shows Migrate button and blocks Edit/Send/Test on outdated PREPARED quest", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local prep = repo:BuildQuestRecord(1, "Old Quest", "Desc", {
+            { name = "Imp", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        prep.needsMigration = true
+        prep.migrationReason = "Outdated stealth field"
+        table.insert(repo.savedVars.quests, prep)
+        repo._questById[prep.id] = prep
+
+        local tab = RPQuest.JournalTab
+        tab:SelectQuest(prep.id)
+
+        AssertEqual(tab.btnMigrate:IsHidden(), false, "Migrate button visible for outdated PREPARED quest")
+        AssertEqual(tab.btnActivate:IsHidden(), true, "Test button hidden for outdated PREPARED quest")
+        AssertEqual(tab.btnEdit:IsHidden(), true, "Edit button hidden for outdated PREPARED quest")
+        AssertEqual(tab.btnCopy:IsHidden(), true, "Copy button hidden for outdated PREPARED quest")
+        AssertEqual(tab.btnSendDirect:IsHidden(), true, "Send button hidden for outdated PREPARED quest")
+        AssertTrue(tab.detailStatus:GetText():find("Outdated stealth field", 1, true) ~= nil, "Migration reason shown in status")
+        AssertEqual(tab:SendSelectedPreparedQuest(), false, "SendSelectedPreparedQuest blocked when needsMigration")
+
+        local migrated = tab:MigrateSelectedQuest()
+        AssertTrue(migrated ~= nil, "MigrateSelectedQuest creates new quest")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "MigrateSelectedQuest opens editor on migrated copy")
+        AssertEqual(repo:GetDraft().editingQuestId, migrated.id, "Editor loads migrated copy")
+        AssertTrue(migrated.needsMigration == nil, "Migrated copy clears needsMigration")
+    end)
+
 end

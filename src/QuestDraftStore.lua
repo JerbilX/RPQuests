@@ -320,6 +320,9 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
     if not repo:IsPreparedQuest(quest) then
         return nil, Addon.Locale:Get("ERR_CANNOT_EDIT_RECEIVED")
     end
+    if quest.needsMigration then
+        return nil, Addon.Locale:Get("ERR_QUEST_NEEDS_MIGRATION")
+    end
 
     repo.savedVars.draft = {
         editingQuestId = quest.id,

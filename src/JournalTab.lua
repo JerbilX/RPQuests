@@ -335,6 +335,21 @@ function JournalTab:DuplicateSelectedQuest()
     return newQuest
 end
 
+function JournalTab:MigrateSelectedQuest()
+    if not self.selectedQuestId then return nil end
+    local newQuest, err = Addon.QuestRepository:MigratePreparedQuest(self.selectedQuestId)
+    if not newQuest then
+        if err then
+            Addon.Announcements:ShowAlert(err, true)
+        end
+        return nil
+    end
+    self.selectedQuestId = newQuest.id
+    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_MIGRATED", newQuest.title or ""), false)
+    self:OpenEditEditor(newQuest.id)
+    return newQuest
+end
+
 function JournalTab:OpenMailSendView()
     Addon.JournalMailSendPane.OpenView(self)
 end

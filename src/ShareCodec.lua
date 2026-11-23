@@ -689,7 +689,11 @@ function ShareCodec:DecodeQuest(codeString)
     if not rawBinary then
         return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
     end
-    return UnpackQuestBinary(rawBinary)
+    local quest, err = UnpackQuestBinary(rawBinary)
+    if quest and Addon.QuestMigration then
+        Addon.QuestMigration:MigrateQuestRecord(quest)
+    end
+    return quest, err
 end
 
 function ShareCodec:ComputeQuestSignature(quest)

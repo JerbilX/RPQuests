@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
+-- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -11,6 +12,9 @@ Addon.Constants = {
         TITLE = "RPQuest",
         VERSION = "1.7.0",
         AUTHOR = "JerbilX",
+    },
+    QUEST_SCHEMA = {
+        CURRENT_VERSION = 1,
     },
     SAVED_VARS = {
         NAME = "RPQuest_SavedVariables",

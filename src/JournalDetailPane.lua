@@ -128,6 +128,12 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
     tab.btnCopy:SetAnchor(TOPLEFT, tab.btnReset, BOTTOMLEFT, 0, 10)
     tab.btnCopy:SetHidden(true)
 
+    tab.btnMigrate = CreateStyledButton(panelName .. "_BtnMigrate", contentParent, 160, 32, Addon.Locale:Get("BTN_MIGRATE"), function()
+        tab:MigrateSelectedQuest()
+    end)
+    tab.btnMigrate:SetAnchor(TOPLEFT, tab.btnActivate, TOPLEFT, 0, 0)
+    tab.btnMigrate:SetHidden(true)
+
     tab.btnAcceptOffered = CreateStyledButton(panelName .. "_BtnAcceptOffered", contentParent, 160, 32, Addon.Locale:Get("BTN_MAIL_ACCEPT"), function()
         tab:AcceptSelectedOfferedQuest()
     end)
@@ -286,6 +292,12 @@ local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, 
 
     if isOffered then
         tab.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING"))
+    elseif isPrepared and selectedQuest.needsMigration then
+        local statusText = Addon.Locale:Get("STATUS_NEEDS_MIGRATION")
+        if type(selectedQuest.migrationReason) == "string" and selectedQuest.migrationReason ~= "" then
+            statusText = statusText .. "\n|cC5C29E" .. selectedQuest.migrationReason .. "|r"
+        end
+        tab.detailStatus:SetText(statusText)
     elseif isPrepared then
         tab.detailStatus:SetText(FormatPreparedStatusText(selectedQuest))
         tab.btnActivate:SetText(isCurrentActive and deactivateLabel or activateLabel)
@@ -414,12 +426,19 @@ end
 local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared)
     tab:UpdateShowOnMapVisibility()
     tab.btnReset:ClearAnchors()
+    local needsMigration = isPrepared and (selectedQuest.needsMigration == true)
     if tab.btnAcceptOffered then tab.btnAcceptOffered:SetHidden(not isOffered) end
     if tab.btnRejectOffered then tab.btnRejectOffered:SetHidden(not isOffered) end
-    if tab.btnSendDirect then tab.btnSendDirect:SetHidden(not isPrepared) end
-    if tab.btnCopy then tab.btnCopy:SetHidden(not isPrepared) end
+    if tab.btnSendDirect then tab.btnSendDirect:SetHidden((not isPrepared) or needsMigration) end
+    if tab.btnCopy then tab.btnCopy:SetHidden((not isPrepared) or needsMigration) end
+    if tab.btnMigrate then tab.btnMigrate:SetHidden(not needsMigration) end
 
     if isOffered then
+        tab.btnActivate:SetHidden(true)
+        if tab.btnComplete then tab.btnComplete:SetHidden(true) end
+        tab.btnEdit:SetHidden(true)
+        tab.btnReset:SetHidden(true)
+    elseif needsMigration then
         tab.btnActivate:SetHidden(true)
         if tab.btnComplete then tab.btnComplete:SetHidden(true) end
         tab.btnEdit:SetHidden(true)
@@ -470,6 +489,7 @@ local function RenderEmptyDetailPane(tab)
     tab.btnReset:SetHidden(true)
     if tab.btnSendDirect then tab.btnSendDirect:SetHidden(true) end
     if tab.btnCopy then tab.btnCopy:SetHidden(true) end
+    if tab.btnMigrate then tab.btnMigrate:SetHidden(true) end
     if tab.keybindStripDescriptor then
         KEYBIND_STRIP:UpdateKeybindButtonGroup(tab.keybindStripDescriptor)
     end
