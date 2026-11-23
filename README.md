@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.7.0-blue)
+![Version](https://img.shields.io/badge/version-1.8.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -70,7 +70,7 @@ The **RPQuest** tab inside the Quest Journal (`J`) uses an exclusive accordionâ€
 - **Pending:** Incoming quest offers waiting for you to **Accept** or **Reject**.
 - **Quests:** Your currently accepted and active quests. Select a quest to view objectives, toggle tracking, or manually complete it once all mandatory objectives are done.
 - **Completed:** Archive of finished quests you have played, including final stealth and optional objective outcomes.
-- **Preparing:** Unsent quest drafts you are creating or editing as a Quest Master.
+- **Preparing:** Unsent quest drafts you are creating or editing as a Quest Master. You can also copy any **Preparing** or **Sent** quest into **Preparing** to create a fresh editable draft.
 - **Sent:** Contracts you have already mailed to players, showing live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and automatic completion results (such as `Undetected` vs `Detected` and optional objectives).
 
 ### 3. Quest Building Blocks

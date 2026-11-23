@@ -1,10 +1,81 @@
 -- Ref: docs/adr/0012-savedvars-account-wide-y-migracion-por-personaje.md
+-- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
 
 Addon.QuestMigration = {}
 local QuestMigration = Addon.QuestMigration
+
+-- Registry of sequential schema migrators keyed by source schemaVersion (vN -> vN+1).
+-- A migrator may return `false, reason` to flag a breaking PREPARED quest with `needsMigration = true`.
+QuestMigration.SCHEMA_MIGRATORS = QuestMigration.SCHEMA_MIGRATORS or {}
+
+function QuestMigration:GetCurrentSchemaVersion()
+    local schema = Addon.Constants and Addon.Constants.QUEST_SCHEMA
+    return (schema and tonumber(schema.CURRENT_VERSION)) or 1
+end
+
+function QuestMigration:NeedsMigration(quest)
+    return type(quest) == "table" and quest.needsMigration == true
+end
+
+function QuestMigration:MigrateQuestRecord(quest, options)
+    if type(quest) ~= "table" then
+        return quest, false
+    end
+
+    local targetVersion = (options and tonumber(options.targetVersion)) or self:GetCurrentSchemaVersion()
+    local migrators = (options and type(options.migrators) == "table" and options.migrators) or self.SCHEMA_MIGRATORS
+
+    local version = math.floor(tonumber(quest.schemaVersion) or 1)
+    if version < 1 then
+        version = 1
+    end
+
+    if quest.needsMigration == true and version >= targetVersion then
+        quest.schemaVersion = version
+        return quest, false, quest.migrationReason
+    end
+
+    local didMigrate = (quest.schemaVersion ~= version)
+    while version < targetVersion do
+        local migrator = migrators[version]
+        if type(migrator) == "function" then
+            local ok, reason = migrator(quest, options)
+            if ok == false then
+                quest.schemaVersion = version
+                quest.needsMigration = true
+                quest.migrationReason = (type(reason) == "string" and reason ~= "") and reason or nil
+                return quest, false, quest.migrationReason
+            end
+        end
+        version = version + 1
+        quest.schemaVersion = version
+        didMigrate = true
+    end
+
+    quest.schemaVersion = version
+    quest.needsMigration = nil
+    quest.migrationReason = nil
+    return quest, didMigrate
+end
+
+function QuestMigration:MigrateQuestList(quests, options)
+    if type(quests) ~= "table" then
+        return 0
+    end
+    local migratedCount = 0
+    for _, quest in ipairs(quests) do
+        if type(quest) == "table" then
+            local _, didMigrate = self:MigrateQuestRecord(quest, options)
+            if didMigrate then
+                migratedCount = migratedCount + 1
+            end
+        end
+    end
+    return migratedCount
+end
 
 local function DeepCopyValue(val, seen)
     if type(val) ~= "table" then

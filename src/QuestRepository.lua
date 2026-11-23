@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
+-- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
@@ -180,8 +181,10 @@ function QuestRepository:CompleteQuest(questId)
 end
 
 function QuestRepository:BuildQuestRecord(id, title, description, targets, data, role)
+    local schemaVersion = (Addon.QuestMigration and Addon.QuestMigration:GetCurrentSchemaVersion()) or 1
     return {
         id = id,
+        schemaVersion = schemaVersion,
         title = title,
         description = description,
         clue = type(data.clue) == "string" and data.clue or "",
@@ -257,6 +260,9 @@ function QuestRepository:Initialize(savedVars)
     self._completionCodeCache = {}
     self._activeTargetCache = nil
     local roles = Addon.Constants.QUEST_ROLE
+    if Addon.QuestMigration then
+        Addon.QuestMigration:MigrateQuestList(self.savedVars.quests)
+    end
     for _, q in ipairs(self.savedVars.quests) do
         q.targets = q.targets or {}
         if q.role ~= roles.PREPARED and q.role ~= roles.RECEIVED then
@@ -264,6 +270,12 @@ function QuestRepository:Initialize(savedVars)
         end
         if q.id then
             self._questById[q.id] = q
+        end
+    end
+    if self.savedVars.activeQuestId then
+        local active = self._questById[self.savedVars.activeQuestId]
+        if not active or active.needsMigration then
+            self.savedVars.activeQuestId = nil
         end
     end
     self._listeners = self._listeners or {}
@@ -722,7 +734,7 @@ function QuestRepository:SetActiveQuest(questId)
     end
 
     local q = self:GetQuestById(questId)
-    if not q or q.completed or q.failed or self:IsOfferedQuest(q) then
+    if not q or q.completed or q.failed or q.needsMigration or self:IsOfferedQuest(q) then
         return false
     end
 
@@ -732,7 +744,7 @@ function QuestRepository:SetActiveQuest(questId)
     return true
 end
 
-function QuestRepository:ResetQuest(questId)
+function QuestRepository:ResetQuest(questId, options)
     local q = self:GetQuestById(questId)
     if not q then return false end
 
@@ -749,10 +761,96 @@ function QuestRepository:ResetQuest(questId)
     if self._completionCodeCache then
         self._completionCodeCache[questId] = nil
     end
-    self.savedVars.activeQuestId = q.id
+
+    local shouldActivate = not (type(options) == "table" and options.activate == false)
+    local wasActive = (self.savedVars.activeQuestId == q.id)
+    if shouldActivate then
+        self.savedVars.activeQuestId = q.id
+    elseif wasActive then
+        self.savedVars.activeQuestId = nil
+    end
+
     self:InvalidateActiveTargetCache()
     self:NotifyListeners("QUEST_RESET", q)
+    if not shouldActivate and wasActive then
+        self:NotifyListeners("ACTIVE_QUEST_CHANGED", nil)
+    end
     return true
+end
+
+local function ClonePreparedQuestRecord(repo, source)
+    local newId = repo.savedVars.nextId or 1
+    repo.savedVars.nextId = newId + 1
+
+    local clonedTargets = Addon.QuestDraftStore:CloneTargetsList(source.targets)
+    for _, t in ipairs(clonedTargets) do
+        t.currentCount = 0
+    end
+
+    local senderChar = (type(source.senderCharacterName) == "string" and source.senderCharacterName ~= "")
+        and source.senderCharacterName
+        or repo:GetPlayerCharacterName()
+
+    local questData = {
+        senderDisplayName = source.senderDisplayName,
+        senderCharacterName = senderChar,
+        recipientAccount = source.recipientAccount,
+        recipientCharacterName = source.recipientCharacterName,
+        clue = source.clue,
+        completionMessage = source.completionMessage,
+        discoveries = Addon.QuestDraftStore:CloneDiscoveriesList(source.discoveries, false),
+        dialogues = Addon.QuestDraftStore:CloneDialoguesList(source.dialogues, source.clue),
+        mapId = source.mapId,
+        zoneId = source.zoneId,
+        mapName = source.mapName,
+        targetX = source.targetX,
+        targetY = source.targetY,
+        areaCenterX = source.areaCenterX,
+        areaCenterY = source.areaCenterY,
+        areaRadius = source.areaRadius,
+        hideMapArea = source.hideMapArea,
+        requireUndetected = source.requireUndetected,
+    }
+
+    local newQuest = repo:BuildQuestRecord(
+        newId,
+        source.title or "",
+        source.description or "",
+        clonedTargets,
+        questData,
+        Addon.Constants.QUEST_ROLE.PREPARED
+    )
+    newQuest.createdAt = GetTimeStamp() or 0
+    newQuest.needsMigration = nil
+    newQuest.migrationReason = nil
+
+    table.insert(repo.savedVars.quests, newQuest)
+    if repo._questById then
+        repo._questById[newQuest.id] = newQuest
+    end
+
+    repo:NotifyListeners("QUEST_CREATED", newQuest)
+    return newQuest
+end
+
+function QuestRepository:DuplicateQuest(questId)
+    if not self.savedVars then return nil end
+    local source = self:GetQuestById(questId)
+    if not source then return nil end
+    if not self:IsPreparedQuest(source) then
+        return nil, Addon.Locale:Get("ERR_CANNOT_COPY_RECEIVED")
+    end
+    return ClonePreparedQuestRecord(self, source)
+end
+
+function QuestRepository:MigratePreparedQuest(questId)
+    if not self.savedVars then return nil end
+    local source = self:GetQuestById(questId)
+    if not source then return nil end
+    if not self:IsPreparedQuest(source) then
+        return nil, Addon.Locale:Get("ERR_CANNOT_MIGRATE_RECEIVED")
+    end
+    return ClonePreparedQuestRecord(self, source)
 end
 
 function QuestRepository:DeleteQuest(questId)

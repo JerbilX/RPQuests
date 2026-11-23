@@ -668,4 +668,209 @@ return function(T)
         AssertEqual(hasRowForQuest(3), false, "Completed quest row is hidden")
     end)
 
+    RunTest("QuestRepository:DuplicateQuest copies Preparing and Sent into Preparing and rejects Received", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(repo:GetDefaults())
+
+        -- Create a PREPARING quest with targets, discoveries, dialogues, and metadata
+        repo:SetDraftCapturedTarget({
+            targetName = "Bandit Cutthroat",
+            mapId = 101,
+            zoneId = 202,
+            mapName = "Glenumbra",
+            targetX = 0.45,
+            targetY = 0.55,
+            worldX = 1000,
+            worldZ = 2000,
+        })
+        repo:AddDraftDiscoveryPoint({
+            zoneId = 202,
+            worldX = 1100,
+            worldY = 100,
+            worldZ = 2100,
+            mapId = 101,
+            x = 0.46,
+            y = 0.56,
+            radius = 1500,
+            message = "Hidden note",
+        })
+        repo:AddDraftDialogue("Innkeeper", 202, "Behind the mill.", "Look near the river.")
+        local prepQuest = repo:SaveDraft("Contract One", "Desc One", 0.075, "Well done", true, "@TargetUser", "HeroChar")
+        AssertTrue(prepQuest ~= nil, "Prepared quest created")
+        -- Simulate runtime test progress on the prepared quest
+        prepQuest.targets[1].currentCount = 1
+        prepQuest.discoveries[1].discovered = true
+        prepQuest.wasDetected = true
+        prepQuest.completed = true
+
+        local copyFromPrep = repo:DuplicateQuest(prepQuest.id)
+        AssertTrue(copyFromPrep ~= nil, "Copy from PREPARING succeeds")
+        AssertEqual(copyFromPrep.id ~= prepQuest.id, true, "Copy has a new unique quest ID")
+        AssertEqual(copyFromPrep.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Copy has PREPARED role")
+        AssertEqual(repo:GetPreparedQuestStatus(copyFromPrep), "draft", "Copy from PREPARING is in draft/Preparing")
+        AssertEqual(copyFromPrep.title, "Contract One", "Title preserved")
+        AssertEqual(copyFromPrep.description, "Desc One", "Description preserved")
+        AssertEqual(copyFromPrep.completionMessage, "Well done", "Completion message preserved")
+        AssertEqual(copyFromPrep.requireUndetected, true, "Stealth flag preserved")
+        AssertEqual(copyFromPrep.recipientAccount, "@TargetUser", "Recipient account preserved")
+        AssertEqual(copyFromPrep.recipientCharacterName, "HeroChar", "Recipient character preserved")
+        AssertEqual(#copyFromPrep.targets, 1, "Targets cloned")
+        AssertEqual(copyFromPrep.targets[1].currentCount, 0, "Target currentCount reset to 0")
+        AssertEqual(#copyFromPrep.discoveries, 1, "Discoveries cloned")
+        AssertEqual(copyFromPrep.discoveries[1].discovered, false, "Discovery state reset")
+        AssertEqual(#copyFromPrep.dialogues, 1, "Dialogues cloned")
+        AssertEqual(copyFromPrep.dialogues[1].npcName, "Innkeeper", "Dialogue NPC preserved")
+        AssertEqual(copyFromPrep.completed, false, "Completed flag reset")
+        AssertEqual(copyFromPrep.wasDetected, false, "Detected flag reset")
+
+        -- Mutating copy does not mutate source
+        copyFromPrep.targets[1].name = "Mutated"
+        AssertEqual(prepQuest.targets[1].name, "Bandit Cutthroat", "Source target not mutated")
+
+        -- Mark original as SENT with delivery history and copy it
+        repo:MarkPreparedQuestSent(prepQuest.id, "@TargetUser")
+        repo:RecordMailDelivery(prepQuest.id, "@TargetUser", { status = "completed", characterName = "HeroChar" })
+        AssertEqual(repo:GetPreparedQuestStatus(prepQuest), "completed", "Original is in SENT/completed")
+
+        local copyFromSent = repo:DuplicateQuest(prepQuest.id)
+        AssertTrue(copyFromSent ~= nil, "Copy from SENT succeeds")
+        AssertEqual(copyFromSent.id ~= prepQuest.id, true, "Sent copy has new ID")
+        AssertEqual(repo:GetPreparedQuestStatus(copyFromSent), "draft", "Copy from SENT starts in Preparing")
+        AssertTrue(copyFromSent.sentTo == nil, "sentTo cleared")
+        AssertTrue(copyFromSent.sentAt == nil, "sentAt cleared")
+        AssertTrue(copyFromSent.lastResult == nil, "lastResult cleared")
+        AssertEqual(#copyFromSent.deliveries, 0, "deliveries cleared")
+        AssertEqual(prepQuest.sentTo, "@TargetUser", "Source SENT quest remains unchanged")
+
+        -- Received quest cannot be copied
+        local recQuest = repo:BuildQuestRecord(99, "Received Quest", "Desc", {
+            { name = "Wolf", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, recQuest)
+        repo._questById[recQuest.id] = recQuest
+
+        local countBefore = #repo:GetAllQuests()
+        local deniedCopy, denyErr = repo:DuplicateQuest(recQuest.id)
+        AssertTrue(deniedCopy == nil, "Received quest cannot be copied")
+        AssertEqual(denyErr, RPQuest.Locale:Get("ERR_CANNOT_COPY_RECEIVED"), "Expected error for received quest")
+        AssertEqual(#repo:GetAllQuests(), countBefore, "No quest added when copy is rejected")
+    end)
+
+    RunTest("Quest schema versioning, sequential migration pipeline, and breaking fallback (ADR-0013)", function()
+        local repo = RPQuest.QuestRepository
+        local mig = RPQuest.QuestMigration
+
+        -- 1. New quests carry CURRENT_VERSION
+        repo:Initialize(nil)
+        local fresh = repo:BuildQuestRecord(1, "Fresh", "Desc", {
+            { name = "Imp", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(fresh.schemaVersion, RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION, "New quest has CURRENT_VERSION")
+
+        -- 2. Sequential migration v1 -> v2 -> v3 with deterministic transforms
+        local legacyQuest = {
+            id = 5,
+            title = "Legacy",
+            description = "Old format",
+            role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+            targets = { { name = "Wolf", currentCount = 0, requiredCount = 1 } },
+            legacyFlag = true,
+        }
+        local migrated, didMigrate = mig:MigrateQuestRecord(legacyQuest, {
+            targetVersion = 3,
+            migrators = {
+                [1] = function(q)
+                    q.step1Applied = (q.legacyFlag == true)
+                    q.legacyFlag = nil
+                    return true
+                end,
+                [2] = function(q)
+                    q.step2Applied = true
+                    return true
+                end,
+            },
+        })
+        AssertTrue(didMigrate, "Legacy quest was migrated")
+        AssertEqual(migrated.schemaVersion, 3, "Quest reached target schemaVersion 3")
+        AssertEqual(migrated.step1Applied, true, "v1->v2 migrator ran")
+        AssertEqual(migrated.step2Applied, true, "v2->v3 migrator ran")
+        AssertTrue(migrated.legacyFlag == nil, "Legacy field cleaned up")
+        AssertTrue(migrated.needsMigration == nil, "Clean migration does not set needsMigration")
+
+        -- 3. Breaking migration marks needsMigration, clears activeQuestId on Initialize, and allows MigratePreparedQuest
+        local origMigrators = mig.SCHEMA_MIGRATORS
+        local origVersion = RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION
+        RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION = 2
+        mig.SCHEMA_MIGRATORS = {
+            [1] = function(q)
+                if q.role == RPQuest.Constants.QUEST_ROLE.PREPARED and q.title == "Broken Prep" then
+                    return false, "Missing required v2 field"
+                end
+                return true
+            end,
+        }
+
+        local sv = {
+            nextId = 3,
+            activeQuestId = 1,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 1,
+                    title = "Broken Prep",
+                    description = "Needs manual update",
+                    role = RPQuest.Constants.QUEST_ROLE.PREPARED,
+                    targets = { { name = "Bandit", currentCount = 0, requiredCount = 1 } },
+                },
+                {
+                    id = 2,
+                    schemaVersion = 1,
+                    title = "Auto Received",
+                    description = "Migrates cleanly",
+                    role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+                    targets = { { name = "Wolf", currentCount = 0, requiredCount = 1 } },
+                },
+            },
+            ingestedMailIds = {},
+        }
+        repo:Initialize(sv)
+
+        local broken = repo:GetQuestById(1)
+        local autoRec = repo:GetQuestById(2)
+        AssertEqual(broken.needsMigration, true, "Breaking PREPARED quest flagged with needsMigration")
+        AssertEqual(broken.migrationReason, "Missing required v2 field", "Migration reason preserved")
+        AssertEqual(autoRec.schemaVersion, 2, "Auto-migratable quest upgraded on Initialize")
+        AssertTrue(repo:GetActiveQuest() == nil, "activeQuestId cleared when active quest needsMigration")
+        AssertEqual(repo:SetActiveQuest(1), false, "Cannot activate quest flagged with needsMigration")
+
+        local draftLoaded, draftErr = repo:LoadQuestIntoDraft(1)
+        AssertTrue(draftLoaded == nil, "Cannot directly edit quest flagged with needsMigration")
+        AssertEqual(draftErr, RPQuest.Locale:Get("ERR_QUEST_NEEDS_MIGRATION"), "Returns migration error on edit")
+
+        local migratedCopy = repo:MigratePreparedQuest(1)
+        AssertTrue(migratedCopy ~= nil, "MigratePreparedQuest creates updated copy")
+        AssertEqual(migratedCopy.schemaVersion, 2, "Migrated copy has CURRENT_VERSION")
+        AssertTrue(migratedCopy.needsMigration == nil, "Migrated copy clears needsMigration")
+        AssertEqual(migratedCopy.title, "Broken Prep", "Migrated copy preserves title")
+
+        -- 4. ShareCodec:DecodeQuest runs migration at boundary
+        local encoded = RPQuest.ShareCodec:EncodeQuest(autoRec)
+        AssertTrue(type(encoded) == "string", "Quest encoded")
+        -- Simulate v1->v2 transform when decoding
+        mig.SCHEMA_MIGRATORS = {
+            [1] = function(q)
+                q.boundaryMigrated = true
+                return true
+            end,
+        }
+        local decoded = RPQuest.ShareCodec:DecodeQuest(encoded)
+        AssertTrue(decoded ~= nil, "Quest decoded")
+        AssertEqual(decoded.schemaVersion, 2, "Decoded quest migrated to CURRENT_VERSION")
+        AssertEqual(decoded.boundaryMigrated, true, "Boundary migrator ran during DecodeQuest")
+
+        -- Restore global constants/migrators
+        RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION = origVersion
+        mig.SCHEMA_MIGRATORS = origMigrators
+    end)
+
 end

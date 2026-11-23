@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.7.0-blue)
+![Version](https://img.shields.io/badge/version-1.8.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -70,7 +70,7 @@ La pestaña **RPQuest** dentro del Diario de Misiones (`J`) usa un acordeón exc
 - **Pendientes:** Ofertas entrantes esperando que las **Aceptes** o **Rechaces**.
 - **Misiones:** Tus misiones aceptadas y activas. Selecciona una misión para ver objetivos, activar/desactivar el seguimiento o completarla manualmente cuando todos los objetivos obligatorios estén cumplidos.
 - **Completadas:** Archivo de las misiones que ya terminaste, incluyendo el resultado final de sigilo y objetivos opcionales.
-- **Preparando:** Borradores de misiones sin enviar que estás creando o editando como Quest Master.
+- **Preparando:** Borradores de misiones sin enviar que estás creando o editando como Quest Master. También puedes copiar cualquier misión de **Preparando** o **Enviadas** hacia **Preparando** para crear un nuevo borrador editable.
 - **Enviadas:** Contratos que ya enviaste por correo a jugadores, mostrando su estado en vivo (`Enviada`, `Aceptada`, `Rechazada`, `Completada`) y los resultados automáticos al finalizar (como `No detectado` frente a `Detectado` y objetivos opcionales).
 
 ### 3. Bloques de Construcción de Misiones

@@ -604,4 +604,382 @@ return function(T)
         AssertTrue(statusText:find("0/1", 1, true) ~= nil, "Prepared quest status shows 0/1 optional objectives completed")
     end)
 
+    RunTest("Journal UI: Capture and clear target location in new draft and editing existing quest", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab:OpenTab()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        mockState.zoneId = 381
+        mockState.worldX = 12000
+        mockState.worldY = 100
+        mockState.worldZ = 24000
+
+        -- 1. New draft with a captured target
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Veiled Scout",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.JournalTab.selectedTargetIndex = 1
+        RPQuest.JournalTab:RefreshEditorPane()
+
+        local tab = RPQuest.JournalTab
+        AssertEqual(tab.btnCaptureTargetLoc:IsHidden(), false, "btnCaptureTargetLoc visible when target exists")
+        AssertEqual(tab.btnCaptureTargetLoc:GetText(), "Capture Loc", "btnCaptureTargetLoc shows plain label before capture")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden before location capture")
+        AssertEqual(tab.btnTargetLocRequired:IsHidden(), true, "btnTargetLocRequired hidden before location capture")
+        AssertEqual(tab.btnTargetRadSmall:IsHidden(), true, "btnTargetRadSmall hidden before location capture")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Status shows Location: None initially")
+
+        -- Capture location via button
+        tab.btnCaptureTargetLoc:GetHandler("OnClicked")()
+        local draft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(draft.targets[1]), true, "Target has captured location after btnCaptureTargetLoc")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible immediately after capture")
+        AssertEqual(tab.btnTargetLocRequired:IsHidden(), false, "btnTargetLocRequired visible immediately after capture")
+        AssertEqual(tab.btnTargetRadSmall:IsHidden(), false, "btnTargetRadSmall visible immediately after capture")
+        AssertTrue(tab.btnCaptureTargetLoc:GetText():find("Capture Loc", 1, true) ~= nil and tab.btnCaptureTargetLoc:GetText():find("|c33FF33", 1, true) ~= nil, "btnCaptureTargetLoc highlighted when location is captured")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_SET", 15), "Status updates to Location: Set (15m)")
+
+        -- Toggle locationRequired = true, then clear location via btnClearTargetLoc
+        tab.btnTargetLocRequired:GetHandler("OnClicked")()
+        AssertEqual(draft.targets[1].locationRequired, true, "btnTargetLocRequired sets locationRequired=true")
+
+        tab.btnClearTargetLoc:GetHandler("OnClicked")()
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(draft.targets[1]), false, "HasTargetLocation false after btnClearTargetLoc")
+        AssertEqual(draft.targets[1].zoneId, nil, "zoneId cleared to nil")
+        AssertEqual(draft.targets[1].worldX, nil, "worldX cleared to nil")
+        AssertEqual(draft.targets[1].worldZ, nil, "worldZ cleared to nil")
+        AssertEqual(draft.targets[1].radius, nil, "radius cleared to nil")
+        AssertEqual(draft.targets[1].locationRequired, false, "locationRequired reset to false")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden immediately after clear")
+        AssertEqual(tab.btnTargetLocRequired:IsHidden(), true, "btnTargetLocRequired hidden immediately after clear")
+        AssertEqual(tab.btnTargetRadSmall:IsHidden(), true, "btnTargetRadSmall hidden immediately after clear")
+        AssertEqual(tab.btnTargetRadMedium:IsHidden(), true, "btnTargetRadMedium hidden immediately after clear")
+        AssertEqual(tab.btnTargetRadLarge:IsHidden(), true, "btnTargetRadLarge hidden immediately after clear")
+        AssertEqual(tab.btnCaptureTargetLoc:GetText(), "Capture Loc", "btnCaptureTargetLoc returns to plain label after clear")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Status returns to Location: None after clear")
+
+        -- Save new draft and verify cleared state persists
+        local savedNew = RPQuest.QuestRepository:SaveDraft("Cleared Loc New Quest", "Desc")
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(savedNew.targets[1]), false, "Saved new quest has no target location")
+        AssertEqual(savedNew.targets[1].locationRequired, false, "Saved new quest has locationRequired=false")
+
+        -- 2. Existing quest with captured location -> edit -> clear -> save
+        RPQuest.JournalTab:OpenCreateEditor()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Veiled Captain",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 15000, 25000, 1500)
+        RPQuest.QuestRepository:UpdateDraftTarget(1, { locationRequired = true })
+        local existingQuest = RPQuest.QuestRepository:SaveDraft("Existing Loc Quest", "Desc")
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(existingQuest.targets[1]), true, "Existing quest saved with target location")
+        AssertEqual(existingQuest.targets[1].locationRequired, true, "Existing quest saved with locationRequired=true")
+
+        tab:OpenEditEditor(existingQuest.id)
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible when editing quest with target location")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_SET", 15), "Edit status shows Location: Set (15m)")
+
+        tab.btnClearTargetLoc:GetHandler("OnClicked")()
+        local editDraft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(editDraft.targets[1]), false, "Edit draft target location cleared")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden after clearing in edit mode")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Edit status returns to Location: None")
+
+        local updatedQuest = RPQuest.QuestRepository:SaveDraft()
+        AssertEqual(updatedQuest.id, existingQuest.id, "Editing updates the existing quest record")
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(updatedQuest.targets[1]), false, "Updated quest persists cleared target location")
+        AssertEqual(updatedQuest.targets[1].zoneId, nil, "Updated quest target zoneId is nil")
+        AssertEqual(updatedQuest.targets[1].worldX, nil, "Updated quest target worldX is nil")
+        AssertEqual(updatedQuest.targets[1].worldZ, nil, "Updated quest target worldZ is nil")
+        AssertEqual(updatedQuest.targets[1].locationRequired, false, "Updated quest target locationRequired is false")
+    end)
+
+    RunTest("22. Accordion Animation: ZO_TreeOpenAnimation expand/collapse, easing, mid-animation reversal, and hidden snap", function()
+        local roles = RPQuest.Constants.QUEST_ROLE
+        RPQuest.QuestRepository:Initialize({
+            quests = {
+                { id = 1, title = "Active A", description = "", role = roles.RECEIVED, completed = false },
+                { id = 2, title = "Active B", description = "", role = roles.RECEIVED, completed = false },
+                { id = 3, title = "Prep A", description = "", role = roles.PREPARED, completed = false },
+                { id = 4, title = "Sent A", description = "", role = roles.PREPARED, sentTo = "@Dest", completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        local tab = RPQuest.JournalTab
+        tab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true }
+        tab.panel:SetHidden(true)
+        tab:Refresh()
+        tab.panel:SetHidden(false)
+
+        local secMissions = tab.accordionSections.missions
+        local secPreparing = tab.accordionSections.preparing
+        local secSent = tab.accordionSections.sent
+
+        -- Initial state: missions open (height = 60, alpha = 1), preparing/sent collapsed (height = 0, hidden)
+        AssertEqual(secMissions.openPercentage, 1, "Missions starts at openPercentage = 1")
+        AssertEqual(secMissions.childContainer:GetHeight(), 60, "Missions childContainer height = 2 * 30")
+        AssertEqual(secMissions.childContainer:GetAlpha(), 1, "Missions childContainer alpha = 1")
+        AssertEqual(secPreparing.childContainer:IsHidden(), true, "Preparing childContainer starts hidden")
+
+        -- 1. Toggle Preparing while visible -> Missions collapses with EaseIn, Preparing expands with EaseOut
+        tab:ToggleSection("preparing")
+        AssertEqual(secMissions.timeline:IsPlaying(), true, "Missions collapse timeline starts playing")
+        AssertEqual(secPreparing.timeline:IsPlaying(), true, "Preparing expand timeline starts playing")
+
+        -- Step halfway through the 300ms animation (rawProgress = 0.5)
+        secMissions.timeline:StepTo(0.5)
+        secPreparing.timeline:StepTo(0.5)
+        AssertEqual(secMissions.openPercentage, 0.25, "Missions uses ZO_EaseInQuadratic at 0.5 -> 0.25")
+        AssertEqual(secMissions.childContainer:GetHeight(), 15, "Missions height interpolates to 15 (0.25 * 60)")
+        AssertEqual(secMissions.childContainer:GetAlpha(), 0.5, "Missions alpha interpolates to 0.5")
+        AssertEqual(secPreparing.openPercentage, 0.75, "Preparing uses ZO_EaseOutQuadratic at 0.5 -> 0.75")
+        AssertEqual(secPreparing.childContainer:GetHeight(), 23, "Preparing height interpolates to round(0.75 * 30) = 23")
+        AssertEqual(secPreparing.childContainer:GetAlpha(), 0.5, "Preparing alpha interpolates to 0.5")
+
+        -- Check dynamic Y-anchor of Sent header shifts smoothly during animation
+        local _, _, _, _, _, sentYMid = secSent.headerBtn:GetAnchor(1)
+        -- missions header (30) + missions children (15) + preparing header (30) + preparing children (23) = 98
+        AssertEqual(sentYMid, 98, "Sent header Y-anchor tracks animated heights of sections above")
+
+        -- Finish animations
+        secMissions.timeline:StepTo(0)
+        secPreparing.timeline:StepTo(1)
+        AssertEqual(secMissions.timeline:IsPlaying(), false, "Missions timeline stops at 0")
+        AssertEqual(secMissions.childContainer:IsHidden(), true, "Missions childContainer hides at 0")
+        AssertEqual(secPreparing.timeline:IsPlaying(), false, "Preparing timeline stops at 1")
+        AssertEqual(secPreparing.childContainer:GetHeight(), 30, "Preparing height reaches full 30")
+        AssertEqual(secPreparing.childContainer:GetAlpha(), 1, "Preparing alpha reaches 1")
+
+        -- 2. Reversing mid-animation when toggling Sent while Preparing is still animating
+        tab:ToggleSection("sent")
+        AssertEqual(secPreparing.timeline:IsPlaying(), true, "Preparing starts collapsing")
+        AssertEqual(secSent.timeline:IsPlaying(), true, "Sent starts expanding")
+        secPreparing.timeline:StepTo(0.5)
+        secSent.timeline:StepTo(0.5)
+        -- Reverse back to Preparing mid-flight
+        tab:ToggleSection("preparing")
+        AssertEqual(secPreparing.isOpen, true, "Preparing reverses back to open mid-animation")
+        AssertEqual(secPreparing.timeline._direction, 1, "Preparing timeline direction flips forward")
+        AssertEqual(secSent.isOpen, false, "Sent reverses back to closed mid-animation")
+        AssertEqual(secSent.timeline._direction, -1, "Sent timeline direction flips backward")
+        secPreparing.timeline:StepTo(1)
+        secSent.timeline:StepTo(0)
+
+        -- 3. Hidden panel snaps immediately without playing timelines
+        tab.panel:SetHidden(true)
+        tab:ToggleSection("missions")
+        AssertEqual(secMissions.timeline:IsPlaying(), false, "Hidden panel snaps Missions without playing timeline")
+        AssertEqual(secMissions.openPercentage, 1, "Hidden panel snaps Missions openPercentage to 1")
+        AssertEqual(secPreparing.openPercentage, 0, "Hidden panel snaps Preparing openPercentage to 0")
+        AssertEqual(secPreparing.childContainer:IsHidden(), true, "Hidden panel hides collapsed childContainer")
+        tab.panel:SetHidden(false)
+    end)
+
+    RunTest("JournalDetailPane shows Copy button only for Preparing and Sent quests", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(repo:GetDefaults())
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+
+        local prep = repo:BuildQuestRecord(10, "Prep Copy UI", "Desc", {
+            { name = "Target A", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 1 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        local sent = repo:BuildQuestRecord(11, "Sent Copy UI", "Desc", {
+            { name = "Target B", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 1, sentTo = "@Friend", sentAt = 12345 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        local rec = repo:BuildQuestRecord(12, "Received UI", "Desc", {
+            { name = "Target C", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 1 }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, prep)
+        table.insert(repo.savedVars.quests, sent)
+        table.insert(repo.savedVars.quests, rec)
+        repo._questById[10] = prep
+        repo._questById[11] = sent
+        repo._questById[12] = rec
+
+        tab:SelectQuest(12)
+        AssertEqual(tab.btnCopy:IsHidden(), true, "Copy button hidden for received quest")
+
+        tab:SelectQuest(10)
+        AssertEqual(tab.btnCopy:IsHidden(), false, "Copy button visible for Preparing quest")
+
+        tab:SelectQuest(11)
+        AssertEqual(tab.btnCopy:IsHidden(), false, "Copy button visible for Sent quest")
+
+        local copied = tab:DuplicateSelectedQuest()
+        AssertTrue(copied ~= nil, "DuplicateSelectedQuest creates copy from Sent quest")
+        AssertEqual(repo:GetPreparedQuestStatus(copied), "draft", "Copied quest is in Preparing")
+        AssertEqual(tab.selectedQuestId, copied.id, "UI selects the newly copied quest")
+    end)
+
+    RunTest("Test Quest simulates full lifecycle (start, progress, fail, complete, stop/reset) without sending mail", function()
+        local repo = RPQuest.QuestRepository
+        local defaults = repo:GetDefaults()
+        defaults.settings.autoSendCompletionMail = true
+        repo:Initialize(defaults)
+        RPQuest.CombatTracker:Initialize()
+        RPQuest.DiscoveryTracker:Initialize()
+        RPQuest.DialogueInjector:Initialize()
+        RPQuest.MailTransport:Initialize()
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+
+        local origSentMail = RPQuest.MailTransport.SendCompletionReport
+        local sentMailCount = 0
+        RPQuest.MailTransport.SendCompletionReport = function()
+            sentMailCount = sentMailCount + 1
+            return true
+        end
+
+        mockState.zoneId = 41
+        mockState.mapId = 100
+        mockState.mapX = 0.50
+        mockState.mapY = 0.50
+        mockState.worldZoneId = 41
+        mockState.worldX = 1000
+        mockState.worldZ = 2000
+
+        local prep = repo:BuildQuestRecord(50, "Prueba Completa", "Simulación E2E", {
+            {
+                name = "Bandido",
+                currentCount = 0,
+                requiredCount = 1,
+                customMessage = "Bandido abatido",
+                locationRequired = true,
+                worldZoneId = 41,
+                worldX = 1000,
+                worldZ = 2000,
+                locationRadius = 2500,
+            },
+        }, {
+            mapId = 100,
+            zoneId = 41,
+            areaCenterX = 0.50,
+            areaCenterY = 0.50,
+            areaRadius = 0.10,
+            clue = "Habla con el informante",
+            completionMessage = "¡Prueba completada con éxito!",
+            senderDisplayName = "@AuthorGM",
+            discoveries = {
+                { zoneId = 41, worldX = 1500, worldZ = 2500, radius = 1500, message = "Pista descubierta", discovered = false },
+            },
+            dialogues = {
+                { npcName = "Informante", zoneId = 41, clue = "Pregunta por el campamento", response = "Están al norte." },
+            },
+        }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+
+        table.insert(repo.savedVars.quests, prep)
+        repo._questById[50] = prep
+        tab:SelectQuest(50)
+
+        -- 1. Click Test Quest -> activates quest, enables trackers, emits AnnounceQuestAccepted
+        mockState.csaMessages = {}
+        tab:OnToggleActiveClicked()
+        AssertEqual(repo:GetActiveQuest().id, 50, "Test Quest activates prepared quest")
+        AssertEqual(RPQuest.CombatTracker._isRegistered, true, "CombatTracker registered in Test Quest mode")
+        AssertEqual(RPQuest.DiscoveryTracker._isPolling, true, "DiscoveryTracker polling in Test Quest mode")
+        AssertEqual(#mockState.csaMessages, 1, "Test Quest emits initial Quest Accepted CSA banner")
+        AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_ACCEPTED, "Test Quest plays SOUNDS.QUEST_ACCEPTED")
+        AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Test Quest uses QUEST_ADDED CSA type")
+
+        local dlgMatch = repo:FindDialogueForActiveQuest("Informante", 41)
+        AssertTrue(dlgMatch ~= nil and dlgMatch.clue == "Pregunta por el campamento", "DialogueInjector finds dialogue in Test Quest mode")
+
+        -- 2. Fail condition (kill Bandido outside required target location) -> triggers failure state & banner
+        mockState.worldX = 99999
+        mockState.worldZ = 99999
+        mockState.csaMessages = {}
+        RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", "", 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Bandido", 0, 1, 0, 0, false, 1, 5001, 1)
+        AssertEqual(prep.failed, true, "Prepared quest marked failed when failing condition in Test Quest mode")
+        AssertEqual(repo:GetActiveQuest(), nil, "Failed prepared quest is no longer active")
+        AssertEqual(#mockState.csaMessages, 1, "Failure emits Quest Failed CSA banner")
+        AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_PROGRESSION_CHANGED, "Failure uses progression changed CSA")
+
+        -- 3. Click Test Quest again after failure -> resets failed state, reactivates, and emits Quest Accepted
+        mockState.csaMessages = {}
+        tab:OnToggleActiveClicked()
+        AssertEqual(prep.failed, false, "Clicking Test Quest after failure resets failed flag")
+        AssertEqual(repo:GetActiveQuest().id, 50, "Prepared quest reactivated after failure")
+        AssertEqual(#mockState.csaMessages, 1, "Restarting Test Quest after failure emits Quest Accepted CSA")
+
+        -- 4. Progress target + discovery -> shows intermediate messages and completes without sending mail
+        mockState.worldX = 1000
+        mockState.worldZ = 2000
+        mockState.csaMessages = {}
+        RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", "", 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Bandido", 0, 1, 0, 0, false, 1, 5002, 1)
+        AssertEqual(prep.targets[1].currentCount, 1, "Target progress recorded in Test Quest mode")
+        AssertEqual(prep.completed, false, "Quest waits for pending discovery before completing")
+        AssertEqual(#mockState.csaMessages, 2, "Progress + custom target message emitted")
+
+        RPQuest.DiscoveryTracker:EvaluatePlayerPosition(41, 1500, 0, 2500)
+        AssertEqual(prep.discoveries[1].discovered, true, "Discovery recorded in Test Quest mode")
+        AssertEqual(prep.completed, true, "Prepared quest completes when all objectives are met")
+        AssertEqual(repo:GetActiveQuest(), nil, "Completed prepared quest clears activeQuestId")
+        AssertEqual(#mockState.csaMessages, 4, "Discovery + Quest Completed CSA banners emitted")
+        AssertEqual(mockState.csaMessages[4].sound, SOUNDS.QUEST_COMPLETED, "Final banner plays SOUNDS.QUEST_COMPLETED")
+        AssertEqual(mockState.csaMessages[4].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_COMPLETED, "Final banner uses QUEST_COMPLETED CSA type")
+        AssertEqual(sentMailCount, 0, "Completing quest in Test Quest mode does NOT send external mail")
+
+        -- 5. Start Test Quest again, make partial progress, then Stop Testing -> cleanly clears state without stale CSA
+        tab:OnToggleActiveClicked()
+        RPQuest.DiscoveryTracker:EvaluatePlayerPosition(41, 1500, 0, 2500)
+        AssertEqual(prep.discoveries[1].discovered, true, "Partial discovery recorded before Stop Testing")
+
+        mockState.csaMessages = {}
+        tab:OnToggleActiveClicked() -- BTN_STOP_TEST
+        AssertEqual(repo:GetActiveQuest(), nil, "Stop Testing clears active quest")
+        AssertEqual(prep.discoveries[1].discovered, false, "Stop Testing resets partial discovery state")
+        AssertEqual(prep.targets[1].currentCount, 0, "Stop Testing resets partial target state")
+        AssertEqual(prep.completed, false, "Stop Testing clears completed flag")
+        AssertEqual(prep.failed, false, "Stop Testing clears failed flag")
+        AssertEqual(RPQuest.CombatTracker._isRegistered, false, "Stop Testing unregisters CombatTracker")
+        AssertEqual(RPQuest.DiscoveryTracker._isPolling, false, "Stop Testing stops DiscoveryTracker polling")
+        AssertEqual(#mockState.csaMessages, 0, "Stop Testing emits no stale CSA announcements")
+
+        RPQuest.MailTransport.SendCompletionReport = origSentMail
+    end)
+
+    RunTest("JournalDetailPane shows Migrate button and blocks Edit/Send/Test on outdated PREPARED quest", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local prep = repo:BuildQuestRecord(1, "Old Quest", "Desc", {
+            { name = "Imp", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        prep.needsMigration = true
+        prep.migrationReason = "Outdated stealth field"
+        table.insert(repo.savedVars.quests, prep)
+        repo._questById[prep.id] = prep
+
+        local tab = RPQuest.JournalTab
+        tab:SelectQuest(prep.id)
+
+        AssertEqual(tab.btnMigrate:IsHidden(), false, "Migrate button visible for outdated PREPARED quest")
+        AssertEqual(tab.btnActivate:IsHidden(), true, "Test button hidden for outdated PREPARED quest")
+        AssertEqual(tab.btnEdit:IsHidden(), true, "Edit button hidden for outdated PREPARED quest")
+        AssertEqual(tab.btnCopy:IsHidden(), true, "Copy button hidden for outdated PREPARED quest")
+        AssertEqual(tab.btnSendDirect:IsHidden(), true, "Send button hidden for outdated PREPARED quest")
+        AssertTrue(tab.detailStatus:GetText():find("Outdated stealth field", 1, true) ~= nil, "Migration reason shown in status")
+        AssertEqual(tab:SendSelectedPreparedQuest(), false, "SendSelectedPreparedQuest blocked when needsMigration")
+
+        local migrated = tab:MigrateSelectedQuest()
+        AssertTrue(migrated ~= nil, "MigrateSelectedQuest creates new quest")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "MigrateSelectedQuest opens editor on migrated copy")
+        AssertEqual(repo:GetDraft().editingQuestId, migrated.id, "Editor loads migrated copy")
+        AssertTrue(migrated.needsMigration == nil, "Migrated copy clears needsMigration")
+    end)
+
 end

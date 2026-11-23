@@ -110,3 +110,18 @@ function Announcements:AnnounceQuestFailed(quest, target)
     local chatText = subText and (mainText .. " — " .. subText) or mainText
     CHAT_SYSTEM:AddMessage(Addon.Constants.UI.CHAT_PREFIX .. "|cFF4444" .. chatText .. "|r")
 end
+
+function Announcements:AnnounceMailDecodeError(message, senderDisplayName)
+    if type(message) ~= "string" or message == "" then return end
+
+    local mainText = Addon.Locale:Get("CSA_MAIL_DECODE_ERROR")
+    local hasSender = type(senderDisplayName) == "string" and senderDisplayName ~= ""
+    local subText = hasSender
+        and Addon.Locale:Get("ALERT_MAIL_DECODE_ERROR_FROM", senderDisplayName, message)
+        or message
+
+    emitLargeBanner(mainText, subText, SOUNDS.GENERAL_ALERT_ERROR, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_PROGRESSION_CHANGED)
+
+    local chatText = mainText .. " — " .. subText
+    CHAT_SYSTEM:AddMessage(Addon.Constants.UI.CHAT_PREFIX .. "|cFF4444" .. chatText .. "|r")
+end

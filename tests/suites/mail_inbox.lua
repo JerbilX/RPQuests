@@ -309,4 +309,130 @@ return function(T)
         AssertEqual(#mockState.csaMessages, 1, "No duplicate CSA banner on re-scan or duplicate UpsertReceivedEntry")
     end)
 
+    RunTest("MailInbox: prominent decode error (CSA + chat) and inbox cleanup on failed/language-mismatch quest mails (Issue #229)", function()
+        local prevLang = mockState.language
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+
+        -- Encode a quest in "de" while client is "en" -> triggers ERR_IMPORT_LANGUAGE_MISMATCH
+        mockState.language = "de"
+        local deCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Fremde Quest",
+            description = "Nur auf Deutsch.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Wache" } },
+        })
+        mockState.language = "en"
+
+        local enCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Valid English Quest",
+            description = "Works on EN client.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Guard" } },
+        })
+
+        local inbox = {
+            [971] = { sender = "@GermanSender", charName = "Hans", subject = "[RPQuest] Fremde Quest", body = deCode, secs = 5 },
+            [972] = { sender = "@EnglishSender", charName = "John", subject = "[RPQuest] Valid English Quest", body = enCode, secs = 3 },
+        }
+        local deletedIds = {}
+        local origDeleteMail = _G.DeleteMail
+        _G.GetNextMailId = function(cur)
+            local keys = {}
+            for k in pairs(inbox) do table.insert(keys, k) end
+            table.sort(keys)
+            if cur == nil then return keys[1] end
+            for i, k in ipairs(keys) do
+                if k == cur then return keys[i + 1] end
+            end
+            return nil
+        end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        _G.DeleteMail = function(id)
+            table.insert(deletedIds, id)
+            inbox[id] = nil
+        end
+
+        mockState.csaMessages = {}
+        mockState.chatMessages = {}
+        local events = {}
+        RPQuest.MailTransport:RegisterListener(function(ev, payload)
+            if ev == "MAIL_DECODE_ERROR" then
+                table.insert(events, payload)
+            end
+        end)
+
+        RPQuest.MailTransport:ScanInbox(false)
+
+        -- 1. Prominent CSA + chat error emitted for the language mismatch mail
+        AssertEqual(#events, 1, "MAIL_DECODE_ERROR emitted once for language mismatch mail")
+        AssertEqual(events[1].errKey, "ERR_IMPORT_LANGUAGE_MISMATCH", "errKey is ERR_IMPORT_LANGUAGE_MISMATCH")
+        AssertEqual(events[1].senderDisplayName, "@GermanSender", "Sender included in MAIL_DECODE_ERROR payload")
+
+        local foundErrorCsa = false
+        for _, csa in ipairs(mockState.csaMessages) do
+            if csa.mainText == RPQuest.Locale:Get("CSA_MAIL_DECODE_ERROR") then
+                foundErrorCsa = true
+                AssertEqual(csa.category, CSA_CATEGORY_LARGE_TEXT, "Decode error CSA uses large text category")
+                AssertEqual(csa.sound, SOUNDS.GENERAL_ALERT_ERROR, "Decode error CSA uses error sound")
+                AssertTrue(string.find(csa.subText or "", "@GermanSender", 1, true) ~= nil, "CSA subText includes sender name")
+                AssertTrue(string.find(csa.subText or "", RPQuest.Locale:Get("ERR_IMPORT_LANGUAGE_MISMATCH"), 1, true) ~= nil, "CSA subText includes localized error")
+            end
+        end
+        AssertTrue(foundErrorCsa, "Prominent CSA banner emitted for mail decode error")
+
+        local foundChatError = false
+        for _, chatMsg in ipairs(mockState.chatMessages) do
+            if string.find(chatMsg, RPQuest.Locale:Get("CSA_MAIL_DECODE_ERROR"), 1, true)
+                and string.find(chatMsg, "@GermanSender", 1, true) then
+                foundChatError = true
+            end
+        end
+        AssertTrue(foundChatError, "Persistent red chat error message emitted for mail decode error")
+
+        -- 2. Failed mail deleted from inbox AND subsequent valid mail still processed
+        AssertEqual(inbox[971], nil, "Failed language-mismatch mail removed from inbox")
+        AssertEqual(inbox[972], nil, "Subsequent valid mail also processed and removed from inbox")
+        AssertEqual(#deletedIds, 2, "Both failed mail and valid mail deleted when autoDeleteMail=true")
+        local received = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        AssertEqual(#received, 1, "Valid quest still ingested after failed mail cleanup")
+        AssertEqual(received[1].title, "Valid English Quest", "Valid quest title matches")
+
+        -- 3. When autoDeleteMail = false, failed mail is dismissed without calling DeleteMail
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
+        inbox[973] = { sender = "@SenderNoDel", charName = "NoDel", subject = "[RPQuest] Corrupt", body = "RPQ3:FFFF:badpayload", secs = 2 }
+        local deletedBefore = #deletedIds
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#deletedIds, deletedBefore, "DeleteMail NOT called for failed mail when autoDeleteMail=false")
+        AssertEqual(RPQuest.MailInbox._dismissedMailIds["973"], true, "Failed mail marked dismissed when autoDeleteMail=false")
+
+        -- 4. Multi-part failed RPQP mail cleans up all parts and incomplete entry
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+        local half = math.floor(#deCode / 2)
+        inbox[981] = { sender = "@MultiSender", charName = "Multi", subject = "[RPQuest 1/2] Fremde Quest", body = "RPQP:ABCD12:1/2\n" .. string.sub(deCode, 1, half), secs = 4 }
+        inbox[982] = { sender = "@MultiSender", charName = "Multi", subject = "[RPQuest 2/2] Fremde Quest", body = "RPQP:ABCD12:2/2\n" .. string.sub(deCode, half + 1), secs = 4 }
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(inbox[981], nil, "Multi-part failed mail part 1 deleted")
+        AssertEqual(inbox[982], nil, "Multi-part failed mail part 2 deleted")
+        AssertEqual(RPQuest.MailTransport:GetReceivedMailCount(), 0, "No stale incomplete entry left in _receivedMails")
+
+        _G.DeleteMail = origDeleteMail
+        mockState.language = prevLang or "en"
+        RPQuest.Locale:Initialize(mockState.language)
+    end)
+
 end

@@ -116,7 +116,7 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 worldX = hasLoc and tonumber(t.worldX) or nil,
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
-                locationRequired = (t.locationRequired == true),
+                locationRequired = hasLoc and (t.locationRequired == true) or false,
                 optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
             })
@@ -319,6 +319,9 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
     if not quest then return nil end
     if not repo:IsPreparedQuest(quest) then
         return nil, Addon.Locale:Get("ERR_CANNOT_EDIT_RECEIVED")
+    end
+    if quest.needsMigration then
+        return nil, Addon.Locale:Get("ERR_QUEST_NEEDS_MIGRATION")
     end
 
     repo.savedVars.draft = {

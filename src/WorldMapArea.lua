@@ -162,7 +162,7 @@ function WorldMapArea:Initialize()
 end
 
 function WorldMapArea:ShouldRenderOnCurrentMap(quest)
-    if not quest or quest.completed or quest.hideMapArea then
+    if not quest or quest.completed or quest.failed or quest.hideMapArea then
         return false
     end
 

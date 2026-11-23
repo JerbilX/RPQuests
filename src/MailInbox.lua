@@ -353,6 +353,9 @@ function MailInbox:ReportDecodeError(errorKey, errKey, senderDisplayName)
     if Addon.Announcements and Addon.Announcements.ShowAlert then
         Addon.Announcements:ShowAlert(msg, true)
     end
+    if Addon.Announcements and Addon.Announcements.AnnounceMailDecodeError then
+        Addon.Announcements:AnnounceMailDecodeError(msg, senderDisplayName)
+    end
     if Addon.MailTransport and Addon.MailTransport.NotifyListeners then
         Addon.MailTransport:NotifyListeners("MAIL_DECODE_ERROR", {
             mailId = errorKey,
@@ -374,6 +377,7 @@ function MailInbox:ProcessMailItem(mailId, senderDisplayName, senderCharacterNam
             local ok, errKey, errorKey = self:UpsertReceivedMail(mailId, senderDisplayName, senderCharacterName, subject, body, secsSinceReceived)
             if not ok and errKey then
                 self:ReportDecodeError(errorKey or mailId, errKey, senderDisplayName)
+                self:CleanupFailedQuestMail(mailId, errorKey)
             end
         else
             self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
@@ -390,9 +394,10 @@ function MailInbox:ScanInbox(requestOpen)
 
     local mailId = GetNextMailId(nil)
     while mailId ~= nil do
+        local nextMailId = GetNextMailId(mailId)
         local senderDisplayName, senderCharacterName, subject, _, _, _, _, _, _, _, _, _, secsSinceReceived = GetMailItemInfo(mailId)
         self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, true)
-        mailId = GetNextMailId(mailId)
+        mailId = nextMailId
     end
 
     return self._receivedMails
@@ -475,8 +480,7 @@ function MailInbox:RemoveEntryById(mailId)
     return entry
 end
 
-function MailInbox:DisposeEntryMails(entry)
-    local ids = (type(entry.mailIds) == "table" and #entry.mailIds > 0) and entry.mailIds or { entry.mailId }
+function MailInbox:DisposeMailIds(ids)
     local shouldDelete = Addon.QuestRepository:GetSetting("autoDeleteMail")
     for _, mid in ipairs(ids) do
         if shouldDelete then
@@ -485,6 +489,26 @@ function MailInbox:DisposeEntryMails(entry)
             self._dismissedMailIds[tostring(mid)] = true
         end
     end
+end
+
+function MailInbox:CleanupFailedQuestMail(mailId, errorKey)
+    local group = errorKey and self._partGroups and self._partGroups[errorKey]
+    if group then
+        local ids = {}
+        for _, mid in pairs(group.mailIds or {}) do
+            table.insert(ids, mid)
+        end
+        self:DisposeMailIds(ids)
+        self._partGroups[errorKey] = nil
+        self:RemoveEntryById(errorKey)
+        return
+    end
+    self:DisposeMailIds({ mailId })
+end
+
+function MailInbox:DisposeEntryMails(entry)
+    local ids = (type(entry.mailIds) == "table" and #entry.mailIds > 0) and entry.mailIds or { entry.mailId }
+    self:DisposeMailIds(ids)
     if self._partGroups and entry.idKey then
         self._partGroups[entry.idKey] = nil
     end
