@@ -646,10 +646,9 @@ local function UnpackQuestBinary(data)
         end
     end
     if pos <= len then
-        local rc, nextPos = BinaryCodec:ReadStr(data, pos, len)
+        local rc = BinaryCodec:ReadStr(data, pos, len)
         if rc then
             recipientCharacterName = rc
-            pos = nextPos
         end
     end
 
