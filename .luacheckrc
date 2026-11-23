@@ -11,7 +11,6 @@ exclude_files = {
 globals = {
     "RPQuest",
     "ESO_Dialogs",
-    "SLASH_COMMANDS",
     "ZO_MapPin",
 }
 
