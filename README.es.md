@@ -15,7 +15,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 ## Características Principales
 
-- **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuest** dentro del Diario de Misiones (`ZO_QuestJournal_Keyboard`) separando las listas de misiones **En preparación** (creadas por ti) y **Recibidas** (activas/jugables).
+- **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuest** dentro del Diario de Misiones (`ZO_QuestJournal_Keyboard`) con secciones en acordeón exclusivo para ofertas **Pendientes**, **Misiones** activas, **Completadas**, **Preparando** (borradores sin enviar) y **Enviadas** (contratos enviados con estado en vivo y resultados al completar).
 - **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de teclado (o `/rpquest capture`). Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones opcionales de ubicación (`Requerida` / `No requerida`), selector de objetivo `Opcional` (habilita completar manualmente la misión al cumplir los obligatorios) y mensajes personalizados al eliminarlos.
 - **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo (`Keybind` o `/rpquest discovery`) con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
@@ -55,7 +55,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
    - **Mismo idioma requerido:** Las misiones deben jugarse en un cliente del juego con el mismo idioma que el creador para que coincidan los nombres de NPCs y diálogos.
 3. **Jugar y Reporte Automático:**
    - Al aceptar la misión se activan inmediatamente el mini-tracker del HUD, el área en el Mapa Mundial y los diálogos inyectados en NPCs.
-   - Al aceptar, completar o rechazar la misión, RPQuest envía automáticamente el resultado por correo al Quest Master y actualiza su estado.
+   - Al aceptar, completar o rechazar la misión, RPQuest envía automáticamente el resultado por correo al Quest Master, moviendo el contrato a la sección **Enviadas** con su estado en vivo (`Enviada`, `Aceptada`, `Rechazada`, `Completada`) y resultados de finalización (como `No detectado` frente a `Detectado` y objetivos opcionales).
 
 ---
 

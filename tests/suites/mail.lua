@@ -1003,4 +1003,109 @@ return function(T)
         RPQuest.Announcements.ShowAlert = origShowAlert
     end)
 
+    RunTest("43. Issue #160: Sent accordion section & detail progress/results", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.JournalTab:Initialize()
+
+        mockState.reticleExists = true
+        mockState.reticleName = "Guard"
+        mockState.mapId = 32
+        mockState.zoneId = 381
+        mockState.mapName = "Auridon"
+        mockState.playerX = 0.5
+        mockState.playerY = 0.5
+
+        -- 1. Unsent draft stays in Preparing
+        RPQuest.TargetCapture:CaptureFromReticle()
+        local draftQuest = RPQuest.QuestRepository:SaveDraft("Unsent Draft", "Still preparing", nil, "", false, "@PlayerA")
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(draftQuest), "draft", "Draft starts with status 'draft'")
+
+        -- 2. Prepared quest with requireUndetected + optional target
+        RPQuest.TargetCapture:CaptureFromReticle()
+        RPQuest.QuestRepository:UpdateDraftTarget(1, { optional = true })
+        mockState.reticleName = "Captain"
+        RPQuest.TargetCapture:CaptureFromReticle()
+        local sentQuest = RPQuest.QuestRepository:SaveDraft("Sent Contract", "Stealth + optional", nil, "", true, "@PlayerB")
+
+        local function hasRowInSection(sectionKey, questId)
+            local inSection = false
+            for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+                if b.isHeader then
+                    inSection = (b.sectionKey == sectionKey)
+                elseif inSection and b.questId == questId then
+                    return true
+                end
+            end
+            return false
+        end
+
+        RPQuest.JournalTab:ToggleSection("preparing")
+        AssertEqual(hasRowInSection("preparing", draftQuest.id), true, "Unsent draft appears in Preparing")
+        AssertEqual(hasRowInSection("preparing", sentQuest.id), true, "Unsent contract appears in Preparing before send")
+
+        -- 3. MarkPreparedQuestSent emits QUEST_SENT, expands Sent, and moves quest out of Preparing
+        local okSent = RPQuest.QuestRepository:MarkPreparedQuestSent(sentQuest.id, "@PlayerB")
+        AssertEqual(okSent, true, "MarkPreparedQuestSent succeeds")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, false, "Sent section expands on QUEST_SENT")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing collapses when Sent expands")
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Sent quest appears in Sent section")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Sent", 1, true) ~= nil, "Detail status shows Sent")
+
+        -- 4. Accepted state stays in Sent and shows Accepted
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1001,
+            completed = false,
+            accepted = true,
+            resultType = "accepted",
+        })
+        RPQuest.JournalTab:SelectQuest(sentQuest.id)
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Accepted quest stays in Sent section")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Accepted", 1, true) ~= nil, "Detail status shows Accepted")
+
+        -- 5. Rejected state stays in Sent and shows Rejected
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1002,
+            completed = false,
+            resultType = "rejected",
+        })
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Rejected quest stays in Sent section")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Rejected", 1, true) ~= nil, "Detail status shows Rejected")
+
+        -- 6. Completed undetected with optional fulfilled
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1003,
+            completed = true,
+            resultType = "completed",
+            wasDetected = false,
+            optionalTargets = { true },
+        })
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Completed sent quest stays in Sent section")
+        local statusUndetected = RPQuest.JournalTab.detailStatus:GetText()
+        AssertTrue(statusUndetected:find("Completed", 1, true) ~= nil, "Detail status shows Completed")
+        AssertTrue(statusUndetected:find("Undetected", 1, true) ~= nil, "Detail status shows Undetected result")
+        AssertTrue(statusUndetected:find("1/1", 1, true) ~= nil, "Detail status shows optional 1/1 result")
+        local objUndetected = RPQuest.JournalTab.detailObjText:GetText()
+        AssertTrue(objUndetected:find("Undetected", 1, true) ~= nil, "Objective lines reflect Undetected completion result")
+        AssertTrue(objUndetected:find("(Completed)", 1, true) ~= nil, "Objective lines reflect completed targets")
+
+        -- 7. Completed detected with optional missed
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1004,
+            completed = true,
+            resultType = "completed",
+            wasDetected = true,
+            optionalTargets = { false },
+        })
+        local statusDetected = RPQuest.JournalTab.detailStatus:GetText()
+        AssertTrue(statusDetected:find("Detected", 1, true) ~= nil, "Detail status shows Detected result")
+        AssertTrue(statusDetected:find("0/1", 1, true) ~= nil, "Detail status shows optional 0/1 result")
+        local objDetected = RPQuest.JournalTab.detailObjText:GetText()
+        AssertTrue(objDetected:find("Detected", 1, true) ~= nil, "Objective lines reflect Detected completion result")
+    end)
+
 end
