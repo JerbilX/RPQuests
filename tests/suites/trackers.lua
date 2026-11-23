@@ -631,4 +631,109 @@ return function(T)
         _G.GetUnitWorldPosition = origGetWorldPos
     end)
 
+    RunTest("WorldMapArea: zoom-out reference marker on parent/world maps, hidden on target map and when untracked", function()
+        RPQuest.QuestRepository:Initialize({})
+        RPQuest.WorldMapArea:Initialize()
+
+        mockState.reticleExists = true
+        mockState.reticleIsPlayer = false
+        mockState.reticleIsDead = false
+        mockState.reticleName = "Mercenario"
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_SUBZONE
+        mockState.zoneId = 104
+        mockState.mapName = "Mournhold"
+        mockState.playerX = 0.42
+        mockState.playerY = 0.61
+        mockState.worldX = 25000
+        mockState.worldY = 100
+        mockState.worldZ = 35000
+        mockState.projectedPositions = {
+            [44] = { x = 0.55, y = 0.48 },   -- Parent zone (Deshaan)
+            [27] = { x = 0.78, y = 0.36 },   -- World map (Tamriel)
+            [99] = { x = 1.25, y = -0.10 },  -- Out of bounds unrelated map
+        }
+
+        local draft = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertTrue(draft ~= nil, "Draft captured")
+        AssertEqual(draft.worldX, 25000, "Draft captures worldX")
+        AssertEqual(draft.worldZ, 35000, "Draft captures worldZ")
+
+        local quest = RPQuest.QuestRepository:SaveDraft("Rastreo en Mournhold", "Busca al mercenario.", 0.10)
+        AssertTrue(quest ~= nil, "Quest saved")
+        AssertEqual(quest.worldX, 25000, "Saved quest persists worldX")
+        AssertEqual(quest.worldZ, 35000, "Saved quest persists worldZ")
+
+        RPQuest.QuestRepository:SetActiveQuest(quest.id)
+
+        -- 1. On target map (mapId 45): only search area pin, NO zoom-out pin
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_SUBZONE
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Only 1 pin rendered on target mapId")
+        AssertEqual(mockPinManager._createdPins[1].pinTypeId, RPQuest.WorldMapArea.pinTypeId, "Target map renders search area pin only")
+
+        -- 2. Zoom out to parent zone (mapId 44, MAPTYPE_ZONE): zoom-out pin with projected coords + pulse animation
+        mockState.mapId = 44
+        mockState.mapType = MAPTYPE_ZONE
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Zoom-out reference pin rendered on parent zone map")
+        local zonePin = mockPinManager._createdPins[1]
+        AssertEqual(zonePin.pinTypeId, RPQuest.WorldMapArea.zoomOutPinTypeId, "Parent zone renders zoom-out pin type")
+        AssertEqual(zonePin.x, 0.55, "Projected X matches parent zone")
+        AssertEqual(zonePin.y, 0.48, "Projected Y matches parent zone")
+        AssertEqual(zonePin.radius, nil, "Zoom-out pin has no search area radius")
+        AssertEqual(#zonePin.pingAnimations, 1, "Zoom-out pin triggers pulse animation")
+        AssertEqual(zonePin.pingAnimations[1], ZO_MapPin.PulseAnimation, "Zoom-out pin uses ZO_MapPin.PulseAnimation")
+
+        -- 3. Zoom out to world map (mapId 27, MAPTYPE_WORLD): zoom-out pin still renders
+        mockState.mapId = 27
+        mockState.mapType = MAPTYPE_WORLD
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Zoom-out reference pin rendered on world map")
+        AssertEqual(mockPinManager._createdPins[1].pinTypeId, RPQuest.WorldMapArea.zoomOutPinTypeId, "World map renders zoom-out pin")
+        AssertEqual(mockPinManager._createdPins[1].x, 0.78, "Projected X matches world map")
+        AssertEqual(mockPinManager._createdPins[1].y, 0.36, "Projected Y matches world map")
+
+        -- 4. Cosmic map (MAPTYPE_COSMIC): no zoom-out pin
+        mockState.mapType = MAPTYPE_COSMIC
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 0, "No zoom-out pin on cosmic map")
+
+        -- 5. Unrelated map with out-of-bounds projection: no zoom-out pin
+        mockState.mapId = 99
+        mockState.mapType = MAPTYPE_ZONE
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 0, "No zoom-out pin when projected coordinates are out of bounds")
+
+        -- 6. Zoom back in to target map (mapId 45): zoom-out pin disappears, search area pin returns
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_SUBZONE
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Only 1 pin rendered after zooming back in")
+        AssertEqual(mockPinManager._createdPins[1].pinTypeId, RPQuest.WorldMapArea.pinTypeId, "Zoom-in restores search area pin only")
+
+        -- 7. Clear active quest while zoomed out: zoom-out pin disappears
+        mockState.mapId = 27
+        mockState.mapType = MAPTYPE_WORLD
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Zoom-out pin shown before untracking")
+        RPQuest.QuestRepository:SetActiveQuest(nil)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 0, "Zoom-out pin hidden when quest is untracked")
+
+        -- 8. Fallback: quest without quest.worldX uses target/discovery worldX for zoom-out projection
+        local legacyQuest = RPQuest.QuestRepository:BuildQuestRecord(999, "Legacy", "Desc", {
+            { name = "Bandit", requiredCount = 1, zoneId = 104, worldX = 25000, worldZ = 35000 },
+        }, { mapId = 45, zoneId = 104, areaCenterX = 0.4, areaCenterY = 0.6, areaRadius = 0.1 })
+        table.insert(RPQuest.QuestRepository.savedVars.quests, legacyQuest)
+        RPQuest.QuestRepository._questById[legacyQuest.id] = legacyQuest
+        RPQuest.QuestRepository:SetActiveQuest(legacyQuest.id)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Fallback target world coordinates project zoom-out pin")
+        AssertEqual(mockPinManager._createdPins[1].pinTypeId, RPQuest.WorldMapArea.zoomOutPinTypeId, "Fallback renders zoom-out pin")
+
+        mockState.projectedPositions = nil
+    end)
+
 end

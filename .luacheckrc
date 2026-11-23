@@ -67,6 +67,7 @@ read_globals = {
     "GetMapPlayerPosition",
     "GetMapType",
     "GetNextMailId",
+    "GetNormalizedWorldPosition",
     "GetString",
     "GetTimeStamp",
     "GetUnitDisplayName",
