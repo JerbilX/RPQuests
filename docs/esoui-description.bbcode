@@ -5,8 +5,8 @@ A native, [B]zero-dependency[/B] add-on for [B]The Elder Scrolls Online[/B] that
 
 [SIZE="3"][B]Key Features[/B][/SIZE]
 [LIST]
-[*][B]Native Quest Journal Integration (J):[/B] Adds a dedicated [B]RPQuest[/B] tab inside the standard Quest Journal with separate [B]Prepared[/B] (authored) and [B]Received[/B] (active/playable) quest lists.
-[*][B]Reticle NPC Target Capture:[/B] Aim at any living NPC and press your keybind to register objectives automatically. Capturing the same NPC name multiple times stacks into [I]Imp x3[/I]; different named NPCs are tracked individually, with optional per-target location conditions ([I]Required[/I] / [I]Not Required[/I]) and custom elimination messages.
+[*][B]Native Quest Journal Integration (J):[/B] Adds a dedicated [B]RPQuest[/B] tab inside the standard Quest Journal with exclusive accordion sections for [B]Pending[/B], [B]Quests[/B], [B]Completed[/B], [B]Preparing[/B], and [B]Sent[/B].
+[*][B]Reticle NPC Target Capture:[/B] Aim at any living NPC and press your keybind to register objectives automatically. Capturing the same NPC name multiple times stacks into [I]Imp x3[/I]; different named NPCs are tracked individually, with optional per-target location conditions ([I]Required[/I] / [I]Not Required[/I]), an [I]Optional[/I] objective toggle, and custom elimination messages.
 [*][B]Hidden Discovery Points:[/B] Capture in-world exploration coordinates with configurable trigger radii ([I]Small[/I], [I]Medium[/I], [I]Large[/I]) without cluttering the map or compass with spoilers.
 [*][B]Optional Stealth / Undetected Condition:[/B] Require players to complete objectives without being detected in combat.
 [*][B]World Map Search Area (M):[/B] Displays an approximate search circle on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
@@ -14,7 +14,7 @@ A native, [B]zero-dependency[/B] add-on for [B]The Elder Scrolls Online[/B] that
 [*][B]Combat & Discovery Tracking + Native Alerts:[/B] Tracks kills and exploration proximity, triggering native Center Screen Announcements and official quest sounds.
 [*][B]HUD Mini-Tracker:[/B] Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
 [*][B]1-to-1 In-Game Mail Flow (No Copy/Paste):[/B] Assign a single [I]@AccountName[/I] recipient directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts via [I]RPQP[/I] on the same megaserver). Incoming quest mails are automatically ingested into the player's [B]Pending[/B] list with an alert and [B]Accept[/B] / [B]Reject[/B] buttons. Completing or rejecting a quest automatically mails the result back to the Quest Master, updating the prepared quest status ([I]Draft[/I] / [I]Sent[/I] / [I]Completed[/I] / [I]Rejected[/I]).
-[*][B]Per-Character Persistence & Auto-Localization:[/B] Stores progress per character via SavedVariables and auto-detects client language (English / Spanish).
+[*][B]Account-Wide Persistence & Auto-Localization:[/B] Stores quests and progress account-wide via SavedVariables (matching ESO's account-wide mail, with automatic migration from legacy per-character data) and auto-detects client language (English / Spanish).
 [/LIST]
 
 [SIZE="3"][B]Keybinds (Settings -> Controls -> RPQuest)[/B][/SIZE]
@@ -29,6 +29,41 @@ A native, [B]zero-dependency[/B] add-on for [B]The Elder Scrolls Online[/B] that
 [*][B]Create a Quest:[/B] Open the Quest Journal ([B]J[/B]), switch to the [B]RPQuest[/B] tab, and click [B]Create Quest[/B]. Use the collapsible sections to set Title, Description, Search Area size, optional Stealth condition, and optional NPC Dialogue lines. Aim at NPCs or stand at discovery spots and press your keybinds.
 [*][B]Send to a Player:[/B] Set the recipient [I]@AccountName[/I] in the quest editor and click [B]Send Quest[/B]. The player receives an alert and can [B]Accept[/B] or [B]Reject[/B] the quest directly from the [B]Pending[/B] section in their [B]RPQuest[/B] tab. Note: quests require the same game client language as the creator so NPC objectives and dialogues match.
 [*][B]Play & Auto-Report:[/B] Accepting the quest activates the HUD mini-tracker, World Map search area, and injected NPC dialogues immediately. Upon completion or rejection, the result is automatically mailed back to the Quest Master.
+[/LIST]
+
+[SIZE="3"][B]How to Use / Guide[/B][/SIZE]
+
+[B]1. Roles: Quest Master vs. Player[/B]
+[LIST]
+[*][B]Quest Master (Creator):[/B] Authors custom quests in the [B]Preparing[/B] section, captures NPC targets or discovery spots in the world, configures optional rules or dialogues, and dispatches contracts to a player via in-game mail. Once sent, the Quest Master tracks live progress and final outcomes in the [B]Sent[/B] section.
+[*][B]Player (Recipient):[/B] Receives quest offers in the [B]Pending[/B] section, reviews the briefing, and chooses [B]Accept[/B] or [B]Reject[/B]. Active quests are tracked automatically in-world, and results are mailed back to the Quest Master with zero manual copy/paste.
+[/LIST]
+
+[B]2. Journal Sections (Exclusive Accordion)[/B]
+The [B]RPQuest[/B] tab inside your Quest Journal ([B]J[/B]) uses an exclusive accordion—expanding one section collapses the others so your list stays tidy:
+[LIST]
+[*][B]Pending:[/B] Incoming quest offers waiting for you to [B]Accept[/B] or [B]Reject[/B].
+[*][B]Quests:[/B] Your currently accepted and active quests. Select a quest to view objectives, toggle tracking, or manually complete it once all mandatory objectives are done.
+[*][B]Completed:[/B] Archive of finished quests you have played, including final stealth and optional objective outcomes.
+[*][B]Preparing:[/B] Unsent quest drafts you are creating or editing as a Quest Master.
+[*][B]Sent:[/B] Contracts you have already mailed to players, showing live status ([I]Sent[/I], [I]Accepted[/I], [I]Rejected[/I], [I]Completed[/I]) and automatic completion results (such as [I]Undetected[/I] vs [I]Detected[/I] and optional objectives).
+[/LIST]
+
+[B]3. Quest Building Blocks[/B]
+[LIST]
+[*][B]Targets (NPC Elimination):[/B] Aim at any living NPC and press your [B]Capture Target under Reticle[/B] keybind. Capturing the same NPC name multiple times stacks into a count (e.g. [I]Imp x3[/I]); different named NPCs become separate objectives. For each target, you can toggle a [B]Location[/B] condition ([I]Required[/I] in the captured zone/subzone or [I]Not Required[/I]), add a custom elimination message, or mark the objective as [B]Optional[/B] (allowing the player to finish the quest once all mandatory objectives are complete).
+[*][B]Hidden Discovery Points:[/B] Stand at an exploration spot and press your [B]Capture Discovery Point[/B] keybind. You can configure the trigger radius ([I]Small[/I], [I]Medium[/I], or [I]Large[/I]). Discovery points remain hidden on the map and compass to avoid spoilers.
+[*][B]Stealth (Undetected):[/B] Enable [B]Undetected (Optional)[/B] in the quest editor to challenge the player to complete the quest without being detected in combat. The quest tracks whether the player remained [I]Undetected[/I] or was [I]Detected[/I] and reports that outcome to the Quest Master.
+[*][B]World Map Search Area (M):[/B] Displays an approximate search circle on the World Map using a fixed random offset so the objective stays inside the circle without giving away its exact center. The circle clears automatically when the quest is completed or deactivated.
+[*][B]NPC Dialogues:[/B] Open dialogue ([B]E[/B]) with up to 3 native ESO NPCs to capture them into the quest's [B]NPC Dialogues[/B] section, then write a custom player response option and NPC reply for each. When the player speaks to those NPCs, your custom line is injected seamlessly into the native dialogue window without modifying original game options.
+[/LIST]
+
+[B]4. In-Game Mail Flow (Automatic)[/B]
+[LIST]
+[*][B]Sending:[/B] Enter the recipient's [I]@AccountName[/I] (and optional character name) in the quest editor and click [B]Send Quest[/B]. Both players must be on the same megaserver (e.g. PC-NA or PC-EU) and use the same client language. Larger quests are split automatically across up to 6 mail parts and reassembled on arrival.
+[*][B]Arrival Announcement:[/B] When a quest mail arrives, RPQuest ingests it automatically and displays an on-screen announcement alerting the player that a new quest is waiting in [B]Pending[/B].
+[*][B]Accepting & Rejecting:[/B] Clicking [B]Accept[/B] activates the quest, HUD mini-tracker, World Map search area, and NPC dialogues, and notifies the Quest Master. Clicking [B]Reject[/B] declines the offer and notifies the Quest Master.
+[*][B]Completion Reporting:[/B] When the player finishes all objectives (or manually completes a quest with only optional objectives remaining), RPQuest automatically mails the completion report back to the Quest Master and updates the contract in [B]Sent[/B].
 [/LIST]
 
 [SIZE="3"][B]Requirements[/B][/SIZE]

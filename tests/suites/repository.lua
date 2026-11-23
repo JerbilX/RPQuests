@@ -129,7 +129,7 @@ return function(T)
         AssertEqual(legacy.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Legacy quest without role migrates to received")
 
         RPQuest.JournalTab:Initialize()
-        RPQuest.JournalTab.collapsedSections = { missions = false, completed = true, preparing = true }
+        RPQuest.JournalTab.collapsedSections = { missions = false, completed = true, preparing = true, sent = true }
         RPQuest.JournalTab:Refresh()
         -- Sin misiones en preparación, la sección PREPARANDO no aparece en el árbol
         local hasPreparingHeader = false
@@ -451,6 +451,221 @@ return function(T)
             AssertEqual(repoRes, c.expected, "QuestRepository:NormalizeAccountName(" .. label .. ")")
             AssertEqual(mailRes, c.expected, "MailTransport:NormalizeDisplayName(" .. label .. ")")
         end
+    end)
+
+    RunTest("QuestRepository:MigrateCharacterSavedVars migrates multiple characters non-destructively and resolves ID collisions", function()
+        local rawRoot = {
+            Default = {
+                ["@TestPlayer"] = {
+                    ["char-A"] = {
+                        nextId = 3,
+                        activeQuestId = 2,
+                        quests = {
+                            { id = 1, title = "Char A Prepared", description = "Desc A1", role = "prepared", targets = {}, discoveries = {} },
+                            { id = 2, title = "Char A Received", description = "Desc A2", role = "received", targets = {}, discoveries = {} },
+                        },
+                        ingestedMailIds = { ["mail-100"] = true },
+                        settings = { autoDeleteMail = false, autoAcceptMail = true, autoSendCompletionMail = false },
+                        draft = { title = "Draft A", description = "In progress", targets = {}, discoveries = {}, dialogues = {}, editingQuestId = 1 },
+                    },
+                    ["char-B"] = {
+                        nextId = 2,
+                        activeQuestId = 1,
+                        quests = {
+                            { id = 1, title = "Char B Quest", description = "Desc B1", role = "prepared", targets = {}, discoveries = {} },
+                        },
+                        ingestedMailIds = { ["mail-200"] = true },
+                        settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = true },
+                    },
+                },
+            },
+        }
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        local migrated = RPQuest.QuestRepository:MigrateCharacterSavedVars(rawRoot, "@TestPlayer", sv, "char-A")
+        AssertEqual(migrated, 3, "Migrated all 3 quests across both characters")
+        AssertEqual(#sv.quests, 3, "Account-wide quests table has 3 quests")
+        AssertEqual(sv.nextId, 4, "nextId advanced past resolved collision ID")
+        AssertEqual(sv.activeQuestId, 2, "Current character activeQuestId preserved")
+        AssertTrue(sv.ingestedMailIds["mail-100"] == true, "Char A ingestedMailIds merged")
+        AssertTrue(sv.ingestedMailIds["mail-200"] == true, "Char B ingestedMailIds merged")
+        AssertEqual(sv.settings.autoDeleteMail, false, "Current character settings preserved")
+        AssertEqual(sv.settings.autoAcceptMail, true, "Current character autoAcceptMail preserved")
+        AssertEqual(sv.draft.title, "Draft A", "Current character draft preserved")
+        AssertEqual(sv.draft.editingQuestId, 1, "Draft editingQuestId preserved")
+
+        -- Verify IDs are unique
+        local seenIds = {}
+        for _, q in ipairs(sv.quests) do
+            AssertTrue(not seenIds[q.id], "Quest ID " .. tostring(q.id) .. " is unique")
+            seenIds[q.id] = true
+        end
+
+        -- Verify original character tables are untouched (non-destructive)
+        AssertEqual(#rawRoot.Default["@TestPlayer"]["char-A"].quests, 2, "Original char-A quests preserved")
+        AssertEqual(#rawRoot.Default["@TestPlayer"]["char-B"].quests, 1, "Original char-B quests preserved")
+
+        -- Verify idempotency: running migration again does not duplicate
+        local secondRun = RPQuest.QuestRepository:MigrateCharacterSavedVars(rawRoot, "@TestPlayer", sv, "char-B")
+        AssertEqual(secondRun, 0, "Second migration run is idempotent (0 quests added)")
+        AssertEqual(#sv.quests, 3, "Quest count remains 3 after second migration")
+    end)
+
+    RunTest("Account-wide SavedVars allows Character B to find and update quest prepared on Character A", function()
+        local rawRoot = {
+            Default = {
+                ["@TestPlayer"] = {
+                    ["char-A"] = {
+                        nextId = 2,
+                        quests = {
+                            {
+                                id = 1,
+                                title = "Cross-Char Contract",
+                                description = "Sent from Char A",
+                                role = "prepared",
+                                targets = { { name = "Bandit", requiredCount = 1, currentCount = 0 } },
+                                discoveries = {},
+                                deliveries = {},
+                            },
+                        },
+                    },
+                },
+            },
+        }
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:MigrateCharacterSavedVars(rawRoot, "@TestPlayer", sv, "char-B")
+        RPQuest.QuestRepository:Initialize(sv)
+
+        local found = RPQuest.QuestRepository:GetQuestById(1)
+        AssertTrue(found ~= nil, "Character B finds quest prepared on Character A")
+        AssertEqual(found.title, "Cross-Char Contract", "Quest title matches")
+
+        local delivery = RPQuest.QuestRepository:RecordMailDelivery(1, "@Recipient", {
+            characterName = "RecipientAlt",
+            completedAt = 1234567890,
+            completed = true,
+            wasDetected = false,
+        })
+        AssertTrue(delivery ~= nil, "Character B records completion delivery on quest prepared by Character A")
+        AssertEqual(#found.deliveries, 1, "Delivery recorded on shared quest")
+    end)
+
+    RunTest("Optional objectives: manual completion when mandatory satisfied, auto-complete when all satisfied", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.QuestRepository:SetDraftCapturedTarget({ targetName = "Boss", mapId = 1, zoneId = 2, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({ targetName = "BonusGuard", mapId = 1, zoneId = 2, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        local draft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(draft.targets[1].optional, false, "Captured target defaults to optional=false")
+        RPQuest.QuestRepository:UpdateDraftTarget(2, { optional = true })
+
+        local prepared = RPQuest.QuestRepository:SaveDraft("Optional Test", "Desc")
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master")
+        RPQuest.QuestRepository:SetActiveQuest(imported.id)
+
+        AssertEqual(RPQuest.QuestRepository:CanManuallyCompleteQuest(imported), false, "Cannot manually complete before mandatory target")
+
+        -- Eliminate mandatory target only
+        local ok, q1, justCompleted = RPQuest.QuestRepository:RecordTargetEliminated("Boss")
+        AssertEqual(ok, true, "Mandatory target recorded")
+        AssertEqual(justCompleted, false, "Quest does not auto-complete while optional target remains")
+        AssertEqual(q1.completed, false, "Quest still incomplete")
+        AssertEqual(RPQuest.QuestRepository:CanManuallyCompleteQuest(q1), true, "Can manually complete once mandatory target is done")
+
+        -- Complete manually
+        local completedEventFired = false
+        RPQuest.QuestRepository:RegisterListener(function(ev)
+            if ev == "QUEST_COMPLETED" then
+                completedEventFired = true
+            end
+        end)
+        local compOk, compQ = RPQuest.QuestRepository:CompleteQuest(q1.id)
+        AssertEqual(compOk, true, "CompleteQuest succeeds")
+        AssertEqual(compQ.completed, true, "Quest marked completed")
+        AssertEqual(completedEventFired, true, "QUEST_COMPLETED event fired on manual completion")
+        AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Active quest cleared after manual completion")
+
+        -- Reset and complete both mandatory and optional -> auto-completes seamlessly
+        RPQuest.QuestRepository:ResetQuest(compQ.id)
+        RPQuest.QuestRepository:SetActiveQuest(compQ.id)
+        RPQuest.QuestRepository:RecordTargetEliminated("Boss")
+        local ok2, q2, justCompleted2 = RPQuest.QuestRepository:RecordTargetEliminated("BonusGuard")
+        AssertEqual(ok2, true, "Optional target recorded")
+        AssertEqual(justCompleted2, true, "Quest auto-completes when all targets including optional are done")
+        AssertEqual(q2.completed, true, "Quest completed")
+    end)
+
+    RunTest("22. Issue 158: Exclusive accordion in JournalTab quest list", function()
+        local roles = RPQuest.Constants.QUEST_ROLE
+        local statuses = RPQuest.Constants.QUEST_STATUS
+        RPQuest.QuestRepository:Initialize({
+            activeQuestId = 1,
+            quests = {
+                { id = 1, title = "Active Mission", description = "", role = roles.RECEIVED, completed = false },
+                { id = 2, title = "Pending Offer", description = "", role = roles.RECEIVED, status = statuses.OFFERED, completed = false },
+                { id = 3, title = "Completed Mission", description = "", role = roles.RECEIVED, completed = true },
+                { id = 4, title = "Prepared Mission", description = "", role = roles.PREPARED, completed = false },
+                { id = 5, title = "Sent Mission", description = "", role = roles.PREPARED, sentTo = "@Recipient", completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true }
+        RPQuest.JournalTab:SelectQuest(1)
+
+        local function hasRowForQuest(questId)
+            for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+                if b.questId == questId then return true end
+            end
+            return false
+        end
+
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "Missions starts expanded")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.pending, true, "Pending starts collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed starts collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing starts collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, true, "Sent starts collapsed")
+        AssertEqual(hasRowForQuest(1), true, "Active mission row is visible initially")
+        AssertEqual(hasRowForQuest(2), false, "Pending quest row is hidden initially")
+
+        -- Clicking Pending while an active/selected quest is in Missions collapses Missions and expands Pending
+        RPQuest.JournalTab:ToggleSection("pending")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.pending, false, "Pending expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, true, "Missions collapses when Pending expands")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed remains collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing remains collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, true, "Sent remains collapsed")
+        AssertEqual(hasRowForQuest(2), true, "Pending quest row is visible after expanding Pending")
+        AssertEqual(hasRowForQuest(1), false, "Missions quest row is hidden even though it is active/selected")
+
+        -- Expanding Preparing collapses Pending and only shows unsent drafts
+        RPQuest.JournalTab:ToggleSection("preparing")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "Preparing expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.pending, true, "Pending collapses when Preparing expands")
+        AssertEqual(hasRowForQuest(4), true, "Prepared draft row is visible")
+        AssertEqual(hasRowForQuest(5), false, "Sent quest row is NOT in Preparing")
+        AssertEqual(hasRowForQuest(2), false, "Pending quest row is hidden")
+
+        -- Expanding Sent collapses Preparing and shows sent quests
+        RPQuest.JournalTab:ToggleSection("sent")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, false, "Sent expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing collapses when Sent expands")
+        AssertEqual(hasRowForQuest(5), true, "Sent quest row is visible in Sent")
+        AssertEqual(hasRowForQuest(4), false, "Prepared draft row is hidden")
+
+        -- Expanding Completed collapses Sent
+        RPQuest.JournalTab:ToggleSection("completed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, false, "Completed expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, true, "Sent collapses when Completed expands")
+        AssertEqual(hasRowForQuest(3), true, "Completed quest row is visible")
+        AssertEqual(hasRowForQuest(5), false, "Sent quest row is hidden")
+
+        -- Expanding Missions again collapses Completed
+        RPQuest.JournalTab:ToggleSection("missions")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "Missions expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed collapses when Missions expands")
+        AssertEqual(hasRowForQuest(1), true, "Active mission row is visible again")
+        AssertEqual(hasRowForQuest(3), false, "Completed quest row is hidden")
     end)
 
 end

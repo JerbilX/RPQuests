@@ -452,4 +452,8 @@ ZO_SavedVars = ZO_SavedVars or {
     end,
 }
 
+GetCurrentCharacterId = GetCurrentCharacterId or function()
+    return "char-test-1"
+end
+
 return M

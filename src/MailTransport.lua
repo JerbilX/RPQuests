@@ -21,6 +21,7 @@ local PART_HEADER_RESERVE = 16
 local QUEST_SUBJECT_PREFIX = "[RPQuest] "
 local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
 local REJECTION_SUBJECT_PREFIX = "[RPQuest:Rejected] "
+local ACCEPTANCE_SUBJECT_PREFIX = "[RPQuest:Accepted] "
 local MAILBOX_OPEN_TIMEOUT_MS = 10000
 local MAIL_SEND_TIMEOUT_MS = 15000
 
@@ -92,6 +93,16 @@ function MailTransport:Initialize()
                     local sender = self:NormalizeDisplayName(payload.senderDisplayName)
                     if sender ~= "" then
                         local ok, errKey = self:SendRejectionReport(payload)
+                        if not ok and errKey then
+                            self:NotifySendError(sender, errKey)
+                        end
+                    end
+                end
+            elseif evType == "QUEST_ACCEPTED" and type(payload) == "table" then
+                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED then
+                    local sender = self:NormalizeDisplayName(payload.senderDisplayName)
+                    if sender ~= "" then
+                        local ok, errKey = self:SendAcceptanceReport(payload)
                         if not ok and errKey then
                             self:NotifySendError(sender, errKey)
                         end
@@ -394,6 +405,16 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
         return false, "ERR_MAIL_SELF_RECIPIENT"
     end
 
+    if type(quest.senderCharacterName) ~= "string" or quest.senderCharacterName == "" then
+        local playerChar = Addon.QuestRepository:GetPlayerCharacterName()
+        if playerChar ~= "" then
+            quest.senderCharacterName = playerChar
+            if Addon.QuestRepository._shareCodeCache then
+                Addon.QuestRepository._shareCodeCache[quest.id] = nil
+            end
+        end
+    end
+
     local questCode = Addon.QuestRepository:ExportQuestToCode(quest.id)
     if not questCode or questCode == "" then
         return false, "ERR_INVALID_CODE"
@@ -458,7 +479,7 @@ function MailTransport:DispatchNextQueuedMail()
     SendMail(nextItem.to, nextItem.subject, nextItem.body)
 end
 
-function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, isRejection)
+function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, resultType)
     local recipient = self:NormalizeDisplayName(quest.senderDisplayName)
     if recipient == "" then
         return false, "ERR_MAIL_NO_RECIPIENTS"
@@ -467,12 +488,18 @@ function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, isRejection
         return false, "ERR_MAIL_SELF_RECIPIENT"
     end
 
+    local kind = resultType
+    if type(resultType) == "boolean" then
+        kind = resultType and "rejected" or "completed"
+    end
+
     local item = {
         to = recipient,
         subject = subjectPrefix .. (quest.title or "RPQuest"),
         body = code,
-        completionQuestId = (not isRejection) and quest.id or nil,
-        rejectionQuestId = isRejection and quest.id or nil,
+        completionQuestId = (kind == "completed") and quest.id or nil,
+        rejectionQuestId = (kind == "rejected") and quest.id or nil,
+        acceptanceQuestId = (kind == "accepted") and quest.id or nil,
     }
 
     if self._isSending then
@@ -501,7 +528,7 @@ function MailTransport:SendCompletionReport(quest)
     if not rpqc1Code or rpqc1Code == "" then
         return false, err or "ERR_INVALID_CODE"
     end
-    return self:EnqueueResultMail(quest, COMPLETION_SUBJECT_PREFIX, rpqc1Code, false)
+    return self:EnqueueResultMail(quest, COMPLETION_SUBJECT_PREFIX, rpqc1Code, "completed")
 end
 
 function MailTransport:SendRejectionReport(quest)
@@ -512,7 +539,18 @@ function MailTransport:SendRejectionReport(quest)
     if not rpqc1Code or rpqc1Code == "" then
         return false, err or "ERR_INVALID_CODE"
     end
-    return self:EnqueueResultMail(quest, REJECTION_SUBJECT_PREFIX, rpqc1Code, true)
+    return self:EnqueueResultMail(quest, REJECTION_SUBJECT_PREFIX, rpqc1Code, "rejected")
+end
+
+function MailTransport:SendAcceptanceReport(quest)
+    if type(quest) ~= "table" then
+        return false, "ERR_INVALID_CODE"
+    end
+    local rpqc1Code, err = Addon.QuestRepository:ExportAcceptanceCode(quest)
+    if not rpqc1Code or rpqc1Code == "" then
+        return false, err or "ERR_INVALID_CODE"
+    end
+    return self:EnqueueResultMail(quest, ACCEPTANCE_SUBJECT_PREFIX, rpqc1Code, "accepted")
 end
 
 function MailTransport:OnMailSendSuccess(_playerName)

@@ -4,6 +4,7 @@
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
+-- Ref: docs/adr/0012-savedvars-account-wide-y-migracion-por-personaje.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -32,6 +33,16 @@ function QuestRepository:NormalizeAccountName(raw)
         clean = "@" .. clean
     end
     return clean
+end
+
+function QuestRepository:NormalizeCharacterName(raw)
+    if type(raw) ~= "string" then return "" end
+    local clean = raw:gsub("%^%a+$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    return clean
+end
+
+function QuestRepository:GetPlayerCharacterName()
+    return self:NormalizeCharacterName(GetUnitName("player"))
 end
 
 function QuestRepository:FormatTargetEntry(target)
@@ -71,6 +82,40 @@ local function AreAllTargetsCompleted(targets)
     return true
 end
 
+local function HasOptionalTargets(targets)
+    if type(targets) ~= "table" then
+        return false
+    end
+    for _, t in ipairs(targets) do
+        if t.optional == true then
+            return true
+        end
+    end
+    return false
+end
+
+local function AreMandatoryTargetsCompleted(targets)
+    if type(targets) ~= "table" then
+        return true, false, false
+    end
+    local hasMandatory = false
+    local anyOptionalDone = false
+    for _, t in ipairs(targets) do
+        local done = (t.currentCount or 0) >= (t.requiredCount or 1)
+        if t.optional == true then
+            if done then
+                anyOptionalDone = true
+            end
+        else
+            hasMandatory = true
+            if not done then
+                return false, true, anyOptionalDone
+            end
+        end
+    end
+    return true, hasMandatory, anyOptionalDone
+end
+
 local function AreAllDiscoveriesCompleted(discoveries)
     if type(discoveries) ~= "table" or #discoveries == 0 then
         return false
@@ -98,6 +143,44 @@ function QuestRepository:AreAllObjectivesCompleted(targets, discoveries)
     return true
 end
 
+function QuestRepository:CanManuallyCompleteQuest(quest)
+    if not quest or quest.completed or quest.failed or self:IsOfferedQuest(quest) then
+        return false
+    end
+    if not HasOptionalTargets(quest.targets) then
+        return false
+    end
+    if self:AreAllObjectivesCompleted(quest.targets, quest.discoveries) then
+        return false
+    end
+    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
+    if hasDiscoveries and not AreAllDiscoveriesCompleted(quest.discoveries) then
+        return false
+    end
+    local mandatoryDone, hasMandatory, anyOptionalDone = AreMandatoryTargetsCompleted(quest.targets)
+    if not mandatoryDone then
+        return false
+    end
+    if not hasMandatory and not hasDiscoveries and not anyOptionalDone then
+        return false
+    end
+    return true
+end
+
+function QuestRepository:CompleteQuest(questId)
+    local quest = self:GetQuestById(questId)
+    if not self:CanManuallyCompleteQuest(quest) then
+        return false, nil
+    end
+    quest.completed = true
+    if self.savedVars.activeQuestId == quest.id then
+        self.savedVars.activeQuestId = nil
+    end
+    self:InvalidateActiveTargetCache()
+    self:NotifyListeners("QUEST_COMPLETED", quest)
+    return true, quest
+end
+
 function QuestRepository:BuildQuestRecord(id, title, description, targets, data, role)
     return {
         id = id,
@@ -123,7 +206,9 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
+        senderCharacterName = (type(data.senderCharacterName) == "string" and data.senderCharacterName ~= "") and data.senderCharacterName or nil,
         recipientAccount = self:NormalizeAccountName(data.recipientAccount),
+        recipientCharacterName = (type(data.recipientCharacterName) == "string" and data.recipientCharacterName ~= "") and data.recipientCharacterName or nil,
         sentTo = type(data.sentTo) == "string" and data.sentTo or nil,
         sentAt = data.sentAt,
         lastResult = type(data.lastResult) == "table" and data.lastResult or nil,
@@ -140,6 +225,7 @@ function QuestRepository:GetDefaults()
         activeQuestId = nil,
         quests = {},
         ingestedMailIds = {},
+        migratedCharacterIds = {},
         draft = Addon.QuestDraftStore:CreateDefaultDraft(),
         settings = {
             autoDeleteMail = true,
@@ -147,6 +233,163 @@ function QuestRepository:GetDefaults()
             autoSendCompletionMail = true,
         },
     }
+end
+
+local function DeepCopyValue(val, seen)
+    if type(val) ~= "table" then
+        return val
+    end
+    seen = seen or {}
+    if seen[val] then
+        return seen[val]
+    end
+    local copy = {}
+    seen[val] = copy
+    for k, v in pairs(val) do
+        copy[DeepCopyValue(k, seen)] = DeepCopyValue(v, seen)
+    end
+    return copy
+end
+
+local function IsDraftEmpty(draft)
+    if type(draft) ~= "table" then
+        return true
+    end
+    local hasText = (type(draft.title) == "string" and draft.title ~= "")
+        or (type(draft.description) == "string" and draft.description ~= "")
+        or (type(draft.clue) == "string" and draft.clue ~= "")
+        or (type(draft.completionMessage) == "string" and draft.completionMessage ~= "")
+    if hasText then
+        return false
+    end
+    local hasLists = (type(draft.targets) == "table" and #draft.targets > 0)
+        or (type(draft.discoveries) == "table" and #draft.discoveries > 0)
+        or (type(draft.dialogues) == "table" and #draft.dialogues > 0)
+    return not hasLists
+end
+
+local function IsCharacterBucket(charData)
+    if type(charData) ~= "table" then
+        return false
+    end
+    return type(charData.quests) == "table"
+        or type(charData.ingestedMailIds) == "table"
+        or type(charData.draft) == "table"
+        or type(charData.settings) == "table"
+end
+
+function QuestRepository:MigrateCharacterSavedVars(rawRoot, displayName, savedVars, currentCharId)
+    if type(rawRoot) ~= "table" or type(displayName) ~= "string" or displayName == "" or type(savedVars) ~= "table" then
+        return 0
+    end
+    local defaultProfile = rawRoot["Default"]
+    if type(defaultProfile) ~= "table" then
+        return 0
+    end
+    local accountRoot = defaultProfile[displayName]
+    if type(accountRoot) ~= "table" then
+        return 0
+    end
+
+    savedVars.nextId = tonumber(savedVars.nextId) or 1
+    savedVars.quests = type(savedVars.quests) == "table" and savedVars.quests or {}
+    savedVars.ingestedMailIds = type(savedVars.ingestedMailIds) == "table" and savedVars.ingestedMailIds or {}
+    savedVars.migratedCharacterIds = type(savedVars.migratedCharacterIds) == "table" and savedVars.migratedCharacterIds or {}
+
+    local usedIds = {}
+    local maxId = 0
+    for _, q in ipairs(savedVars.quests) do
+        if type(q) == "table" and type(q.id) == "number" then
+            usedIds[q.id] = true
+            if q.id > maxId then
+                maxId = q.id
+            end
+        end
+    end
+    if savedVars.nextId <= maxId then
+        savedVars.nextId = maxId + 1
+    end
+
+    local charKeys = {}
+    for charKey, charData in pairs(accountRoot) do
+        if charKey ~= "$AccountWide" and not savedVars.migratedCharacterIds[charKey] and IsCharacterBucket(charData) then
+            table.insert(charKeys, charKey)
+        end
+    end
+    table.sort(charKeys, function(a, b)
+        if currentCharId and a == currentCharId and b ~= currentCharId then
+            return true
+        end
+        if currentCharId and b == currentCharId and a ~= currentCharId then
+            return false
+        end
+        return tostring(a) < tostring(b)
+    end)
+
+    local migratedCount = 0
+    for _, charKey in ipairs(charKeys) do
+        local charData = accountRoot[charKey]
+        local idMap = {}
+
+        if type(charData.quests) == "table" then
+            for _, srcQuest in ipairs(charData.quests) do
+                if type(srcQuest) == "table" then
+                    local cloned = DeepCopyValue(srcQuest)
+                    local oldId = tonumber(cloned.id)
+                    local newId = oldId
+                    if not newId or newId < 1 or usedIds[newId] then
+                        newId = savedVars.nextId
+                        savedVars.nextId = newId + 1
+                    elseif newId >= savedVars.nextId then
+                        savedVars.nextId = newId + 1
+                    end
+                    cloned.id = newId
+                    usedIds[newId] = true
+                    if oldId then
+                        idMap[oldId] = newId
+                    end
+                    table.insert(savedVars.quests, cloned)
+                    migratedCount = migratedCount + 1
+                end
+            end
+        end
+
+        if type(charData.ingestedMailIds) == "table" then
+            for mailKey, flag in pairs(charData.ingestedMailIds) do
+                if flag then
+                    savedVars.ingestedMailIds[mailKey] = true
+                end
+            end
+        end
+
+        if savedVars.activeQuestId == nil and charData.activeQuestId ~= nil then
+            local activeNum = tonumber(charData.activeQuestId)
+            savedVars.activeQuestId = (activeNum and idMap[activeNum]) or charData.activeQuestId
+        end
+
+        if not savedVars._migratedSettings and type(charData.settings) == "table" then
+            savedVars.settings = type(savedVars.settings) == "table" and savedVars.settings or {}
+            for k, v in pairs(charData.settings) do
+                if v ~= nil then
+                    savedVars.settings[k] = v
+                end
+            end
+            savedVars._migratedSettings = true
+        end
+
+        if IsDraftEmpty(savedVars.draft) and type(charData.draft) == "table" and not IsDraftEmpty(charData.draft) then
+            local clonedDraft = DeepCopyValue(charData.draft)
+            local editId = tonumber(clonedDraft.editingQuestId)
+            if editId and idMap[editId] then
+                clonedDraft.editingQuestId = idMap[editId]
+            end
+            savedVars.draft = clonedDraft
+        end
+
+        savedVars.migratedCharacterIds[charKey] = true
+    end
+
+    return migratedCount
 end
 
 function QuestRepository:Initialize(savedVars)
@@ -319,7 +562,7 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return Addon.QuestDraftStore:SetDraftCapturedTarget(self, captureData)
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput, recipientCharacterNameInput)
     return Addon.QuestDraftStore:SaveDraft(
         self,
         titleInput,
@@ -327,7 +570,8 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         areaRadiusInput,
         completionMessageInput,
         requireUndetectedInput,
-        recipientAccountInput
+        recipientAccountInput,
+        recipientCharacterNameInput
     )
 end
 
@@ -393,6 +637,7 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
                 locationRequired = (t.locationRequired == true),
+                optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
             })
         end
@@ -403,6 +648,15 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
     local cleanSender = self:NormalizeAccountName(senderDisplayName)
     if cleanSender ~= "" then
         decoded.senderDisplayName = cleanSender
+    end
+    local cleanSenderChar = self:NormalizeCharacterName(options.senderCharacterName)
+    if cleanSenderChar ~= "" then
+        decoded.senderCharacterName = cleanSenderChar
+    elseif type(decoded.senderCharacterName) == "string" then
+        decoded.senderCharacterName = self:NormalizeCharacterName(decoded.senderCharacterName)
+    end
+    if type(decoded.recipientCharacterName) == "string" then
+        decoded.recipientCharacterName = self:NormalizeCharacterName(decoded.recipientCharacterName)
     end
     decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
     decoded.sourceMailId = options.sourceMailId
@@ -463,6 +717,12 @@ function QuestRepository:ExportQuestToCode(questId)
     if not quest then
         return nil
     end
+    if self:IsPreparedQuest(quest) and (type(quest.senderCharacterName) ~= "string" or quest.senderCharacterName == "") then
+        local playerChar = self:GetPlayerCharacterName()
+        if playerChar ~= "" then
+            quest.senderCharacterName = playerChar
+        end
+    end
     self._shareCodeCache = self._shareCodeCache or {}
     local cached = self._shareCodeCache[questId]
     if cached then
@@ -508,6 +768,16 @@ function QuestRepository:ExportRejectionCode(quest)
     return Addon.ShareCodec:EncodeRejection(quest, charName, ts)
 end
 
+function QuestRepository:ExportAcceptanceCode(quest)
+    if type(quest) ~= "table" then
+        return nil, "Invalid quest"
+    end
+    local rawName = GetUnitName("player") or ""
+    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
+    local ts = GetTimeStamp() or 0
+    return Addon.ShareCodec:EncodeAcceptance(quest, charName, ts)
+end
+
 function QuestRepository:ValidateResultCode(questId, codeString)
     local quest = self:GetQuestById(questId)
     if not quest then
@@ -522,12 +792,20 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
         return nil
     end
     quest.deliveries = quest.deliveries or {}
-    local status = (validationResult.completed == false) and "rejected" or "completed"
+    local status
+    if validationResult.resultType == "accepted" or validationResult.accepted == true then
+        status = "accepted"
+    elseif validationResult.resultType == "rejected" or validationResult.rejected == true or validationResult.completed == false then
+        status = "rejected"
+    else
+        status = "completed"
+    end
     local entry = {
         senderDisplayName = type(senderDisplayName) == "string" and senderDisplayName or "",
         characterName = validationResult.characterName or "",
         completedAt = tonumber(validationResult.completedAt) or 0,
         wasDetected = validationResult.wasDetected,
+        optionalTargets = validationResult.optionalTargets,
         status = status,
     }
     -- Avoid duplicate entries for same characterName + completedAt + status
@@ -539,7 +817,10 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
         end
     end
     table.insert(quest.deliveries, entry)
-    quest.lastResult = entry
+    local prevStatus = type(quest.lastResult) == "table" and (quest.lastResult.status or "completed") or nil
+    if not (status == "accepted" and (prevStatus == "completed" or prevStatus == "rejected")) then
+        quest.lastResult = entry
+    end
     self:NotifyListeners("DELIVERY_RECORDED", { quest = quest, delivery = entry })
     return entry, true
 end
@@ -565,11 +846,14 @@ function QuestRepository:GetPreparedQuestStatus(quest)
     if type(quest.lastResult) == "table" then
         if quest.lastResult.status == "rejected" then
             return "rejected", quest.lastResult
+        elseif quest.lastResult.status == "accepted" then
+            return "accepted", quest.lastResult
         end
         return "completed", quest.lastResult
     end
     if type(quest.deliveries) == "table" and #quest.deliveries > 0 then
-        return "completed", quest.deliveries[#quest.deliveries]
+        local lastDelivery = quest.deliveries[#quest.deliveries]
+        return lastDelivery.status or "completed", lastDelivery
     end
     if type(quest.sentTo) == "string" and quest.sentTo ~= "" then
         return "sent", { recipient = quest.sentTo, sentAt = quest.sentAt }

@@ -17,6 +17,7 @@ function QuestDraftStore:CreateDefaultDraft()
         title = "",
         description = "",
         recipientAccount = "",
+        recipientCharacterName = "",
         clue = "",
         completionMessage = "",
         targets = {},
@@ -116,6 +117,7 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
                 locationRequired = (t.locationRequired == true),
+                optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
             })
         end
@@ -324,6 +326,7 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         title = quest.title or "",
         description = quest.description or "",
         recipientAccount = quest.recipientAccount or "",
+        recipientCharacterName = quest.recipientCharacterName or "",
         clue = quest.clue or "",
         completionMessage = quest.completionMessage or "",
         targets = self:CloneTargetsList(quest.targets),
@@ -354,6 +357,7 @@ function QuestDraftStore:UpdateDraftFields(repo, fields, silent)
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
     if fields.recipientAccount ~= nil then draft.recipientAccount = tostring(fields.recipientAccount) end
+    if fields.recipientCharacterName ~= nil then draft.recipientCharacterName = tostring(fields.recipientCharacterName) end
     if fields.clue ~= nil then draft.clue = tostring(fields.clue) end
     if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
     if fields.hideMapArea ~= nil then draft.hideMapArea = (fields.hideMapArea == true) end
@@ -416,6 +420,7 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
             requiredCount = 1,
             targetX = tx,
             targetY = ty,
+            optional = false,
         }
         table.insert(draft.targets, matchedEntry)
     end
@@ -473,6 +478,10 @@ function QuestDraftStore:UpdateDraftTarget(repo, index, fields, silent)
         end
     end
 
+    if fields.optional ~= nil then
+        target.optional = (fields.optional == true)
+    end
+
     if fields.customMessage ~= nil then
         target.customMessage = tostring(fields.customMessage)
     end
@@ -510,6 +519,10 @@ local function ApplyDraftToExistingQuest(store, repo, existing, draft, fields)
     existing.title = fields.title
     existing.description = fields.description
     existing.recipientAccount = fields.recipientAccount
+    existing.recipientCharacterName = (fields.recipientCharacterName ~= "") and fields.recipientCharacterName or nil
+    if type(existing.senderCharacterName) ~= "string" or existing.senderCharacterName == "" then
+        existing.senderCharacterName = repo:GetPlayerCharacterName()
+    end
     if existing.sentTo and existing.sentTo:lower() ~= fields.recipientAccount:lower() then
         existing.sentTo = nil
         existing.sentAt = nil
@@ -554,7 +567,9 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
     repo.savedVars.nextId = targetId + 1
 
     local questData = {
+        senderCharacterName = repo:GetPlayerCharacterName(),
         recipientAccount = fields.recipientAccount,
+        recipientCharacterName = fields.recipientCharacterName,
         clue = fields.clue,
         completionMessage = draft.completionMessage,
         discoveries = store:CloneDiscoveriesList(draft.discoveries, false),
@@ -590,12 +605,13 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
     return newQuest
 end
 
-function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput)
+function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput, recipientCharacterNameInput)
     local draft = self:GetDraft(repo)
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
     if descriptionInput ~= nil then draft.description = tostring(descriptionInput) end
     if recipientAccountInput ~= nil then draft.recipientAccount = tostring(recipientAccountInput) end
+    if recipientCharacterNameInput ~= nil then draft.recipientCharacterName = tostring(recipientCharacterNameInput) end
     if completionMessageInput ~= nil then draft.completionMessage = tostring(completionMessageInput) end
     if requireUndetectedInput ~= nil then draft.requireUndetected = (requireUndetectedInput == true) end
     if areaRadiusInput ~= nil and tonumber(areaRadiusInput) and tonumber(areaRadiusInput) > 0 then
@@ -630,10 +646,12 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
         clue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", ""),
         completionMessage = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", ""),
         recipientAccount = repo:NormalizeAccountName(draft.recipientAccount),
+        recipientCharacterName = repo:NormalizeCharacterName(draft.recipientCharacterName),
     }
     draft.clue = fields.clue
     draft.completionMessage = fields.completionMessage
     draft.recipientAccount = fields.recipientAccount
+    draft.recipientCharacterName = fields.recipientCharacterName
 
     if existing then
         return ApplyDraftToExistingQuest(self, repo, existing, draft, fields)

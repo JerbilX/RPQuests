@@ -221,6 +221,10 @@ return function(T)
         AssertTrue(imported ~= nil, "Quest auto-ingested from mail")
         RPQuest.QuestRepository:AcceptOfferedQuest(imported.id)
         AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
+        RPQuest.MailTransport:OnMailboxOpened()
+        AssertEqual(#sentMails, 1, "Acceptance mail auto-sent to creator")
+        AssertEqual(sentMails[1].subject, "[RPQuest:Accepted] Entrega por Correo", "Uses [RPQuest:Accepted] subject")
+        RPQuest.MailTransport:OnMailSendSuccess("@Creator")
 
         -- Automatic mode (default): completing quest auto-sends completion report to @Creator
         AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), true, "autoSendCompletionMail defaults to true")
@@ -228,10 +232,10 @@ return function(T)
         RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
         AssertEqual(imported.completed, true, "Imported quest completed")
         RPQuest.MailTransport:OnMailboxOpened()
-        AssertEqual(#sentMails, 1, "Completion mail auto-sent to creator")
-        AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
-        AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
-        local rpqc1Code = sentMails[1].body
+        AssertEqual(#sentMails, 2, "Completion mail auto-sent to creator")
+        AssertEqual(sentMails[2].to, "@Creator", "Sent to @Creator")
+        AssertEqual(sentMails[2].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
+        local rpqc1Code = sentMails[2].body
         AssertTrue(rpqc1Code:sub(1, 6) == "RPQC1:", "Body contains RPQC1 code")
         RPQuest.MailTransport:OnMailSendSuccess("@Creator")
         AssertEqual(imported.completionReported, true, "completionReported marked true after send success")
@@ -241,7 +245,7 @@ return function(T)
         imported.completionReported = false
         RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
         RPQuest.MailTransport:OnMailboxOpened()
-        AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
+        AssertEqual(#sentMails, 3, "Automatic mode sends completion mail upon QUEST_COMPLETED")
         RPQuest.JournalTab:SelectQuest(imported.id)
         AssertEqual(RPQuest.JournalTab.btnReportCompletionMail, nil, "Manual report button removed in mail-only UX")
         RPQuest.MailTransport:OnMailSendSuccess("@Creator")
@@ -512,6 +516,66 @@ return function(T)
         RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
     end)
 
+    RunTest("MailInbox: emits localized on-screen CSA announcement on new mail quest without duplicates (Issue #166)", function()
+        local prevLang = mockState.language
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        AssertEqual(RPQuest.Locale:Get("CSA_QUEST_RECEIVED"), "You have received a new quest", "English CSA_QUEST_RECEIVED text")
+
+        mockState.language = "es"
+        RPQuest.Locale:Initialize("es")
+        AssertEqual(RPQuest.Locale:Get("CSA_QUEST_RECEIVED"), "Has recibido una nueva misión", "Spanish CSA_QUEST_RECEIVED text")
+
+        mockState.language = prevLang or "en"
+        RPQuest.Locale:Initialize(mockState.language)
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+        mockState.csaMessages = {}
+
+        local code = RPQuest.ShareCodec:EncodeQuest({
+            title = "Anuncio por Correo",
+            description = "Prueba de anuncio en pantalla.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Guardia" } },
+        })
+
+        local inbox = {
+            [961] = { sender = "@SenderCSA", charName = "SenderCSA", subject = "[RPQuest] Anuncio por Correo", body = code, secs = 3 },
+        }
+        _G.GetNextMailId = function(cur) return (cur == nil and inbox[961]) and 961 or nil end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        _G.DeleteMail = function(id) inbox[id] = nil end
+
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#mockState.csaMessages, 1, "1 CENTER_SCREEN_ANNOUNCE banner emitted on new offered mail quest")
+        AssertEqual(mockState.csaMessages[1].category, CSA_CATEGORY_LARGE_TEXT, "Mail quest received CSA uses large text category")
+        AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Mail quest received CSA uses QUEST_ADDED type")
+        AssertEqual(mockState.csaMessages[1].mainText, RPQuest.Locale:Get("CSA_QUEST_RECEIVED"), "Mail quest received CSA mainText is localized")
+        AssertEqual(mockState.csaMessages[1].subText, "Anuncio por Correo", "Mail quest received CSA subText shows quest title")
+
+        -- Re-scan and duplicate UpsertReceivedEntry must not duplicate CSA banner
+        RPQuest.MailTransport:ScanInbox(false)
+        RPQuest.MailInbox:UpsertReceivedEntry({
+            idKey = "961",
+            mailId = 961,
+            senderDisplayName = "@SenderCSA",
+            senderCharacterName = "SenderCSA",
+            title = "Anuncio por Correo",
+            questCode = code,
+            isIncomplete = false,
+        })
+        AssertEqual(#mockState.csaMessages, 1, "No duplicate CSA banner on re-scan or duplicate UpsertReceivedEntry")
+    end)
+
     RunTest("38. Auto-report rejection and completion results to Master via mail (Issue #144)", function()
         local sv = RPQuest.QuestRepository:GetDefaults()
         RPQuest.QuestRepository:Initialize(sv)
@@ -740,6 +804,10 @@ return function(T)
         local q = received[1]
         AssertEqual(q.senderDisplayName, "@QuestMaster", "senderDisplayName normalized on import")
         RPQuest.QuestRepository:AcceptOfferedQuest(q.id)
+        RPQuest.MailTransport:OnMailboxOpened()
+        RPQuest.MailTransport:OnMailSendSuccess("@QuestMaster")
+        sentMails = {}
+        openCalls = 0
 
         -- 2. Simulate native scene showing before EVENT_MAIL_OPEN_MAILBOX -> MAIL_SEND_RESULT_MAILBOX_NOT_OPEN retry
         nativeMailOpen = true
@@ -796,6 +864,308 @@ return function(T)
         _G.GetMailItemInfo = origGetInfo
         _G.ReadMail = origReadMail
         _G.DeleteMail = origDeleteMail
+    end)
+
+    RunTest("41. Sender and recipient character names (From/To) in Editor, ShareCodec, Mail, and DetailPane (Issue #157)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        local origUnitName = _G.GetUnitName
+        _G.GetUnitName = function(tag)
+            if tag == "player" then return "Nerevar^Mx" end
+            return origUnitName(tag)
+        end
+
+        -- 1. Editor captures recipientAccount and recipientCharacterName independently, and persists senderCharacterName
+        RPQuest.JournalTab:OpenCreateEditor()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Dagoth",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Vvardenfell",
+            targetX = 0.4,
+            targetY = 0.4,
+        })
+        RPQuest.JournalTab.titleEdit:SetText("Red Mountain")
+        RPQuest.JournalTab.descEdit:SetText("Confront the Sixth House.")
+        RPQuest.JournalTab.recipientEdit:SetText("VivecAcct")
+        RPQuest.JournalTab.recipientCharEdit:SetText("Lord Vivec")
+        RPQuest.JournalTab:OnSaveDraftClicked()
+
+        local prepared = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)[1]
+        AssertEqual(prepared.senderCharacterName, "Nerevar", "senderCharacterName captured from GetUnitName('player') and stripped of grammar suffix")
+        AssertEqual(prepared.recipientAccount, "@VivecAcct", "recipientAccount normalized and preserved")
+        AssertEqual(prepared.recipientCharacterName, "Lord Vivec", "recipientCharacterName preserved")
+
+        -- 2. Detail pane displays From: and To: below Status: while keeping @AccountName in Status:
+        RPQuest.JournalTab:SelectQuest(prepared.id)
+        RPQuest.JournalTab:Refresh()
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@VivecAcct", 1, true) ~= nil, "Prepared status preserves @AccountName")
+        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Nerevar", "Detail From shows sender character name")
+        AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Detail To shows recipient character name")
+
+        -- 3. ShareCodec preserves senderCharacterName and recipientCharacterName without altering quest signature
+        local sigBefore = RPQuest.ShareCodec:ComputeQuestSignature(prepared)
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertEqual(decoded.senderCharacterName, "Nerevar", "ShareCodec decodes senderCharacterName")
+        AssertEqual(decoded.recipientCharacterName, "Lord Vivec", "ShareCodec decodes recipientCharacterName")
+        local sigAfter = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+        AssertEqual(sigAfter, sigBefore, "Quest signature unchanged when character names are encoded")
+
+        -- 4. Offered mail quest displays From: <CharacterName> and To: <CharacterName> below Status: without inline From in Status:
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@MasterAcct", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            senderCharacterName = "Sotha Sil^Mx",
+        })
+        AssertEqual(imported.senderDisplayName, "@MasterAcct", "Imported quest keeps senderDisplayName")
+        AssertEqual(imported.senderCharacterName, "Sotha Sil", "Imported quest prefers normalized mail metadata senderCharacterName")
+        AssertEqual(imported.recipientCharacterName, "Lord Vivec", "Imported quest keeps recipientCharacterName")
+
+        RPQuest.JournalTab:SelectQuest(imported.id)
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.detailStatus:GetText():find("From:", 1, true), nil, "Offered status no longer embeds inline From:")
+        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Sotha Sil", "Offered detail From shows sender character name")
+        AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Offered detail To shows recipient character name")
+
+        _G.GetUnitName = origUnitName
+    end)
+
+    RunTest("42. Automatic acceptance mail report on QUEST_ACCEPTED and status lifecycle (Issue #159)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        -- Master creates prepared quest
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.4,
+            targetY = 0.4,
+        })
+        local prepared = RPQuest.QuestRepository:SaveDraft("Scout the Camp", "Accept and report.", nil, "", false, "@PlayerAcc")
+        local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+
+        -- 1. ShareCodec EncodeAcceptance / DecodeCompletion
+        local accCode, accErr = RPQuest.ShareCodec:EncodeAcceptance(prepared, "HeroChar", 222333)
+        AssertTrue(accCode ~= nil and accCode:sub(1, 6) == "RPQC1:", "EncodeAcceptance produces RPQC1 code: " .. tostring(accErr))
+        local decodedAcc = RPQuest.ShareCodec:DecodeCompletion(accCode)
+        AssertTrue(decodedAcc ~= nil, "DecodeCompletion decodes acceptance payload")
+        AssertEqual(decodedAcc.completed, false, "Acceptance has completed=false")
+        AssertEqual(decodedAcc.rejected, false, "Acceptance has rejected=false")
+        AssertEqual(decodedAcc.accepted, true, "Acceptance has accepted=true")
+        AssertEqual(decodedAcc.resultType, "accepted", "Acceptance has resultType='accepted'")
+        AssertEqual(decodedAcc.characterName, "HeroChar", "Acceptance preserves characterName")
+        AssertEqual(decodedAcc.completedAt, 222333, "Acceptance preserves timestamp")
+
+        local okCompOnly, errCompOnly = RPQuest.ShareCodec:ValidateCompletionForQuest(prepared, accCode)
+        AssertEqual(okCompOnly, false, "ValidateCompletionForQuest rejects an acceptance code")
+        AssertEqual(errCompOnly, "VALIDATE_ERR_NOT_COMPLETED", "Returns VALIDATE_ERR_NOT_COMPLETED for acceptance")
+
+        local okResult, resPayload = RPQuest.ShareCodec:ValidateResultForQuest(prepared, accCode)
+        AssertEqual(okResult, true, "ValidateResultForQuest accepts acceptance code")
+        AssertEqual(resPayload.accepted, true, "ValidateResultForQuest returns accepted=true")
+        AssertEqual(resPayload.resultType, "accepted", "ValidateResultForQuest returns resultType='accepted'")
+
+        -- 2. Player accepts offered mail quest -> auto-sends acceptance report to @Master
+        local sentMails = {}
+        local origSendMail = _G.SendMail
+        local origReqOpen = _G.RequestOpenMailbox
+        local origClose = _G.CloseMailbox
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        _G.SendMail = function(to, subject, body)
+            table.insert(sentMails, { to = to, subject = subject, body = body })
+        end
+        _G.RequestOpenMailbox = function() end
+        _G.CloseMailbox = function() end
+
+        local offered = RPQuest.QuestRepository:ImportQuestFromCode(rpq3Code, "@Master", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            sourceMailId = "mail_acc_1",
+        })
+        RPQuest.QuestRepository:AcceptOfferedQuest(offered.id)
+        RPQuest.MailTransport:OnMailboxOpened()
+        AssertEqual(#sentMails, 1, "Acceptance mail auto-queued and sent on AcceptOfferedQuest")
+        AssertEqual(sentMails[1].to, "@Master", "Acceptance mail sent to @Master")
+        AssertEqual(sentMails[1].subject, "[RPQuest:Accepted] Scout the Camp", "Uses [RPQuest:Accepted] subject")
+        RPQuest.MailTransport:OnMailSendSuccess("@Master")
+        AssertEqual(offered.completionReported or false, false, "Acceptance send does not mark completionReported=true")
+
+        -- 3. Master receives acceptance mail -> updates prepared status to accepted & shows alert
+        local alerts = {}
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+        local deletedIds = {}
+        _G.DeleteMail = function(id) table.insert(deletedIds, id) end
+        _G.GetNextMailId = function(cur) return (cur == nil) and 501 or nil end
+        _G.GetMailItemInfo = function(id)
+            if id == 501 then return "@PlayerAcc", "HeroChar", sentMails[1].subject, "", true, false, false, false, 0, 0, 0, 30, 1, 0 end
+            return nil
+        end
+        _G.ReadMail = function(id) return (id == 501) and sentMails[1].body or "" end
+
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#alerts, 1, "Master receives alert for acceptance mail")
+        AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_ACCEPTANCE_RECEIVED", "@PlayerAcc", prepared.title), "Acceptance alert text matches")
+        AssertTrue(prepared.lastResult ~= nil and prepared.lastResult.status == "accepted", "Prepared quest records lastResult.status == 'accepted'")
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "accepted", "GetPreparedQuestStatus returns 'accepted'")
+        AssertEqual(#deletedIds, 1, "Acceptance mail auto-deleted on Master")
+
+        RPQuest.JournalTab:SelectQuest(prepared.id)
+        RPQuest.JournalTab:Refresh()
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Accepted", 1, true) ~= nil, "Detail status displays Accepted label")
+
+        -- 4. Subsequent completion overwrites accepted status
+        RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerAcc", {
+            characterName = "HeroChar",
+            completedAt = 222400,
+            completed = true,
+            resultType = "completed",
+            wasDetected = false,
+        })
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "completed", "Completion overwrites accepted status")
+
+        -- 5. Late acceptance arriving after completion does not overwrite completed status
+        local lateEntry, isNewLate = RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerAcc", {
+            characterName = "HeroChar",
+            completedAt = 222500,
+            completed = false,
+            accepted = true,
+            resultType = "accepted",
+        })
+        AssertEqual(isNewLate, true, "Late acceptance recorded in deliveries")
+        AssertEqual(lateEntry.status, "accepted", "Late delivery entry has status='accepted'")
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "completed", "Late acceptance does not overwrite completed status")
+        AssertEqual(prepared.lastResult.status, "completed", "lastResult remains completed")
+
+        _G.SendMail = origSendMail
+        _G.RequestOpenMailbox = origReqOpen
+        _G.CloseMailbox = origClose
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+        RPQuest.Announcements.ShowAlert = origShowAlert
+    end)
+
+    RunTest("43. Issue #160: Sent accordion section & detail progress/results", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.JournalTab:Initialize()
+
+        mockState.reticleExists = true
+        mockState.reticleName = "Guard"
+        mockState.mapId = 32
+        mockState.zoneId = 381
+        mockState.mapName = "Auridon"
+        mockState.playerX = 0.5
+        mockState.playerY = 0.5
+
+        -- 1. Unsent draft stays in Preparing
+        RPQuest.TargetCapture:CaptureFromReticle()
+        local draftQuest = RPQuest.QuestRepository:SaveDraft("Unsent Draft", "Still preparing", nil, "", false, "@PlayerA")
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(draftQuest), "draft", "Draft starts with status 'draft'")
+
+        -- 2. Prepared quest with requireUndetected + optional target
+        RPQuest.TargetCapture:CaptureFromReticle()
+        RPQuest.QuestRepository:UpdateDraftTarget(1, { optional = true })
+        mockState.reticleName = "Captain"
+        RPQuest.TargetCapture:CaptureFromReticle()
+        local sentQuest = RPQuest.QuestRepository:SaveDraft("Sent Contract", "Stealth + optional", nil, "", true, "@PlayerB")
+
+        local function hasRowInSection(sectionKey, questId)
+            local inSection = false
+            for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+                if b.isHeader then
+                    inSection = (b.sectionKey == sectionKey)
+                elseif inSection and b.questId == questId then
+                    return true
+                end
+            end
+            return false
+        end
+
+        RPQuest.JournalTab:ToggleSection("preparing")
+        AssertEqual(hasRowInSection("preparing", draftQuest.id), true, "Unsent draft appears in Preparing")
+        AssertEqual(hasRowInSection("preparing", sentQuest.id), true, "Unsent contract appears in Preparing before send")
+
+        -- 3. MarkPreparedQuestSent emits QUEST_SENT, expands Sent, and moves quest out of Preparing
+        local okSent = RPQuest.QuestRepository:MarkPreparedQuestSent(sentQuest.id, "@PlayerB")
+        AssertEqual(okSent, true, "MarkPreparedQuestSent succeeds")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, false, "Sent section expands on QUEST_SENT")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing collapses when Sent expands")
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Sent quest appears in Sent section")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Sent", 1, true) ~= nil, "Detail status shows Sent")
+
+        -- 4. Accepted state stays in Sent and shows Accepted
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1001,
+            completed = false,
+            accepted = true,
+            resultType = "accepted",
+        })
+        RPQuest.JournalTab:SelectQuest(sentQuest.id)
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Accepted quest stays in Sent section")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Accepted", 1, true) ~= nil, "Detail status shows Accepted")
+
+        -- 5. Rejected state stays in Sent and shows Rejected
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1002,
+            completed = false,
+            resultType = "rejected",
+        })
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Rejected quest stays in Sent section")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Rejected", 1, true) ~= nil, "Detail status shows Rejected")
+
+        -- 6. Completed undetected with optional fulfilled
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1003,
+            completed = true,
+            resultType = "completed",
+            wasDetected = false,
+            optionalTargets = { true },
+        })
+        AssertEqual(hasRowInSection("sent", sentQuest.id), true, "Completed sent quest stays in Sent section")
+        local statusUndetected = RPQuest.JournalTab.detailStatus:GetText()
+        AssertTrue(statusUndetected:find("Completed", 1, true) ~= nil, "Detail status shows Completed")
+        AssertTrue(statusUndetected:find("Undetected", 1, true) ~= nil, "Detail status shows Undetected result")
+        AssertTrue(statusUndetected:find("1/1", 1, true) ~= nil, "Detail status shows optional 1/1 result")
+        local objUndetected = RPQuest.JournalTab.detailObjText:GetText()
+        AssertTrue(objUndetected:find("Undetected", 1, true) ~= nil, "Objective lines reflect Undetected completion result")
+        AssertTrue(objUndetected:find("(Completed)", 1, true) ~= nil, "Objective lines reflect completed targets")
+
+        -- 7. Completed detected with optional missed
+        RPQuest.QuestRepository:RecordMailDelivery(sentQuest.id, "@PlayerB", {
+            characterName = "ShadowChar",
+            completedAt = 1004,
+            completed = true,
+            resultType = "completed",
+            wasDetected = true,
+            optionalTargets = { false },
+        })
+        local statusDetected = RPQuest.JournalTab.detailStatus:GetText()
+        AssertTrue(statusDetected:find("Detected", 1, true) ~= nil, "Detail status shows Detected result")
+        AssertTrue(statusDetected:find("0/1", 1, true) ~= nil, "Detail status shows optional 0/1 result")
+        local objDetected = RPQuest.JournalTab.detailObjText:GetText()
+        AssertTrue(objDetected:find("Detected", 1, true) ~= nil, "Objective lines reflect Detected completion result")
     end)
 
 end

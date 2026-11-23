@@ -15,8 +15,8 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 ## Características Principales
 
-- **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuest** dentro del Diario de Misiones (`ZO_QuestJournal_Keyboard`) separando las listas de misiones **En preparación** (creadas por ti) y **Recibidas** (activas/jugables).
-- **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de teclado (o `/rpquest capture`). Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones opcionales de ubicación (`Requerida` / `No requerida`) y mensajes personalizados al eliminarlos.
+- **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuest** dentro del Diario de Misiones (`ZO_QuestJournal_Keyboard`) con secciones en acordeón exclusivo para ofertas **Pendientes**, **Misiones** activas, **Completadas**, **Preparando** (borradores sin enviar) y **Enviadas** (contratos enviados con estado en vivo y resultados al completar).
+- **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de teclado (o `/rpquest capture`). Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones opcionales de ubicación (`Requerida` / `No requerida`), selector de objetivo `Opcional` (habilita completar manualmente la misión al cumplir los obligatorios) y mensajes personalizados al eliminarlos.
 - **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo (`Keybind` o `/rpquest discovery`) con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_PinBlob`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto. Desaparece automáticamente al completar o desactivar la misión.
@@ -24,10 +24,10 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Mini-Tracker en el HUD:** Muestra la misión activa en pantalla (clic izquierdo abre el Diario; clic derecho centra el Mapa Mundial en el área de búsqueda).
 - **Flujo 100% por Correo In-Game 1-a-1 (Sin Copiar/Pegar):**
-  - Asigna un único destinatario (`@Cuenta`) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU).
+  - Asigna un único destinatario (`@Cuenta`) (y opcionalmente el nombre del personaje **Para (Personaje)**) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU). Los nombres de personaje `De:` y `Para:` se muestran debajo del estado en el detalle de la misión.
   - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario.
-  - **Reportes Automáticos de Completado y Rechazo:** Al completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Completada` / `Rechazada`).
-- **Persistencia por Personaje y Auto-Localización:** Guarda el progreso por personaje con `ZO_SavedVars:NewCharacterIdSettings` y detecta automáticamente el idioma del cliente (`es` / `en`).
+  - **Reportes Automáticos de Aceptación, Completado y Rechazo:** Al aceptar, completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Aceptada` / `Completada` / `Rechazada`).
+- **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente el idioma del cliente (`es` / `en`).
 
 ---
 
@@ -50,12 +50,41 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
    - Pulsa **Crear Misión**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`), opcionalmente activar **No ser detectado** y configurar líneas de **Diálogo de NPC**.
    - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo** (`/rpquest capture`), o párate en un lugar y usa **Capturar Punto de Descubrimiento** (`/rpquest discovery`).
 2. **Enviar al Jugador (Correo 1-a-1):**
-   - Define el destinatario `@Cuenta` en el editor de la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
+   - Define el destinatario `@Cuenta` (y opcionalmente el personaje destinatario) en el editor de la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
    - El jugador recibe una alerta y ve la misión en **Pendientes** dentro de su pestaña **RPQuest** para **Aceptar** o **Rechazar**.
    - **Mismo idioma requerido:** Las misiones deben jugarse en un cliente del juego con el mismo idioma que el creador para que coincidan los nombres de NPCs y diálogos.
 3. **Jugar y Reporte Automático:**
    - Al aceptar la misión se activan inmediatamente el mini-tracker del HUD, el área en el Mapa Mundial y los diálogos inyectados en NPCs.
-   - Al completar (o rechazar) la misión, RPQuest envía automáticamente el resultado por correo al Quest Master y actualiza su estado.
+   - Al aceptar, completar o rechazar la misión, RPQuest envía automáticamente el resultado por correo al Quest Master, moviendo el contrato a la sección **Enviadas** con su estado en vivo (`Enviada`, `Aceptada`, `Rechazada`, `Completada`) y resultados de finalización (como `No detectado` frente a `Detectado` y objetivos opcionales).
+
+---
+
+## Guía de Uso
+
+### 1. Roles: Quest Master vs. Jugador
+- **Quest Master (Creador):** Redacta misiones personalizadas en **Preparando**, captura objetivos NPC o puntos de descubrimiento en el mundo, configura reglas opcionales o diálogos y envía contratos por correo in-game. Una vez enviados, sigue su estado en vivo y los resultados finales en **Enviadas**.
+- **Jugador (Destinatario):** Recibe ofertas de misión en **Pendientes**, revisa la descripción y elige **Aceptar** o **Rechazar**. Las misiones activas se siguen automáticamente en el mundo y los resultados se envían por correo de vuelta al Quest Master sin copiar ni pegar nada.
+
+### 2. Secciones del Diario (Acordeón Exclusivo)
+La pestaña **RPQuest** dentro del Diario de Misiones (`J`) usa un acordeón exclusivo: al expandir una sección, las demás se colapsan para mantener la lista ordenada:
+- **Pendientes:** Ofertas entrantes esperando que las **Aceptes** o **Rechaces**.
+- **Misiones:** Tus misiones aceptadas y activas. Selecciona una misión para ver objetivos, activar/desactivar el seguimiento o completarla manualmente cuando todos los objetivos obligatorios estén cumplidos.
+- **Completadas:** Archivo de las misiones que ya terminaste, incluyendo el resultado final de sigilo y objetivos opcionales.
+- **Preparando:** Borradores de misiones sin enviar que estás creando o editando como Quest Master.
+- **Enviadas:** Contratos que ya enviaste por correo a jugadores, mostrando su estado en vivo (`Enviada`, `Aceptada`, `Rechazada`, `Completada`) y los resultados automáticos al finalizar (como `No detectado` frente a `Detectado` y objetivos opcionales).
+
+### 3. Bloques de Construcción de Misiones
+- **Objetivos (Eliminación de NPCs):** Apunta a cualquier NPC vivo y pulsa tu atajo de **Capturar Objetivo bajo Retícula** (o `/rpquest capture`). Capturar varias veces un mismo nombre de NPC se acumula (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos separados. Para cada objetivo puedes alternar una condición de **Ubicación** (`Requerida` en la zona/subzona capturada o `No requerida`), añadir un mensaje personalizado al eliminarlo o marcarlo como **Opcional** (permitiendo completar la misión cuando todos los obligatorios estén listos).
+- **Puntos de Descubrimiento Ocultos:** Párate en un punto de exploración y pulsa tu atajo de **Capturar Punto de Descubrimiento** (o `/rpquest discovery`). Puedes configurar el radio de detección (`Pequeño`, `Mediano` o `Grande`). Los puntos permanecen ocultos en el mapa y la brújula para evitar spoilers.
+- **Sigilo (`No detectado`):** Activa **No detectado (Opcional)** en el editor para desafiar al jugador a completar la misión sin ser detectado en combate. La misión registra si permaneció `No detectado` o fue `Detectado` y lo reporta al Quest Master.
+- **Área de Búsqueda en el Mapa Mundial (`M`):** Muestra un círculo aproximado en el Mapa Mundial usando un desplazamiento aleatorio fijo para que el objetivo quede dentro del círculo sin revelar su centro exacto. El círculo desaparece automáticamente al completar o desactivar la misión.
+- **Diálogos de NPC:** Abre diálogo (`E`) con hasta 3 NPCs nativos de ESO para capturarlos en la sección **Diálogos de NPC** de la misión y redacta una opción de respuesta del jugador y la réplica del NPC para cada uno. Cuando el jugador hable con esos NPCs, tu línea personalizada se inyectará de forma nativa sin modificar las opciones originales del juego.
+
+### 4. Flujo por Correo In-Game (Automático)
+- **Envío:** Ingresa la `@Cuenta` destinataria (y opcionalmente el nombre del personaje) en el editor de la misión y pulsa **Enviar Misión**. Ambos jugadores deben estar en el mismo megaserver (ej. PC-NA o PC-EU) y usar el mismo idioma de cliente. Las misiones largas se dividen automáticamente en hasta 6 partes (`RPQP`) y se reensamblan al llegar.
+- **Aviso de Llegada:** Cuando llega un correo de misión, RPQuest lo importa automáticamente y muestra un aviso en pantalla alertando al jugador de que tiene una nueva misión en **Pendientes**.
+- **Aceptar y Rechazar:** Pulsar **Aceptar** activa la misión, el mini-tracker del HUD, el área en el Mapa Mundial y los diálogos de NPC, y notifica al Quest Master. Pulsar **Rechazar** declina la oferta y avisa al Quest Master.
+- **Reporte de Finalización:** Cuando el jugador completa todos los objetivos (o completa manualmente una misión con solo objetivos opcionales pendientes), RPQuest envía automáticamente el reporte (`RPQC1`) al Quest Master y actualiza el contrato en **Enviadas**.
 
 ---
 
@@ -82,7 +111,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 - **Versión del Juego:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **Librerías Externas:** Ninguna (`Zero-Dependency`)
-- **SavedVariables:** `RPQuest_SavedVariables` (por personaje)
+- **SavedVariables:** `RPQuest_SavedVariables` (por cuenta / account-wide)
 - **Idiomas Soportados:** Español (`es`), Inglés (`en`)
 
 ---
@@ -105,7 +134,7 @@ RPQuest/
 │   ├── MailInbox.lua        # Escaneo de bandeja, reensamblado RPQP e ingesta de correos
 │   ├── MailTransport.lua    # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestDraftStore.lua  # Estado de borrador de creación y normalización de objetivos
-│   ├── QuestRepository.lua  # CRUD por personaje y cálculo de offset del círculo
+│   ├── QuestRepository.lua  # CRUD account-wide, migración y cálculo de offset del círculo
 │   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
 │   ├── CombatTracker.lua    # Seguimiento de bajas y sigilo (EVENT_COMBAT_EVENT)

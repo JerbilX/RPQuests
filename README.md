@@ -15,8 +15,8 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 
 ## Key Features
 
-- **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with separate **Prepared** (authored) and **Received** (active/playable) quest lists.
-- **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`) and custom elimination messages.
+- **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with exclusive accordion sections for **Pending** offers, active **Quests**, **Completed** missions, **Preparing** (unsent drafts), and **Sent** (dispatched contracts with live status and completion results).
+- **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`), an `Optional` objective toggle (enabling manual quest completion once mandatory objectives are done), and custom elimination messages.
 - **Hidden Discovery Points:** Capture in-world exploration coordinates (`Keybind` or `/rpquest discovery`) with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
 - **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
 - **World Map Search Area (`M`):** Displays an approximate search circle (`ZO_PinBlob`) on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
@@ -24,10 +24,10 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **Combat & Discovery Tracking + Native Alerts:** Tracks kills (`EVENT_COMBAT_EVENT`) and exploration proximity, triggering native `CENTER_SCREEN_ANNOUNCE` banners and official quest sounds (`SOUNDS.QUEST_COMPLETED`).
 - **HUD Mini-Tracker:** Displays the active custom quest on the side of your screen (left-click opens the Journal; right-click centers the World Map on the search area).
 - **1-to-1 In-Game Mail Flow (Zero Copy/Paste):**
-  - Assign a single `@AccountName` recipient directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU).
+  - Assign a single `@AccountName` recipient (and optional `To (Character)` name) directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU). Both `From:` and `To:` character names are displayed below `Status:` in the quest details.
   - **Auto-Ingested Pending Quests:** Incoming quest mails are automatically ingested into the player's **Pending** list with a visible alert and **Accept** / **Reject** actions directly in the RPQuest Journal.
-  - **Automatic Completion & Rejection Reports:** Completing or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Completed` / `Rejected`).
-- **Per-Character Persistence & Auto-Localization:** Stores progress per character via `ZO_SavedVars:NewCharacterIdSettings` and auto-detects client language (`en` / `es`).
+  - **Automatic Acceptance, Completion & Rejection Reports:** Accepting, completing, or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Accepted` / `Completed` / `Rejected`).
+- **Account-Wide Persistence & Auto-Localization:** Stores quests and progress account-wide via `ZO_SavedVars:NewAccountWide` (matching ESO's account-wide mail, with automatic non-destructive migration from legacy per-character data) and auto-detects client language (`en` / `es`).
 
 ---
 
@@ -50,12 +50,41 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
    - Click **Create Quest**, use the collapsible form sections to set **Title**, **Description / Lore**, **Search Area** size (`Small`, `Medium`, `Large`), optional **Do not be detected**, and optional **NPC Dialogue** lines.
    - In the world, aim at NPCs and press your **Capture Target** keybind (or `/rpquest capture`), or stand at a location and press **Capture Discovery Point** (or `/rpquest discovery`).
 2. **Send to a Player (1-to-1 Mail):**
-   - Set the target `@AccountName` in the quest editor and click **Send Quest** from the prepared quest details.
+   - Set the target `@AccountName` (and optional character name) in the quest editor and click **Send Quest** from the prepared quest details.
    - The player receives an alert and sees the quest under **Pending** in their **RPQuest** tab to **Accept** or **Reject**.
    - **Same-language requirement:** Quests should be played on a game client using the same language as the creator so NPC names and dialogue targets match.
 3. **Play & Auto-Report:**
    - Accepting the quest activates the HUD mini-tracker, World Map search area, and any injected NPC dialogues immediately.
-   - Upon completion (or rejection), RPQuest automatically mails the result back to the Quest Master and updates the quest status.
+   - Accepting, completing, or rejecting the quest automatically mails the result back to the Quest Master, moving the contract into the **Sent** section with live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and completion results (such as `Undetected` vs `Detected` and optional objective outcomes).
+
+---
+
+## How to Use / Guide
+
+### 1. Roles: Quest Master vs. Player
+- **Quest Master (Creator):** Authors custom quests in **Preparing**, captures NPC targets or discovery spots in the world, configures optional rules or dialogues, and dispatches contracts via in-game mail. Once sent, the Quest Master tracks live status and final outcomes in **Sent**.
+- **Player (Recipient):** Receives quest offers in **Pending**, reviews the briefing, and chooses **Accept** or **Reject**. Active quests are tracked automatically in-world, and results are mailed back to the Quest Master with zero manual copy/paste.
+
+### 2. Journal Sections (Exclusive Accordion)
+The **RPQuest** tab inside the Quest Journal (`J`) uses an exclusive accordion—expanding one section collapses the others:
+- **Pending:** Incoming quest offers waiting for you to **Accept** or **Reject**.
+- **Quests:** Your currently accepted and active quests. Select a quest to view objectives, toggle tracking, or manually complete it once all mandatory objectives are done.
+- **Completed:** Archive of finished quests you have played, including final stealth and optional objective outcomes.
+- **Preparing:** Unsent quest drafts you are creating or editing as a Quest Master.
+- **Sent:** Contracts you have already mailed to players, showing live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and automatic completion results (such as `Undetected` vs `Detected` and optional objectives).
+
+### 3. Quest Building Blocks
+- **Targets (NPC Elimination):** Aim at any living NPC and press your **Capture Target under Reticle** keybind (or `/rpquest capture`). Capturing the same NPC name multiple times stacks into a count (e.g. `Imp x3`); different named NPCs become separate objectives. For each target, you can toggle a **Location** condition (`Required` in the captured zone/subzone or `Not Required`), add a custom elimination message, or mark the objective as **Optional** (allowing the player to finish the quest once all mandatory objectives are complete).
+- **Hidden Discovery Points:** Stand at an exploration spot and press your **Capture Discovery Point** keybind (or `/rpquest discovery`). You can configure the trigger radius (`Small`, `Medium`, or `Large`). Discovery points remain hidden on the map and compass to avoid spoilers.
+- **Stealth (`Undetected`):** Enable **Undetected (Optional)** in the quest editor to challenge the player to complete the quest without being detected in combat. The quest tracks whether the player remained `Undetected` or was `Detected` and reports that outcome to the Quest Master.
+- **World Map Search Area (`M`):** Displays an approximate search circle on the World Map using a fixed random offset so the objective stays inside the circle without giving away its exact center. The circle clears automatically when the quest is completed or deactivated.
+- **NPC Dialogues:** Open dialogue (`E`) with up to 3 native ESO NPCs to capture them into the quest's **NPC Dialogues** section, then write a custom player response option and NPC reply for each. When the player speaks to those NPCs, your custom line is injected seamlessly into the native dialogue window without modifying original game options.
+
+### 4. In-Game Mail Flow (Automatic)
+- **Sending:** Enter the recipient's `@AccountName` (and optional character name) in the quest editor and click **Send Quest**. Both players must be on the same megaserver (e.g. PC-NA or PC-EU) and use the same client language. Larger quests are split automatically across up to 6 mail parts (`RPQP`) and reassembled on arrival.
+- **Arrival Announcement:** When a quest mail arrives, RPQuest ingests it automatically and displays an on-screen announcement alerting the player that a new quest is waiting in **Pending**.
+- **Accepting & Rejecting:** Clicking **Accept** activates the quest, HUD mini-tracker, World Map search area, and NPC dialogues, and notifies the Quest Master. Clicking **Reject** declines the offer and notifies the Quest Master.
+- **Completion Reporting:** When the player finishes all objectives (or manually completes a quest with only optional objectives remaining), RPQuest automatically mails the completion report (`RPQC1`) back to the Quest Master and updates the contract in **Sent**.
 
 ---
 
@@ -82,7 +111,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 
 - **Game Version:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **External Libraries:** None (`Zero-Dependency`)
-- **SavedVariables:** `RPQuest_SavedVariables` (per character)
+- **SavedVariables:** `RPQuest_SavedVariables` (account-wide)
 - **Supported Languages:** English (`en`), Spanish (`es`)
 
 ---
@@ -105,7 +134,7 @@ RPQuest/
 │   ├── MailInbox.lua        # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
 │   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
-│   ├── QuestRepository.lua  # Per-character CRUD & search area offset logic
+│   ├── QuestRepository.lua  # Account-wide CRUD, migration & search area offset logic
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
 │   ├── CombatTracker.lua    # Kill & stealth tracking (EVENT_COMBAT_EVENT)

@@ -85,8 +85,9 @@ local function EncodeTargetsList(targets)
             local req = math.max(1, math.floor(tonumber(t.requiredCount) or 1))
             local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
             local reqLoc = (t.locationRequired == true)
+            local isOpt = (t.optional == true)
             local msg = type(t.customMessage) == "string" and t.customMessage or ""
-            if hasLoc or reqLoc or msg ~= "" then
+            if hasLoc or reqLoc or msg ~= "" or isOpt then
                 local parts = {
                     EscapeField(t.name),
                     tostring(req),
@@ -96,6 +97,7 @@ local function EncodeTargetsList(targets)
                     hasLoc and tostring(math.max(100, math.floor(tonumber(t.radius) or defaultRad))) or "",
                     reqLoc and "1" or "0",
                     EscapeField(msg),
+                    isOpt and "1" or "0",
                 }
                 table.insert(items, table.concat(parts, "~"))
             else
@@ -131,6 +133,7 @@ local function DecodeTargetsList(rawTargets)
                     worldZ = hasLoc and wz or nil,
                     radius = hasLoc and math.max(100, math.floor(tonumber(kv[6]) or defaultRad)) or nil,
                     locationRequired = (kv[7] == "1"),
+                    optional = (kv[9] == "1"),
                     customMessage = UnescapeField(kv[8] or ""),
                 })
             end
@@ -315,8 +318,9 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
     for _, t in ipairs(targets) do
         local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
         local reqLoc = (t.locationRequired == true)
+        local isOpt = (t.optional == true)
         local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
-        local tFlags = (hasLoc and 1 or 0) + (reqLoc and 2 or 0) + (tMsg ~= "" and 4 or 0)
+        local tFlags = (hasLoc and 1 or 0) + (reqLoc and 2 or 0) + (tMsg ~= "" and 4 or 0) + (isOpt and 8 or 0)
         BinaryCodec:WriteByte(buf, tFlags)
         BinaryCodec:WriteStr(buf, t.name or "")
         BinaryCodec:WriteUVarint(buf, math.max(1, math.floor(tonumber(t.requiredCount) or 1)))
@@ -359,14 +363,16 @@ local function PackDialoguesBlock(buf, dialogues)
     end
 end
 
-local function PackDialogueCluesBlock(buf, dialogues)
+local function PackDialogueCluesBlock(buf, dialogues, forceWrite)
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
     local count = math.min(#dialogues, maxNpcs)
-    local hasPerNpcClue = false
-    for idx = 1, count do
-        if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
-            hasPerNpcClue = true
-            break
+    local hasPerNpcClue = forceWrite and true or false
+    if not hasPerNpcClue then
+        for idx = 1, count do
+            if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
+                hasPerNpcClue = true
+                break
+            end
         end
     end
     if hasPerNpcClue then
@@ -422,8 +428,17 @@ local function PackQuestBinary(quest)
     if clue ~= "" then BinaryCodec:WriteStr(buf, clue) end
     if lang ~= "" then BinaryCodec:WriteStr(buf, lang) end
 
+    local senderChar = (type(quest.senderCharacterName) == "string") and quest.senderCharacterName or ""
+    local recipientChar = (type(quest.recipientCharacterName) == "string") and quest.recipientCharacterName or ""
+    local hasCharNames = (senderChar ~= "" or recipientChar ~= "")
+
     if #dialogues > 0 then
-        PackDialogueCluesBlock(buf, dialogues)
+        PackDialogueCluesBlock(buf, dialogues, hasCharNames)
+    end
+
+    if hasCharNames then
+        BinaryCodec:WriteStr(buf, senderChar)
+        BinaryCodec:WriteStr(buf, recipientChar)
     end
 
     return table.concat(buf)
@@ -448,6 +463,7 @@ local function UnpackTargetsBlock(data, pos, len)
         local tHasLoc = (tFlags % 2) == 1
         local tReqLoc = (floor(tFlags / 2) % 2) == 1
         local tHasMsg = (floor(tFlags / 4) % 2) == 1
+        local tOptional = (floor(tFlags / 8) % 2) == 1
         local tName; tName, pos = BinaryCodec:ReadStr(data, pos, len)
         local tReq; tReq, pos = BinaryCodec:ReadUVarint(data, pos, len)
         if not tName or not tReq or tName == "" or tReq < 1 then
@@ -477,6 +493,7 @@ local function UnpackTargetsBlock(data, pos, len)
             worldZ = tHasLoc and tWZ or nil,
             radius = tHasLoc and math.max(100, floor(tRad)) or nil,
             locationRequired = tReqLoc,
+            optional = tOptional,
             customMessage = tMsg,
         })
     end
@@ -551,7 +568,9 @@ local function UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
         local dClue
         dClue, pos = BinaryCodec:ReadStr(data, pos, len)
         if not dClue then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-        decodedDialogues[idx].clue = dClue
+        if dClue ~= "" then
+            decodedDialogues[idx].clue = dClue
+        end
     end
     return true, pos
 end
@@ -618,8 +637,25 @@ local function UnpackQuestBinary(data)
     end
 
     if hasDialogues and pos <= len then
-        local okClues, clueErr = UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
-        if not okClues then return nil, clueErr end
+        local okClues
+        okClues, pos = UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
+        if not okClues then return nil, pos end
+    end
+
+    local senderCharacterName = ""
+    local recipientCharacterName = ""
+    if pos <= len then
+        local sc, nextPos = BinaryCodec:ReadStr(data, pos, len)
+        if sc then
+            senderCharacterName = sc
+            pos = nextPos
+        end
+    end
+    if pos <= len then
+        local rc = BinaryCodec:ReadStr(data, pos, len)
+        if rc then
+            recipientCharacterName = rc
+        end
     end
 
     if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then
@@ -654,6 +690,8 @@ local function UnpackQuestBinary(data)
         hideMapArea = hideMapArea,
         requireUndetected = requireUndetected,
         language = (sourceLanguage ~= "" and sourceLanguage) or nil,
+        senderCharacterName = (senderCharacterName ~= "" and senderCharacterName) or nil,
+        recipientCharacterName = (recipientCharacterName ~= "" and recipientCharacterName) or nil,
     }
 end
 
@@ -828,11 +866,15 @@ function ShareCodec:ComputeQuestSignature(quest)
     return ComputeSignature32(rawPayload)
 end
 
-local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
+local function EncodeResultCode(quest, characterName, timestamp, resultType)
     if type(quest) ~= "table" then
         return nil, "Invalid quest"
     end
-    if isCompleted and not quest.completed then
+    local kind = resultType
+    if type(resultType) == "boolean" then
+        kind = resultType and "completed" or "rejected"
+    end
+    if kind == "completed" and not quest.completed then
         return nil, "Quest is not completed"
     end
 
@@ -851,15 +893,35 @@ local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
 
     local ts = math.max(0, math.floor(tonumber(timestamp) or 0))
     local stealthFlag = ""
-    if isCompleted and quest.requireUndetected then
+    if kind == "completed" and quest.requireUndetected then
         stealthFlag = quest.wasDetected and "1" or "0"
+    end
+    local optionalFlag = ""
+    if kind == "completed" and type(quest.targets) == "table" then
+        local optBits = {}
+        for _, t in ipairs(quest.targets) do
+            if t.optional == true then
+                local done = (t.currentCount or 0) >= (t.requiredCount or 1)
+                table.insert(optBits, done and "1" or "0")
+            end
+        end
+        if #optBits > 0 then
+            optionalFlag = table.concat(optBits)
+        end
+    end
+    local resultFlag = "0"
+    if kind == "completed" then
+        resultFlag = "1"
+    elseif kind == "accepted" then
+        resultFlag = "2"
     end
     local rawPayload = table.concat({
         signature,
         EscapeField(cleanName),
-        isCompleted and "1" or "0",
+        resultFlag,
         tostring(ts),
         stealthFlag,
+        optionalFlag,
     }, "|")
 
     local prefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
@@ -870,11 +932,15 @@ local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
 end
 
 function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
-    return EncodeResultCode(quest, characterName, completedAt, true)
+    return EncodeResultCode(quest, characterName, completedAt, "completed")
 end
 
 function ShareCodec:EncodeRejection(quest, characterName, rejectedAt)
-    return EncodeResultCode(quest, characterName, rejectedAt, false)
+    return EncodeResultCode(quest, characterName, rejectedAt, "rejected")
+end
+
+function ShareCodec:EncodeAcceptance(quest, characterName, acceptedAt)
+    return EncodeResultCode(quest, characterName, acceptedAt, "accepted")
 end
 
 function ShareCodec:DecodeCompletion(codeString)
@@ -913,13 +979,32 @@ function ShareCodec:DecodeCompletion(codeString)
 
     local questSignature = fields[1]
     local characterName = UnescapeField(fields[2])
-    local completed = (fields[3] == "1")
+    local flag = fields[3]
+    local resultType
+    if flag == "1" then
+        resultType = "completed"
+    elseif flag == "0" then
+        resultType = "rejected"
+    elseif flag == "2" then
+        resultType = "accepted"
+    else
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+    local completed = (resultType == "completed")
     local completedAt = tonumber(fields[4]) or 0
     local wasDetected = nil
     if fields[5] == "1" then
         wasDetected = true
     elseif fields[5] == "0" then
         wasDetected = false
+    end
+    local optionalTargets = nil
+    local rawOpt = fields[6]
+    if type(rawOpt) == "string" and rawOpt ~= "" then
+        optionalTargets = {}
+        for i = 1, #rawOpt do
+            optionalTargets[i] = (string.sub(rawOpt, i, i) == "1")
+        end
     end
 
     if not questSignature or not string.match(questSignature, "^[0-9A-Fa-f]+$") or #questSignature ~= 8 then
@@ -933,10 +1018,12 @@ function ShareCodec:DecodeCompletion(codeString)
         questSignature = questSignature:upper(),
         characterName = characterName,
         completed = completed,
-        rejected = (fields[3] == "0"),
-        resultType = completed and "completed" or "rejected",
+        rejected = (resultType == "rejected"),
+        accepted = (resultType == "accepted"),
+        resultType = resultType,
         completedAt = math.max(0, math.floor(completedAt)),
         wasDetected = wasDetected,
+        optionalTargets = optionalTargets,
     }
 end
 

@@ -42,16 +42,30 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
     if statusLabel.SetFont then statusLabel:SetFont("ZoFontWinH4") end
     tab.detailStatus = statusLabel
 
+    local fromLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailFrom", contentParent, CT_LABEL)
+    fromLabel:SetDimensions(500, 20)
+    fromLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
+    if fromLabel.SetFont then fromLabel:SetFont("ZoFontWinH4") end
+    if fromLabel.SetColor then fromLabel:SetColor(0.77, 0.76, 0.62, 1) end
+    tab.detailFrom = fromLabel
+
+    local toLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailTo", contentParent, CT_LABEL)
+    toLabel:SetDimensions(500, 20)
+    toLabel:SetAnchor(TOPLEFT, fromLabel, BOTTOMLEFT, 0, 2)
+    if toLabel.SetFont then toLabel:SetFont("ZoFontWinH4") end
+    if toLabel.SetColor then toLabel:SetColor(0.77, 0.76, 0.62, 1) end
+    tab.detailTo = toLabel
+
     local locLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailLoc", contentParent, CT_LABEL)
     locLabel:SetDimensions(500, 22)
-    locLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
+    locLabel:SetAnchor(TOPLEFT, toLabel, BOTTOMLEFT, 0, 8)
     if locLabel.SetFont then locLabel:SetFont("ZoFontWinH4") end
     if locLabel.SetColor then locLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailLocation = locLabel
 
     local descBody = WINDOW_MANAGER:CreateControl(panelName .. "_DetailDescBody", contentParent, CT_LABEL)
     descBody:SetDimensions(495, 104)
-    descBody:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 25, 54)
+    descBody:SetAnchor(TOPLEFT, locLabel, BOTTOMLEFT, 25, 8)
     if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
     if descBody.SetColor then descBody:SetColor(0.77, 0.76, 0.62, 1) end
     if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
@@ -59,7 +73,7 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
 
     local divider = WINDOW_MANAGER:CreateControl(panelName .. "_DetailDivider", contentParent, CT_TEXTURE)
     divider:SetDimensions(512, 4)
-    divider:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 210)
+    divider:SetAnchor(TOPLEFT, descBody, BOTTOMLEFT, -25, 14)
     divider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
 
     local objHeader = WINDOW_MANAGER:CreateControl(panelName .. "_DetailObjHeader", contentParent, CT_LABEL)
@@ -91,6 +105,12 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
         tab:OnToggleActiveClicked()
     end)
     tab.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -25, 16)
+
+    tab.btnComplete = CreateStyledButton(panelName .. "_BtnComplete", contentParent, 160, 32, Addon.Locale:Get("BTN_COMPLETE_QUEST"), function()
+        tab:OnCompleteQuestClicked()
+    end)
+    tab.btnComplete:SetAnchor(TOPLEFT, tab.btnActivate, TOPRIGHT, 12, 0)
+    tab.btnComplete:SetHidden(true)
 
     tab.btnEdit = CreateStyledButton(panelName .. "_BtnEdit", contentParent, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
         tab:OpenEditEditor(tab.selectedQuestId)
@@ -226,7 +246,32 @@ local function FormatPreparedStatusText(quest)
         elseif pInfo.wasDetected == true then
             stealthPart = " " .. Addon.Locale:Get("VALIDATE_STEALTH_DETECTED")
         end
-        return Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart)
+        local optionalPart = ""
+        if type(pInfo.optionalTargets) == "table" and #pInfo.optionalTargets > 0 then
+            local optNames = {}
+            for _, t in ipairs(quest.targets or {}) do
+                if t.optional == true then
+                    table.insert(optNames, t.name or "")
+                end
+            end
+            local doneNames = {}
+            local totalOpt = #pInfo.optionalTargets
+            for i = 1, totalOpt do
+                if pInfo.optionalTargets[i] == true then
+                    table.insert(doneNames, optNames[i] or tostring(i))
+                end
+            end
+            if #doneNames > 0 then
+                optionalPart = Addon.Locale:Get("VALIDATE_OPTIONAL_COMPLETED", #doneNames, totalOpt, table.concat(doneNames, ", "))
+            else
+                optionalPart = Addon.Locale:Get("VALIDATE_OPTIONAL_NONE", totalOpt)
+            end
+        end
+        return Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart .. optionalPart)
+    elseif pStatus == "accepted" and type(pInfo) == "table" then
+        local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
+        local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
+        return Addon.Locale:Get("PREPARED_STATUS_ACCEPTED", who .. charPart)
     elseif pStatus == "rejected" and type(pInfo) == "table" then
         local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
         local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
@@ -242,10 +287,7 @@ local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, 
     local deactivateLabel = isPrepared and Addon.Locale:Get("BTN_STOP_TEST") or Addon.Locale:Get("BTN_DEACTIVATE")
 
     if isOffered then
-        local senderSuffix = (type(selectedQuest.senderDisplayName) == "string" and selectedQuest.senderDisplayName ~= "")
-            and (" (" .. Addon.Locale:Get("MAIL_FROM_LABEL", selectedQuest.senderDisplayName) .. ")")
-            or ""
-        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING") .. senderSuffix)
+        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING"))
     elseif isPrepared then
         tab.detailStatus:SetText(FormatPreparedStatusText(selectedQuest))
         tab.btnActivate:SetText(isCurrentActive and deactivateLabel or activateLabel)
@@ -271,16 +313,43 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
     local totalTargets = #targets
     local limit = (totalTargets > maxVisibleObjLines) and (maxVisibleObjLines - 1) or totalTargets
     local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
+    local pStatus, pInfo
+    if isPrepared then
+        pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(selectedQuest)
+    end
+    local isSentCompleted = isPrepared and pStatus == "completed" and type(pInfo) == "table"
+    local optIdx = 0
 
     for i = 1, limit do
         local t = targets[i]
+        local currentCount = t.currentCount or 0
+        local requiredCount = t.requiredCount or 1
+        local isTargetCompleted = (currentCount >= requiredCount)
+        if isSentCompleted then
+            if t.optional == true then
+                optIdx = optIdx + 1
+                isTargetCompleted = (type(pInfo.optionalTargets) == "table" and pInfo.optionalTargets[optIdx] == true)
+            else
+                isTargetCompleted = true
+                currentCount = requiredCount
+            end
+        elseif t.optional == true then
+            optIdx = optIdx + 1
+        end
+        if isTargetCompleted and currentCount < requiredCount then
+            currentCount = requiredCount
+        end
+
         local line = Addon.Locale:Get(
             "OBJECTIVE_KILL_FORMAT",
             t.name or "",
-            t.currentCount or 0,
-            t.requiredCount or 1
+            currentCount,
+            requiredCount
         ):gsub("^•%s*", bullet)
-        if (t.currentCount or 0) >= (t.requiredCount or 1) then
+        if t.optional == true then
+            line = line .. Addon.Locale:Get("OBJECTIVE_OPTIONAL_SUFFIX")
+        end
+        if isTargetCompleted then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
         elseif isPrepared and Addon.QuestRepository:HasTargetLocation(t) then
             local locKey = t.locationRequired and "TARGET_DETAIL_LOC_REQUIRED" or "TARGET_DETAIL_LOC_OPTIONAL"
@@ -308,7 +377,11 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
     end
 
     if selectedQuest.requireUndetected then
-        local stealthKey = selectedQuest.wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
+        local wasDetected = selectedQuest.wasDetected
+        if isSentCompleted and pInfo.wasDetected ~= nil then
+            wasDetected = pInfo.wasDetected
+        end
+        local stealthKey = wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
         table.insert(objLines, bullet .. Addon.Locale:Get(stealthKey))
     end
 
@@ -341,17 +414,21 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
 
     if isOffered then
         tab.btnActivate:SetHidden(true)
+        if tab.btnComplete then tab.btnComplete:SetHidden(true) end
         tab.btnEdit:SetHidden(true)
         tab.btnReset:SetHidden(true)
     elseif isPrepared then
         tab.btnActivate:SetHidden(false)
+        if tab.btnComplete then tab.btnComplete:SetHidden(true) end
         tab.btnEdit:SetHidden(false)
         tab.btnReset:SetAnchor(TOPLEFT, tab.btnActivate, BOTTOMLEFT, 0, 10)
         tab.btnReset:SetHidden(false)
     else
         local showCompletion = selectedQuest.completed and true or false
         local showFailed = selectedQuest.failed and true or false
+        local canManualComplete = Addon.QuestRepository:CanManuallyCompleteQuest(selectedQuest)
         tab.btnActivate:SetHidden(showCompletion or showFailed)
+        if tab.btnComplete then tab.btnComplete:SetHidden(not canManualComplete) end
         tab.btnEdit:SetHidden(true)
         tab.btnReset:SetHidden(not showFailed)
         if showFailed then
@@ -367,11 +444,14 @@ end
 local function RenderEmptyDetailPane(tab)
     tab.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
     tab.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
+    tab.detailFrom:SetText("")
+    tab.detailTo:SetText("")
     tab.detailLocation:SetText("")
     tab.detailDescBody:SetText("")
     tab.detailObjHeader:SetHidden(true)
     tab.detailObjText:SetText("")
     tab.btnActivate:SetHidden(true)
+    if tab.btnComplete then tab.btnComplete:SetHidden(true) end
     if tab.btnAcceptOffered then tab.btnAcceptOffered:SetHidden(true) end
     if tab.btnRejectOffered then tab.btnRejectOffered:SetHidden(true) end
     tab.selectedQuestId = nil
@@ -401,6 +481,33 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
 
     ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
+    local statusText = tab.detailStatus:GetText() or ""
+    tab.detailStatus:SetDimensions(500, 0)
+    local statusHeight = tab.detailStatus.GetTextHeight and tab.detailStatus:GetTextHeight()
+    if not statusHeight then
+        local _, newlines = statusText:gsub("\n", "\n")
+        statusHeight = (newlines + 1) * 22
+    end
+    statusHeight = math.max(22, statusHeight)
+    tab.detailStatus:SetDimensions(500, statusHeight)
+
+    local fromName = (type(selectedQuest.senderCharacterName) == "string" and selectedQuest.senderCharacterName ~= "")
+        and selectedQuest.senderCharacterName
+        or ((type(selectedQuest.senderDisplayName) == "string" and selectedQuest.senderDisplayName ~= "")
+            and selectedQuest.senderDisplayName
+            or nil)
+    if not fromName and isPrepared then
+        local playerChar = Addon.QuestRepository:GetPlayerCharacterName()
+        if playerChar ~= "" then
+            fromName = playerChar
+        end
+    end
+    tab.detailFrom:SetText(Addon.Locale:Get("MAIL_FROM_LABEL", fromName or Addon.Locale:Get("LABEL_NO_RECIPIENT")))
+
+    local toName = (type(selectedQuest.recipientCharacterName) == "string" and selectedQuest.recipientCharacterName ~= "")
+        and selectedQuest.recipientCharacterName
+        or Addon.Locale:Get("LABEL_NO_RECIPIENT")
+    tab.detailTo:SetText(Addon.Locale:Get("MAIL_TO_LABEL", toName))
 
     local locText = (selectedQuest.mapName and selectedQuest.mapName ~= "" and selectedQuest.mapName)
         or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
@@ -417,7 +524,7 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local objHeight = textHeight and (textHeight + 16) or (#objLines * 24)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
     if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 540 + objHeight))
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 580 + objHeight + math.max(0, statusHeight - 22)))
     end
 
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared)

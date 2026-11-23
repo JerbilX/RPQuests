@@ -91,12 +91,26 @@ local function BuildEditorBaseFields(tab, formParent, panelName)
     tab.lblInputRecipient = lblRecipient
 
     local recipientBg, recipientEdit = CreateEditBox(
-        panelName .. "_RecipientEdit", formParent, 260, 30, 64, false,
+        panelName .. "_RecipientEdit", formParent, 250, 30, 64, false,
         function(val) Addon.QuestRepository:UpdateDraftFields({ recipientAccount = val }, true) end
     )
     recipientBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 188)
     tab.recipientBg = recipientBg
     tab.recipientEdit = recipientEdit
+
+    local lblRecipientChar = WINDOW_MANAGER:CreateControl(panelName .. "_LblInputRecipientChar", formParent, CT_LABEL)
+    lblRecipientChar:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 166)
+    if lblRecipientChar.SetFont then lblRecipientChar:SetFont("ZoFontGameBold") end
+    lblRecipientChar:SetText(Addon.Locale:Get("LABEL_INPUT_RECIPIENT_CHAR"))
+    tab.lblInputRecipientChar = lblRecipientChar
+
+    local recipientCharBg, recipientCharEdit = CreateEditBox(
+        panelName .. "_RecipientCharEdit", formParent, 250, 30, 64, false,
+        function(val) Addon.QuestRepository:UpdateDraftFields({ recipientCharacterName = val }, true) end
+    )
+    recipientCharBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 188)
+    tab.recipientCharBg = recipientCharBg
+    tab.recipientCharEdit = recipientCharEdit
 end
 
 local function BuildTargetSectionAreaControls(tab, targetBody, panelName)
@@ -158,11 +172,20 @@ local function BuildTargetSectionConfigControls(tab, targetBody, panelName)
     tab.btnTargetPrev:SetHidden(true)
 
     local lblTargetCfgIndex = WINDOW_MANAGER:CreateControl(panelName .. "_LblTargetCfgIndex", targetBody, CT_LABEL)
-    lblTargetCfgIndex:SetDimensions(440, 24)
+    lblTargetCfgIndex:SetDimensions(300, 24)
     lblTargetCfgIndex:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 34, 132)
     if lblTargetCfgIndex.SetFont then lblTargetCfgIndex:SetFont("ZoFontGameBold") end
     lblTargetCfgIndex:SetHidden(true)
     tab.lblTargetCfgIndex = lblTargetCfgIndex
+
+    tab.btnTargetOptional = CreateStyledButton(panelName .. "_BtnTargetOptional", targetBody, 134, 24, "", function()
+        local idx = tab.selectedTargetIndex
+        local draft = Addon.QuestRepository:GetDraft()
+        local target = idx and draft.targets and draft.targets[idx]
+        if target then Addon.QuestRepository:UpdateDraftTarget(idx, { optional = target.optional ~= true }) end
+    end)
+    tab.btnTargetOptional:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 340, 130)
+    tab.btnTargetOptional:SetHidden(true)
 
     tab.btnTargetNext = CreateStyledButton(panelName .. "_BtnTargetNext", targetBody, 28, 24, ">", function()
         local total = #(Addon.QuestRepository:GetDraft().targets or {})
@@ -656,6 +679,8 @@ local function RefreshEditorBaseAndArea(tab, draft)
     tab.editorHeader:SetText(Addon.Locale:Get(draft.editingQuestId and "EDITOR_EDIT_TITLE" or "EDITOR_CREATE_TITLE"))
     SyncUnfocusedEdit(tab.titleEdit, draft.title or "")
     SyncUnfocusedEdit(tab.descEdit, draft.description or "")
+    SyncUnfocusedEdit(tab.recipientEdit, draft.recipientAccount or "")
+    SyncUnfocusedEdit(tab.recipientCharEdit, draft.recipientCharacterName or "")
     SyncUnfocusedEdit(tab.completionEdit, draft.completionMessage or "")
 
     local targets = draft.targets or {}
@@ -704,6 +729,13 @@ local function RefreshEditorTargetConfig(tab, draft)
 
     if tab.btnTargetPrev then tab.btnTargetPrev:SetHidden(not showTargetCfg) end
     if tab.btnTargetNext then tab.btnTargetNext:SetHidden(not showTargetCfg) end
+    if tab.btnTargetOptional then
+        tab.btnTargetOptional:SetHidden(not showTargetCfg)
+        if selTarget then
+            local optKey = selTarget.optional and "BTN_TARGET_OPTIONAL_ON" or "BTN_TARGET_OPTIONAL_OFF"
+            tab.btnTargetOptional:SetText(FormatSelected(Addon.Locale:Get(optKey), selTarget.optional == true))
+        end
+    end
     if tab.lblTargetCfgIndex then
         tab.lblTargetCfgIndex:SetHidden(not showTargetCfg)
         if showTargetCfg and selTarget then
