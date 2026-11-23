@@ -732,7 +732,7 @@ function QuestRepository:SetActiveQuest(questId)
     return true
 end
 
-function QuestRepository:ResetQuest(questId)
+function QuestRepository:ResetQuest(questId, options)
     local q = self:GetQuestById(questId)
     if not q then return false end
 
@@ -749,9 +749,20 @@ function QuestRepository:ResetQuest(questId)
     if self._completionCodeCache then
         self._completionCodeCache[questId] = nil
     end
-    self.savedVars.activeQuestId = q.id
+
+    local shouldActivate = not (type(options) == "table" and options.activate == false)
+    local wasActive = (self.savedVars.activeQuestId == q.id)
+    if shouldActivate then
+        self.savedVars.activeQuestId = q.id
+    elseif wasActive then
+        self.savedVars.activeQuestId = nil
+    end
+
     self:InvalidateActiveTargetCache()
     self:NotifyListeners("QUEST_RESET", q)
+    if not shouldActivate and wasActive then
+        self:NotifyListeners("ACTIVE_QUEST_CHANGED", nil)
+    end
     return true
 end
 

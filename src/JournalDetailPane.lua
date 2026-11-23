@@ -102,7 +102,15 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
     tab.btnEdit:SetAnchor(TOPLEFT, tab.btnActivate, TOPRIGHT, 12, 0)
 
     tab.btnReset = CreateStyledButton(panelName .. "_BtnReset", contentParent, 160, 32, Addon.Locale:Get("BTN_RESET"), function()
-        if tab.selectedQuestId and Addon.QuestRepository:ResetQuest(tab.selectedQuestId) then
+        if not tab.selectedQuestId then return end
+        local q = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
+        if not q then return end
+        local activeQuest = Addon.QuestRepository:GetActiveQuest()
+        local isCurrentActive = (activeQuest and activeQuest.id == q.id)
+        local resetOptions = (Addon.QuestRepository:IsPreparedQuest(q) and not isCurrentActive)
+            and { activate = false }
+            or nil
+        if Addon.QuestRepository:ResetQuest(tab.selectedQuestId, resetOptions) then
             Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_RESET"), false)
         end
     end)
@@ -417,9 +425,12 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
         tab.btnEdit:SetHidden(true)
         tab.btnReset:SetHidden(true)
     elseif isPrepared then
+        local activeQuest = Addon.QuestRepository:GetActiveQuest()
+        local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
+        local canManualComplete = isCurrentActive and Addon.QuestRepository:CanManuallyCompleteQuest(selectedQuest)
         tab.btnActivate:SetHidden(false)
-        if tab.btnComplete then tab.btnComplete:SetHidden(true) end
-        tab.btnEdit:SetHidden(false)
+        if tab.btnComplete then tab.btnComplete:SetHidden(not canManualComplete) end
+        tab.btnEdit:SetHidden(canManualComplete)
         tab.btnReset:SetAnchor(TOPLEFT, tab.btnActivate, BOTTOMLEFT, 0, 10)
         tab.btnReset:SetHidden(false)
     else

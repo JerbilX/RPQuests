@@ -520,13 +520,22 @@ function JournalTab:OnToggleActiveClicked()
     if not q then return end
 
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    local isPrepared = Addon.QuestRepository:IsPreparedQuest(q)
     if activeQuest and activeQuest.id == q.id then
-        Addon.QuestRepository:SetActiveQuest(nil)
-    else
-        if q.completed then
-            Addon.QuestRepository:ResetQuest(q.id)
+        if isPrepared then
+            Addon.QuestRepository:ResetQuest(q.id, { activate = false })
         else
-            Addon.QuestRepository:SetActiveQuest(q.id)
+            Addon.QuestRepository:SetActiveQuest(nil)
+        end
+    else
+        local activated
+        if q.completed or q.failed or isPrepared then
+            activated = Addon.QuestRepository:ResetQuest(q.id)
+        else
+            activated = Addon.QuestRepository:SetActiveQuest(q.id)
+        end
+        if activated and isPrepared then
+            Addon.Announcements:AnnounceQuestAccepted(q)
         end
     end
 end
