@@ -84,16 +84,32 @@ jobs:
             echo "Release ${VERSION}" > changelog.txt
           fi
 
+          API_VERSION=$(awk -F': *' '/^## APIVersion:/{print $2; exit}' RPQuest.txt | tr -d '\r' | awk '{print $NF}')
+          COMPATIBLE_JSON=$(curl -fsS -H "x-api-token: ${ESOUI_API_TOKEN}" "https://api.esoui.com/addons/compatible.json" || true)
+          COMPATIBILITY=$(printf '%s' "$COMPATIBLE_JSON" | jq -r --arg api "$API_VERSION" 'map(select(.interface == $api)) | .[0].id // empty' 2>/dev/null || true)
+          if [ -z "$COMPATIBILITY" ]; then
+            echo "::warning::Could not resolve ESOUI compatible version for APIVersion '${API_VERSION}'; omitting compatible parameter."
+          fi
+
           ENDPOINT="https://api.esoui.com/addons/update"
           if [ "$IS_DRY_RUN" = "true" ]; then
             ENDPOINT="https://api.esoui.com/addons/updatetest"
           fi
 
-          echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}) to ${ENDPOINT}..."
-          curl --fail-with-body -sS -X POST "$ENDPOINT" \
-            -H "x-api-token: ${ESOUI_API_TOKEN}" \
-            -F "id=5080" \
-            -F "version=${VERSION}" \
-            -F "updatefile=@${ZIP_PATH}" \
-            -F "changelog=<changelog.txt" \
+          CURL_ARGS=(
+            --fail-with-body -sS -X POST "$ENDPOINT"
+            -H "x-api-token: ${ESOUI_API_TOKEN}"
+            -F "id=5080"
+            -F "version=${VERSION}"
+            -F "updatefile=@${ZIP_PATH}"
+            -F "changelog=<changelog.txt"
             -F "description=<docs/esoui-description.bbcode"
+          )
+          if [ -n "$COMPATIBILITY" ]; then
+            CURL_ARGS+=(-F "compatible=${COMPATIBILITY}")
+            echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}, compatible=${COMPATIBILITY}) to ${ENDPOINT}..."
+          else
+            echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}) to ${ENDPOINT}..."
+          fi
+
+          curl "${CURL_ARGS[@]}"
