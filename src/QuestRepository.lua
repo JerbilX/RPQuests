@@ -12,12 +12,6 @@ local Addon = RPQuest
 Addon.QuestRepository = {}
 local QuestRepository = Addon.QuestRepository
 
-local function Clamp(val, minVal, maxVal)
-    if val < minVal then return minVal end
-    if val > maxVal then return maxVal end
-    return val
-end
-
 function QuestRepository:NormalizeName(name)
     if type(name) ~= "string" or name == "" then return "" end
     local clean = zo_strformat("<<C:1>>", (name:gsub("%^%a+$", "")))
@@ -167,16 +161,20 @@ function QuestRepository:CanManuallyCompleteQuest(quest)
     return true
 end
 
-function QuestRepository:CompleteQuest(questId)
-    local quest = self:GetQuestById(questId)
-    if not self:CanManuallyCompleteQuest(quest) then
-        return false, nil
-    end
+local function FinalizeCompletedQuest(self, quest)
     quest.completed = true
     if self.savedVars.activeQuestId == quest.id then
         self.savedVars.activeQuestId = nil
     end
     self:InvalidateActiveTargetCache()
+end
+
+function QuestRepository:CompleteQuest(questId)
+    local quest = self:GetQuestById(questId)
+    if not self:CanManuallyCompleteQuest(quest) then
+        return false, nil
+    end
+    FinalizeCompletedQuest(self, quest)
     self:NotifyListeners("QUEST_COMPLETED", quest)
     return true, quest
 end
@@ -235,161 +233,8 @@ function QuestRepository:GetDefaults()
     }
 end
 
-local function DeepCopyValue(val, seen)
-    if type(val) ~= "table" then
-        return val
-    end
-    seen = seen or {}
-    if seen[val] then
-        return seen[val]
-    end
-    local copy = {}
-    seen[val] = copy
-    for k, v in pairs(val) do
-        copy[DeepCopyValue(k, seen)] = DeepCopyValue(v, seen)
-    end
-    return copy
-end
-
-local function IsDraftEmpty(draft)
-    if type(draft) ~= "table" then
-        return true
-    end
-    local hasText = (type(draft.title) == "string" and draft.title ~= "")
-        or (type(draft.description) == "string" and draft.description ~= "")
-        or (type(draft.clue) == "string" and draft.clue ~= "")
-        or (type(draft.completionMessage) == "string" and draft.completionMessage ~= "")
-    if hasText then
-        return false
-    end
-    local hasLists = (type(draft.targets) == "table" and #draft.targets > 0)
-        or (type(draft.discoveries) == "table" and #draft.discoveries > 0)
-        or (type(draft.dialogues) == "table" and #draft.dialogues > 0)
-    return not hasLists
-end
-
-local function IsCharacterBucket(charData)
-    if type(charData) ~= "table" then
-        return false
-    end
-    return type(charData.quests) == "table"
-        or type(charData.ingestedMailIds) == "table"
-        or type(charData.draft) == "table"
-        or type(charData.settings) == "table"
-end
-
 function QuestRepository:MigrateCharacterSavedVars(rawRoot, displayName, savedVars, currentCharId)
-    if type(rawRoot) ~= "table" or type(displayName) ~= "string" or displayName == "" or type(savedVars) ~= "table" then
-        return 0
-    end
-    local defaultProfile = rawRoot["Default"]
-    if type(defaultProfile) ~= "table" then
-        return 0
-    end
-    local accountRoot = defaultProfile[displayName]
-    if type(accountRoot) ~= "table" then
-        return 0
-    end
-
-    savedVars.nextId = tonumber(savedVars.nextId) or 1
-    savedVars.quests = type(savedVars.quests) == "table" and savedVars.quests or {}
-    savedVars.ingestedMailIds = type(savedVars.ingestedMailIds) == "table" and savedVars.ingestedMailIds or {}
-    savedVars.migratedCharacterIds = type(savedVars.migratedCharacterIds) == "table" and savedVars.migratedCharacterIds or {}
-
-    local usedIds = {}
-    local maxId = 0
-    for _, q in ipairs(savedVars.quests) do
-        if type(q) == "table" and type(q.id) == "number" then
-            usedIds[q.id] = true
-            if q.id > maxId then
-                maxId = q.id
-            end
-        end
-    end
-    if savedVars.nextId <= maxId then
-        savedVars.nextId = maxId + 1
-    end
-
-    local charKeys = {}
-    for charKey, charData in pairs(accountRoot) do
-        if charKey ~= "$AccountWide" and not savedVars.migratedCharacterIds[charKey] and IsCharacterBucket(charData) then
-            table.insert(charKeys, charKey)
-        end
-    end
-    table.sort(charKeys, function(a, b)
-        if currentCharId and a == currentCharId and b ~= currentCharId then
-            return true
-        end
-        if currentCharId and b == currentCharId and a ~= currentCharId then
-            return false
-        end
-        return tostring(a) < tostring(b)
-    end)
-
-    local migratedCount = 0
-    for _, charKey in ipairs(charKeys) do
-        local charData = accountRoot[charKey]
-        local idMap = {}
-
-        if type(charData.quests) == "table" then
-            for _, srcQuest in ipairs(charData.quests) do
-                if type(srcQuest) == "table" then
-                    local cloned = DeepCopyValue(srcQuest)
-                    local oldId = tonumber(cloned.id)
-                    local newId = oldId
-                    if not newId or newId < 1 or usedIds[newId] then
-                        newId = savedVars.nextId
-                        savedVars.nextId = newId + 1
-                    elseif newId >= savedVars.nextId then
-                        savedVars.nextId = newId + 1
-                    end
-                    cloned.id = newId
-                    usedIds[newId] = true
-                    if oldId then
-                        idMap[oldId] = newId
-                    end
-                    table.insert(savedVars.quests, cloned)
-                    migratedCount = migratedCount + 1
-                end
-            end
-        end
-
-        if type(charData.ingestedMailIds) == "table" then
-            for mailKey, flag in pairs(charData.ingestedMailIds) do
-                if flag then
-                    savedVars.ingestedMailIds[mailKey] = true
-                end
-            end
-        end
-
-        if savedVars.activeQuestId == nil and charData.activeQuestId ~= nil then
-            local activeNum = tonumber(charData.activeQuestId)
-            savedVars.activeQuestId = (activeNum and idMap[activeNum]) or charData.activeQuestId
-        end
-
-        if not savedVars._migratedSettings and type(charData.settings) == "table" then
-            savedVars.settings = type(savedVars.settings) == "table" and savedVars.settings or {}
-            for k, v in pairs(charData.settings) do
-                if v ~= nil then
-                    savedVars.settings[k] = v
-                end
-            end
-            savedVars._migratedSettings = true
-        end
-
-        if IsDraftEmpty(savedVars.draft) and type(charData.draft) == "table" and not IsDraftEmpty(charData.draft) then
-            local clonedDraft = DeepCopyValue(charData.draft)
-            local editId = tonumber(clonedDraft.editingQuestId)
-            if editId and idMap[editId] then
-                clonedDraft.editingQuestId = idMap[editId]
-            end
-            savedVars.draft = clonedDraft
-        end
-
-        savedVars.migratedCharacterIds[charKey] = true
-    end
-
-    return migratedCount
+    return Addon.QuestMigration:MigrateCharacterSavedVars(rawRoot, displayName, savedVars, currentCharId)
 end
 
 function QuestRepository:Initialize(savedVars)
@@ -398,16 +243,12 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars.quests = self.savedVars.quests or {}
     self.savedVars.ingestedMailIds = self.savedVars.ingestedMailIds or {}
     if type(self.savedVars.settings) ~= "table" then
-        self.savedVars.settings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = true }
-    else
-        if self.savedVars.settings.autoDeleteMail == nil then
-            self.savedVars.settings.autoDeleteMail = true
-        end
-        if self.savedVars.settings.autoAcceptMail == nil then
-            self.savedVars.settings.autoAcceptMail = false
-        end
-        if self.savedVars.settings.autoSendCompletionMail == nil then
-            self.savedVars.settings.autoSendCompletionMail = true
+        self.savedVars.settings = {}
+    end
+    local defaultSettings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = true }
+    for k, v in pairs(defaultSettings) do
+        if self.savedVars.settings[k] == nil then
+            self.savedVars.settings[k] = v
         end
     end
     self.savedVars.draft = Addon.QuestDraftStore:EnsureDraft(self.savedVars.draft)
@@ -444,73 +285,23 @@ function QuestRepository:NotifyListeners(eventType, quest)
     end
 end
 
--- Calcula un centro desplazado aleatorio para que (targetX, targetY) quede
--- garantizadamente dentro del círculo de radio `radius`, pero no en su centro exacto.
 function QuestRepository:ComputeOffsetCenter(targetX, targetY, radius, randomAngle01, randomDist01)
-    local r = tonumber(radius) or 0.075
-    if r <= 0 then r = 0.075 end
+    return Addon.WorldMapArea:ComputeOffsetCenter(targetX, targetY, radius, randomAngle01, randomDist01)
+end
 
-    local tx = Clamp(tonumber(targetX) or 0.5, 0.01, 0.99)
-    local ty = Clamp(tonumber(targetY) or 0.5, 0.01, 0.99)
+local DRAFT_DELEGATES = {
+    "GetDraft", "ResetDraft", "ClearDraftTargets", "AddDraftDiscoveryPoint",
+    "ClearDraftDiscoveries", "UpdateDraftDiscoveryPoint", "RemoveDraftDiscoveryPoint",
+    "AddDraftDialogue", "AddDraftDialogueFromLastNpc", "UpdateDraftDialogue",
+    "RemoveDraftDialogue", "ClearDraftDialogues", "LoadQuestIntoDraft",
+    "UpdateDraftFields", "SetDraftCapturedTarget", "SaveDraft",
+    "UpdateDraftTarget", "CaptureDraftTargetLocation", "ClearDraftTargetLocation",
+}
 
-    local minRatio = Addon.Constants.AREA_OFFSET.MIN_RATIO
-    local maxRatio = Addon.Constants.AREA_OFFSET.MAX_RATIO
-
-    local uAngle = (randomAngle01 ~= nil) and randomAngle01 or math.random()
-    local uDist = (randomDist01 ~= nil) and randomDist01 or math.random()
-
-    local angle = uAngle * 2 * math.pi
-    local dist = (minRatio + (uDist * (maxRatio - minRatio))) * r
-
-    local cx = tx + (dist * math.cos(angle))
-    local cy = ty + (dist * math.sin(angle))
-
-    local minBound = math.max(0.02, r * 0.5)
-    local maxBound = math.min(0.98, 1.0 - (r * 0.5))
-
-    cx = Clamp(cx, minBound, maxBound)
-    cy = Clamp(cy, minBound, maxBound)
-
-    -- Garantizar matemáticamente que la distancia entre (tx, ty) y (cx, cy) sea <= 0.80 * r
-    local dx = tx - cx
-    local dy = ty - cy
-    local actualDist = math.sqrt((dx * dx) + (dy * dy))
-    local maxAllowedDist = r * 0.80
-    if actualDist > maxAllowedDist and actualDist > 0 then
-        local scale = maxAllowedDist / actualDist
-        cx = tx - (dx * scale)
-        cy = ty - (dy * scale)
+for _, methodName in ipairs(DRAFT_DELEGATES) do
+    QuestRepository[methodName] = function(self, ...)
+        return Addon.QuestDraftStore[methodName](Addon.QuestDraftStore, self, ...)
     end
-
-    return cx, cy
-end
-
-function QuestRepository:GetDraft()
-    return Addon.QuestDraftStore:GetDraft(self)
-end
-
-function QuestRepository:ResetDraft()
-    return Addon.QuestDraftStore:ResetDraft(self)
-end
-
-function QuestRepository:ClearDraftTargets()
-    return Addon.QuestDraftStore:ClearDraftTargets(self)
-end
-
-function QuestRepository:AddDraftDiscoveryPoint(data)
-    return Addon.QuestDraftStore:AddDraftDiscoveryPoint(self, data)
-end
-
-function QuestRepository:ClearDraftDiscoveries()
-    return Addon.QuestDraftStore:ClearDraftDiscoveries(self)
-end
-
-function QuestRepository:UpdateDraftDiscoveryPoint(index, fields, silent)
-    return Addon.QuestDraftStore:UpdateDraftDiscoveryPoint(self, index, fields, silent)
-end
-
-function QuestRepository:RemoveDraftDiscoveryPoint(index)
-    return Addon.QuestDraftStore:RemoveDraftDiscoveryPoint(self, index)
 end
 
 function QuestRepository:SetLastInteractedNpc(npcName, zoneId)
@@ -528,51 +319,6 @@ end
 
 function QuestRepository:GetLastInteractedNpc()
     return self._lastInteractedNpc
-end
-
-function QuestRepository:AddDraftDialogue(npcName, zoneId, responseText, clueText)
-    return Addon.QuestDraftStore:AddDraftDialogue(self, npcName, zoneId, responseText, clueText)
-end
-
-function QuestRepository:AddDraftDialogueFromLastNpc(responseText, clueText)
-    return Addon.QuestDraftStore:AddDraftDialogueFromLastNpc(self, responseText, clueText)
-end
-
-function QuestRepository:UpdateDraftDialogue(index, fields, silent)
-    return Addon.QuestDraftStore:UpdateDraftDialogue(self, index, fields, silent)
-end
-
-function QuestRepository:RemoveDraftDialogue(index)
-    return Addon.QuestDraftStore:RemoveDraftDialogue(self, index)
-end
-
-function QuestRepository:ClearDraftDialogues()
-    return Addon.QuestDraftStore:ClearDraftDialogues(self)
-end
-
-function QuestRepository:LoadQuestIntoDraft(questId)
-    return Addon.QuestDraftStore:LoadQuestIntoDraft(self, questId)
-end
-
-function QuestRepository:UpdateDraftFields(fields, silent)
-    return Addon.QuestDraftStore:UpdateDraftFields(self, fields, silent)
-end
-
-function QuestRepository:SetDraftCapturedTarget(captureData)
-    return Addon.QuestDraftStore:SetDraftCapturedTarget(self, captureData)
-end
-
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput, recipientCharacterNameInput)
-    return Addon.QuestDraftStore:SaveDraft(
-        self,
-        titleInput,
-        descriptionInput,
-        areaRadiusInput,
-        completionMessageInput,
-        requireUndetectedInput,
-        recipientAccountInput,
-        recipientCharacterNameInput
-    )
 end
 
 function QuestRepository:IsOfferedQuest(quest)
@@ -594,44 +340,34 @@ function QuestRepository:HasIngestedMail(mailKey)
     return false
 end
 
-function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, options)
-    options = type(options) == "table" and options or {}
-    if type(options.sourceMailId) == "string" and options.sourceMailId ~= "" then
-        if self:HasIngestedMail(options.sourceMailId) then
-            for _, q in ipairs(self.savedVars.quests or {}) do
-                if q.sourceMailId == options.sourceMailId then
-                    return q, nil, true
-                end
-            end
-            return nil, nil, true
+function QuestRepository:FindAlreadyIngestedQuest(sourceMailId)
+    if type(sourceMailId) ~= "string" or sourceMailId == "" then
+        return false, nil
+    end
+    if not self:HasIngestedMail(sourceMailId) then
+        return false, nil
+    end
+    for _, q in ipairs((self.savedVars and self.savedVars.quests) or {}) do
+        if q.sourceMailId == sourceMailId then
+            return true, q
         end
     end
+    return true, nil
+end
 
-    local decoded, errKey = Addon.ShareCodec:DecodeQuest(codeString)
-    if not decoded then
-        return nil, Addon.Locale:Get(type(errKey) == "string" and errKey or "ERR_INVALID_CODE")
-    end
-
-    local newId = self.savedVars.nextId
-    self.savedVars.nextId = newId + 1
-
-    local cleanTitle = (decoded.title or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if cleanTitle == "" then
-        cleanTitle = Addon.Locale:Get("DEFAULT_QUEST_TITLE", newId)
-    end
-
+function QuestRepository:NormalizeImportedTargets(rawTargets, targetX, targetY)
     local importedTargets = {}
-    for _, t in ipairs(decoded.targets or {}) do
+    local defaultRad = Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+    for _, t in ipairs(rawTargets or {}) do
         local cleanTName = self:NormalizeName(t.name)
         if cleanTName ~= "" then
             local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
-            local defaultRad = Addon.Constants.DISCOVERY_RADIUS.MEDIUM
             table.insert(importedTargets, {
                 name = cleanTName,
                 currentCount = 0,
                 requiredCount = math.max(1, math.floor(tonumber(t.requiredCount) or 1)),
-                targetX = decoded.targetX,
-                targetY = decoded.targetY,
+                targetX = targetX,
+                targetY = targetY,
                 zoneId = hasLoc and math.floor(tonumber(t.zoneId) or 0) or nil,
                 worldX = hasLoc and tonumber(t.worldX) or nil,
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
@@ -642,9 +378,10 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
             })
         end
     end
+    return importedTargets
+end
 
-    decoded.discoveries = Addon.QuestDraftStore:CloneDiscoveriesList(decoded.discoveries, false)
-    decoded.dialogues = Addon.QuestDraftStore:CloneDialoguesList(decoded.dialogues, decoded.clue)
+function QuestRepository:ApplyImportedSenderMetadata(decoded, senderDisplayName, options)
     local cleanSender = self:NormalizeAccountName(senderDisplayName)
     if cleanSender ~= "" then
         decoded.senderDisplayName = cleanSender
@@ -660,16 +397,9 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
     end
     decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
     decoded.sourceMailId = options.sourceMailId
+end
 
-    local importedQuest = self:BuildQuestRecord(
-        newId,
-        cleanTitle,
-        decoded.description or "",
-        importedTargets,
-        decoded,
-        Addon.Constants.QUEST_ROLE.RECEIVED
-    )
-
+function QuestRepository:FinalizeImportedQuest(importedQuest, options)
     table.insert(self.savedVars.quests, importedQuest)
     if self._questById then
         self._questById[importedQuest.id] = importedQuest
@@ -688,6 +418,43 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
         end
         self:NotifyListeners("QUEST_IMPORTED", importedQuest)
     end
+end
+
+function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, options)
+    options = type(options) == "table" and options or {}
+    local alreadyIngested, existingQuest = self:FindAlreadyIngestedQuest(options.sourceMailId)
+    if alreadyIngested then
+        return existingQuest, nil, true
+    end
+
+    local decoded, errKey = Addon.ShareCodec:DecodeQuest(codeString)
+    if not decoded then
+        return nil, Addon.Locale:Get(type(errKey) == "string" and errKey or "ERR_INVALID_CODE")
+    end
+
+    local newId = self.savedVars.nextId
+    self.savedVars.nextId = newId + 1
+
+    local cleanTitle = (decoded.title or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if cleanTitle == "" then
+        cleanTitle = Addon.Locale:Get("DEFAULT_QUEST_TITLE", newId)
+    end
+
+    local importedTargets = self:NormalizeImportedTargets(decoded.targets, decoded.targetX, decoded.targetY)
+    decoded.discoveries = Addon.QuestDraftStore:CloneDiscoveriesList(decoded.discoveries, false)
+    decoded.dialogues = Addon.QuestDraftStore:CloneDialoguesList(decoded.dialogues, decoded.clue)
+    self:ApplyImportedSenderMetadata(decoded, senderDisplayName, options)
+
+    local importedQuest = self:BuildQuestRecord(
+        newId,
+        cleanTitle,
+        decoded.description or "",
+        importedTargets,
+        decoded,
+        Addon.Constants.QUEST_ROLE.RECEIVED
+    )
+
+    self:FinalizeImportedQuest(importedQuest, options)
     return importedQuest, nil, false
 end
 
@@ -735,6 +502,12 @@ function QuestRepository:ExportQuestToCode(questId)
     return code, err
 end
 
+local function GetPlayerExportContext()
+    local rawName = GetUnitName("player") or ""
+    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
+    return charName, GetTimeStamp() or 0
+end
+
 function QuestRepository:ExportCompletionCode(questId)
     local quest = self:GetQuestById(questId)
     if not quest or not quest.completed then
@@ -747,10 +520,7 @@ function QuestRepository:ExportCompletionCode(questId)
         return cached
     end
 
-    local rawName = GetUnitName("player") or ""
-    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
-    local ts = GetTimeStamp() or 0
-
+    local charName, ts = GetPlayerExportContext()
     local code, err = Addon.ShareCodec:EncodeCompletion(quest, charName, ts)
     if code then
         self._completionCodeCache[questId] = code
@@ -762,9 +532,7 @@ function QuestRepository:ExportRejectionCode(quest)
     if type(quest) ~= "table" then
         return nil, "Invalid quest"
     end
-    local rawName = GetUnitName("player") or ""
-    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
-    local ts = GetTimeStamp() or 0
+    local charName, ts = GetPlayerExportContext()
     return Addon.ShareCodec:EncodeRejection(quest, charName, ts)
 end
 
@@ -772,9 +540,7 @@ function QuestRepository:ExportAcceptanceCode(quest)
     if type(quest) ~= "table" then
         return nil, "Invalid quest"
     end
-    local rawName = GetUnitName("player") or ""
-    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
-    local ts = GetTimeStamp() or 0
+    local charName, ts = GetPlayerExportContext()
     return Addon.ShareCodec:EncodeAcceptance(quest, charName, ts)
 end
 
@@ -894,24 +660,22 @@ function QuestRepository:GetAllQuests()
     return self.savedVars.quests or {}
 end
 
-function QuestRepository:GetQuestsByRole(role)
+local function FilterQuests(self, predicate)
     local result = {}
     for _, q in ipairs(self:GetAllQuests()) do
-        if q.role == role then
+        if predicate(q) then
             table.insert(result, q)
         end
     end
     return result
 end
 
+function QuestRepository:GetQuestsByRole(role)
+    return FilterQuests(self, function(q) return q.role == role end)
+end
+
 function QuestRepository:GetCompletedQuests()
-    local result = {}
-    for _, q in ipairs(self:GetAllQuests()) do
-        if q.completed then
-            table.insert(result, q)
-        end
-    end
-    return result
+    return FilterQuests(self, function(q) return q.completed end)
 end
 
 function QuestRepository:GetQuestById(questId)
@@ -930,38 +694,12 @@ function QuestRepository:GetQuestById(questId)
     return nil
 end
 
-function QuestRepository:UpdateDraftTarget(index, fields, silent)
-    return Addon.QuestDraftStore:UpdateDraftTarget(self, index, fields, silent)
-end
-
-function QuestRepository:CaptureDraftTargetLocation(index, zoneId, worldX, worldZ, radius)
-    return Addon.QuestDraftStore:CaptureDraftTargetLocation(self, index, zoneId, worldX, worldZ, radius)
-end
-
-function QuestRepository:ClearDraftTargetLocation(index)
-    return Addon.QuestDraftStore:ClearDraftTargetLocation(self, index)
-end
-
 function QuestRepository:HasTargetLocation(target)
     return type(target) == "table" and target.worldX ~= nil and target.worldZ ~= nil
 end
 
 function QuestRepository:IsPlayerInsideTargetLocation(target, playerZoneId, playerWorldX, playerWorldZ)
-    if not self:HasTargetLocation(target) then
-        return true
-    end
-    if not playerWorldX or not playerWorldZ then
-        return false
-    end
-    local targetZone = tonumber(target.zoneId) or 0
-    local pZone = tonumber(playerZoneId) or 0
-    if targetZone > 0 and pZone > 0 and targetZone ~= pZone then
-        return false
-    end
-    local dx = playerWorldX - target.worldX
-    local dz = playerWorldZ - target.worldZ
-    local radius = tonumber(target.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
-    return ((dx * dx) + (dz * dz)) <= (radius * radius)
+    return Addon.WorldMapArea:IsPlayerInsideTargetLocation(target, playerZoneId, playerWorldX, playerWorldZ)
 end
 
 function QuestRepository:GetActiveQuest()
@@ -1053,33 +791,7 @@ function QuestRepository:DeleteQuest(questId)
 end
 
 function QuestRepository:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneId, playerX, playerY)
-    if not quest then return false end
-
-    -- Si la misión tiene mapId o zoneId definidos (> 0), validar coincidencia de mapa o zona
-    local mapMatches = true
-    if (quest.mapId and quest.mapId > 0) and (playerMapId and playerMapId > 0) then
-        mapMatches = (quest.mapId == playerMapId)
-        if not mapMatches and (quest.zoneId and quest.zoneId > 0) and (playerZoneId and playerZoneId > 0) then
-            mapMatches = (quest.zoneId == playerZoneId)
-        end
-    elseif (quest.zoneId and quest.zoneId > 0) and (playerZoneId and playerZoneId > 0) then
-        mapMatches = (quest.zoneId == playerZoneId)
-    end
-
-    if not mapMatches then
-        return false
-    end
-
-    -- Si tenemos coordenadas del jugador en el mismo mapa, verificar que esté dentro de un radio generoso del área de búsqueda
-    if (quest.mapId and quest.mapId > 0 and playerMapId == quest.mapId) and playerX and playerY and quest.areaCenterX and quest.areaCenterY then
-        local dx = playerX - quest.areaCenterX
-        local dy = playerY - quest.areaCenterY
-        local dist = math.sqrt((dx * dx) + (dy * dy))
-        local toleranceRadius = (quest.areaRadius or 0.075) * 1.35
-        return dist <= toleranceRadius
-    end
-
-    return true
+    return Addon.WorldMapArea:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneId, playerX, playerY)
 end
 
 function QuestRepository:FindPendingTarget(rawTargetName)
@@ -1170,11 +882,7 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
     local showCustomMessage = (customMsg ~= "") and (not hasTargetLoc or inTargetLoc)
 
     if self:AreAllObjectivesCompleted(activeQuest.targets, activeQuest.discoveries) then
-        activeQuest.completed = true
-        if self.savedVars.activeQuestId == activeQuest.id then
-            self.savedVars.activeQuestId = nil
-        end
-        self:InvalidateActiveTargetCache()
+        FinalizeCompletedQuest(self, activeQuest)
         self:NotifyListeners("QUEST_COMPLETED", activeQuest)
     else
         self:NotifyListeners("QUEST_PROGRESS", activeQuest)
@@ -1208,11 +916,7 @@ function QuestRepository:MarkDiscoveryTriggered(questId, discoveryIndex)
     point.discovered = true
 
     if self:AreAllObjectivesCompleted(quest.targets, quest.discoveries) then
-        quest.completed = true
-        if self.savedVars.activeQuestId == quest.id then
-            self.savedVars.activeQuestId = nil
-        end
-        self:InvalidateActiveTargetCache()
+        FinalizeCompletedQuest(self, quest)
         self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
         self:NotifyListeners("QUEST_COMPLETED", quest)
     else

@@ -125,7 +125,8 @@ RPQuest/
 │   ├── MailInbox.lua        # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
 │   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
-│   ├── QuestRepository.lua  # Account-wide CRUD, migration & search area offset logic
+│   ├── QuestMigration.lua   # Non-destructive character SavedVars migration to account-wide
+│   ├── QuestRepository.lua  # Account-wide CRUD, quest import/export & runtime tracking
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
 │   ├── CombatTracker.lua    # Kill & stealth tracking (EVENT_COMBAT_EVENT)
