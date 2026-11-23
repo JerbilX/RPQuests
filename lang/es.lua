@@ -85,6 +85,7 @@ RPQuest.Locales["es"] = {
     PREPARED_STATUS_REJECTED = "Estado: |cFF6666Rechazada|r por %s",
     ALERT_MAIL_SENDING_TO = "Enviando \"%s\" a %s...",
     LABEL_INPUT_COMPLETION_MSG = "Mensaje al Completar (Opcional):",
+    LABEL_HEADER_SECTION = "Detalles de la Misión y Destinatario",
     LABEL_TARGET_SECTION = "Objetivo (NPC) y Área de Búsqueda",
     TARGET_CAPTURED_FORMAT = "Objetivo: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Apunta a un NPC vivo y pulsa la tecla de captura.|r",

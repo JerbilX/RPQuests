@@ -85,6 +85,7 @@ RPQuest.Locales["en"] = {
     PREPARED_STATUS_REJECTED = "Status: |cFF6666Rejected|r by %s",
     ALERT_MAIL_SENDING_TO = "Sending \"%s\" to %s...",
     LABEL_INPUT_COMPLETION_MSG = "Completion Message (Optional):",
+    LABEL_HEADER_SECTION = "Quest Details & Recipient",
     LABEL_TARGET_SECTION = "Target (NPC) & Search Area",
     TARGET_CAPTURED_FORMAT = "Target: |c33FF33%s|r (%s)",
     TARGET_NOT_CAPTURED = "|cFFAA33Aim at a living NPC and press the Capture keybind.|r",

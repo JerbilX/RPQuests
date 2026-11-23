@@ -378,10 +378,22 @@ return function(T)
 
         local sections = RPQuest.JournalTab.editorSectionsByKey
         AssertTrue(sections ~= nil, "editorSectionsByKey initialized")
+        AssertTrue(sections.header ~= nil, "Header section initialized")
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section starts expanded by default")
         AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed")
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed")
         AssertEqual(sections.dialogue.body:IsHidden(), true, "Dialogue section starts collapsed")
         AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed")
+
+        local yTargetWhenHeaderExpanded = sections.target.divider._anchors[1].y
+        RPQuest.JournalTab:ToggleEditorSection("header")
+        AssertEqual(sections.header.body:IsHidden(), true, "Header section collapses on toggle")
+        local yTargetWhenHeaderCollapsed = sections.target.divider._anchors[1].y
+        AssertTrue(yTargetWhenHeaderCollapsed < yTargetWhenHeaderExpanded, "Subsequent section Y offset decreases when header accordion collapses")
+
+        RPQuest.JournalTab:ToggleEditorSection("header")
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section expands on second toggle")
+        AssertEqual(sections.target.divider._anchors[1].y, yTargetWhenHeaderExpanded, "Subsequent section Y offset restores when header accordion expands")
 
         local yCollapsed = sections.dialogue.divider._anchors[1].y
         RPQuest.JournalTab:ToggleEditorSection("discovery")
@@ -392,7 +404,7 @@ return function(T)
         RPQuest.JournalTab:ToggleEditorSection("discovery")
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section collapses on second toggle")
 
-        -- Save a quest with options configured and verify OpenEditEditor keeps all accordions collapsed by default
+        -- Save a quest with options configured and verify OpenEditEditor keeps header expanded and other accordions collapsed by default
         RPQuest.QuestRepository:SetDraftCapturedTarget({
             targetName = "Bandido",
             mapId = 32,
@@ -406,6 +418,7 @@ return function(T)
         AssertTrue(q ~= nil, "Quest saved for edit accordion test")
 
         RPQuest.JournalTab:OpenEditEditor(q.id)
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section starts expanded on edit")
         AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed on edit")
         AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed on edit")
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed on edit")
