@@ -26,6 +26,10 @@ function TargetCapture:GetPlayerMapContext(forceSync, includeMapName)
         normX = x
         normY = y
     end
+    local worldZoneId, worldX, worldY, worldZ = GetUnitWorldPosition("player")
+    if zoneId == 0 and worldZoneId and worldZoneId > 0 then
+        zoneId = worldZoneId
+    end
 
     return {
         mapId = mapId,
@@ -34,6 +38,9 @@ function TargetCapture:GetPlayerMapContext(forceSync, includeMapName)
         mapName = mapName,
         x = normX,
         y = normY,
+        worldX = (worldZoneId and worldZoneId > 0 and worldX) or nil,
+        worldY = (worldZoneId and worldZoneId > 0 and (worldY or 0)) or nil,
+        worldZ = (worldZoneId and worldZoneId > 0 and worldZ) or nil,
     }
 end
 
@@ -85,6 +92,9 @@ function TargetCapture:CaptureFromReticle()
         mapName = ctx.mapName,
         targetX = ctx.x,
         targetY = ctx.y,
+        worldX = ctx.worldX,
+        worldY = ctx.worldY,
+        worldZ = ctx.worldZ,
     })
 
     if draft then

@@ -61,6 +61,7 @@ Addon.Constants = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",
         TAB_DESCRIPTOR = "rpquest_custom_quests",
         PIN_TYPE_STRING = "RPQUEST_SEARCH_AREA_PIN",
+        ZOOM_OUT_PIN_TYPE_STRING = "RPQUEST_ZOOM_OUT_PIN",
         ICON_TAB_UP = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_up.dds",
         ICON_TAB_DOWN = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_down.dds",
         ICON_TAB_OVER = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_over.dds",

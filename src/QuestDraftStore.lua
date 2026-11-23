@@ -168,6 +168,9 @@ function QuestDraftStore:ClearDraftTargets(repo)
     draft.lastCapturedDisplay = nil
     draft.targetX = nil
     draft.targetY = nil
+    draft.worldX = nil
+    draft.worldY = nil
+    draft.worldZ = nil
     draft.areaCenterX = nil
     draft.areaCenterY = nil
     if #draft.discoveries == 0 then
@@ -363,6 +366,9 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         mapName = quest.mapName or "",
         targetX = quest.targetX,
         targetY = quest.targetY,
+        worldX = quest.worldX,
+        worldY = quest.worldY,
+        worldZ = quest.worldZ,
         areaCenterX = quest.areaCenterX,
         areaCenterY = quest.areaCenterY,
         areaRadius = quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM,
@@ -458,6 +464,11 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
     draft.mapType = captureData.mapType or draft.mapType
     draft.zoneId = tonumber(captureData.zoneId) or draft.zoneId or 0
     draft.mapName = tostring(captureData.mapName or draft.mapName or "")
+    if captureData.worldX ~= nil and captureData.worldZ ~= nil then
+        draft.worldX = tonumber(captureData.worldX)
+        draft.worldY = tonumber(captureData.worldY) or 0
+        draft.worldZ = tonumber(captureData.worldZ)
+    end
 
     -- Calcular centroide de los objetivos capturados para situar el área de búsqueda
     local sumX, sumY, countCoords = 0, 0, 0
@@ -590,6 +601,9 @@ local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
     existing.mapName = draft.mapName or ""
     existing.targetX = draft.targetX
     existing.targetY = draft.targetY
+    existing.worldX = draft.worldX
+    existing.worldY = draft.worldY
+    existing.worldZ = draft.worldZ
     existing.areaCenterX = draft.areaCenterX
     existing.areaCenterY = draft.areaCenterY
     existing.areaRadius = draft.areaRadius
@@ -681,6 +695,9 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
         mapName = draft.mapName,
         targetX = draft.targetX,
         targetY = draft.targetY,
+        worldX = draft.worldX,
+        worldY = draft.worldY,
+        worldZ = draft.worldZ,
         areaCenterX = draft.areaCenterX,
         areaCenterY = draft.areaCenterY,
         areaRadius = draft.areaRadius,

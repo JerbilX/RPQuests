@@ -214,10 +214,27 @@ WORLD_MAP_MANAGER = WORLD_MAP_MANAGER or {
     end,
 }
 
-ZO_MapPin = ZO_MapPin or { ASSISTED_PIN_TYPES = {} }
+ZO_MapPin = ZO_MapPin or {
+    ASSISTED_PIN_TYPES = {},
+    PulseAnimation = {
+        texture = "EsoUI/Art/MapPins/UI-WorldMapPinHighlight.dds",
+        duration = 6,
+        type = 1,
+    },
+}
 ZO_WorldMapPins_Manager = ZO_WorldMapPins_Manager or {
     IsCurrentMapGlobal = function() return false end,
 }
+ZO_WorldMap_IsNormalizedPointInsideMapBounds = ZO_WorldMap_IsNormalizedPointInsideMapBounds or function(x, y)
+    return type(x) == "number" and type(y) == "number" and x > 0 and x < 1 and y > 0 and y < 1
+end
+GetNormalizedWorldPosition = GetNormalizedWorldPosition or function(zoneId, worldX, worldY, worldZ)
+    if mockState.projectedPositions and mockState.projectedPositions[mockState.mapId] then
+        local pos = mockState.projectedPositions[mockState.mapId]
+        return pos.x, pos.y
+    end
+    return nil, nil
+end
 CALLBACK_MANAGER = CALLBACK_MANAGER or {
     RegisterCallback = function() end,
     FireCallbacks = function() end,
@@ -303,7 +320,15 @@ local mockPinManager = {
         end
     end,
     RefreshCustomPins = function(self, optionalPinType)
-        self._createdPins = {}
+        if optionalPinType == nil then
+            self._createdPins = {}
+        else
+            for i = #self._createdPins, 1, -1 do
+                if self._createdPins[i].pinTypeId == optionalPinType then
+                    table.remove(self._createdPins, i)
+                end
+            end
+        end
         for id, data in pairs(self._customPins) do
             if (optionalPinType == nil or optionalPinType == id) and data.enabled and data.layoutCallback then
                 data.layoutCallback(self)
@@ -317,6 +342,10 @@ local mockPinManager = {
             x = xLoc,
             y = yLoc,
             radius = radius,
+            pingAnimations = {},
+            PingMapPin = function(pinSelf, animation)
+                table.insert(pinSelf.pingAnimations, animation)
+            end,
         }
         table.insert(self._createdPins, p)
         return p
