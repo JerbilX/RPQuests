@@ -100,7 +100,29 @@ for doc_file in "$BBCODE_FILE" README.md README.es.md readme.txt; do
 done
 pass "Public documentation contains no slash commands."
 
-# 7. Package build must succeed cleanly (unless --skip-package is passed, e.g. in CI)
+# 7. Retired/removed feature terms must not reappear in public documentation
+RETIRED_DOC_TERMS=(
+  "mini-tracker|minitracker|mini tracker"
+  "reticle capture or NPC name|captura por retícula o nombre"
+  "Click 'Import'|Pulsa 'Importar'|Validate Delivery|Validar Entrega"
+  "ZO_PinBlob|ZO_QuestJournal_Keyboard"
+)
+RETIRED_HITS=0
+for doc_file in "$BBCODE_FILE" README.md README.es.md readme.txt; do
+  for term in "${RETIRED_DOC_TERMS[@]+"${RETIRED_DOC_TERMS[@]}"}"; do
+    if grep -niE "$term" "$doc_file"; then
+      echo "Retired term '$term' found in $doc_file" >&2
+      RETIRED_HITS=1
+    fi
+  done
+done
+if [[ "$RETIRED_HITS" -ne 0 ]]; then
+  fail "Public documentation references retired/removed feature(s)."
+else
+  pass "Public documentation contains no retired feature terms."
+fi
+
+# 8. Package build must succeed cleanly (unless --skip-package is passed, e.g. in CI)
 if [[ "$SKIP_PACKAGE" -eq 0 ]]; then
   if ./scripts/package.sh >/dev/null; then
     pass "./scripts/package.sh built cleanly."

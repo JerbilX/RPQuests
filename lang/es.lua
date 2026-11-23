@@ -19,7 +19,7 @@ RPQuest.Locales["es"] = {
     SECTION_PREPARED_QUESTS = "PREPARANDO (%d)",
     SECTION_SENT_QUESTS = "ENVIADAS (%d)",
     SECTION_COMPLETED_QUESTS = "COMPLETADAS (%d)",
-    EMPTY_QUEST_LIST = "No hay misiones aún. Pulsa 'Importar' para recibir una o '+ Nueva' para crearla.",
+    EMPTY_QUEST_LIST = "No hay misiones aún. Recibe una por correo o pulsa '+ Nueva' para crearla.",
 
     -- Buttons
     BTN_NEW_QUEST = "+ Nueva",

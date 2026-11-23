@@ -68,11 +68,17 @@ jobs:
             echo "[B]${TAG}[/B]" >> changelog.txt
             if [ "$NEXT_IDX" -lt "${#TAGS[@]}" ]; then
               PREV="${TAGS[$NEXT_IDX]}"
-              git log "${PREV}..${TAG}" --no-merges --pretty=format:"- %s" >> changelog.txt
+              RAW_LOG=$(git log "${PREV}..${TAG}" --no-merges --pretty=format:"- %s")
             else
-              git log "${TAG}" --no-merges --pretty=format:"- %s" >> changelog.txt
+              RAW_LOG=$(git log "${TAG}" --no-merges --pretty=format:"- %s")
             fi
-            printf "\n\n" >> changelog.txt
+            PLAYER_LOG=$(printf '%s\n' "$RAW_LOG" | grep -E '^- (feat|fix|ui|perf|revert)(\(|:)' || true)
+            if [ -n "$PLAYER_LOG" ]; then
+              printf '%s\n' "$PLAYER_LOG" >> changelog.txt
+            else
+              echo "- Maintenance and internal improvements" >> changelog.txt
+            fi
+            printf "\n" >> changelog.txt
           done
           if [ ! -s changelog.txt ]; then
             echo "Release ${VERSION}" > changelog.txt
