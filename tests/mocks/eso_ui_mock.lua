@@ -455,4 +455,75 @@ GetCurrentCharacterId = GetCurrentCharacterId or function()
     return "char-test-1"
 end
 
+ZO_EaseInQuadratic = ZO_EaseInQuadratic or function(progress)
+    return progress ^ 2
+end
+
+ZO_EaseOutQuadratic = ZO_EaseOutQuadratic or function(progress)
+    return 1 - ((1 - progress) ^ 2)
+end
+
+ANIMATION_MANAGER = ANIMATION_MANAGER or {
+    _timelines = {},
+    CreateTimelineFromVirtual = function(self, templateName, animatedControl)
+        local customAnim = {
+            _updateFn = nil,
+            _easingFn = nil,
+            SetUpdateFunction = function(anim, fn) anim._updateFn = fn end,
+            SetEasingFunction = function(anim, fn) anim._easingFn = fn end,
+        }
+        local alphaAnim = {
+            _control = animatedControl,
+            SetAnimatedControl = function(anim, ctrl) anim._control = ctrl end,
+        }
+        local timeline = {
+            _templateName = templateName,
+            _playing = false,
+            _direction = 1,
+            _progress = 0,
+            _animations = { customAnim, alphaAnim },
+            GetFirstAnimation = function(tl) return tl._animations[1] end,
+            GetNumAnimations = function(tl) return #tl._animations end,
+            GetAnimation = function(tl, idx) return tl._animations[idx] end,
+            IsPlaying = function(tl) return tl._playing end,
+            PlayFromStart = function(tl)
+                tl._playing = true
+                tl._direction = 1
+                tl._progress = 0
+            end,
+            PlayFromEnd = function(tl)
+                tl._playing = true
+                tl._direction = -1
+                tl._progress = 1
+            end,
+            PlayForward = function(tl)
+                tl._playing = true
+                tl._direction = 1
+            end,
+            PlayBackward = function(tl)
+                tl._playing = true
+                tl._direction = -1
+            end,
+            Stop = function(tl)
+                tl._playing = false
+            end,
+            StepTo = function(tl, rawProgress)
+                tl._progress = rawProgress
+                local eased = customAnim._easingFn and customAnim._easingFn(rawProgress) or rawProgress
+                if customAnim._updateFn then
+                    customAnim._updateFn(customAnim, eased)
+                end
+                if alphaAnim._control and alphaAnim._control.SetAlpha then
+                    alphaAnim._control:SetAlpha(rawProgress)
+                end
+                if (tl._direction == 1 and rawProgress >= 1) or (tl._direction == -1 and rawProgress <= 0) then
+                    tl._playing = false
+                end
+            end,
+        }
+        table.insert(self._timelines, timeline)
+        return timeline
+    end,
+}
+
 return M

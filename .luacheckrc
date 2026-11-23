@@ -22,6 +22,7 @@ read_globals = {
     "zo_strformat",
 
     -- EsoUI Singletons & Managers
+    "ANIMATION_MANAGER",
     "CALLBACK_MANAGER",
     "CENTER_SCREEN_ANNOUNCE",
     "CHAT_SYSTEM",
@@ -89,6 +90,8 @@ read_globals = {
     "ZO_Alert",
     "ZO_CreateStringId",
     "ZO_Dialogs_ShowDialog",
+    "ZO_EaseInQuadratic",
+    "ZO_EaseOutQuadratic",
     "ZO_PostHook",
     "ZO_WorldMap_GetPinManager",
 
@@ -114,6 +117,7 @@ read_globals = {
     "CT_CONTROL",
     "CT_EDITBOX",
     "CT_LABEL",
+    "CT_SCROLL",
     "CT_TEXTURE",
     "CT_TOPLEVELCONTROL",
     "EVENT_ADD_ON_LOADED",
