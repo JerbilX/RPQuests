@@ -126,7 +126,7 @@ return function(T)
 
         local imported, importErr = RPQuest.QuestRepository:ImportQuestFromCode(enCode)
         AssertEqual(imported, nil, "ImportQuestFromCode must reject quest from another language")
-        AssertEqual(importErr, "Misión inválida: creada en otro idioma.", "ImportQuestFromCode returns localized Spanish mismatch error")
+        AssertEqual(importErr, RPQuest.Locale:Get("ERR_IMPORT_LANGUAGE_MISMATCH"), "ImportQuestFromCode returns localized Spanish mismatch error")
 
         -- Same language (ES -> ES) must succeed
         local esCode = RPQuest.ShareCodec:EncodeQuest(enQuest)
