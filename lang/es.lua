@@ -70,6 +70,7 @@ RPQuest.Locales["es"] = {
     LABEL_NO_RECIPIENT = "Sin asignar",
     PREPARED_STATUS_DRAFT = "Estado: |cE8D5A0Borrador|r (Destinatario: %s)",
     PREPARED_STATUS_SENT = "Estado: |c66CCFFEnviada|r a %s",
+    PREPARED_STATUS_ACCEPTED = "Estado: |cFFCC33Aceptada|r por %s",
     PREPARED_STATUS_COMPLETED = "Estado: |c33FF33Completada|r por %s",
     PREPARED_STATUS_REJECTED = "Estado: |cFF6666Rechazada|r por %s",
     ALERT_MAIL_SENDING_TO = "Enviando \"%s\" a %s...",
@@ -194,5 +195,6 @@ RPQuest.Locales["es"] = {
     ALERT_MAIL_SEND_FAILED = "RPQuest: Error al enviar correo a %s (%s).",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Reporte de finalización enviado a %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: ¡Entrega verificada de %s para '%s'!",
+    ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s aceptó '%s'.",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s rechazó '%s'.",
 }

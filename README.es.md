@@ -26,7 +26,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Flujo 100% por Correo In-Game 1-a-1 (Sin Copiar/Pegar):**
   - Asigna un único destinatario (`@Cuenta`) (y opcionalmente el nombre del personaje **Para (Personaje)**) directamente en el editor de la misión preparada y envíala con un clic (dividiendo automáticamente misiones largas en hasta 6 correos / ~4.000 caracteres mediante `RPQP` sobre serialización interna `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA o PC-EU con PC-EU). Los nombres de personaje `De:` y `Para:` se muestran debajo del estado en el detalle de la misión.
   - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario.
-  - **Reportes Automáticos de Completado y Rechazo:** Al completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Completada` / `Rechazada`).
+  - **Reportes Automáticos de Aceptación, Completado y Rechazo:** Al aceptar, completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Aceptada` / `Completada` / `Rechazada`).
 - **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente el idioma del cliente (`es` / `en`).
 
 ---
@@ -55,7 +55,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
    - **Mismo idioma requerido:** Las misiones deben jugarse en un cliente del juego con el mismo idioma que el creador para que coincidan los nombres de NPCs y diálogos.
 3. **Jugar y Reporte Automático:**
    - Al aceptar la misión se activan inmediatamente el mini-tracker del HUD, el área en el Mapa Mundial y los diálogos inyectados en NPCs.
-   - Al completar (o rechazar) la misión, RPQuest envía automáticamente el resultado por correo al Quest Master y actualiza su estado.
+   - Al aceptar, completar o rechazar la misión, RPQuest envía automáticamente el resultado por correo al Quest Master y actualiza su estado.
 
 ---
 

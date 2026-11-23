@@ -12,6 +12,7 @@ local MAX_MAIL_PARTS = 6
 local QUEST_SUBJECT_PREFIX = "[RPQuest] "
 local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
 local REJECTION_SUBJECT_PREFIX = "[RPQuest:Rejected] "
+local ACCEPTANCE_SUBJECT_PREFIX = "[RPQuest:Accepted] "
 
 function MailInbox:Initialize()
     self._receivedMails = {}
@@ -69,6 +70,7 @@ function MailInbox:IsCompletionMailSubject(subject)
     if type(subject) ~= "string" then return false end
     return string.sub(subject, 1, #COMPLETION_SUBJECT_PREFIX) == COMPLETION_SUBJECT_PREFIX
         or string.sub(subject, 1, #REJECTION_SUBJECT_PREFIX) == REJECTION_SUBJECT_PREFIX
+        or string.sub(subject, 1, #ACCEPTANCE_SUBJECT_PREFIX) == ACCEPTANCE_SUBJECT_PREFIX
 end
 
 function MailInbox:ParseCompletionMailBody(body)
@@ -99,7 +101,12 @@ function MailInbox:ProcessCompletionMail(mailId, senderDisplayName, _subject, bo
                 local who = (type(senderDisplayName) == "string" and senderDisplayName ~= "")
                     and senderDisplayName
                     or (res.characterName or "")
-                local alertKey = (res.completed == false) and "ALERT_MAIL_REJECTION_RECEIVED" or "ALERT_MAIL_DELIVERY_VALIDATED"
+                local alertKey = "ALERT_MAIL_DELIVERY_VALIDATED"
+                if res.resultType == "accepted" or res.accepted then
+                    alertKey = "ALERT_MAIL_ACCEPTANCE_RECEIVED"
+                elseif res.resultType == "rejected" or res.rejected or res.completed == false then
+                    alertKey = "ALERT_MAIL_REJECTION_RECEIVED"
+                end
                 Addon.Announcements:ShowAlert(Addon.Locale:Get(alertKey, who, q.title or ""), false)
             end
             if Addon.QuestRepository:GetSetting("autoDeleteMail") then
@@ -159,6 +166,7 @@ function MailInbox:UpsertReceivedEntry(entry)
             local imported, _, _, isDuplicate = self:IngestReceivedMail(entry.idKey)
             if imported and not isDuplicate and Addon.Announcements then
                 if Addon.QuestRepository:GetSetting("autoAcceptMail") then
+                    Addon.QuestRepository:NotifyListeners("QUEST_ACCEPTED", imported)
                     if Addon.Announcements.AnnounceQuestAccepted then
                         Addon.Announcements:AnnounceQuestAccepted(imported)
                     end

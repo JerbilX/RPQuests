@@ -221,6 +221,10 @@ return function(T)
         AssertTrue(imported ~= nil, "Quest auto-ingested from mail")
         RPQuest.QuestRepository:AcceptOfferedQuest(imported.id)
         AssertEqual(imported.senderDisplayName, "@Creator", "senderDisplayName persisted on imported quest")
+        RPQuest.MailTransport:OnMailboxOpened()
+        AssertEqual(#sentMails, 1, "Acceptance mail auto-sent to creator")
+        AssertEqual(sentMails[1].subject, "[RPQuest:Accepted] Entrega por Correo", "Uses [RPQuest:Accepted] subject")
+        RPQuest.MailTransport:OnMailSendSuccess("@Creator")
 
         -- Automatic mode (default): completing quest auto-sends completion report to @Creator
         AssertEqual(RPQuest.QuestRepository:GetSetting("autoSendCompletionMail"), true, "autoSendCompletionMail defaults to true")
@@ -228,10 +232,10 @@ return function(T)
         RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
         AssertEqual(imported.completed, true, "Imported quest completed")
         RPQuest.MailTransport:OnMailboxOpened()
-        AssertEqual(#sentMails, 1, "Completion mail auto-sent to creator")
-        AssertEqual(sentMails[1].to, "@Creator", "Sent to @Creator")
-        AssertEqual(sentMails[1].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
-        local rpqc1Code = sentMails[1].body
+        AssertEqual(#sentMails, 2, "Completion mail auto-sent to creator")
+        AssertEqual(sentMails[2].to, "@Creator", "Sent to @Creator")
+        AssertEqual(sentMails[2].subject, "[RPQuest:Done] Entrega por Correo", "Uses [RPQuest:Done] subject")
+        local rpqc1Code = sentMails[2].body
         AssertTrue(rpqc1Code:sub(1, 6) == "RPQC1:", "Body contains RPQC1 code")
         RPQuest.MailTransport:OnMailSendSuccess("@Creator")
         AssertEqual(imported.completionReported, true, "completionReported marked true after send success")
@@ -241,7 +245,7 @@ return function(T)
         imported.completionReported = false
         RPQuest.QuestRepository:RecordTargetEliminated("Bandido", { mapId = 32, zoneId = 381, x = imported.areaCenterX, y = imported.areaCenterY })
         RPQuest.MailTransport:OnMailboxOpened()
-        AssertEqual(#sentMails, 2, "Automatic mode sends completion mail upon QUEST_COMPLETED")
+        AssertEqual(#sentMails, 3, "Automatic mode sends completion mail upon QUEST_COMPLETED")
         RPQuest.JournalTab:SelectQuest(imported.id)
         AssertEqual(RPQuest.JournalTab.btnReportCompletionMail, nil, "Manual report button removed in mail-only UX")
         RPQuest.MailTransport:OnMailSendSuccess("@Creator")
@@ -740,6 +744,10 @@ return function(T)
         local q = received[1]
         AssertEqual(q.senderDisplayName, "@QuestMaster", "senderDisplayName normalized on import")
         RPQuest.QuestRepository:AcceptOfferedQuest(q.id)
+        RPQuest.MailTransport:OnMailboxOpened()
+        RPQuest.MailTransport:OnMailSendSuccess("@QuestMaster")
+        sentMails = {}
+        openCalls = 0
 
         -- 2. Simulate native scene showing before EVENT_MAIL_OPEN_MAILBOX -> MAIL_SEND_RESULT_MAILBOX_NOT_OPEN retry
         nativeMailOpen = true
@@ -864,6 +872,135 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Offered detail To shows recipient character name")
 
         _G.GetUnitName = origUnitName
+    end)
+
+    RunTest("42. Automatic acceptance mail report on QUEST_ACCEPTED and status lifecycle (Issue #159)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        -- Master creates prepared quest
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.4,
+            targetY = 0.4,
+        })
+        local prepared = RPQuest.QuestRepository:SaveDraft("Scout the Camp", "Accept and report.", nil, "", false, "@PlayerAcc")
+        local rpq3Code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+
+        -- 1. ShareCodec EncodeAcceptance / DecodeCompletion
+        local accCode, accErr = RPQuest.ShareCodec:EncodeAcceptance(prepared, "HeroChar", 222333)
+        AssertTrue(accCode ~= nil and accCode:sub(1, 6) == "RPQC1:", "EncodeAcceptance produces RPQC1 code: " .. tostring(accErr))
+        local decodedAcc = RPQuest.ShareCodec:DecodeCompletion(accCode)
+        AssertTrue(decodedAcc ~= nil, "DecodeCompletion decodes acceptance payload")
+        AssertEqual(decodedAcc.completed, false, "Acceptance has completed=false")
+        AssertEqual(decodedAcc.rejected, false, "Acceptance has rejected=false")
+        AssertEqual(decodedAcc.accepted, true, "Acceptance has accepted=true")
+        AssertEqual(decodedAcc.resultType, "accepted", "Acceptance has resultType='accepted'")
+        AssertEqual(decodedAcc.characterName, "HeroChar", "Acceptance preserves characterName")
+        AssertEqual(decodedAcc.completedAt, 222333, "Acceptance preserves timestamp")
+
+        local okCompOnly, errCompOnly = RPQuest.ShareCodec:ValidateCompletionForQuest(prepared, accCode)
+        AssertEqual(okCompOnly, false, "ValidateCompletionForQuest rejects an acceptance code")
+        AssertEqual(errCompOnly, "VALIDATE_ERR_NOT_COMPLETED", "Returns VALIDATE_ERR_NOT_COMPLETED for acceptance")
+
+        local okResult, resPayload = RPQuest.ShareCodec:ValidateResultForQuest(prepared, accCode)
+        AssertEqual(okResult, true, "ValidateResultForQuest accepts acceptance code")
+        AssertEqual(resPayload.accepted, true, "ValidateResultForQuest returns accepted=true")
+        AssertEqual(resPayload.resultType, "accepted", "ValidateResultForQuest returns resultType='accepted'")
+
+        -- 2. Player accepts offered mail quest -> auto-sends acceptance report to @Master
+        local sentMails = {}
+        local origSendMail = _G.SendMail
+        local origReqOpen = _G.RequestOpenMailbox
+        local origClose = _G.CloseMailbox
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        _G.SendMail = function(to, subject, body)
+            table.insert(sentMails, { to = to, subject = subject, body = body })
+        end
+        _G.RequestOpenMailbox = function() end
+        _G.CloseMailbox = function() end
+
+        local offered = RPQuest.QuestRepository:ImportQuestFromCode(rpq3Code, "@Master", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            sourceMailId = "mail_acc_1",
+        })
+        RPQuest.QuestRepository:AcceptOfferedQuest(offered.id)
+        RPQuest.MailTransport:OnMailboxOpened()
+        AssertEqual(#sentMails, 1, "Acceptance mail auto-queued and sent on AcceptOfferedQuest")
+        AssertEqual(sentMails[1].to, "@Master", "Acceptance mail sent to @Master")
+        AssertEqual(sentMails[1].subject, "[RPQuest:Accepted] Scout the Camp", "Uses [RPQuest:Accepted] subject")
+        RPQuest.MailTransport:OnMailSendSuccess("@Master")
+        AssertEqual(offered.completionReported or false, false, "Acceptance send does not mark completionReported=true")
+
+        -- 3. Master receives acceptance mail -> updates prepared status to accepted & shows alert
+        local alerts = {}
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+        local deletedIds = {}
+        _G.DeleteMail = function(id) table.insert(deletedIds, id) end
+        _G.GetNextMailId = function(cur) return (cur == nil) and 501 or nil end
+        _G.GetMailItemInfo = function(id)
+            if id == 501 then return "@PlayerAcc", "HeroChar", sentMails[1].subject, "", true, false, false, false, 0, 0, 0, 30, 1, 0 end
+            return nil
+        end
+        _G.ReadMail = function(id) return (id == 501) and sentMails[1].body or "" end
+
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#alerts, 1, "Master receives alert for acceptance mail")
+        AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_ACCEPTANCE_RECEIVED", "@PlayerAcc", prepared.title), "Acceptance alert text matches")
+        AssertTrue(prepared.lastResult ~= nil and prepared.lastResult.status == "accepted", "Prepared quest records lastResult.status == 'accepted'")
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "accepted", "GetPreparedQuestStatus returns 'accepted'")
+        AssertEqual(#deletedIds, 1, "Acceptance mail auto-deleted on Master")
+
+        RPQuest.JournalTab:SelectQuest(prepared.id)
+        RPQuest.JournalTab:Refresh()
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Accepted", 1, true) ~= nil, "Detail status displays Accepted label")
+
+        -- 4. Subsequent completion overwrites accepted status
+        RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerAcc", {
+            characterName = "HeroChar",
+            completedAt = 222400,
+            completed = true,
+            resultType = "completed",
+            wasDetected = false,
+        })
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "completed", "Completion overwrites accepted status")
+
+        -- 5. Late acceptance arriving after completion does not overwrite completed status
+        local lateEntry, isNewLate = RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerAcc", {
+            characterName = "HeroChar",
+            completedAt = 222500,
+            completed = false,
+            accepted = true,
+            resultType = "accepted",
+        })
+        AssertEqual(isNewLate, true, "Late acceptance recorded in deliveries")
+        AssertEqual(lateEntry.status, "accepted", "Late delivery entry has status='accepted'")
+        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "completed", "Late acceptance does not overwrite completed status")
+        AssertEqual(prepared.lastResult.status, "completed", "lastResult remains completed")
+
+        _G.SendMail = origSendMail
+        _G.RequestOpenMailbox = origReqOpen
+        _G.CloseMailbox = origClose
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+        RPQuest.Announcements.ShowAlert = origShowAlert
     end)
 
 end

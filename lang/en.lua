@@ -70,6 +70,7 @@ RPQuest.Locales["en"] = {
     LABEL_NO_RECIPIENT = "Unassigned",
     PREPARED_STATUS_DRAFT = "Status: |cE8D5A0Draft|r (Recipient: %s)",
     PREPARED_STATUS_SENT = "Status: |c66CCFFSent|r to %s",
+    PREPARED_STATUS_ACCEPTED = "Status: |cFFCC33Accepted|r by %s",
     PREPARED_STATUS_COMPLETED = "Status: |c33FF33Completed|r by %s",
     PREPARED_STATUS_REJECTED = "Status: |cFF6666Rejected|r by %s",
     ALERT_MAIL_SENDING_TO = "Sending \"%s\" to %s...",
@@ -194,5 +195,6 @@ RPQuest.Locales["en"] = {
     ALERT_MAIL_SEND_FAILED = "RPQuest: Failed to send mail to %s (%s).",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Completion report sent to %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: Delivery verified from %s for '%s'!",
+    ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s accepted '%s'.",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s rejected '%s'.",
 }
