@@ -41,9 +41,11 @@ function EditorPane.Build(tab, parent)
     end
     tab.editorFormParent = formParent
 
-    EditorSections.BuildBaseFields(tab, formParent, panelName)
     tab.editorSections = {}
     tab.editorSectionsByKey = {}
+
+    local headerSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "header", "LABEL_HEADER_SECTION", 218)
+    EditorSections.BuildBaseFields(tab, headerSec.body, panelName)
 
     local targetSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "target", "LABEL_TARGET_SECTION", 256)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
@@ -94,7 +96,7 @@ function EditorPane.LayoutSections(tab)
     if not tab.editorSections or not tab.editorFormParent then return end
     local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft() or {}
     local collapsedMap = tab.editorSectionsCollapsed or {}
-    local y = 228
+    local y = 0
 
     for _, sec in ipairs(tab.editorSections) do
         local isCollapsed = collapsedMap[sec.key] and true or false

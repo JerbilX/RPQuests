@@ -109,6 +109,7 @@ function JournalTab:Initialize()
         sent = true,
     }
     self.editorSectionsCollapsed = {
+        header = false,
         target = true,
         discovery = true,
         dialogue = true,
@@ -437,6 +438,7 @@ local function ApplyDraftToEditor(self, draft)
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
     self.editorSectionsCollapsed = {
+        header = false,
         target = true,
         discovery = true,
         dialogue = true,
