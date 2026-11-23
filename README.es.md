@@ -59,6 +59,35 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 ---
 
+## Guía de Uso
+
+### 1. Roles: Quest Master vs. Jugador
+- **Quest Master (Creador):** Redacta misiones personalizadas en **Preparando**, captura objetivos NPC o puntos de descubrimiento en el mundo, configura reglas opcionales o diálogos y envía contratos por correo in-game. Una vez enviados, sigue su estado en vivo y los resultados finales en **Enviadas**.
+- **Jugador (Destinatario):** Recibe ofertas de misión en **Pendientes**, revisa la descripción y elige **Aceptar** o **Rechazar**. Las misiones activas se siguen automáticamente en el mundo y los resultados se envían por correo de vuelta al Quest Master sin copiar ni pegar nada.
+
+### 2. Secciones del Diario (Acordeón Exclusivo)
+La pestaña **RPQuest** dentro del Diario de Misiones (`J`) usa un acordeón exclusivo: al expandir una sección, las demás se colapsan para mantener la lista ordenada:
+- **Pendientes:** Ofertas entrantes esperando que las **Aceptes** o **Rechaces**.
+- **Misiones:** Tus misiones aceptadas y activas. Selecciona una misión para ver objetivos, activar/desactivar el seguimiento o completarla manualmente cuando todos los objetivos obligatorios estén cumplidos.
+- **Completadas:** Archivo de las misiones que ya terminaste, incluyendo el resultado final de sigilo y objetivos opcionales.
+- **Preparando:** Borradores de misiones sin enviar que estás creando o editando como Quest Master.
+- **Enviadas:** Contratos que ya enviaste por correo a jugadores, mostrando su estado en vivo (`Enviada`, `Aceptada`, `Rechazada`, `Completada`) y los resultados automáticos al finalizar (como `No detectado` frente a `Detectado` y objetivos opcionales).
+
+### 3. Bloques de Construcción de Misiones
+- **Objetivos (Eliminación de NPCs):** Apunta a cualquier NPC vivo y pulsa tu atajo de **Capturar Objetivo bajo Retícula** (o `/rpquest capture`). Capturar varias veces un mismo nombre de NPC se acumula (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos separados. Para cada objetivo puedes alternar una condición de **Ubicación** (`Requerida` en la zona/subzona capturada o `No requerida`), añadir un mensaje personalizado al eliminarlo o marcarlo como **Opcional** (permitiendo completar la misión cuando todos los obligatorios estén listos).
+- **Puntos de Descubrimiento Ocultos:** Párate en un punto de exploración y pulsa tu atajo de **Capturar Punto de Descubrimiento** (o `/rpquest discovery`). Puedes configurar el radio de detección (`Pequeño`, `Mediano` o `Grande`). Los puntos permanecen ocultos en el mapa y la brújula para evitar spoilers.
+- **Sigilo (`No detectado`):** Activa **No detectado (Opcional)** en el editor para desafiar al jugador a completar la misión sin ser detectado en combate. La misión registra si permaneció `No detectado` o fue `Detectado` y lo reporta al Quest Master.
+- **Área de Búsqueda en el Mapa Mundial (`M`):** Muestra un círculo aproximado en el Mapa Mundial usando un desplazamiento aleatorio fijo para que el objetivo quede dentro del círculo sin revelar su centro exacto. El círculo desaparece automáticamente al completar o desactivar la misión.
+- **Diálogos de NPC:** Abre diálogo (`E`) con hasta 3 NPCs nativos de ESO para capturarlos en la sección **Diálogos de NPC** de la misión y redacta una opción de respuesta del jugador y la réplica del NPC para cada uno. Cuando el jugador hable con esos NPCs, tu línea personalizada se inyectará de forma nativa sin modificar las opciones originales del juego.
+
+### 4. Flujo por Correo In-Game (Automático)
+- **Envío:** Ingresa la `@Cuenta` destinataria (y opcionalmente el nombre del personaje) en el editor de la misión y pulsa **Enviar Misión**. Ambos jugadores deben estar en el mismo megaserver (ej. PC-NA o PC-EU) y usar el mismo idioma de cliente. Las misiones largas se dividen automáticamente en hasta 6 partes (`RPQP`) y se reensamblan al llegar.
+- **Aviso de Llegada:** Cuando llega un correo de misión, RPQuest lo importa automáticamente y muestra un aviso en pantalla alertando al jugador de que tiene una nueva misión en **Pendientes**.
+- **Aceptar y Rechazar:** Pulsar **Aceptar** activa la misión, el mini-tracker del HUD, el área en el Mapa Mundial y los diálogos de NPC, y notifica al Quest Master. Pulsar **Rechazar** declina la oferta y avisa al Quest Master.
+- **Reporte de Finalización:** Cuando el jugador completa todos los objetivos (o completa manualmente una misión con solo objetivos opcionales pendientes), RPQuest envía automáticamente el reporte (`RPQC1`) al Quest Master y actualiza el contrato en **Enviadas**.
+
+---
+
 ## Controles y Comandos Slash
 
 ### Atajos de Teclado (`Ajustes -> Controles -> RPQuest`)
