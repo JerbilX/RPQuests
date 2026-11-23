@@ -787,4 +787,42 @@ return function(T)
         tab.panel:SetHidden(false)
     end)
 
+    RunTest("JournalDetailPane shows Copy button only for Preparing and Sent quests", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(repo:GetDefaults())
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+
+        local prep = repo:BuildQuestRecord(10, "Prep Copy UI", "Desc", {
+            { name = "Target A", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 1 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        local sent = repo:BuildQuestRecord(11, "Sent Copy UI", "Desc", {
+            { name = "Target B", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 1, sentTo = "@Friend", sentAt = 12345 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        local rec = repo:BuildQuestRecord(12, "Received UI", "Desc", {
+            { name = "Target C", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 1 }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, prep)
+        table.insert(repo.savedVars.quests, sent)
+        table.insert(repo.savedVars.quests, rec)
+        repo._questById[10] = prep
+        repo._questById[11] = sent
+        repo._questById[12] = rec
+
+        tab:SelectQuest(12)
+        AssertEqual(tab.btnCopy:IsHidden(), true, "Copy button hidden for received quest")
+
+        tab:SelectQuest(10)
+        AssertEqual(tab.btnCopy:IsHidden(), false, "Copy button visible for Preparing quest")
+
+        tab:SelectQuest(11)
+        AssertEqual(tab.btnCopy:IsHidden(), false, "Copy button visible for Sent quest")
+
+        local copied = tab:DuplicateSelectedQuest()
+        AssertTrue(copied ~= nil, "DuplicateSelectedQuest creates copy from Sent quest")
+        AssertEqual(repo:GetPreparedQuestStatus(copied), "draft", "Copied quest is in Preparing")
+        AssertEqual(tab.selectedQuestId, copied.id, "UI selects the newly copied quest")
+    end)
+
 end

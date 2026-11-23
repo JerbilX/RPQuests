@@ -114,6 +114,12 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
     tab.btnSendDirect:SetAnchor(TOPLEFT, tab.btnReset, TOPRIGHT, 12, 0)
     tab.btnSendDirect:SetHidden(true)
 
+    tab.btnCopy = CreateStyledButton(panelName .. "_BtnCopy", contentParent, 160, 32, Addon.Locale:Get("BTN_COPY"), function()
+        tab:DuplicateSelectedQuest()
+    end)
+    tab.btnCopy:SetAnchor(TOPLEFT, tab.btnReset, BOTTOMLEFT, 0, 10)
+    tab.btnCopy:SetHidden(true)
+
     tab.btnAcceptOffered = CreateStyledButton(panelName .. "_BtnAcceptOffered", contentParent, 160, 32, Addon.Locale:Get("BTN_MAIL_ACCEPT"), function()
         tab:AcceptSelectedOfferedQuest()
     end)
@@ -403,6 +409,7 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
     if tab.btnAcceptOffered then tab.btnAcceptOffered:SetHidden(not isOffered) end
     if tab.btnRejectOffered then tab.btnRejectOffered:SetHidden(not isOffered) end
     if tab.btnSendDirect then tab.btnSendDirect:SetHidden(not isPrepared) end
+    if tab.btnCopy then tab.btnCopy:SetHidden(not isPrepared) end
 
     if isOffered then
         tab.btnActivate:SetHidden(true)
@@ -451,6 +458,7 @@ local function RenderEmptyDetailPane(tab)
     tab.btnEdit:SetHidden(true)
     tab.btnReset:SetHidden(true)
     if tab.btnSendDirect then tab.btnSendDirect:SetHidden(true) end
+    if tab.btnCopy then tab.btnCopy:SetHidden(true) end
     if tab.keybindStripDescriptor then
         KEYBIND_STRIP:UpdateKeybindButtonGroup(tab.keybindStripDescriptor)
     end
@@ -516,7 +524,7 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local objHeight = textHeight and (textHeight + 16) or (#objLines * 24)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
     if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 580 + objHeight + math.max(0, statusHeight - 22)))
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 620 + objHeight + math.max(0, statusHeight - 22)))
     end
 
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared)

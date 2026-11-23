@@ -70,7 +70,7 @@ The **RPQuest** tab inside the Quest Journal (`J`) uses an exclusive accordionâ€
 - **Pending:** Incoming quest offers waiting for you to **Accept** or **Reject**.
 - **Quests:** Your currently accepted and active quests. Select a quest to view objectives, toggle tracking, or manually complete it once all mandatory objectives are done.
 - **Completed:** Archive of finished quests you have played, including final stealth and optional objective outcomes.
-- **Preparing:** Unsent quest drafts you are creating or editing as a Quest Master.
+- **Preparing:** Unsent quest drafts you are creating or editing as a Quest Master. You can also copy any **Preparing** or **Sent** quest into **Preparing** to create a fresh editable draft.
 - **Sent:** Contracts you have already mailed to players, showing live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and automatic completion results (such as `Undetected` vs `Detected` and optional objectives).
 
 ### 3. Quest Building Blocks
