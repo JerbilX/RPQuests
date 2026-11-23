@@ -170,11 +170,16 @@ function MailInbox:UpsertReceivedEntry(entry)
                     if Addon.Announcements.AnnounceQuestAccepted then
                         Addon.Announcements:AnnounceQuestAccepted(imported)
                     end
-                elseif Addon.Announcements.ShowAlert then
-                    local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
-                        and entry.senderDisplayName
-                        or entry.senderCharacterName or ""
-                    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_OFFERED", imported.title or entry.title or "", who), false)
+                else
+                    if Addon.Announcements.AnnounceQuestReceived then
+                        Addon.Announcements:AnnounceQuestReceived(imported)
+                    end
+                    if Addon.Announcements.ShowAlert then
+                        local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
+                            and entry.senderDisplayName
+                            or entry.senderCharacterName or ""
+                        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_OFFERED", imported.title or entry.title or "", who), false)
+                    end
                 end
             end
         end

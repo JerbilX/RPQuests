@@ -52,6 +52,15 @@ function Announcements:AnnounceQuestAccepted(quest)
     emitLargeBanner(mainText, nil, SOUNDS.QUEST_ACCEPTED, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED)
 end
 
+function Announcements:AnnounceQuestReceived(quest)
+    if not quest then return end
+
+    local mainText = Addon.Locale:Get("CSA_QUEST_RECEIVED")
+    local subText = (type(quest.title) == "string" and quest.title ~= "") and quest.title or nil
+    local soundId = SOUNDS.QUEST_OBJECTIVE_INCREMENT or SOUNDS.BOOK_PAGE_TURN
+    emitLargeBanner(mainText, subText, soundId, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED)
+end
+
 function Announcements:AnnounceQuestCompleted(quest, _matchedTarget)
     if not quest then return end
 
