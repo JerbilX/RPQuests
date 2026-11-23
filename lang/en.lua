@@ -151,6 +151,7 @@ RPQuest.Locales["en"] = {
     CSA_QUEST_PROGRESS = "%s: %d / %d",
     CSA_QUEST_COMPLETED = "Quest Completed: %s",
     CSA_QUEST_FAILED = "Quest Failed: %s",
+    CSA_QUEST_RECEIVED = "You have received a new quest",
     ALERT_QUEST_FAILED_LOCATION = "Eliminated %s outside the required location.",
     STATUS_FAILED = "Status: |cFF4444Failed|r",
     LIST_FAILED_SUFFIX = " |cFF4444[Failed]|r",

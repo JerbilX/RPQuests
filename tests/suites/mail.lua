@@ -516,6 +516,66 @@ return function(T)
         RPQuest.Announcements.AnnounceQuestAccepted = origAnnounce
     end)
 
+    RunTest("MailInbox: emits localized on-screen CSA announcement on new mail quest without duplicates (Issue #166)", function()
+        local prevLang = mockState.language
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        AssertEqual(RPQuest.Locale:Get("CSA_QUEST_RECEIVED"), "You have received a new quest", "English CSA_QUEST_RECEIVED text")
+
+        mockState.language = "es"
+        RPQuest.Locale:Initialize("es")
+        AssertEqual(RPQuest.Locale:Get("CSA_QUEST_RECEIVED"), "Has recibido una nueva misión", "Spanish CSA_QUEST_RECEIVED text")
+
+        mockState.language = prevLang or "en"
+        RPQuest.Locale:Initialize(mockState.language)
+
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+        mockState.csaMessages = {}
+
+        local code = RPQuest.ShareCodec:EncodeQuest({
+            title = "Anuncio por Correo",
+            description = "Prueba de anuncio en pantalla.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Guardia" } },
+        })
+
+        local inbox = {
+            [961] = { sender = "@SenderCSA", charName = "SenderCSA", subject = "[RPQuest] Anuncio por Correo", body = code, secs = 3 },
+        }
+        _G.GetNextMailId = function(cur) return (cur == nil and inbox[961]) and 961 or nil end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        _G.DeleteMail = function(id) inbox[id] = nil end
+
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#mockState.csaMessages, 1, "1 CENTER_SCREEN_ANNOUNCE banner emitted on new offered mail quest")
+        AssertEqual(mockState.csaMessages[1].category, CSA_CATEGORY_LARGE_TEXT, "Mail quest received CSA uses large text category")
+        AssertEqual(mockState.csaMessages[1].csaType, CENTER_SCREEN_ANNOUNCE_TYPE_QUEST_ADDED, "Mail quest received CSA uses QUEST_ADDED type")
+        AssertEqual(mockState.csaMessages[1].mainText, RPQuest.Locale:Get("CSA_QUEST_RECEIVED"), "Mail quest received CSA mainText is localized")
+        AssertEqual(mockState.csaMessages[1].subText, "Anuncio por Correo", "Mail quest received CSA subText shows quest title")
+
+        -- Re-scan and duplicate UpsertReceivedEntry must not duplicate CSA banner
+        RPQuest.MailTransport:ScanInbox(false)
+        RPQuest.MailInbox:UpsertReceivedEntry({
+            idKey = "961",
+            mailId = 961,
+            senderDisplayName = "@SenderCSA",
+            senderCharacterName = "SenderCSA",
+            title = "Anuncio por Correo",
+            questCode = code,
+            isIncomplete = false,
+        })
+        AssertEqual(#mockState.csaMessages, 1, "No duplicate CSA banner on re-scan or duplicate UpsertReceivedEntry")
+    end)
+
     RunTest("38. Auto-report rejection and completion results to Master via mail (Issue #144)", function()
         local sv = RPQuest.QuestRepository:GetDefaults()
         RPQuest.QuestRepository:Initialize(sv)
