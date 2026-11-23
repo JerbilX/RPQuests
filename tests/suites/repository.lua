@@ -229,7 +229,7 @@ return function(T)
         local noCode = RPQuest.QuestRepository:ExportCompletionCode(masterQuest.id)
         AssertEqual(noCode, nil, "Cannot export completion code for incomplete quest")
 
-        -- Master exporta RPQ1 y otro jugador la importa y completa
+        -- Master exporta RPQ3 y otro jugador la importa y completa
         local shareCode = RPQuest.QuestRepository:ExportQuestToCode(masterQuest.id)
         local playerQuest = RPQuest.QuestRepository:ImportQuestFromCode(shareCode)
         AssertTrue(playerQuest ~= nil, "Player imported quest")
@@ -253,10 +253,10 @@ return function(T)
         AssertTrue(ok, "Completion code validates against master prepared quest")
         AssertEqual(result.characterName, "Jugador", "Completion code preserves characterName")
 
-        -- Rechaza un código RPQ1 como si fuera entrega
+        -- Rechaza un código RPQ3 como si fuera entrega
         local okQuestCode, errQuestCode = RPQuest.QuestRepository:ValidateResultCode(masterQuest.id, shareCode)
-        AssertEqual(okQuestCode, false, "RPQ1 code rejected in delivery validator")
-        AssertEqual(errQuestCode, "VALIDATE_ERR_NOT_COMPLETION_CODE", "Specific error returned for RPQ1 code")
+        AssertEqual(okQuestCode, false, "RPQ3 code rejected in delivery validator")
+        AssertEqual(errQuestCode, "VALIDATE_ERR_NOT_COMPLETION_CODE", "Specific error returned for RPQ3 code")
 
         -- Rechaza un código corrupto
         local okBad, errBad = RPQuest.QuestRepository:ValidateResultCode(masterQuest.id, completionCode .. "X")

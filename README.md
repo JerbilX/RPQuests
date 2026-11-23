@@ -121,7 +121,7 @@ RPQuest/
 │   ├── Constants.lua        # Constants, radii, and metadata
 │   ├── Locale.lua           # Client language selector & i18n
 │   ├── BinaryCodec.lua      # Base85, Base64Url, LZSS, and Varint binary primitives
-│   ├── ShareCodec.lua       # RPQ3 / RPQ2 / RPQ1 & RPQC1 quest/result serialization
+│   ├── ShareCodec.lua       # RPQ3 & RPQC1 quest/result serialization
 │   ├── MailInbox.lua        # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
 │   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
