@@ -108,43 +108,6 @@ local function EncodeTargetsList(targets)
     return table.concat(items, ";")
 end
 
-local function DecodeTargetsList(rawTargets)
-    if type(rawTargets) ~= "string" or rawTargets == "" then
-        return nil
-    end
-    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
-    local entries = SplitByChar(rawTargets, ";")
-    local targets = {}
-    for _, item in ipairs(entries) do
-        if item ~= "" then
-            local kv = SplitByChar(item, "~")
-            local name = UnescapeField(kv[1] or "")
-            local req = tonumber(kv[2]) or 1
-            if name ~= "" and req >= 1 then
-                local wx = (kv[4] ~= nil and kv[4] ~= "") and tonumber(kv[4]) or nil
-                local wz = (kv[5] ~= nil and kv[5] ~= "") and tonumber(kv[5]) or nil
-                local hasLoc = (wx ~= nil and wz ~= nil)
-                table.insert(targets, {
-                    name = name,
-                    currentCount = 0,
-                    requiredCount = math.max(1, math.floor(req)),
-                    zoneId = hasLoc and math.floor(tonumber(kv[3]) or 0) or nil,
-                    worldX = hasLoc and wx or nil,
-                    worldZ = hasLoc and wz or nil,
-                    radius = hasLoc and math.max(100, math.floor(tonumber(kv[6]) or defaultRad)) or nil,
-                    locationRequired = (kv[7] == "1"),
-                    optional = (kv[9] == "1"),
-                    customMessage = UnescapeField(kv[8] or ""),
-                })
-            end
-        end
-    end
-    if #targets == 0 then
-        return nil
-    end
-    return targets
-end
-
 local function EncodeDiscoveriesList(discoveries)
     if type(discoveries) ~= "table" or #discoveries == 0 then
         return ""
@@ -170,37 +133,6 @@ local function EncodeDiscoveriesList(discoveries)
     return table.concat(items, ";")
 end
 
-local function DecodeDiscoveriesList(rawDiscoveries)
-    if type(rawDiscoveries) ~= "string" or rawDiscoveries == "" then
-        return {}
-    end
-    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
-    local entries = SplitByChar(rawDiscoveries, ";")
-    local discoveries = {}
-    for _, item in ipairs(entries) do
-        if item ~= "" then
-            local kv = SplitByChar(item, "~")
-            local worldX = tonumber(kv[2])
-            local worldZ = tonumber(kv[4])
-            if worldX and worldZ then
-                table.insert(discoveries, {
-                    zoneId = math.floor(tonumber(kv[1]) or 0),
-                    worldX = math.floor(worldX),
-                    worldY = math.floor(tonumber(kv[3]) or 0),
-                    worldZ = math.floor(worldZ),
-                    mapId = math.floor(tonumber(kv[5]) or 0),
-                    x = tonumber(kv[6]) or 0,
-                    y = tonumber(kv[7]) or 0,
-                    radius = math.max(100, math.floor(tonumber(kv[8]) or defaultRad)),
-                    message = UnescapeField(kv[9] or ""),
-                    discovered = false,
-                })
-            end
-        end
-    end
-    return discoveries
-end
-
 local function EncodeDialoguesList(dialogues)
     if type(dialogues) ~= "table" or #dialogues == 0 then
         return ""
@@ -220,31 +152,6 @@ local function EncodeDialoguesList(dialogues)
         end
     end
     return table.concat(items, ";")
-end
-
-local function DecodeDialoguesList(rawDialogues)
-    if type(rawDialogues) ~= "string" or rawDialogues == "" then
-        return {}
-    end
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
-    local entries = SplitByChar(rawDialogues, ";")
-    local dialogues = {}
-    for _, item in ipairs(entries) do
-        if #dialogues >= maxNpcs then break end
-        if item ~= "" then
-            local kv = SplitByChar(item, "~")
-            local npcName = UnescapeField(kv[1] or "")
-            if npcName ~= "" then
-                table.insert(dialogues, {
-                    npcName = npcName,
-                    zoneId = math.floor(tonumber(kv[2]) or 0),
-                    response = UnescapeField(kv[3] or ""),
-                    clue = kv[4] ~= nil and UnescapeField(kv[4]) or nil,
-                })
-            end
-        end
-    end
-    return dialogues
 end
 
 local function ComputeChecksum16(data)
@@ -740,81 +647,6 @@ local function DecodeAndVerifyEnvelope(codeString, invalidFormatErr, badB64Err, 
     return pfx, rawPayload, nil
 end
 
-local function DecodeLegacyQuest(trimmed, legacyPrefixV2, legacyPrefix, compPrefix)
-    local _, rawPayload, envErr = DecodeAndVerifyEnvelope(
-        trimmed,
-        "ERR_IMPORT_INVALID_FORMAT",
-        "ERR_IMPORT_TRUNCATED_OR_CORRUPT",
-        "ERR_IMPORT_TRUNCATED_OR_CORRUPT",
-        {
-            [legacyPrefixV2] = true,
-            [legacyPrefix] = true,
-            [compPrefix] = "ERR_IMPORT_NOT_QUEST_CODE",
-        },
-        "ERR_IMPORT_UNSUPPORTED_VERSION"
-    )
-    if not rawPayload then
-        return nil, envErr
-    end
-
-    local fields = SplitByChar(rawPayload, "|")
-    if #fields < 11 then
-        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-    end
-
-    local title = UnescapeField(fields[1])
-    local description = UnescapeField(fields[2])
-    local mapId = tonumber(fields[3])
-    local zoneId = tonumber(fields[4])
-    local mapName = UnescapeField(fields[5])
-    local targetX = tonumber(fields[6])
-    local targetY = tonumber(fields[7])
-    local areaCenterX = tonumber(fields[8])
-    local areaCenterY = tonumber(fields[9])
-    local areaRadius = tonumber(fields[10])
-    local decodedTargets = DecodeTargetsList(fields[11]) or {}
-    local completionMessage = fields[12] and UnescapeField(fields[12]) or ""
-    local requireUndetected = (fields[13] == "1")
-    local decodedDiscoveries = fields[14] and DecodeDiscoveriesList(fields[14]) or {}
-    local clue = fields[15] and UnescapeField(fields[15]) or ""
-    local hideMapArea = (fields[16] == "1")
-    local decodedDialogues = fields[17] and DecodeDialoguesList(fields[17]) or {}
-    local sourceLanguage = fields[18] and UnescapeField(fields[18]):lower() or ""
-
-    if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then
-        return nil, "ERR_IMPORT_LANGUAGE_MISMATCH"
-    end
-
-    if #decodedTargets == 0 and #decodedDiscoveries == 0 then
-        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-    end
-
-    if #decodedTargets > 0 and (not areaCenterX or not areaCenterY or not areaRadius or areaRadius <= 0) then
-        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
-    end
-
-    return {
-        title = title,
-        description = description,
-        clue = clue,
-        completionMessage = completionMessage,
-        targets = decodedTargets,
-        discoveries = decodedDiscoveries,
-        dialogues = decodedDialogues,
-        mapId = math.floor(mapId or 0),
-        zoneId = math.floor(zoneId or 0),
-        mapName = mapName,
-        targetX = (#decodedTargets > 0) and (targetX or areaCenterX) or nil,
-        targetY = (#decodedTargets > 0) and (targetY or areaCenterY) or nil,
-        areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
-        areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
-        areaRadius = areaRadius or 0.075,
-        hideMapArea = hideMapArea,
-        requireUndetected = requireUndetected,
-        language = (sourceLanguage ~= "" and sourceLanguage) or nil,
-    }
-end
-
 function ShareCodec:DecodeQuest(codeString)
     if type(codeString) ~= "string" then
         return nil, "ERR_IMPORT_EMPTY"
@@ -826,36 +658,38 @@ function ShareCodec:DecodeQuest(codeString)
     end
 
     local prefix = Addon.Constants.SHARE_CODEC.PREFIX
-    local legacyPrefixV2 = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX_V2 or "RPQ2"
-    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
     local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
 
+    if string.sub(trimmed, 1, #compPrefix + 1) == (compPrefix .. ":") then
+        return nil, "ERR_IMPORT_NOT_QUEST_CODE"
+    end
+
     local rpqPrefix = string.match(trimmed, "^(RPQ%d+):")
-    if rpqPrefix and rpqPrefix ~= prefix and rpqPrefix ~= legacyPrefixV2 and rpqPrefix ~= legacyPrefix then
+    if rpqPrefix and rpqPrefix ~= prefix then
         return nil, "ERR_IMPORT_UNSUPPORTED_VERSION"
     end
 
-    if string.sub(trimmed, 1, #prefix + 1) == (prefix .. ":") then
-        local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):(.+)$")
-        if not pfx or not checksum or #checksum ~= 4 or not encodedPayload or encodedPayload:find("%s") then
-            return nil, "ERR_IMPORT_INVALID_FORMAT"
-        end
-        local compressed = BinaryCodec:Base85Decode(encodedPayload)
-        if not compressed then
-            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
-        end
-        local expectedChecksum = ComputeChecksum16(compressed)
-        if checksum:upper() ~= expectedChecksum:upper() then
-            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
-        end
-        local rawBinary = BinaryCodec:DecompressLZSS(compressed)
-        if not rawBinary then
-            return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
-        end
-        return UnpackQuestBinary(rawBinary)
+    if string.sub(trimmed, 1, #prefix + 1) ~= (prefix .. ":") then
+        return nil, "ERR_IMPORT_INVALID_FORMAT"
     end
 
-    return DecodeLegacyQuest(trimmed, legacyPrefixV2, legacyPrefix, compPrefix)
+    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):(.+)$")
+    if not pfx or not checksum or #checksum ~= 4 or not encodedPayload or encodedPayload:find("%s") then
+        return nil, "ERR_IMPORT_INVALID_FORMAT"
+    end
+    local compressed = BinaryCodec:Base85Decode(encodedPayload)
+    if not compressed then
+        return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
+    end
+    local expectedChecksum = ComputeChecksum16(compressed)
+    if checksum:upper() ~= expectedChecksum:upper() then
+        return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
+    end
+    local rawBinary = BinaryCodec:DecompressLZSS(compressed)
+    if not rawBinary then
+        return nil, "ERR_IMPORT_TRUNCATED_OR_CORRUPT"
+    end
+    return UnpackQuestBinary(rawBinary)
 end
 
 function ShareCodec:ComputeQuestSignature(quest)
@@ -949,8 +783,6 @@ function ShareCodec:DecodeCompletion(codeString)
     end
 
     local questPrefix = Addon.Constants.SHARE_CODEC.PREFIX
-    local legacyPrefixV2 = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX_V2 or "RPQ2"
-    local legacyPrefix = Addon.Constants.SHARE_CODEC.LEGACY_PREFIX or "RPQ1"
     local compPrefix = Addon.Constants.SHARE_CODEC.COMPLETION_PREFIX
 
     if string.sub(codeString:gsub("^%s+", ""), 1, #questPrefix + 1) == (questPrefix .. ":") then
@@ -964,8 +796,6 @@ function ShareCodec:DecodeCompletion(codeString)
         "VALIDATE_ERR_INVALID_CODE",
         {
             [compPrefix] = true,
-            [legacyPrefixV2] = "VALIDATE_ERR_NOT_COMPLETION_CODE",
-            [legacyPrefix] = "VALIDATE_ERR_NOT_COMPLETION_CODE",
         }
     )
     if not rawPayload then

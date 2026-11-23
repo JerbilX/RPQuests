@@ -18,8 +18,6 @@ Addon.Constants = {
     },
     SHARE_CODEC = {
         PREFIX = "RPQ3",
-        LEGACY_PREFIX_V2 = "RPQ2",
-        LEGACY_PREFIX = "RPQ1",
         COMPLETION_PREFIX = "RPQC1",
         VERSION = 3,
     },
