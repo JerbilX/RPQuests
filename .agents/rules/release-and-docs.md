@@ -4,13 +4,14 @@ trigger: always_on
 
 # Mantenimiento de READMEs y Versiones (RPQuest)
 
-1. **Sincronización de Documentación en Tareas (`feat` / `ui` / Estructura):**
-   - Al agregar o modificar funcionalidades visibles para el usuario, atajos de teclado o módulos en `src/` / `lang/`, actualizar **`README.md`** y **`README.es.md`** en el mismo PR (secciones de características, guía rápida y estructura del proyecto).
-   - Si cambian las instrucciones de instalación o uso general del paquete ESOUI, actualizar también `readme.txt`.
+1. **Sincronización de Documentación en Tareas (`feat` / `fix` / `ui` / `refactor` / Estructura):**
+   - Al agregar, modificar o **eliminar** funcionalidades visibles para el usuario, atajos de teclado o módulos en `src/` / `lang/`, actualizar en el **mismo PR** los cuatro documentos públicos: **`README.md`**, **`README.es.md`**, **`docs/esoui-description.bbcode`** y (si aplica) **`readme.txt`**.
+   - **Cero features fantasma ni ocultas:** Nunca dejar afirmaciones sobre funcionalidades eliminadas ni omitir capacidades nuevas visibles para el usuario. Cuando se retire una funcionalidad visible, agregar su patrón en `RETIRED_DOC_TERMS` dentro de `scripts/check-esoui.sh` para bloquear regresiones en CI.
 
 2. **Checklist Obligatorio al Promover `dev` -> `main` (`vX.Y.Z`):**
+   - **Auditoría Integral Código vs. Documentación (Gate Pre-Release):** Antes de ejecutar `bump-version.sh` y abrir el Release PR (`dev -> main`), ejecutar una auditoría en contexto limpio que contraste el estado real de `RPQuest.lua`, `src/*.lua`, `RPQuest.txt` y `lang/en.lua` contra el texto completo de **`docs/esoui-description.bbcode`**, **`README.md`**, **`README.es.md`** y **`readme.txt`**. Cualquier discrepancia (feature fantasma u oculta) debe corregirse en `dev` antes de promover a `main`.
    - Ejecutar `./scripts/bump-version.sh --dry-run` para calcular automáticamente el próximo SemVer según Conventional Commits desde el último tag `v*` (o usar `./scripts/bump-version.sh --version X.Y.Z` / `major|minor|patch` si se requiere override manual), y luego `./scripts/bump-version.sh` para actualizar de forma sincronizada `RPQuest.txt` (`## Version:` y sufijo `(vX.Y.Z)` en `## Description:`), `src/Constants.lua` (`METADATA.VERSION`) y los badges `![Version](https://img.shields.io/badge/version-X.Y.Z-blue)` en **`README.md`** y **`README.es.md`**.
-   - Confirmar que todas las funcionalidades nuevas incluidas desde el último tag estén documentadas en ambos READMEs y en **`docs/esoui-description.bbcode`**.
+   - Confirmar que todas las funcionalidades nuevas, modificadas o eliminadas desde el último tag estén fielmente reflejadas en ambos READMEs, `readme.txt` y **`docs/esoui-description.bbcode`**.
    - **Tag SemVer obligatorio (`vX.Y.Z`) sobre `main`:** El workflow `.github/workflows/release.yml` (GitHub Release + publicación automática en ESOUI.com) se dispara exclusivamente al pushear un tag `v*` sobre `main`. Nunca omitir la creación y push del tag `vX.Y.Z` tras el merge a `main`, ni ejecutar `workflow_dispatch` en modo live (`dry_run=false`) desde `dev` (los tags de `main` no son ancestros de `dev`).
    - Tras crear el tag `vX.Y.Z` sobre `main` (y antes de volver a `dev`), ejecutar `./scripts/package.sh` para regenerar la distribución local en `dist/RPQuest-X.Y.Z.zip` (el script limpia versiones anteriores automáticamente).
    - **Sincronizar `main` de vuelta a `dev` tras el tag:** Al volver a `dev`, ejecutar `git merge --ff-only main` (o `git merge main` si `dev` ya avanzó) y pushear `dev`, para que el merge commit etiquetado con `vX.Y.Z` sea ancestro directo de `dev`.
