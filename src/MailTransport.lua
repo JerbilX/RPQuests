@@ -394,6 +394,16 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
         return false, "ERR_MAIL_SELF_RECIPIENT"
     end
 
+    if type(quest.senderCharacterName) ~= "string" or quest.senderCharacterName == "" then
+        local playerChar = Addon.QuestRepository:GetPlayerCharacterName()
+        if playerChar ~= "" then
+            quest.senderCharacterName = playerChar
+            if Addon.QuestRepository._shareCodeCache then
+                Addon.QuestRepository._shareCodeCache[quest.id] = nil
+            end
+        end
+    end
+
     local questCode = Addon.QuestRepository:ExportQuestToCode(quest.id)
     if not questCode or questCode == "" then
         return false, "ERR_INVALID_CODE"

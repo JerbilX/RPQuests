@@ -91,12 +91,26 @@ local function BuildEditorBaseFields(tab, formParent, panelName)
     tab.lblInputRecipient = lblRecipient
 
     local recipientBg, recipientEdit = CreateEditBox(
-        panelName .. "_RecipientEdit", formParent, 260, 30, 64, false,
+        panelName .. "_RecipientEdit", formParent, 250, 30, 64, false,
         function(val) Addon.QuestRepository:UpdateDraftFields({ recipientAccount = val }, true) end
     )
     recipientBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 188)
     tab.recipientBg = recipientBg
     tab.recipientEdit = recipientEdit
+
+    local lblRecipientChar = WINDOW_MANAGER:CreateControl(panelName .. "_LblInputRecipientChar", formParent, CT_LABEL)
+    lblRecipientChar:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 166)
+    if lblRecipientChar.SetFont then lblRecipientChar:SetFont("ZoFontGameBold") end
+    lblRecipientChar:SetText(Addon.Locale:Get("LABEL_INPUT_RECIPIENT_CHAR"))
+    tab.lblInputRecipientChar = lblRecipientChar
+
+    local recipientCharBg, recipientCharEdit = CreateEditBox(
+        panelName .. "_RecipientCharEdit", formParent, 250, 30, 64, false,
+        function(val) Addon.QuestRepository:UpdateDraftFields({ recipientCharacterName = val }, true) end
+    )
+    recipientCharBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 188)
+    tab.recipientCharBg = recipientCharBg
+    tab.recipientCharEdit = recipientCharEdit
 end
 
 local function BuildTargetSectionAreaControls(tab, targetBody, panelName)
@@ -656,6 +670,8 @@ local function RefreshEditorBaseAndArea(tab, draft)
     tab.editorHeader:SetText(Addon.Locale:Get(draft.editingQuestId and "EDITOR_EDIT_TITLE" or "EDITOR_CREATE_TITLE"))
     SyncUnfocusedEdit(tab.titleEdit, draft.title or "")
     SyncUnfocusedEdit(tab.descEdit, draft.description or "")
+    SyncUnfocusedEdit(tab.recipientEdit, draft.recipientAccount or "")
+    SyncUnfocusedEdit(tab.recipientCharEdit, draft.recipientCharacterName or "")
     SyncUnfocusedEdit(tab.completionEdit, draft.completionMessage or "")
 
     local targets = draft.targets or {}

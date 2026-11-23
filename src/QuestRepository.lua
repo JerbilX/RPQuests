@@ -35,6 +35,16 @@ function QuestRepository:NormalizeAccountName(raw)
     return clean
 end
 
+function QuestRepository:NormalizeCharacterName(raw)
+    if type(raw) ~= "string" then return "" end
+    local clean = raw:gsub("%^%a+$", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    return clean
+end
+
+function QuestRepository:GetPlayerCharacterName()
+    return self:NormalizeCharacterName(GetUnitName("player"))
+end
+
 function QuestRepository:FormatTargetEntry(target)
     if type(target) ~= "table" or not target.name or target.name == "" then
         return ""
@@ -124,7 +134,9 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
+        senderCharacterName = (type(data.senderCharacterName) == "string" and data.senderCharacterName ~= "") and data.senderCharacterName or nil,
         recipientAccount = self:NormalizeAccountName(data.recipientAccount),
+        recipientCharacterName = (type(data.recipientCharacterName) == "string" and data.recipientCharacterName ~= "") and data.recipientCharacterName or nil,
         sentTo = type(data.sentTo) == "string" and data.sentTo or nil,
         sentAt = data.sentAt,
         lastResult = type(data.lastResult) == "table" and data.lastResult or nil,
@@ -478,7 +490,7 @@ function QuestRepository:SetDraftCapturedTarget(captureData)
     return Addon.QuestDraftStore:SetDraftCapturedTarget(self, captureData)
 end
 
-function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput)
+function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput, recipientCharacterNameInput)
     return Addon.QuestDraftStore:SaveDraft(
         self,
         titleInput,
@@ -486,7 +498,8 @@ function QuestRepository:SaveDraft(titleInput, descriptionInput, areaRadiusInput
         areaRadiusInput,
         completionMessageInput,
         requireUndetectedInput,
-        recipientAccountInput
+        recipientAccountInput,
+        recipientCharacterNameInput
     )
 end
 
@@ -563,6 +576,15 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
     if cleanSender ~= "" then
         decoded.senderDisplayName = cleanSender
     end
+    local cleanSenderChar = self:NormalizeCharacterName(options.senderCharacterName)
+    if cleanSenderChar ~= "" then
+        decoded.senderCharacterName = cleanSenderChar
+    elseif type(decoded.senderCharacterName) == "string" then
+        decoded.senderCharacterName = self:NormalizeCharacterName(decoded.senderCharacterName)
+    end
+    if type(decoded.recipientCharacterName) == "string" then
+        decoded.recipientCharacterName = self:NormalizeCharacterName(decoded.recipientCharacterName)
+    end
     decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
     decoded.sourceMailId = options.sourceMailId
 
@@ -621,6 +643,12 @@ function QuestRepository:ExportQuestToCode(questId)
     local quest = self:GetQuestById(questId)
     if not quest then
         return nil
+    end
+    if self:IsPreparedQuest(quest) and (type(quest.senderCharacterName) ~= "string" or quest.senderCharacterName == "") then
+        local playerChar = self:GetPlayerCharacterName()
+        if playerChar ~= "" then
+            quest.senderCharacterName = playerChar
+        end
     end
     self._shareCodeCache = self._shareCodeCache or {}
     local cached = self._shareCodeCache[questId]

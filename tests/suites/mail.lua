@@ -798,4 +798,72 @@ return function(T)
         _G.DeleteMail = origDeleteMail
     end)
 
+    RunTest("41. Sender and recipient character names (From/To) in Editor, ShareCodec, Mail, and DetailPane (Issue #157)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        local origUnitName = _G.GetUnitName
+        _G.GetUnitName = function(tag)
+            if tag == "player" then return "Nerevar^Mx" end
+            return origUnitName(tag)
+        end
+
+        -- 1. Editor captures recipientAccount and recipientCharacterName independently, and persists senderCharacterName
+        RPQuest.JournalTab:OpenCreateEditor()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Dagoth",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Vvardenfell",
+            targetX = 0.4,
+            targetY = 0.4,
+        })
+        RPQuest.JournalTab.titleEdit:SetText("Red Mountain")
+        RPQuest.JournalTab.descEdit:SetText("Confront the Sixth House.")
+        RPQuest.JournalTab.recipientEdit:SetText("VivecAcct")
+        RPQuest.JournalTab.recipientCharEdit:SetText("Lord Vivec")
+        RPQuest.JournalTab:OnSaveDraftClicked()
+
+        local prepared = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)[1]
+        AssertEqual(prepared.senderCharacterName, "Nerevar", "senderCharacterName captured from GetUnitName('player') and stripped of grammar suffix")
+        AssertEqual(prepared.recipientAccount, "@VivecAcct", "recipientAccount normalized and preserved")
+        AssertEqual(prepared.recipientCharacterName, "Lord Vivec", "recipientCharacterName preserved")
+
+        -- 2. Detail pane displays From: and To: below Status: while keeping @AccountName in Status:
+        RPQuest.JournalTab:SelectQuest(prepared.id)
+        RPQuest.JournalTab:Refresh()
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@VivecAcct", 1, true) ~= nil, "Prepared status preserves @AccountName")
+        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Nerevar", "Detail From shows sender character name")
+        AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Detail To shows recipient character name")
+
+        -- 3. ShareCodec preserves senderCharacterName and recipientCharacterName without altering quest signature
+        local sigBefore = RPQuest.ShareCodec:ComputeQuestSignature(prepared)
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertEqual(decoded.senderCharacterName, "Nerevar", "ShareCodec decodes senderCharacterName")
+        AssertEqual(decoded.recipientCharacterName, "Lord Vivec", "ShareCodec decodes recipientCharacterName")
+        local sigAfter = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+        AssertEqual(sigAfter, sigBefore, "Quest signature unchanged when character names are encoded")
+
+        -- 4. Offered mail quest displays From: <CharacterName> and To: <CharacterName> below Status: without inline From in Status:
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@MasterAcct", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            senderCharacterName = "Sotha Sil^Mx",
+        })
+        AssertEqual(imported.senderDisplayName, "@MasterAcct", "Imported quest keeps senderDisplayName")
+        AssertEqual(imported.senderCharacterName, "Sotha Sil", "Imported quest prefers normalized mail metadata senderCharacterName")
+        AssertEqual(imported.recipientCharacterName, "Lord Vivec", "Imported quest keeps recipientCharacterName")
+
+        RPQuest.JournalTab:SelectQuest(imported.id)
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.detailStatus:GetText():find("From:", 1, true), nil, "Offered status no longer embeds inline From:")
+        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Sotha Sil", "Offered detail From shows sender character name")
+        AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Offered detail To shows recipient character name")
+
+        _G.GetUnitName = origUnitName
+    end)
+
 end

@@ -359,14 +359,16 @@ local function PackDialoguesBlock(buf, dialogues)
     end
 end
 
-local function PackDialogueCluesBlock(buf, dialogues)
+local function PackDialogueCluesBlock(buf, dialogues, forceWrite)
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
     local count = math.min(#dialogues, maxNpcs)
-    local hasPerNpcClue = false
-    for idx = 1, count do
-        if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
-            hasPerNpcClue = true
-            break
+    local hasPerNpcClue = forceWrite and true or false
+    if not hasPerNpcClue then
+        for idx = 1, count do
+            if type(dialogues[idx].clue) == "string" and dialogues[idx].clue ~= "" then
+                hasPerNpcClue = true
+                break
+            end
         end
     end
     if hasPerNpcClue then
@@ -422,8 +424,17 @@ local function PackQuestBinary(quest)
     if clue ~= "" then BinaryCodec:WriteStr(buf, clue) end
     if lang ~= "" then BinaryCodec:WriteStr(buf, lang) end
 
+    local senderChar = (type(quest.senderCharacterName) == "string") and quest.senderCharacterName or ""
+    local recipientChar = (type(quest.recipientCharacterName) == "string") and quest.recipientCharacterName or ""
+    local hasCharNames = (senderChar ~= "" or recipientChar ~= "")
+
     if #dialogues > 0 then
-        PackDialogueCluesBlock(buf, dialogues)
+        PackDialogueCluesBlock(buf, dialogues, hasCharNames)
+    end
+
+    if hasCharNames then
+        BinaryCodec:WriteStr(buf, senderChar)
+        BinaryCodec:WriteStr(buf, recipientChar)
     end
 
     return table.concat(buf)
@@ -551,7 +562,9 @@ local function UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
         local dClue
         dClue, pos = BinaryCodec:ReadStr(data, pos, len)
         if not dClue then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
-        decodedDialogues[idx].clue = dClue
+        if dClue ~= "" then
+            decodedDialogues[idx].clue = dClue
+        end
     end
     return true, pos
 end
@@ -618,8 +631,25 @@ local function UnpackQuestBinary(data)
     end
 
     if hasDialogues and pos <= len then
-        local okClues, clueErr = UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
-        if not okClues then return nil, clueErr end
+        local okClues
+        okClues, pos = UnpackDialogueCluesBlock(data, pos, len, decodedDialogues)
+        if not okClues then return nil, pos end
+    end
+
+    local senderCharacterName = ""
+    local recipientCharacterName = ""
+    if pos <= len then
+        local sc, nextPos = BinaryCodec:ReadStr(data, pos, len)
+        if sc then
+            senderCharacterName = sc
+            pos = nextPos
+        end
+    end
+    if pos <= len then
+        local rc = BinaryCodec:ReadStr(data, pos, len)
+        if rc then
+            recipientCharacterName = rc
+        end
     end
 
     if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then
@@ -654,6 +684,8 @@ local function UnpackQuestBinary(data)
         hideMapArea = hideMapArea,
         requireUndetected = requireUndetected,
         language = (sourceLanguage ~= "" and sourceLanguage) or nil,
+        senderCharacterName = (senderCharacterName ~= "" and senderCharacterName) or nil,
+        recipientCharacterName = (recipientCharacterName ~= "" and recipientCharacterName) or nil,
     }
 end
 
