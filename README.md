@@ -15,7 +15,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 
 ## Key Features
 
-- **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with separate **Prepared** (authored) and **Received** (active/playable) quest lists.
+- **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with exclusive accordion sections for **Pending** offers, active **Quests**, **Completed** missions, **Preparing** (unsent drafts), and **Sent** (dispatched contracts with live status and completion results).
 - **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`), an `Optional` objective toggle (enabling manual quest completion once mandatory objectives are done), and custom elimination messages.
 - **Hidden Discovery Points:** Capture in-world exploration coordinates (`Keybind` or `/rpquest discovery`) with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
 - **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
@@ -55,7 +55,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
    - **Same-language requirement:** Quests should be played on a game client using the same language as the creator so NPC names and dialogue targets match.
 3. **Play & Auto-Report:**
    - Accepting the quest activates the HUD mini-tracker, World Map search area, and any injected NPC dialogues immediately.
-   - Accepting, completing, or rejecting the quest automatically mails the result back to the Quest Master and updates the quest status.
+   - Accepting, completing, or rejecting the quest automatically mails the result back to the Quest Master, moving the contract into the **Sent** section with live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and completion results (such as `Undetected` vs `Detected` and optional objective outcomes).
 
 ---
 

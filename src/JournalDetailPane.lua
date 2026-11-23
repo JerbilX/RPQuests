@@ -313,19 +313,43 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
     local totalTargets = #targets
     local limit = (totalTargets > maxVisibleObjLines) and (maxVisibleObjLines - 1) or totalTargets
     local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
+    local pStatus, pInfo
+    if isPrepared then
+        pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(selectedQuest)
+    end
+    local isSentCompleted = isPrepared and pStatus == "completed" and type(pInfo) == "table"
+    local optIdx = 0
 
     for i = 1, limit do
         local t = targets[i]
+        local currentCount = t.currentCount or 0
+        local requiredCount = t.requiredCount or 1
+        local isTargetCompleted = (currentCount >= requiredCount)
+        if isSentCompleted then
+            if t.optional == true then
+                optIdx = optIdx + 1
+                isTargetCompleted = (type(pInfo.optionalTargets) == "table" and pInfo.optionalTargets[optIdx] == true)
+            else
+                isTargetCompleted = true
+                currentCount = requiredCount
+            end
+        elseif t.optional == true then
+            optIdx = optIdx + 1
+        end
+        if isTargetCompleted and currentCount < requiredCount then
+            currentCount = requiredCount
+        end
+
         local line = Addon.Locale:Get(
             "OBJECTIVE_KILL_FORMAT",
             t.name or "",
-            t.currentCount or 0,
-            t.requiredCount or 1
+            currentCount,
+            requiredCount
         ):gsub("^•%s*", bullet)
         if t.optional == true then
             line = line .. Addon.Locale:Get("OBJECTIVE_OPTIONAL_SUFFIX")
         end
-        if (t.currentCount or 0) >= (t.requiredCount or 1) then
+        if isTargetCompleted then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
         elseif isPrepared and Addon.QuestRepository:HasTargetLocation(t) then
             local locKey = t.locationRequired and "TARGET_DETAIL_LOC_REQUIRED" or "TARGET_DETAIL_LOC_OPTIONAL"
@@ -353,7 +377,11 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
     end
 
     if selectedQuest.requireUndetected then
-        local stealthKey = selectedQuest.wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
+        local wasDetected = selectedQuest.wasDetected
+        if isSentCompleted and pInfo.wasDetected ~= nil then
+            wasDetected = pInfo.wasDetected
+        end
+        local stealthKey = wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
         table.insert(objLines, bullet .. Addon.Locale:Get(stealthKey))
     end
 
@@ -453,6 +481,15 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
 
     ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
+    local statusText = tab.detailStatus:GetText() or ""
+    tab.detailStatus:SetDimensions(500, 0)
+    local statusHeight = tab.detailStatus.GetTextHeight and tab.detailStatus:GetTextHeight()
+    if not statusHeight then
+        local _, newlines = statusText:gsub("\n", "\n")
+        statusHeight = (newlines + 1) * 22
+    end
+    statusHeight = math.max(22, statusHeight)
+    tab.detailStatus:SetDimensions(500, statusHeight)
 
     local fromName = (type(selectedQuest.senderCharacterName) == "string" and selectedQuest.senderCharacterName ~= "")
         and selectedQuest.senderCharacterName
@@ -487,7 +524,7 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local objHeight = textHeight and (textHeight + 16) or (#objLines * 24)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
     if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 580 + objHeight))
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 580 + objHeight + math.max(0, statusHeight - 22)))
     end
 
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared)

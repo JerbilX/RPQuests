@@ -12,7 +12,7 @@ local JournalTab = Addon.JournalTab
 
 local PANEL_NAME = Addon.JournalWidgets.PANEL_NAME
 local MAX_VISIBLE_ROWS = 15
-local QUEST_SECTIONS = { "pending", "missions", "completed", "preparing" }
+local QUEST_SECTIONS = { "pending", "missions", "completed", "preparing", "sent" }
 
 local VIEW_MODE = {
     DETAIL = "DETAIL",
@@ -30,17 +30,24 @@ local function ExpandOnlySection(self, sectionKey)
     end
 end
 
+local function GetQuestSectionKey(quest)
+    if not quest then return nil end
+    if Addon.QuestRepository:IsPreparedQuest(quest) then
+        local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(quest)
+        return (pStatus == "draft") and "preparing" or "sent"
+    elseif Addon.QuestRepository:IsOfferedQuest(quest) then
+        return "pending"
+    elseif quest.completed then
+        return "completed"
+    end
+    return "missions"
+end
+
 function JournalTab:RegisterRepositoryListener()
     Addon.QuestRepository:RegisterListener(function(eventType, quest)
-        if eventType == "QUEST_CREATED" or eventType == "QUEST_UPDATED" then
+        if eventType == "QUEST_CREATED" or eventType == "QUEST_UPDATED" or eventType == "QUEST_SENT" then
             if quest and quest.id then
-                if quest.role == Addon.Constants.QUEST_ROLE.PREPARED then
-                    ExpandOnlySection(self, "preparing")
-                elseif quest.completed then
-                    ExpandOnlySection(self, "completed")
-                else
-                    ExpandOnlySection(self, "missions")
-                end
+                ExpandOnlySection(self, GetQuestSectionKey(quest))
                 self.listOffset = 0
                 self.selectedQuestId = quest.id
             end
@@ -95,6 +102,7 @@ function JournalTab:Initialize()
         missions = false,
         completed = true,
         preparing = true,
+        sent = true,
     }
     self.editorSectionsCollapsed = {
         target = true,
@@ -390,18 +398,6 @@ function JournalTab:OpenCreateEditor()
     ApplyDraftToEditor(self, draft)
 end
 
-local function GetQuestSectionKey(quest)
-    if not quest then return nil end
-    if Addon.QuestRepository:IsPreparedQuest(quest) then
-        return "preparing"
-    elseif Addon.QuestRepository:IsOfferedQuest(quest) then
-        return "pending"
-    elseif quest.completed then
-        return "completed"
-    end
-    return "missions"
-end
-
 function JournalTab:IsSectionLockedExpanded(sectionKey)
     if not sectionKey then return false end
     if self.selectedQuestId then
@@ -564,6 +560,13 @@ function JournalTab:ToggleTab()
     end
 end
 
+local SENT_STATUS_LOCALE_KEYS = {
+    sent = "LIST_SENT_STATUS_SENT",
+    accepted = "LIST_SENT_STATUS_ACCEPTED",
+    rejected = "LIST_SENT_STATUS_REJECTED",
+    completed = "LIST_SENT_STATUS_COMPLETED",
+}
+
 local function PartitionQuestsBySection(allQuests)
     local roles = Addon.Constants.QUEST_ROLE
     local buckets = {
@@ -571,10 +574,16 @@ local function PartitionQuestsBySection(allQuests)
         missions = {},
         completed = {},
         preparing = {},
+        sent = {},
     }
     for _, q in ipairs(allQuests) do
         if q.role == roles.PREPARED then
-            table.insert(buckets.preparing, q)
+            local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(q)
+            if pStatus == "draft" then
+                table.insert(buckets.preparing, q)
+            else
+                table.insert(buckets.sent, q)
+            end
         elseif Addon.QuestRepository:IsOfferedQuest(q) then
             table.insert(buckets.pending, q)
         elseif q.completed then
@@ -601,9 +610,22 @@ local function AppendQuestSectionRows(tab, displayRows, sectionKey, localeKey, q
     for _, q in ipairs(quests) do
         local isSelected = (tab.selectedQuestId == q.id)
         local prefix, selColor
+        local suffix = q.failed and Addon.Locale:Get("LIST_FAILED_SUFFIX") or ""
         if isCompleted then
             prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
             selColor = isSelected and "|cFFFFFF" or "|c8899AA"
+        elseif sectionKey == "sent" then
+            local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(q)
+            if pStatus == "completed" then
+                prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
+            else
+                prefix = "          "
+            end
+            selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
+            local statusLocaleKey = SENT_STATUS_LOCALE_KEYS[pStatus]
+            if statusLocaleKey then
+                suffix = suffix .. Addon.Locale:Get(statusLocaleKey)
+            end
         elseif Addon.QuestRepository:IsOfferedQuest(q) then
             prefix = "      |t18:18:/esoui/art/mail/mail_tabicon_inbox_up.dds|t "
             selColor = isSelected and "|cFFFFFF" or "|cFFD155"
@@ -612,7 +634,6 @@ local function AppendQuestSectionRows(tab, displayRows, sectionKey, localeKey, q
             prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
             selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
         end
-        local suffix = q.failed and Addon.Locale:Get("LIST_FAILED_SUFFIX") or ""
         table.insert(displayRows, {
             isHeader = false,
             questId = q.id,
@@ -649,6 +670,7 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     AppendQuestSectionRows(self, displayRows, "missions", "SECTION_ACTIVE_QUESTS", buckets.missions, false, activeQuest)
     AppendQuestSectionRows(self, displayRows, "completed", "SECTION_COMPLETED_QUESTS", buckets.completed, true, activeQuest)
     AppendQuestSectionRows(self, displayRows, "preparing", "SECTION_PREPARED_QUESTS", buckets.preparing, false, activeQuest)
+    AppendQuestSectionRows(self, displayRows, "sent", "SECTION_SENT_QUESTS", buckets.sent, false, activeQuest)
 
     local maxOffset = math.max(0, #displayRows - MAX_VISIBLE_ROWS)
     self._maxListOffset = maxOffset

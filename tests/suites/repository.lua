@@ -129,7 +129,7 @@ return function(T)
         AssertEqual(legacy.role, RPQuest.Constants.QUEST_ROLE.RECEIVED, "Legacy quest without role migrates to received")
 
         RPQuest.JournalTab:Initialize()
-        RPQuest.JournalTab.collapsedSections = { missions = false, completed = true, preparing = true }
+        RPQuest.JournalTab.collapsedSections = { missions = false, completed = true, preparing = true, sent = true }
         RPQuest.JournalTab:Refresh()
         -- Sin misiones en preparación, la sección PREPARANDO no aparece en el árbol
         local hasPreparingHeader = false
@@ -606,10 +606,11 @@ return function(T)
                 { id = 2, title = "Pending Offer", description = "", role = roles.RECEIVED, status = statuses.OFFERED, completed = false },
                 { id = 3, title = "Completed Mission", description = "", role = roles.RECEIVED, completed = true },
                 { id = 4, title = "Prepared Mission", description = "", role = roles.PREPARED, completed = false },
+                { id = 5, title = "Sent Mission", description = "", role = roles.PREPARED, sentTo = "@Recipient", completed = false },
             },
         })
         RPQuest.JournalTab:Initialize()
-        RPQuest.JournalTab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true }
+        RPQuest.JournalTab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true }
         RPQuest.JournalTab:SelectQuest(1)
 
         local function hasRowForQuest(questId)
@@ -623,6 +624,7 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.collapsedSections.pending, true, "Pending starts collapsed")
         AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed starts collapsed")
         AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing starts collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, true, "Sent starts collapsed")
         AssertEqual(hasRowForQuest(1), true, "Active mission row is visible initially")
         AssertEqual(hasRowForQuest(2), false, "Pending quest row is hidden initially")
 
@@ -632,22 +634,31 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.collapsedSections.missions, true, "Missions collapses when Pending expands")
         AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed remains collapsed")
         AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing remains collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, true, "Sent remains collapsed")
         AssertEqual(hasRowForQuest(2), true, "Pending quest row is visible after expanding Pending")
         AssertEqual(hasRowForQuest(1), false, "Missions quest row is hidden even though it is active/selected")
 
-        -- Expanding Preparing collapses Pending
+        -- Expanding Preparing collapses Pending and only shows unsent drafts
         RPQuest.JournalTab:ToggleSection("preparing")
         AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "Preparing expands on click")
         AssertEqual(RPQuest.JournalTab.collapsedSections.pending, true, "Pending collapses when Preparing expands")
-        AssertEqual(hasRowForQuest(4), true, "Prepared quest row is visible")
+        AssertEqual(hasRowForQuest(4), true, "Prepared draft row is visible")
+        AssertEqual(hasRowForQuest(5), false, "Sent quest row is NOT in Preparing")
         AssertEqual(hasRowForQuest(2), false, "Pending quest row is hidden")
 
-        -- Expanding Completed collapses Preparing
+        -- Expanding Sent collapses Preparing and shows sent quests
+        RPQuest.JournalTab:ToggleSection("sent")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, false, "Sent expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing collapses when Sent expands")
+        AssertEqual(hasRowForQuest(5), true, "Sent quest row is visible in Sent")
+        AssertEqual(hasRowForQuest(4), false, "Prepared draft row is hidden")
+
+        -- Expanding Completed collapses Sent
         RPQuest.JournalTab:ToggleSection("completed")
         AssertEqual(RPQuest.JournalTab.collapsedSections.completed, false, "Completed expands on click")
-        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing collapses when Completed expands")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.sent, true, "Sent collapses when Completed expands")
         AssertEqual(hasRowForQuest(3), true, "Completed quest row is visible")
-        AssertEqual(hasRowForQuest(4), false, "Prepared quest row is hidden")
+        AssertEqual(hasRowForQuest(5), false, "Sent quest row is hidden")
 
         -- Expanding Missions again collapses Completed
         RPQuest.JournalTab:ToggleSection("missions")
