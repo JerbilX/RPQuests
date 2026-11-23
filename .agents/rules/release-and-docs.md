@@ -5,7 +5,7 @@ trigger: always_on
 # Mantenimiento de READMEs y Versiones (RPQuest)
 
 1. **Sincronización de Documentación en Tareas (`feat` / `ui` / Estructura):**
-   - Al agregar o modificar funcionalidades visibles para el usuario, atajos de teclado, comandos slash o módulos en `src/` / `lang/`, actualizar **`README.md`** y **`README.es.md`** en el mismo PR (secciones de características, guía rápida y estructura del proyecto).
+   - Al agregar o modificar funcionalidades visibles para el usuario, atajos de teclado o módulos en `src/` / `lang/`, actualizar **`README.md`** y **`README.es.md`** en el mismo PR (secciones de características, guía rápida y estructura del proyecto).
    - Si cambian las instrucciones de instalación o uso general del paquete ESOUI, actualizar también `readme.txt`.
 
 2. **Checklist Obligatorio al Promover `dev` -> `main` (`vX.Y.Z`):**
@@ -15,7 +15,7 @@ trigger: always_on
    - Tras crear el tag `vX.Y.Z` sobre `main` (y antes de volver a `dev`), ejecutar `./scripts/package.sh` para regenerar la distribución local en `dist/RPQuest-X.Y.Z.zip` (el script limpia versiones anteriores automáticamente).
    - Nota: `scripts/package.sh` calcula e inyecta automáticamente `## AddOnVersion:` (desde `git rev-list --count HEAD`) y usa `## Version:` desde el tag exacto `vX.Y.Z` cuando `HEAD` está sobre un tag (en `main`), o desde `RPQuest.txt` (por ejemplo `1.5.0-dev`) en `dev` y ramas de trabajo. Al iniciar un nuevo ciclo en `dev`, actualizar `RPQuest.txt`, `src/Constants.lua` (`METADATA.VERSION`) y los badges a `X.Y.Z-dev`; antes de promover a `main`, limpiar el sufijo `-dev` a `X.Y.Z`.
 
-3. **Descripción y Changelog Público en ESOUI (BBCode / Inglés por defecto):**
-   - Al redactar o actualizar **`docs/esoui-description.bbcode`** (formato BBCode), **nunca incluir slash commands** (como `/rpquest` o `/rpq`); documentar únicamente los **keybinds** (`Settings -> Controls -> RPQuest`).
+3. **Descripción y Changelog Público en ESOUI y GitHub (Sin Slash Commands / Inglés por defecto):**
+   - Al redactar o actualizar **`docs/esoui-description.bbcode`**, **`README.md`**, **`README.es.md`** o **`readme.txt`**, **nunca incluir slash commands** (como `/rpquest` o `/rpq`); documentar únicamente los **keybinds** (`Settings -> Controls -> RPQuest`).
    - **Aviso de desarrollo activo destacado:** Conservar siempre en **`docs/esoui-description.bbcode`**, inmediatamente debajo del título, el bloque `[SIZE="4"][COLOR="DarkRed"][B]Notice:[/B][/COLOR] ...[/SIZE]` con tamaño grande (`SIZE="4"` o superior) para que sobresalga respecto al texto normal.
    - **Títulos de commits y PRs en inglés:** El workflow `.github/workflows/release.yml` genera el changelog de ESOUI a partir de `git log "${PREV_TAG}..HEAD" --no-merges --pretty=format:"- %s"`, y GitHub Release lo genera desde los títulos de PR. Por lo tanto, todos los títulos de commits (`git commit`) y de Pull Requests (`gh pr create`) deben redactarse en **inglés** para que el changelog público salga en inglés por defecto.
