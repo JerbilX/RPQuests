@@ -21,6 +21,31 @@ return function(T)
         end
     end)
 
+    RunTest("AREA_RADIUS enlarged progression and ComputeOffsetCenter bounds for zone and subzone radii", function()
+        RPQuest.QuestRepository:Initialize({})
+        local radii = RPQuest.Constants.AREA_RADIUS
+        local mult = RPQuest.Constants.AREA_SUBZONE_MULTIPLIER
+        AssertTrue(radii.MEDIUM > 0.075, "Default MEDIUM radius is enlarged beyond legacy 0.075")
+        AssertTrue(radii.SMALL < radii.MEDIUM and radii.MEDIUM < radii.LARGE, "AREA_RADIUS maintains coherent progression")
+        AssertTrue(mult > 1.0, "Subzone multiplier enlarges city/subzone maps")
+
+        local testRadii = { radii.SMALL, radii.MEDIUM, radii.LARGE, radii.MEDIUM * mult, radii.LARGE * mult }
+        local corners = { { 0.01, 0.01 }, { 0.99, 0.01 }, { 0.01, 0.99 }, { 0.99, 0.99 }, { 0.50, 0.50 } }
+        for _, r in ipairs(testRadii) do
+            for _, pt in ipairs(corners) do
+                for i = 0, 7 do
+                    local cx, cy = RPQuest.WorldMapArea:ComputeOffsetCenter(pt[1], pt[2], r, i / 8, 1.0)
+                    AssertTrue(cx >= 0 and cx <= 1, "Offset center X stays within [0, 1]")
+                    AssertTrue(cy >= 0 and cy <= 1, "Offset center Y stays within [0, 1]")
+                    local dx = pt[1] - cx
+                    local dy = pt[2] - cy
+                    local dist = math.sqrt((dx * dx) + (dy * dy))
+                    AssertTrue(dist < r, "Target remains strictly inside enlarged circle")
+                end
+            end
+        end
+    end)
+
     RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Complete, Reset, Export/Import, Delete", function()
         mockState.language = "es"
         RPQuest.Locale:Initialize("es")

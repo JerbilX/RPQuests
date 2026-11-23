@@ -44,6 +44,7 @@ function QuestDraftStore:CreateDefaultDraft()
         discoveryMessage = "",
         lastCapturedDisplay = nil,
         mapId = 0,
+        mapType = nil,
         zoneId = 0,
         mapName = "",
         targetX = nil,
@@ -364,7 +365,7 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         targetY = quest.targetY,
         areaCenterX = quest.areaCenterX,
         areaCenterY = quest.areaCenterY,
-        areaRadius = quest.areaRadius or 0.075,
+        areaRadius = quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM,
         hideMapArea = quest.hideMapArea and true or false,
         stealthMode = self:NormalizeStealthMode(quest.stealthMode, quest.requireUndetected),
     }
@@ -400,7 +401,8 @@ function QuestDraftStore:UpdateDraftFields(repo, fields, silent)
         if newRadius > 0 then
             draft.areaRadius = newRadius
             if draft.targetX and draft.targetY then
-                draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, draft.areaRadius)
+                local effectiveRadius = Addon.WorldMapArea:GetEffectiveAreaRadius(draft.areaRadius, draft.mapType)
+                draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, effectiveRadius)
             end
         end
     end
@@ -453,6 +455,7 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
 
     draft.lastCapturedDisplay = repo:FormatTargetEntry(matchedEntry)
     draft.mapId = tonumber(captureData.mapId) or draft.mapId or 0
+    draft.mapType = captureData.mapType or draft.mapType
     draft.zoneId = tonumber(captureData.zoneId) or draft.zoneId or 0
     draft.mapName = tostring(captureData.mapName or draft.mapName or "")
 
@@ -475,7 +478,8 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
 
     local radius = draft.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM
     draft.areaRadius = radius
-    draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, radius)
+    local effectiveRadius = Addon.WorldMapArea:GetEffectiveAreaRadius(radius, draft.mapType)
+    draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, effectiveRadius)
 
     repo:NotifyListeners("DRAFT_TARGET_CAPTURED", draft)
     return draft
@@ -656,7 +660,8 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
     end
 
     if hasTargets and (not draft.areaCenterX or not draft.areaCenterY) then
-        draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, draft.areaRadius)
+        local effectiveRadius = Addon.WorldMapArea:GetEffectiveAreaRadius(draft.areaRadius, draft.mapType)
+        draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, effectiveRadius)
     end
 
     local existing = draft.editingQuestId and repo:GetQuestById(draft.editingQuestId) or nil

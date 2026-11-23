@@ -216,6 +216,25 @@ function WorldMapArea:ResolveTargetQuest()
     return nil, nil
 end
 
+function WorldMapArea:IsSubzoneMap(mapType)
+    local resolvedType = mapType
+    if resolvedType == nil then
+        resolvedType = GetMapType()
+    end
+    return resolvedType == MAPTYPE_SUBZONE
+end
+
+function WorldMapArea:GetEffectiveAreaRadius(baseRadius, mapType)
+    local radius = tonumber(baseRadius) or Addon.Constants.AREA_RADIUS.MEDIUM
+    if radius <= 0 then
+        radius = Addon.Constants.AREA_RADIUS.MEDIUM
+    end
+    if self:IsSubzoneMap(mapType) then
+        return radius * Addon.Constants.AREA_SUBZONE_MULTIPLIER
+    end
+    return radius
+end
+
 function WorldMapArea:OnLayoutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.pinTypeId then return end
@@ -225,12 +244,13 @@ function WorldMapArea:OnLayoutPins(pinManager)
         return
     end
 
+    local effectiveRadius = self:GetEffectiveAreaRadius(targetQuest.areaRadius)
     pManager:CreatePin(
         self.pinTypeId,
         pinTag,
         targetQuest.areaCenterX,
         targetQuest.areaCenterY,
-        targetQuest.areaRadius
+        effectiveRadius
     )
 end
 
@@ -296,8 +316,8 @@ end
 -- Calcula un centro desplazado aleatorio para que (targetX, targetY) quede
 -- garantizadamente dentro del círculo de radio `radius`, pero no en su centro exacto.
 function WorldMapArea:ComputeOffsetCenter(targetX, targetY, radius, randomAngle01, randomDist01)
-    local r = tonumber(radius) or 0.075
-    if r <= 0 then r = 0.075 end
+    local r = tonumber(radius) or Addon.Constants.AREA_RADIUS.MEDIUM
+    if r <= 0 then r = Addon.Constants.AREA_RADIUS.MEDIUM end
 
     local tx = Clamp(tonumber(targetX) or 0.5, 0.01, 0.99)
     local ty = Clamp(tonumber(targetY) or 0.5, 0.01, 0.99)
@@ -316,6 +336,10 @@ function WorldMapArea:ComputeOffsetCenter(targetX, targetY, radius, randomAngle0
 
     local minBound = math.max(0.02, r * 0.5)
     local maxBound = math.min(0.98, 1.0 - (r * 0.5))
+    if minBound > maxBound then
+        minBound = 0.5
+        maxBound = 0.5
+    end
 
     cx = Clamp(cx, minBound, maxBound)
     cy = Clamp(cy, minBound, maxBound)
@@ -375,7 +399,7 @@ function WorldMapArea:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneId, 
         local dx = playerX - quest.areaCenterX
         local dy = playerY - quest.areaCenterY
         local dist = math.sqrt((dx * dx) + (dy * dy))
-        local toleranceRadius = (quest.areaRadius or 0.075) * 1.35
+        local toleranceRadius = self:GetEffectiveAreaRadius(quest.areaRadius) * 1.35
         return dist <= toleranceRadius
     end
 
