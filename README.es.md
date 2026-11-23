@@ -135,7 +135,8 @@ RPQuest/
 │   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
 │   ├── JournalWidgets.lua   # Helpers de widgets UI y formato reutilizables para JournalTab
 │   ├── JournalDetailPane.lua# Panel de detalle de misión y actualización de acciones
-│   ├── JournalEditorPane.lua# Panel editor multi-sección para misiones preparadas
+│   ├── JournalEditorSections.lua# Constructores de secciones acordeón y campos del editor
+│   ├── JournalEditorPane.lua# Panel editor multi-sección: layout y actualización
 │   ├── JournalMailSendPane.lua# Panel de envío por correo in-game y progreso de transporte
 │   └── JournalTab.lua       # Coordinador de la pestaña en el Diario de Misiones
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)

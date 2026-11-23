@@ -25,6 +25,7 @@ src/MailInbox.lua
 src/MailTransport.lua
 src/JournalWidgets.lua
 src/JournalDetailPane.lua
+src/JournalEditorSections.lua
 src/JournalEditorPane.lua
 src/JournalMailSendPane.lua
 src/JournalTab.lua

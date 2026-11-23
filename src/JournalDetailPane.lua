@@ -8,7 +8,7 @@ local Addon = RPQuest
 Addon.JournalDetailPane = {}
 local DetailPane = Addon.JournalDetailPane
 
-local function BuildDetailHeaderAndBody(tab, pane, panelName)
+local function CreateDetailScrollContainer(tab, pane, panelName)
     local scrollContainer = WINDOW_MANAGER.CreateControlFromVirtual
         and WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_DetailScroll", pane, "ZO_ScrollContainer")
         or nil
@@ -25,48 +25,40 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
         end
         tab.detailScroll = scrollContainer
     end
+    return contentParent
+end
 
-    local titleLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailTitle", contentParent, CT_LABEL)
-    titleLabel:SetDimensions(500, 34)
-    titleLabel:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 0)
-    if titleLabel.SetFont then titleLabel:SetFont("ZoFontWinH2") end
+local function CreateDetailLabel(parent, name, width, height, font, anchorTo, anchorPoint, offsetX, offsetY)
+    local label = WINDOW_MANAGER:CreateControl(name, parent, CT_LABEL)
+    label:SetDimensions(width, height)
+    label:SetAnchor(TOPLEFT, anchorTo, anchorPoint, offsetX, offsetY)
+    if label.SetFont then label:SetFont(font) end
+    return label
+end
+
+local function BuildDetailHeaderAndBody(tab, pane, panelName)
+    local contentParent = CreateDetailScrollContainer(tab, pane, panelName)
+
+    local titleLabel = CreateDetailLabel(contentParent, panelName .. "_DetailTitle", 500, 34, "ZoFontWinH2", contentParent, TOPLEFT, 0, 0)
     if titleLabel.SetColor then titleLabel:SetColor(1, 1, 1, 1) end
-    if titleLabel.SetModifyTextType then
-        titleLabel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
-    end
+    if titleLabel.SetModifyTextType then titleLabel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE) end
     tab.detailTitle = titleLabel
 
-    local statusLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailStatus", contentParent, CT_LABEL)
-    statusLabel:SetDimensions(500, 22)
-    statusLabel:SetAnchor(TOPLEFT, titleLabel, BOTTOMLEFT, 0, 5)
-    if statusLabel.SetFont then statusLabel:SetFont("ZoFontWinH4") end
-    tab.detailStatus = statusLabel
+    tab.detailStatus = CreateDetailLabel(contentParent, panelName .. "_DetailStatus", 500, 22, "ZoFontWinH4", titleLabel, BOTTOMLEFT, 0, 5)
 
-    local fromLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailFrom", contentParent, CT_LABEL)
-    fromLabel:SetDimensions(500, 20)
-    fromLabel:SetAnchor(TOPLEFT, statusLabel, BOTTOMLEFT, 0, 2)
-    if fromLabel.SetFont then fromLabel:SetFont("ZoFontWinH4") end
+    local fromLabel = CreateDetailLabel(contentParent, panelName .. "_DetailFrom", 500, 20, "ZoFontWinH4", tab.detailStatus, BOTTOMLEFT, 0, 2)
     if fromLabel.SetColor then fromLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailFrom = fromLabel
 
-    local toLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailTo", contentParent, CT_LABEL)
-    toLabel:SetDimensions(500, 20)
-    toLabel:SetAnchor(TOPLEFT, fromLabel, BOTTOMLEFT, 0, 2)
-    if toLabel.SetFont then toLabel:SetFont("ZoFontWinH4") end
+    local toLabel = CreateDetailLabel(contentParent, panelName .. "_DetailTo", 500, 20, "ZoFontWinH4", fromLabel, BOTTOMLEFT, 0, 2)
     if toLabel.SetColor then toLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailTo = toLabel
 
-    local locLabel = WINDOW_MANAGER:CreateControl(panelName .. "_DetailLoc", contentParent, CT_LABEL)
-    locLabel:SetDimensions(500, 22)
-    locLabel:SetAnchor(TOPLEFT, toLabel, BOTTOMLEFT, 0, 8)
-    if locLabel.SetFont then locLabel:SetFont("ZoFontWinH4") end
+    local locLabel = CreateDetailLabel(contentParent, panelName .. "_DetailLoc", 500, 22, "ZoFontWinH4", toLabel, BOTTOMLEFT, 0, 8)
     if locLabel.SetColor then locLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailLocation = locLabel
 
-    local descBody = WINDOW_MANAGER:CreateControl(panelName .. "_DetailDescBody", contentParent, CT_LABEL)
-    descBody:SetDimensions(495, 104)
-    descBody:SetAnchor(TOPLEFT, locLabel, BOTTOMLEFT, 25, 8)
-    if descBody.SetFont then descBody:SetFont("ZoFontWinH4") end
+    local descBody = CreateDetailLabel(contentParent, panelName .. "_DetailDescBody", 495, 104, "ZoFontWinH4", locLabel, BOTTOMLEFT, 25, 8)
     if descBody.SetColor then descBody:SetColor(0.77, 0.76, 0.62, 1) end
     if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
     tab.detailDescBody = descBody
@@ -76,21 +68,13 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
     divider:SetAnchor(TOPLEFT, descBody, BOTTOMLEFT, -25, 14)
     divider:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
 
-    local objHeader = WINDOW_MANAGER:CreateControl(panelName .. "_DetailObjHeader", contentParent, CT_LABEL)
-    objHeader:SetDimensions(500, 24)
-    objHeader:SetAnchor(TOPLEFT, divider, BOTTOMLEFT, 0, 10)
-    if objHeader.SetFont then objHeader:SetFont("ZoFontWinH3") end
+    local objHeader = CreateDetailLabel(contentParent, panelName .. "_DetailObjHeader", 500, 24, "ZoFontWinH3", divider, BOTTOMLEFT, 0, 10)
     if objHeader.SetColor then objHeader:SetColor(1, 1, 1, 1) end
-    if objHeader.SetModifyTextType then
-        objHeader:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE)
-    end
+    if objHeader.SetModifyTextType then objHeader:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE) end
     objHeader:SetText(Addon.Locale:Get("LABEL_OBJECTIVE_HEADER"))
     tab.detailObjHeader = objHeader
 
-    local objText = WINDOW_MANAGER:CreateControl(panelName .. "_DetailObjText", contentParent, CT_LABEL)
-    objText:SetDimensions(495, 48)
-    objText:SetAnchor(TOPLEFT, objHeader, BOTTOMLEFT, 25, 10)
-    if objText.SetFont then objText:SetFont("ZoFontWinH4") end
+    local objText = CreateDetailLabel(contentParent, panelName .. "_DetailObjText", 495, 48, "ZoFontWinH4", objHeader, BOTTOMLEFT, 25, 10)
     if objText.SetColor then objText:SetColor(1, 1, 1, 1) end
     tab.detailObjText = objText
 
@@ -306,18 +290,11 @@ local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, 
     end
 end
 
-local function BuildObjectiveLines(selectedQuest, isPrepared)
+local function AppendTargetObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
     local targets = selectedQuest.targets or {}
-    local objLines = {}
     local maxVisibleObjLines = 4
     local totalTargets = #targets
     local limit = (totalTargets > maxVisibleObjLines) and (maxVisibleObjLines - 1) or totalTargets
-    local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
-    local pStatus, pInfo
-    if isPrepared then
-        pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(selectedQuest)
-    end
-    local isSentCompleted = isPrepared and pStatus == "completed" and type(pInfo) == "table"
     local optIdx = 0
 
     for i = 1, limit do
@@ -360,7 +337,9 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
     if totalTargets > maxVisibleObjLines then
         objLines[maxVisibleObjLines] = string.format("... (+%d)", totalTargets - limit)
     end
+end
 
+local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
     local discoveries = selectedQuest.discoveries or {}
     if #discoveries > 0 then
         if isPrepared then
@@ -401,6 +380,19 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
             table.insert(objLines, mapHiddenLine)
         end
     end
+end
+
+local function BuildObjectiveLines(selectedQuest, isPrepared)
+    local objLines = {}
+    local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
+    local pStatus, pInfo
+    if isPrepared then
+        pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(selectedQuest)
+    end
+    local isSentCompleted = isPrepared and pStatus == "completed" and type(pInfo) == "table"
+
+    AppendTargetObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
+    AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
 
     return objLines
 end
