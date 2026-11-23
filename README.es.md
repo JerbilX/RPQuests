@@ -48,7 +48,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 1. **Crear una Misión (Quest Master):**
    - Abre el Diario de Misiones (`J`) y entra en la pestaña **RPQuests** (o pulsa tu atajo **Abrir / Cerrar Pestaña de Misiones Custom**).
    - Pulsa **+ Nueva**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Trasfondo:**, tamaño del **Área de búsqueda** (o **Ocultar área en el mapa**), **Condición de Sigilo** (`Desactivado`, `Opcional` u `Obligatorio`), **Mensaje al completar (Opcional)** y líneas de **Diálogos de NPC**.
-   - En el mundo, apunta a NPCs y usa el atajo **Seleccionar Objetivo bajo Retícula (NPC)**, o párate en un lugar y usa **Capturar Punto de Descubrimiento Oculto Aquí**, y pulsa **Crear Misión** para guardar.
+   - En el mundo, apunta a NPCs y usa el atajo **Seleccionar Objetivo bajo Retícula (NPC)**, o párate en un lugar y usa **Capturar Punto de Descubrimiento Oculto Aquí**, y pulsa **Guardar Borrador** para guardar.
 2. **Enviar al Jugador (Correo 1-a-1):**
    - Define el destinatario `@Cuenta` (y opcionalmente **Para (Personaje)**) en el editor, guarda la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
    - El jugador recibe una alerta y ve la misión en **Pendientes** dentro de su pestaña **RPQuests** para **Aceptar** o **Rechazar**.

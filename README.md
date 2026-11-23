@@ -48,7 +48,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 1. **Create a Quest (Quest Master):**
    - Open the Quest Journal (`J`) and switch to the **RPQuests** tab (or press your **Open / Close Custom Quests Tab** keybind).
    - Click **+ New**, use the collapsible form sections to set **Title**, **Description / Story:**, **Search Area** size (or **Hide area on map**), **Undetected Stealth Condition** (`Disabled`, `Optional`, or `Required`), optional **Completion Message**, and optional **NPC Dialogues** lines.
-   - In the world, aim at NPCs and press your **Capture Target Under Reticle (NPC)** keybind, or stand at a location and press **Capture Hidden Discovery Point Here**, then click **Create Quest** to save.
+   - In the world, aim at NPCs and press your **Capture Target Under Reticle (NPC)** keybind, or stand at a location and press **Capture Hidden Discovery Point Here**, then click **Save Draft** to save.
 2. **Send to a Player (1-to-1 Mail):**
    - Set the target `@AccountName` (and optional `To (Character)` name) in the quest editor, save, and click **Send Quest** from the prepared quest details.
    - The player receives an alert and sees the quest under **Pending** in their **RPQuests** tab to **Accept** or **Reject**.
