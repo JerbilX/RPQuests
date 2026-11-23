@@ -668,4 +668,92 @@ return function(T)
         AssertEqual(hasRowForQuest(3), false, "Completed quest row is hidden")
     end)
 
+    RunTest("QuestRepository:DuplicateQuest copies Preparing and Sent into Preparing and rejects Received", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(repo:GetDefaults())
+
+        -- Create a PREPARING quest with targets, discoveries, dialogues, and metadata
+        repo:SetDraftCapturedTarget({
+            targetName = "Bandit Cutthroat",
+            mapId = 101,
+            zoneId = 202,
+            mapName = "Glenumbra",
+            targetX = 0.45,
+            targetY = 0.55,
+            worldX = 1000,
+            worldZ = 2000,
+        })
+        repo:AddDraftDiscoveryPoint({
+            zoneId = 202,
+            worldX = 1100,
+            worldY = 100,
+            worldZ = 2100,
+            mapId = 101,
+            x = 0.46,
+            y = 0.56,
+            radius = 1500,
+            message = "Hidden note",
+        })
+        repo:AddDraftDialogue("Innkeeper", 202, "Behind the mill.", "Look near the river.")
+        local prepQuest = repo:SaveDraft("Contract One", "Desc One", 0.075, "Well done", true, "@TargetUser", "HeroChar")
+        AssertTrue(prepQuest ~= nil, "Prepared quest created")
+        -- Simulate runtime test progress on the prepared quest
+        prepQuest.targets[1].currentCount = 1
+        prepQuest.discoveries[1].discovered = true
+        prepQuest.wasDetected = true
+        prepQuest.completed = true
+
+        local copyFromPrep = repo:DuplicateQuest(prepQuest.id)
+        AssertTrue(copyFromPrep ~= nil, "Copy from PREPARING succeeds")
+        AssertEqual(copyFromPrep.id ~= prepQuest.id, true, "Copy has a new unique quest ID")
+        AssertEqual(copyFromPrep.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Copy has PREPARED role")
+        AssertEqual(repo:GetPreparedQuestStatus(copyFromPrep), "draft", "Copy from PREPARING is in draft/Preparing")
+        AssertEqual(copyFromPrep.title, "Contract One", "Title preserved")
+        AssertEqual(copyFromPrep.description, "Desc One", "Description preserved")
+        AssertEqual(copyFromPrep.completionMessage, "Well done", "Completion message preserved")
+        AssertEqual(copyFromPrep.requireUndetected, true, "Stealth flag preserved")
+        AssertEqual(copyFromPrep.recipientAccount, "@TargetUser", "Recipient account preserved")
+        AssertEqual(copyFromPrep.recipientCharacterName, "HeroChar", "Recipient character preserved")
+        AssertEqual(#copyFromPrep.targets, 1, "Targets cloned")
+        AssertEqual(copyFromPrep.targets[1].currentCount, 0, "Target currentCount reset to 0")
+        AssertEqual(#copyFromPrep.discoveries, 1, "Discoveries cloned")
+        AssertEqual(copyFromPrep.discoveries[1].discovered, false, "Discovery state reset")
+        AssertEqual(#copyFromPrep.dialogues, 1, "Dialogues cloned")
+        AssertEqual(copyFromPrep.dialogues[1].npcName, "Innkeeper", "Dialogue NPC preserved")
+        AssertEqual(copyFromPrep.completed, false, "Completed flag reset")
+        AssertEqual(copyFromPrep.wasDetected, false, "Detected flag reset")
+
+        -- Mutating copy does not mutate source
+        copyFromPrep.targets[1].name = "Mutated"
+        AssertEqual(prepQuest.targets[1].name, "Bandit Cutthroat", "Source target not mutated")
+
+        -- Mark original as SENT with delivery history and copy it
+        repo:MarkPreparedQuestSent(prepQuest.id, "@TargetUser")
+        repo:RecordMailDelivery(prepQuest.id, "@TargetUser", { status = "completed", characterName = "HeroChar" })
+        AssertEqual(repo:GetPreparedQuestStatus(prepQuest), "completed", "Original is in SENT/completed")
+
+        local copyFromSent = repo:DuplicateQuest(prepQuest.id)
+        AssertTrue(copyFromSent ~= nil, "Copy from SENT succeeds")
+        AssertEqual(copyFromSent.id ~= prepQuest.id, true, "Sent copy has new ID")
+        AssertEqual(repo:GetPreparedQuestStatus(copyFromSent), "draft", "Copy from SENT starts in Preparing")
+        AssertTrue(copyFromSent.sentTo == nil, "sentTo cleared")
+        AssertTrue(copyFromSent.sentAt == nil, "sentAt cleared")
+        AssertTrue(copyFromSent.lastResult == nil, "lastResult cleared")
+        AssertEqual(#copyFromSent.deliveries, 0, "deliveries cleared")
+        AssertEqual(prepQuest.sentTo, "@TargetUser", "Source SENT quest remains unchanged")
+
+        -- Received quest cannot be copied
+        local recQuest = repo:BuildQuestRecord(99, "Received Quest", "Desc", {
+            { name = "Wolf", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, recQuest)
+        repo._questById[recQuest.id] = recQuest
+
+        local countBefore = #repo:GetAllQuests()
+        local deniedCopy, denyErr = repo:DuplicateQuest(recQuest.id)
+        AssertTrue(deniedCopy == nil, "Received quest cannot be copied")
+        AssertEqual(denyErr, RPQuest.Locale:Get("ERR_CANNOT_COPY_RECEIVED"), "Expected error for received quest")
+        AssertEqual(#repo:GetAllQuests(), countBefore, "No quest added when copy is rejected")
+    end)
+
 end

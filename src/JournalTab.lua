@@ -322,6 +322,19 @@ function JournalTab:SendSelectedPreparedQuest()
     return Addon.JournalMailSendPane.SendSelectedPrepared(self)
 end
 
+function JournalTab:DuplicateSelectedQuest()
+    if not self.selectedQuestId then return nil end
+    local newQuest, err = Addon.QuestRepository:DuplicateQuest(self.selectedQuestId)
+    if not newQuest then
+        if err then
+            Addon.Announcements:ShowAlert(err, true)
+        end
+        return nil
+    end
+    Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_COPIED", newQuest.title or ""), false)
+    return newQuest
+end
+
 function JournalTab:OpenMailSendView()
     Addon.JournalMailSendPane.OpenView(self)
 end

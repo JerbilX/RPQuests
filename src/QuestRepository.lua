@@ -755,6 +755,66 @@ function QuestRepository:ResetQuest(questId)
     return true
 end
 
+function QuestRepository:DuplicateQuest(questId)
+    if not self.savedVars then return nil end
+    local source = self:GetQuestById(questId)
+    if not source then return nil end
+    if not self:IsPreparedQuest(source) then
+        return nil, Addon.Locale:Get("ERR_CANNOT_COPY_RECEIVED")
+    end
+
+    local newId = self.savedVars.nextId or 1
+    self.savedVars.nextId = newId + 1
+
+    local clonedTargets = Addon.QuestDraftStore:CloneTargetsList(source.targets)
+    for _, t in ipairs(clonedTargets) do
+        t.currentCount = 0
+    end
+
+    local senderChar = (type(source.senderCharacterName) == "string" and source.senderCharacterName ~= "")
+        and source.senderCharacterName
+        or self:GetPlayerCharacterName()
+
+    local questData = {
+        senderDisplayName = source.senderDisplayName,
+        senderCharacterName = senderChar,
+        recipientAccount = source.recipientAccount,
+        recipientCharacterName = source.recipientCharacterName,
+        clue = source.clue,
+        completionMessage = source.completionMessage,
+        discoveries = Addon.QuestDraftStore:CloneDiscoveriesList(source.discoveries, false),
+        dialogues = Addon.QuestDraftStore:CloneDialoguesList(source.dialogues, source.clue),
+        mapId = source.mapId,
+        zoneId = source.zoneId,
+        mapName = source.mapName,
+        targetX = source.targetX,
+        targetY = source.targetY,
+        areaCenterX = source.areaCenterX,
+        areaCenterY = source.areaCenterY,
+        areaRadius = source.areaRadius,
+        hideMapArea = source.hideMapArea,
+        requireUndetected = source.requireUndetected,
+    }
+
+    local newQuest = self:BuildQuestRecord(
+        newId,
+        source.title or "",
+        source.description or "",
+        clonedTargets,
+        questData,
+        Addon.Constants.QUEST_ROLE.PREPARED
+    )
+    newQuest.createdAt = GetTimeStamp() or 0
+
+    table.insert(self.savedVars.quests, newQuest)
+    if self._questById then
+        self._questById[newQuest.id] = newQuest
+    end
+
+    self:NotifyListeners("QUEST_CREATED", newQuest)
+    return newQuest
+end
+
 function QuestRepository:DeleteQuest(questId)
     if not self.savedVars or not questId then return false end
     for i, q in ipairs(self.savedVars.quests) do
