@@ -1125,4 +1125,97 @@ return function(T)
         AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Detail pane shows Required Failed")
     end)
 
+    RunTest("Issue #253: + New creates localized Preparing draft, auto-preserves edits, removes Cancel, and allows Abandon", function()
+        -- 1. English: + New creates "New Quest" immediately in Preparing, allows duplicates, expands Preparing, selects it
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenTab()
+
+        AssertEqual(tab.btnCancelEditor, nil, "Cancel button removed from editor footer")
+
+        tab:OpenCreateEditor()
+        local prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 1, "First + New immediately creates 1 quest in Preparing")
+        local q1 = prepared[1]
+        AssertEqual(q1.title, "New Quest", "EN default title is 'New Quest' without numeric suffix")
+        AssertEqual(tab.selectedQuestId, q1.id, "Newly created quest is selected in left tree")
+        AssertEqual(tab.collapsedSections.preparing, false, "Preparing accordion expands automatically")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "Editor opens immediately")
+        AssertEqual(tab.titleEdit:GetText(), "New Quest", "Editor title input prefilled with 'New Quest'")
+
+        -- [X] Abandon is available for newly created Preparing draft in Editor mode
+        AssertEqual(tab.abandonQuestDescriptor.visible(), true, "Abandon keybind visible in Editor mode for Preparing draft")
+        AssertEqual(tab.abandonQuestDescriptor.enabled(), true, "Abandon keybind enabled in Editor mode for Preparing draft")
+
+        -- 2. Edit fields + dialogue + discovery without clicking Save Draft, then switch via + New -> auto-preserved!
+        tab.titleEdit:SetText("Moonlit Contract")
+        tab.titleEdit:FireHandler("OnTextChanged")
+        tab.descEdit:SetText("Meet at the docks.")
+        tab.descEdit:FireHandler("OnTextChanged")
+        tab.recipientEdit:SetText("@GuildMate")
+        tab.recipientEdit:FireHandler("OnTextChanged")
+        tab.completionEdit:SetText("Well done.")
+        tab.completionEdit:FireHandler("OnTextChanged")
+        repo:AddDraftDialogue("Razum-dar", 381, "Check the crates.", "Any news?")
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 1000, worldY = 50, worldZ = 2000, mapId = 32, message = "Hidden note" })
+
+        -- Second + New creates another "New Quest" (duplicates allowed) and auto-preserves q1
+        tab:OpenCreateEditor()
+        prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 2, "Second + New creates second quest in Preparing")
+        local q2 = prepared[2]
+        AssertEqual(q2.title, "New Quest", "Second draft also gets 'New Quest' without numbering")
+        AssertEqual(tab.selectedQuestId, q2.id, "Second draft selected")
+
+        -- Verify q1 preserved all edits
+        local q1Reloaded = repo:GetQuestById(q1.id)
+        AssertEqual(q1Reloaded.title, "Moonlit Contract", "Auto-preserved title on + New switch")
+        AssertEqual(q1Reloaded.description, "Meet at the docks.", "Auto-preserved description on + New switch")
+        AssertEqual(q1Reloaded.recipientAccount, "@GuildMate", "Auto-preserved recipient on + New switch")
+        AssertEqual(q1Reloaded.completionMessage, "Well done.", "Auto-preserved completionMessage on + New switch")
+        AssertEqual(#q1Reloaded.dialogues, 1, "Auto-preserved dialogue on + New switch")
+        AssertEqual(#q1Reloaded.discoveries, 1, "Auto-preserved discovery on + New switch")
+
+        -- Third + New creates duplicate "New Quest" alongside q2
+        tab:OpenCreateEditor()
+        prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 3, "Third + New creates third quest")
+        local q3 = prepared[3]
+        AssertEqual(q3.title, "New Quest", "Duplicate 'New Quest' title allowed")
+
+        -- 3. Edit q3 and close/hide journal -> auto-preserved without Save Draft
+        tab.titleEdit:SetText("Closed Journal Draft")
+        tab.descEdit:SetText("Saved on close.")
+        tab.panel:FireHandler("OnHide")
+        local q3Reloaded = repo:GetQuestById(q3.id)
+        AssertEqual(q3Reloaded.title, "Closed Journal Draft", "Auto-preserved title on journal OnHide")
+        AssertEqual(q3Reloaded.description, "Saved on close.", "Auto-preserved description on journal OnHide")
+
+        -- 4. Switch to q1 via SelectQuest while editing q3 -> auto-preserves q3 edits
+        tab.descEdit:SetText("Updated before SelectQuest.")
+        tab:SelectQuest(q1.id)
+        AssertEqual(repo:GetQuestById(q3.id).description, "Updated before SelectQuest.", "Auto-preserved edits on SelectQuest")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.DETAIL, "SelectQuest switches to Detail mode")
+
+        -- 5. Abandoning a Preparing draft from Editor mode deletes it and returns to Detail mode
+        tab:OpenEditEditor(q2.id)
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "Opened q2 in Editor mode")
+        AssertEqual(tab:ConfirmAbandonQuest(q2.id), true, "ConfirmAbandonQuest opens dialog for Preparing draft")
+        local dlg = ESO_Dialogs["RPQUEST_ABANDON_QUEST"]
+        dlg.buttons[1].callback({ data = { questId = q2.id } })
+        AssertEqual(repo:GetQuestById(q2.id), nil, "Confirmed Abandon deletes Preparing draft")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.DETAIL, "Deleting active editor draft returns to Detail mode")
+
+        -- 6. Spanish locale: + New creates "Nueva Misión"
+        mockState.language = "es"
+        RPQuest.Locale:Initialize("es")
+        tab:OpenCreateEditor()
+        local qEs = repo:GetQuestById(tab.selectedQuestId)
+        AssertEqual(qEs.title, "Nueva Misión", "ES default title is 'Nueva Misión' without numeric suffix")
+    end)
+
 end
