@@ -19,7 +19,7 @@ RPQuest.Locales["en"] = {
     SECTION_PREPARED_QUESTS = "PREPARING (%d)",
     SECTION_SENT_QUESTS = "SENT (%d)",
     SECTION_COMPLETED_QUESTS = "COMPLETED (%d)",
-    EMPTY_QUEST_LIST = "No custom quests yet. Click 'Import' to receive one or '+ New' to create one.",
+    EMPTY_QUEST_LIST = "No custom quests yet. Receive one via in-game mail or click '+ New' to create one.",
 
     -- Buttons
     BTN_NEW_QUEST = "+ New",

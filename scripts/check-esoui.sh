@@ -101,9 +101,12 @@ done
 pass "Public documentation contains no slash commands."
 
 # 7. Retired/removed feature terms must not reappear in public documentation
-# Populate this array with regex patterns whenever a user-facing feature is retired
-# (e.g., "mini-tracker|minitracker" after cleaning retired references in docs).
-RETIRED_DOC_TERMS=()
+RETIRED_DOC_TERMS=(
+  "mini-tracker|minitracker|mini tracker"
+  "reticle capture or NPC name|captura por retícula o nombre"
+  "Click 'Import'|Pulsa 'Importar'|Validate Delivery|Validar Entrega"
+  "ZO_PinBlob|ZO_QuestJournal_Keyboard"
+)
 RETIRED_HITS=0
 for doc_file in "$BBCODE_FILE" README.md README.es.md readme.txt; do
   for term in "${RETIRED_DOC_TERMS[@]+"${RETIRED_DOC_TERMS[@]}"}"; do

@@ -3,7 +3,7 @@
 ## Version: 1.8.0
 ## AddOnVersion: 1
 ## Author: JerbilX
-## Description: Custom Roleplay Quests with reticle NPC target capture, map search area, native Journal tab, and code sharing. (v1.8.0)
+## Description: Custom Roleplay Quests with reticle NPC target capture, map search area, native Journal tab, and in-game mail sharing. (v1.8.0)
 ## SavedVariables: RPQuest_SavedVariables
 
 src/Constants.lua
