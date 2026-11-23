@@ -59,6 +59,35 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 
 ---
 
+## How to Use / Guide
+
+### 1. Roles: Quest Master vs. Player
+- **Quest Master (Creator):** Authors custom quests in **Preparing**, captures NPC targets or discovery spots in the world, configures optional rules or dialogues, and dispatches contracts via in-game mail. Once sent, the Quest Master tracks live status and final outcomes in **Sent**.
+- **Player (Recipient):** Receives quest offers in **Pending**, reviews the briefing, and chooses **Accept** or **Reject**. Active quests are tracked automatically in-world, and results are mailed back to the Quest Master with zero manual copy/paste.
+
+### 2. Journal Sections (Exclusive Accordion)
+The **RPQuest** tab inside the Quest Journal (`J`) uses an exclusive accordion—expanding one section collapses the others:
+- **Pending:** Incoming quest offers waiting for you to **Accept** or **Reject**.
+- **Quests:** Your currently accepted and active quests. Select a quest to view objectives, toggle tracking, or manually complete it once all mandatory objectives are done.
+- **Completed:** Archive of finished quests you have played, including final stealth and optional objective outcomes.
+- **Preparing:** Unsent quest drafts you are creating or editing as a Quest Master.
+- **Sent:** Contracts you have already mailed to players, showing live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and automatic completion results (such as `Undetected` vs `Detected` and optional objectives).
+
+### 3. Quest Building Blocks
+- **Targets (NPC Elimination):** Aim at any living NPC and press your **Capture Target under Reticle** keybind (or `/rpquest capture`). Capturing the same NPC name multiple times stacks into a count (e.g. `Imp x3`); different named NPCs become separate objectives. For each target, you can toggle a **Location** condition (`Required` in the captured zone/subzone or `Not Required`), add a custom elimination message, or mark the objective as **Optional** (allowing the player to finish the quest once all mandatory objectives are complete).
+- **Hidden Discovery Points:** Stand at an exploration spot and press your **Capture Discovery Point** keybind (or `/rpquest discovery`). You can configure the trigger radius (`Small`, `Medium`, or `Large`). Discovery points remain hidden on the map and compass to avoid spoilers.
+- **Stealth (`Undetected`):** Enable **Undetected (Optional)** in the quest editor to challenge the player to complete the quest without being detected in combat. The quest tracks whether the player remained `Undetected` or was `Detected` and reports that outcome to the Quest Master.
+- **World Map Search Area (`M`):** Displays an approximate search circle on the World Map using a fixed random offset so the objective stays inside the circle without giving away its exact center. The circle clears automatically when the quest is completed or deactivated.
+- **NPC Dialogues:** Open dialogue (`E`) with up to 3 native ESO NPCs to capture them into the quest's **NPC Dialogues** section, then write a custom player response option and NPC reply for each. When the player speaks to those NPCs, your custom line is injected seamlessly into the native dialogue window without modifying original game options.
+
+### 4. In-Game Mail Flow (Automatic)
+- **Sending:** Enter the recipient's `@AccountName` (and optional character name) in the quest editor and click **Send Quest**. Both players must be on the same megaserver (e.g. PC-NA or PC-EU) and use the same client language. Larger quests are split automatically across up to 6 mail parts (`RPQP`) and reassembled on arrival.
+- **Arrival Announcement:** When a quest mail arrives, RPQuest ingests it automatically and displays an on-screen announcement alerting the player that a new quest is waiting in **Pending**.
+- **Accepting & Rejecting:** Clicking **Accept** activates the quest, HUD mini-tracker, World Map search area, and NPC dialogues, and notifies the Quest Master. Clicking **Reject** declines the offer and notifies the Quest Master.
+- **Completion Reporting:** When the player finishes all objectives (or manually completes a quest with only optional objectives remaining), RPQuest automatically mails the completion report (`RPQC1`) back to the Quest Master and updates the contract in **Sent**.
+
+---
+
 ## Controls & Slash Commands
 
 ### Keybinds (`Settings -> Controls -> RPQuest`)
