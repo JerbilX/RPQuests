@@ -116,7 +116,7 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 worldX = hasLoc and tonumber(t.worldX) or nil,
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
-                locationRequired = (t.locationRequired == true),
+                locationRequired = hasLoc and (t.locationRequired == true) or false,
                 optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
             })

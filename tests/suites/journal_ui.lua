@@ -604,4 +604,106 @@ return function(T)
         AssertTrue(statusText:find("0/1", 1, true) ~= nil, "Prepared quest status shows 0/1 optional objectives completed")
     end)
 
+    RunTest("Journal UI: Capture and clear target location in new draft and editing existing quest", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab:OpenTab()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        mockState.zoneId = 381
+        mockState.worldX = 12000
+        mockState.worldY = 100
+        mockState.worldZ = 24000
+
+        -- 1. New draft with a captured target
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Veiled Scout",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.JournalTab.selectedTargetIndex = 1
+        RPQuest.JournalTab:RefreshEditorPane()
+
+        local tab = RPQuest.JournalTab
+        AssertEqual(tab.btnCaptureTargetLoc:IsHidden(), false, "btnCaptureTargetLoc visible when target exists")
+        AssertEqual(tab.btnCaptureTargetLoc:GetText(), "Capture Loc", "btnCaptureTargetLoc shows plain label before capture")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden before location capture")
+        AssertEqual(tab.btnTargetLocRequired:IsHidden(), true, "btnTargetLocRequired hidden before location capture")
+        AssertEqual(tab.btnTargetRadSmall:IsHidden(), true, "btnTargetRadSmall hidden before location capture")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Status shows Location: None initially")
+
+        -- Capture location via button
+        tab.btnCaptureTargetLoc:GetHandler("OnClicked")()
+        local draft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(draft.targets[1]), true, "Target has captured location after btnCaptureTargetLoc")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible immediately after capture")
+        AssertEqual(tab.btnTargetLocRequired:IsHidden(), false, "btnTargetLocRequired visible immediately after capture")
+        AssertEqual(tab.btnTargetRadSmall:IsHidden(), false, "btnTargetRadSmall visible immediately after capture")
+        AssertTrue(tab.btnCaptureTargetLoc:GetText():find("Capture Loc", 1, true) ~= nil and tab.btnCaptureTargetLoc:GetText():find("|c33FF33", 1, true) ~= nil, "btnCaptureTargetLoc highlighted when location is captured")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_SET", 15), "Status updates to Location: Set (15m)")
+
+        -- Toggle locationRequired = true, then clear location via btnClearTargetLoc
+        tab.btnTargetLocRequired:GetHandler("OnClicked")()
+        AssertEqual(draft.targets[1].locationRequired, true, "btnTargetLocRequired sets locationRequired=true")
+
+        tab.btnClearTargetLoc:GetHandler("OnClicked")()
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(draft.targets[1]), false, "HasTargetLocation false after btnClearTargetLoc")
+        AssertEqual(draft.targets[1].zoneId, nil, "zoneId cleared to nil")
+        AssertEqual(draft.targets[1].worldX, nil, "worldX cleared to nil")
+        AssertEqual(draft.targets[1].worldZ, nil, "worldZ cleared to nil")
+        AssertEqual(draft.targets[1].radius, nil, "radius cleared to nil")
+        AssertEqual(draft.targets[1].locationRequired, false, "locationRequired reset to false")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden immediately after clear")
+        AssertEqual(tab.btnTargetLocRequired:IsHidden(), true, "btnTargetLocRequired hidden immediately after clear")
+        AssertEqual(tab.btnTargetRadSmall:IsHidden(), true, "btnTargetRadSmall hidden immediately after clear")
+        AssertEqual(tab.btnTargetRadMedium:IsHidden(), true, "btnTargetRadMedium hidden immediately after clear")
+        AssertEqual(tab.btnTargetRadLarge:IsHidden(), true, "btnTargetRadLarge hidden immediately after clear")
+        AssertEqual(tab.btnCaptureTargetLoc:GetText(), "Capture Loc", "btnCaptureTargetLoc returns to plain label after clear")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Status returns to Location: None after clear")
+
+        -- Save new draft and verify cleared state persists
+        local savedNew = RPQuest.QuestRepository:SaveDraft("Cleared Loc New Quest", "Desc")
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(savedNew.targets[1]), false, "Saved new quest has no target location")
+        AssertEqual(savedNew.targets[1].locationRequired, false, "Saved new quest has locationRequired=false")
+
+        -- 2. Existing quest with captured location -> edit -> clear -> save
+        RPQuest.JournalTab:OpenCreateEditor()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Veiled Captain",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 15000, 25000, 1500)
+        RPQuest.QuestRepository:UpdateDraftTarget(1, { locationRequired = true })
+        local existingQuest = RPQuest.QuestRepository:SaveDraft("Existing Loc Quest", "Desc")
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(existingQuest.targets[1]), true, "Existing quest saved with target location")
+        AssertEqual(existingQuest.targets[1].locationRequired, true, "Existing quest saved with locationRequired=true")
+
+        tab:OpenEditEditor(existingQuest.id)
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible when editing quest with target location")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_SET", 15), "Edit status shows Location: Set (15m)")
+
+        tab.btnClearTargetLoc:GetHandler("OnClicked")()
+        local editDraft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(editDraft.targets[1]), false, "Edit draft target location cleared")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden after clearing in edit mode")
+        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Edit status returns to Location: None")
+
+        local updatedQuest = RPQuest.QuestRepository:SaveDraft()
+        AssertEqual(updatedQuest.id, existingQuest.id, "Editing updates the existing quest record")
+        AssertEqual(RPQuest.QuestRepository:HasTargetLocation(updatedQuest.targets[1]), false, "Updated quest persists cleared target location")
+        AssertEqual(updatedQuest.targets[1].zoneId, nil, "Updated quest target zoneId is nil")
+        AssertEqual(updatedQuest.targets[1].worldX, nil, "Updated quest target worldX is nil")
+        AssertEqual(updatedQuest.targets[1].worldZ, nil, "Updated quest target worldZ is nil")
+        AssertEqual(updatedQuest.targets[1].locationRequired, false, "Updated quest target locationRequired is false")
+    end)
+
 end
