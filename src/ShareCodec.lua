@@ -219,7 +219,7 @@ local function BuildQuestPayloadString(quest)
         string.format("%.4f", tonumber(quest.targetY) or 0.5),
         string.format("%.4f", tonumber(quest.areaCenterX) or 0.5),
         string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
-        string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
+        string.format("%.4f", tonumber(quest.areaRadius) or Addon.Constants.AREA_RADIUS.MEDIUM),
         encodedTargets,
         EscapeField(quest.completionMessage or ""),
         stealthSig,
@@ -238,7 +238,7 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
     BinaryCodec:WriteUInt16(buf, quest.targetY or 0.5)
     BinaryCodec:WriteUInt16(buf, quest.areaCenterX or 0.5)
     BinaryCodec:WriteUInt16(buf, quest.areaCenterY or 0.5)
-    BinaryCodec:WriteUInt16(buf, quest.areaRadius or 0.075)
+    BinaryCodec:WriteUInt16(buf, quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM)
     BinaryCodec:WriteUVarint(buf, #targets)
     for _, t in ipairs(targets) do
         local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
@@ -629,7 +629,7 @@ local function UnpackQuestBinary(data)
         targetY = (#decodedTargets > 0) and (targetsResult.targetY or areaCenterY) or nil,
         areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
         areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
-        areaRadius = areaRadius or 0.075,
+        areaRadius = areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM,
         hideMapArea = hideMapArea,
         stealthMode = stealthMode,
         language = (sourceLanguage ~= "" and sourceLanguage) or nil,

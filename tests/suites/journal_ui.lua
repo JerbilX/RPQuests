@@ -332,6 +332,44 @@ return function(T)
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
     end)
 
+    RunTest("City/subzone map detection enlarges effective search area radius on Show on Map", function()
+        RPQuest.QuestRepository:Initialize({})
+        RPQuest.JournalTab:Initialize()
+        RPQuest.WorldMapArea:Initialize()
+
+        local mockPinManager = ZO_WorldMap_GetPinManager()
+        mockPinManager._createdPins = {}
+
+        mockState.reticleExists = true
+        mockState.reticleName = "Guardia de la Ciudad"
+        mockState.reticleIsPlayer = false
+        mockState.reticleIsDead = false
+        mockState.reticleAttackable = true
+        mockState.mapId = 200
+        mockState.zoneId = 381
+        mockState.mapName = "Vulkhel Guard"
+        mockState.mapType = MAPTYPE_SUBZONE
+        mockState.playerX = 0.45
+        mockState.playerY = 0.55
+
+        RPQuest.JournalTab:OpenCreateEditor()
+        local draft = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertEqual(draft.mapType, MAPTYPE_SUBZONE, "Captured draft stores MAPTYPE_SUBZONE")
+        AssertEqual(draft.areaRadius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft keeps base MEDIUM selection for editor UI")
+
+        local expectedSubzoneRadius = RPQuest.Constants.AREA_RADIUS.MEDIUM * RPQuest.Constants.AREA_SUBZONE_MULTIPLIER
+        AssertEqual(#mockPinManager._createdPins, 1, "Map pin rendered on subzone map")
+        AssertTrue(math.abs(mockPinManager._createdPins[1].radius - expectedSubzoneRadius) < 0.0001, "Subzone pin uses enlarged effective radius")
+
+        local dx = draft.targetX - draft.areaCenterX
+        local dy = draft.targetY - draft.areaCenterY
+        local dist = math.sqrt((dx * dx) + (dy * dy))
+        AssertTrue(dist < expectedSubzoneRadius, "Target remains inside enlarged subzone search circle")
+
+        -- Restaurar mapType a MAPTYPE_ZONE para evitar fuga de estado en tests siguientes
+        mockState.mapType = MAPTYPE_ZONE
+    end)
+
     RunTest("Editor Accordion Sections: default state, toggle layout, and auto-expand on edit", function()
         RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
         RPQuest.JournalTab:Initialize()

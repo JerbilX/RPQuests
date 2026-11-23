@@ -42,10 +42,11 @@ Addon.Constants = {
         ACTIVE = "active",
     },
     AREA_RADIUS = {
-        SMALL = 0.045,
-        MEDIUM = 0.075,
-        LARGE = 0.115,
+        SMALL = 0.070,
+        MEDIUM = 0.125,
+        LARGE = 0.195,
     },
+    AREA_SUBZONE_MULTIPLIER = 1.6,
     AREA_OFFSET = {
         MIN_RATIO = 0.25,
         MAX_RATIO = 0.65,
