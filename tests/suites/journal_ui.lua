@@ -387,21 +387,73 @@ return function(T)
 
         local yTargetWhenHeaderExpanded = sections.target.divider._anchors[1].y
         RPQuest.JournalTab:ToggleEditorSection("header")
-        AssertEqual(sections.header.body:IsHidden(), true, "Header section collapses on toggle")
+        AssertEqual(sections.header.isOpen, false, "Header section marks closed on toggle")
+        AssertEqual(sections.header.timeline:IsPlaying(), true, "Header collapse timeline starts playing")
+        sections.header.timeline:StepTo(0.5)
+        AssertEqual(sections.header.openPercentage, 0.25, "Header uses ZO_EaseInQuadratic at 0.5 -> 0.25")
+        AssertEqual(sections.header.body:GetAlpha(), 0.5, "Header body alpha interpolates to 0.5")
+        local yTargetMidCollapse = sections.target.divider._anchors[1].y
+        AssertTrue(yTargetMidCollapse < yTargetWhenHeaderExpanded, "Subsequent section Y offset decreases mid-collapse")
+        sections.header.timeline:StepTo(0)
+        AssertEqual(sections.header.timeline:IsPlaying(), false, "Header collapse timeline stops at 0")
+        AssertEqual(sections.header.body:IsHidden(), true, "Header section hides at end of collapse")
         local yTargetWhenHeaderCollapsed = sections.target.divider._anchors[1].y
-        AssertTrue(yTargetWhenHeaderCollapsed < yTargetWhenHeaderExpanded, "Subsequent section Y offset decreases when header accordion collapses")
+        AssertTrue(yTargetWhenHeaderCollapsed < yTargetMidCollapse, "Subsequent section Y offset decreases further when header accordion finishes collapsing")
 
         RPQuest.JournalTab:ToggleEditorSection("header")
-        AssertEqual(sections.header.body:IsHidden(), false, "Header section expands on second toggle")
+        AssertEqual(sections.header.isOpen, true, "Header section marks open on second toggle")
+        AssertEqual(sections.header.timeline:IsPlaying(), true, "Header expand timeline starts playing")
+        sections.header.timeline:StepTo(0.5)
+        AssertEqual(sections.header.openPercentage, 0.75, "Header uses ZO_EaseOutQuadratic at 0.5 -> 0.75")
+        sections.header.timeline:StepTo(1)
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section visible after expand")
         AssertEqual(sections.target.divider._anchors[1].y, yTargetWhenHeaderExpanded, "Subsequent section Y offset restores when header accordion expands")
 
-        local yCollapsed = sections.dialogue.divider._anchors[1].y
+        -- Single-open (exclusive): opening discovery automatically collapses header
+        local yDialogueBefore = sections.dialogue.divider._anchors[1].y
         RPQuest.JournalTab:ToggleEditorSection("discovery")
-        AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery section expands on toggle")
-        local yExpanded = sections.dialogue.divider._anchors[1].y
-        AssertTrue(yExpanded > yCollapsed, "Subsequent section Y offset increases when discovery accordion expands")
+        AssertEqual(sections.header.isOpen, false, "Opening discovery collapses currently open header")
+        AssertEqual(RPQuest.JournalTab.editorSectionsCollapsed.header, true, "Header marked collapsed in editorSectionsCollapsed")
+        AssertEqual(sections.discovery.isOpen, true, "Discovery section opens")
+        AssertEqual(RPQuest.JournalTab.editorSectionsCollapsed.discovery, false, "Discovery marked expanded in editorSectionsCollapsed")
+        AssertEqual(sections.header.timeline:IsPlaying(), true, "Header collapse animation plays when discovery opens")
+        AssertEqual(sections.discovery.timeline:IsPlaying(), true, "Discovery expand animation plays")
 
+        sections.header.timeline:StepTo(0.5)
+        sections.discovery.timeline:StepTo(0.5)
+        AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery body becomes visible during expand")
+        AssertTrue(sections.discovery.divider._anchors[1].y >= sections.header.body:GetHeight(), "Discovery divider does not overlap header body mid-animation")
+
+        sections.header.timeline:StepTo(0)
+        sections.discovery.timeline:StepTo(1)
+        AssertEqual(sections.header.body:IsHidden(), true, "Header body hides after exclusive collapse")
+        AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery body remains visible after expand")
+        AssertEqual(sections.discovery.body:GetHeight(), sections.discovery.bodyHeight, "Discovery body reaches full height")
+        local yDialogueAfter = sections.dialogue.divider._anchors[1].y
+        AssertTrue(yDialogueAfter < yDialogueBefore, "Dialogue Y offset reflects smaller discovery body vs header body")
+
+        -- Opening options collapses discovery, and reversing mid-animation flips directions cleanly
+        RPQuest.JournalTab:ToggleEditorSection("options")
+        AssertEqual(sections.discovery.isOpen, false, "Opening options collapses discovery")
+        AssertEqual(sections.options.isOpen, true, "Options opens")
+        sections.discovery.timeline:StepTo(0.5)
+        sections.options.timeline:StepTo(0.5)
         RPQuest.JournalTab:ToggleEditorSection("discovery")
+        AssertEqual(sections.discovery.isOpen, true, "Reversing mid-animation reopens discovery")
+        AssertEqual(sections.discovery.timeline._direction, 1, "Discovery timeline direction flips forward")
+        AssertEqual(sections.options.isOpen, false, "Reversing mid-animation collapses options")
+        AssertEqual(sections.options.timeline._direction, -1, "Options timeline direction flips backward")
+        sections.discovery.timeline:StepTo(1)
+        sections.options.timeline:StepTo(0)
+        AssertEqual(sections.options.body:IsHidden(), true, "Options body hides at 0")
+        if RPQuest.JournalTab.editorScrollChild then
+            local scrollHeightWithDiscovery = RPQuest.JournalTab.editorScrollChild:GetHeight()
+            AssertTrue(scrollHeightWithDiscovery >= 474, "editorScrollChild height stays synchronized")
+        end
+
+        -- Collapsing the only open section leaves all sections collapsed
+        RPQuest.JournalTab:ToggleEditorSection("discovery")
+        sections.discovery.timeline:StepTo(0)
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section collapses on second toggle")
 
         -- Save a quest with options configured and verify OpenEditEditor keeps header expanded and other accordions collapsed by default

@@ -111,8 +111,21 @@ function EditorPane.LayoutSections(tab)
         sec.headerBtn:SetAnchor(TOPLEFT, tab.editorFormParent, TOPLEFT, 0, y + 8)
         sec.headerBtn:SetText(string.format(" |t22:22:%s|t %s%s|r%s", arrowTex, titleColor, Addon.Locale:Get(sec.localeKey), badge))
 
-        sec.body:SetHidden(isCollapsed)
-        y = isCollapsed and (y + 54) or (y + 44 + sec.bodyHeight + 22)
+        local openPct = sec.openPercentage
+        if openPct == nil then
+            openPct = isCollapsed and 0 or 1
+        end
+        local currentHeight = math.floor((sec.bodyHeight or 0) * openPct + 0.5)
+        if currentHeight <= 0 then
+            sec.body:SetDimensions(510, 0)
+            sec.body:SetHidden(true)
+            y = y + 54
+        else
+            local extraPad = math.floor(12 * openPct + 0.5)
+            sec.body:SetDimensions(510, currentHeight)
+            sec.body:SetHidden(false)
+            y = y + 54 + currentHeight + extraPad
+        end
     end
 
     if tab.editorScrollChild then
@@ -120,10 +133,73 @@ function EditorPane.LayoutSections(tab)
     end
 end
 
+local function SetSectionOpenPercentage(tab, sec, openPercentage)
+    sec.openPercentage = openPercentage
+    EditorPane.LayoutSections(tab)
+end
+
+local function SnapSectionState(sec, targetOpen)
+    local timeline = sec.timeline
+    if timeline and timeline:IsPlaying() then
+        timeline:Stop()
+    end
+    sec.isOpen = targetOpen
+    sec.openPercentage = targetOpen and 1 or 0
+    sec.body:SetAlpha(sec.openPercentage)
+end
+
+local function AnimateSection(tab, sec, targetOpen)
+    local timeline = sec.timeline
+    local isHidden = (tab.panel and tab.panel:IsHidden()) or (tab.editorPane and tab.editorPane:IsHidden())
+    if not timeline or isHidden or (sec.bodyHeight or 0) == 0 then
+        SnapSectionState(sec, targetOpen)
+        return
+    end
+
+    sec.isOpen = targetOpen
+    if timeline:IsPlaying() then
+        if targetOpen then
+            timeline:PlayForward()
+        else
+            timeline:PlayBackward()
+        end
+    else
+        local customAnim = timeline:GetFirstAnimation()
+        customAnim:SetUpdateFunction(function(_, progress)
+            SetSectionOpenPercentage(tab, sec, progress)
+        end)
+        local numAnimations = timeline:GetNumAnimations()
+        for i = 2, numAnimations do
+            timeline:GetAnimation(i):SetAnimatedControl(sec.body)
+        end
+        if targetOpen then
+            customAnim:SetEasingFunction(ZO_EaseOutQuadratic)
+            timeline:PlayFromStart()
+        else
+            customAnim:SetEasingFunction(ZO_EaseInQuadratic)
+            timeline:PlayFromEnd()
+        end
+    end
+end
+
 function EditorPane.ToggleSection(tab, sectionKey)
     if not sectionKey then return end
     tab.editorSectionsCollapsed = tab.editorSectionsCollapsed or {}
-    tab.editorSectionsCollapsed[sectionKey] = not tab.editorSectionsCollapsed[sectionKey]
+    local willOpen = tab.editorSectionsCollapsed[sectionKey] and true or false
+    if willOpen then
+        for _, sec in ipairs(tab.editorSections or {}) do
+            tab.editorSectionsCollapsed[sec.key] = (sec.key ~= sectionKey)
+        end
+    else
+        tab.editorSectionsCollapsed[sectionKey] = true
+    end
+
+    for _, sec in ipairs(tab.editorSections or {}) do
+        local targetOpen = not tab.editorSectionsCollapsed[sec.key]
+        if targetOpen ~= sec.isOpen then
+            AnimateSection(tab, sec, targetOpen)
+        end
+    end
     EditorPane.LayoutSections(tab)
 end
 
@@ -371,5 +447,16 @@ function EditorPane.Refresh(tab)
     RefreshEditorTargetConfig(tab, draft)
     RefreshEditorDiscoveries(tab, draft)
     RefreshEditorDialoguesAndOptions(tab, draft)
+
+    local collapsedMap = tab.editorSectionsCollapsed or {}
+    for _, sec in ipairs(tab.editorSections or {}) do
+        local targetOpen = not collapsedMap[sec.key]
+        if targetOpen ~= sec.isOpen then
+            SnapSectionState(sec, targetOpen)
+        elseif not (sec.timeline and sec.timeline:IsPlaying()) then
+            sec.openPercentage = targetOpen and 1 or 0
+            sec.body:SetAlpha(sec.openPercentage)
+        end
+    end
     EditorPane.LayoutSections(tab)
 end

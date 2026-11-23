@@ -36,9 +36,14 @@ function EditorSections.CreateAccordionSection(tab, formParent, panelName, key, 
         tab:ToggleEditorSection(key)
     end)
 
-    local body = WINDOW_MANAGER:CreateControl(panelName .. "_EdBody_" .. key, formParent, CT_CONTROL)
+    local body = WINDOW_MANAGER:CreateControl(panelName .. "_EdBody_" .. key, formParent, CT_SCROLL)
     body:SetDimensions(510, bodyHeight)
     body:SetAnchor(TOPLEFT, headerBtn, BOTTOMLEFT, 0, 10)
+
+    local isCollapsed = tab.editorSectionsCollapsed and tab.editorSectionsCollapsed[key] and true or false
+    local isOpen = not isCollapsed
+    local timeline = ANIMATION_MANAGER:CreateTimelineFromVirtual("ZO_TreeOpenAnimation", body)
+    body:SetAlpha(isOpen and 1 or 0)
 
     local sec = {
         key = key,
@@ -47,6 +52,9 @@ function EditorSections.CreateAccordionSection(tab, formParent, panelName, key, 
         headerBtn = headerBtn,
         body = body,
         bodyHeight = bodyHeight,
+        timeline = timeline,
+        isOpen = isOpen,
+        openPercentage = isOpen and 1 or 0,
     }
     table.insert(tab.editorSections, sec)
     tab.editorSectionsByKey[key] = sec
