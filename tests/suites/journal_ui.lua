@@ -301,11 +301,13 @@ return function(T)
         mockState.playerX = 0.50
         mockState.playerY = 0.50
 
-        -- 1. En creación (sin guardar), capturar objetivo muestra el pin en el mapa y habilita Ver en Mapa en el editor
+        -- 1. En creación (sin guardar), capturar objetivo muestra el pin en el mapa y habilita [M] Show On Map en el editor
         RPQuest.JournalTab:OpenCreateEditor()
-        AssertEqual(RPQuest.JournalTab.btnShowMapEditor:IsHidden(), true, "ShowMapEditor hidden before target capture")
+        AssertEqual(RPQuest.JournalTab.btnShowMapEditor == nil, true, "Standalone ShowMapEditor button removed")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map keybind hidden before target capture")
         RPQuest.TargetCapture:CaptureFromReticle()
-        AssertEqual(RPQuest.JournalTab.btnShowMapEditor:IsHidden(), false, "ShowMapEditor visible after target capture")
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map keybind visible after target capture")
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin rendered immediately during draft preparation")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft pin starts with MEDIUM radius")
 
@@ -326,8 +328,8 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed when editing quest radius")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "Edited draft pin immediately reflects SMALL radius")
 
-        -- 4. Pulsar Ver en Mapa desde el editor abre el mapa mostrando el pin editado
-        RPQuest.JournalTab.btnShowMapEditor:FireHandler("OnClicked")
+        -- 4. Pulsar [M] Show On Map desde el editor abre el mapa mostrando el pin editado
+        RPQuest.JournalTab.showOnMapDescriptor.callback()
         AssertEqual(#mockPinManager._createdPins, 1, "ShowQuestOnMap from editor renders pin")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
     end)
@@ -644,10 +646,46 @@ return function(T)
         AssertEqual(shownQuestId, hiddenAreaQuest.id, "showOnMapDescriptor callback calls ShowQuestOnMap with selected quest")
         RPQuest.WorldMapArea.ShowQuestOnMap = origShowQuestOnMap
 
-        -- 6. Editor mode -> hidden
+        -- 6. Editor mode -> hidden when draft has no coordinates, visible when draft has target or discovery
         RPQuest.JournalTab:OpenCreateEditor()
-        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Editor mode")
-        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false in Editor mode")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:GetParent(), RPQuest.JournalTab.rightCol, "Show On Map keybind parented to rightCol so it remains visible in Editor mode")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Editor mode when draft has no coordinates")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false in Editor mode when draft has no coordinates")
+
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 381,
+            worldX = 1000,
+            worldY = 100,
+            worldZ = 2000,
+            mapId = 32,
+            x = 0.42,
+            y = 0.61,
+            mapName = "Auridon",
+        })
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible in Editor mode after adding discovery point")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible true in Editor mode after adding discovery point")
+
+        local origEditorShow = RPQuest.WorldMapArea.ShowQuestOnMap
+        local shownEditorTarget = nil
+        RPQuest.WorldMapArea.ShowQuestOnMap = function(_, target)
+            shownEditorTarget = target
+            return true
+        end
+        RPQuest.JournalTab.showOnMapDescriptor.callback()
+        AssertEqual(shownEditorTarget, RPQuest.QuestRepository:GetDraft(), "showOnMapDescriptor callback in Editor mode passes live draft")
+        RPQuest.WorldMapArea.ShowQuestOnMap = origEditorShow
+
+        -- Text-only quest without coordinates in Detail mode -> hidden (vanilla behavior)
+        RPQuest.QuestRepository:ClearDraftDiscoveries()
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden again after clearing draft coordinates")
+        RPQuest.JournalTab.titleEdit:SetText("Solo Texto")
+        RPQuest.JournalTab:OnSaveDraftClicked()
+        local textOnlyQuest = RPQuest.JournalTab.selectedQuestId and RPQuest.QuestRepository:GetQuestById(RPQuest.JournalTab.selectedQuestId)
+        AssertEqual(textOnlyQuest ~= nil, true, "Text-only quest saved")
+        RPQuest.JournalTab:SelectQuest(textOnlyQuest.id)
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Detail mode when quest has no coordinates")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false when quest has no coordinates")
 
         -- 7. Mail Send mode -> hidden
         RPQuest.JournalTab:SelectQuest(hiddenAreaQuest.id)

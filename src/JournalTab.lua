@@ -1062,10 +1062,6 @@ function JournalTab:Refresh()
     if self.viewMode == VIEW_MODE.EDITOR then
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
-        self:UpdateShowOnMapVisibility()
-        if self.keybindStripDescriptor then
-            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
-        end
     elseif self.viewMode == VIEW_MODE.MAIL_SEND and self.mailSendPane then
         self.mailSendPane:SetHidden(false)
         self:RefreshMailSendCounter()
@@ -1093,4 +1089,8 @@ end
 
 function JournalTab:RefreshEditorPane()
     Addon.JournalEditorPane.Refresh(self)
+    self:UpdateShowOnMapVisibility()
+    if self.keybindStripDescriptor then
+        KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+    end
 end

@@ -28,7 +28,6 @@ RPQuest.Locales["es"] = {
     BTN_DEACTIVATE = "Desactivar",
     BTN_TEST_QUEST = "Probar",
     BTN_STOP_TEST = "Dejar de probar",
-    BTN_SHOW_ON_MAP = "Ver en Mapa",
     BTN_EDIT = "Editar",
     BTN_COPY = "Copiar",
     BTN_MIGRATE = "Migrar",

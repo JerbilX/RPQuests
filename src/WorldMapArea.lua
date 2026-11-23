@@ -282,24 +282,86 @@ local function PanWorldMapToNormalizedPosition(x, y)
     end
 end
 
+local function ResolveQuestMapTarget(quest)
+    if type(quest) ~= "table" then
+        return 0, nil, nil
+    end
+
+    local mapId = tonumber(quest.mapId) or 0
+    local panX = quest.areaCenterX or quest.targetX
+    local panY = quest.areaCenterY or quest.targetY
+
+    if (mapId <= 0 or not panX or not panY) and type(quest.targets) == "table" then
+        for _, t in ipairs(quest.targets) do
+            if type(t) == "table" then
+                if mapId <= 0 and (tonumber(t.mapId) or 0) > 0 then
+                    mapId = tonumber(t.mapId)
+                end
+                if (not panX or not panY) and t.targetX and t.targetY then
+                    panX, panY = t.targetX, t.targetY
+                end
+            end
+        end
+    end
+
+    if (mapId <= 0 or not panX or not panY) and type(quest.discoveries) == "table" then
+        for _, d in ipairs(quest.discoveries) do
+            if type(d) == "table" then
+                if mapId <= 0 and (tonumber(d.mapId) or 0) > 0 then
+                    mapId = tonumber(d.mapId)
+                end
+                if (not panX or not panY) and d.x and d.y then
+                    panX, panY = d.x, d.y
+                end
+            end
+        end
+    end
+
+    return mapId, panX, panY
+end
+
+function WorldMapArea:HasMapLocation(quest)
+    if type(quest) ~= "table" then
+        return false
+    end
+
+    local mapId, panX, panY = ResolveQuestMapTarget(quest)
+    if mapId > 0 and panX and panY then
+        return true
+    end
+
+    if mapId > 0 and type(quest.discoveries) == "table" then
+        for _, d in ipairs(quest.discoveries) do
+            if type(d) == "table" and ((d.x and d.y) or (d.worldX and d.worldZ)) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 function WorldMapArea:ShowQuestOnMap(quest)
     local targetQuest = quest or Addon.QuestRepository:GetActiveQuest()
     if not targetQuest then return false end
 
+    local mapId, panX, panY = ResolveQuestMapTarget(targetQuest)
+    if mapId <= 0 then return false end
+
     self.previewQuestId = targetQuest.id or targetQuest.editingQuestId or DRAFT_PIN_TAG
     self._pinsDirty = true
 
-    SetWorldMapToId(targetQuest.mapId)
+    SetWorldMapToId(mapId)
     OpenWorldMapScene()
     if self._pinsDirty then
         self:RefreshPins()
     end
 
-    if targetQuest.areaCenterX and targetQuest.areaCenterY then
-        PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+    if panX and panY then
+        PanWorldMapToNormalizedPosition(panX, panY)
         zo_callLater(function()
             if IsMapSceneShowing() then
-                PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+                PanWorldMapToNormalizedPosition(panX, panY)
             end
         end, 50)
     end
