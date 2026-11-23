@@ -12,6 +12,7 @@ local JournalTab = Addon.JournalTab
 
 local PANEL_NAME = Addon.JournalWidgets.PANEL_NAME
 local MAX_VISIBLE_ROWS = 15
+local QUEST_SECTIONS = { "pending", "missions", "completed", "preparing" }
 
 local VIEW_MODE = {
     DETAIL = "DETAIL",
@@ -22,16 +23,23 @@ JournalTab.VIEW_MODE = VIEW_MODE
 
 local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
 
+local function ExpandOnlySection(self, sectionKey)
+    if not sectionKey or not self.collapsedSections then return end
+    for _, key in ipairs(QUEST_SECTIONS) do
+        self.collapsedSections[key] = (key ~= sectionKey)
+    end
+end
+
 function JournalTab:RegisterRepositoryListener()
     Addon.QuestRepository:RegisterListener(function(eventType, quest)
         if eventType == "QUEST_CREATED" or eventType == "QUEST_UPDATED" then
             if quest and quest.id then
                 if quest.role == Addon.Constants.QUEST_ROLE.PREPARED then
-                    self.collapsedSections.preparing = false
+                    ExpandOnlySection(self, "preparing")
                 elseif quest.completed then
-                    self.collapsedSections.completed = false
+                    ExpandOnlySection(self, "completed")
                 else
-                    self.collapsedSections.missions = false
+                    ExpandOnlySection(self, "missions")
                 end
                 self.listOffset = 0
                 self.selectedQuestId = quest.id
@@ -39,14 +47,14 @@ function JournalTab:RegisterRepositoryListener()
             self.viewMode = VIEW_MODE.DETAIL
         elseif eventType == "QUEST_IMPORTED" or eventType == "QUEST_ACCEPTED" then
             if quest and quest.id then
-                self.collapsedSections.missions = false
+                ExpandOnlySection(self, "missions")
                 self.listOffset = 0
                 self.selectedQuestId = quest.id
             end
             self.viewMode = VIEW_MODE.DETAIL
         elseif eventType == "QUEST_OFFERED" then
             if quest and quest.id then
-                self.collapsedSections.pending = false
+                ExpandOnlySection(self, "pending")
                 self.listOffset = 0
                 if not self.selectedQuestId then
                     self.selectedQuestId = quest.id
@@ -83,6 +91,7 @@ function JournalTab:Initialize()
 
     self.viewMode = VIEW_MODE.DETAIL
     self.collapsedSections = {
+        pending = true,
         missions = false,
         completed = true,
         preparing = true,
@@ -385,6 +394,8 @@ local function GetQuestSectionKey(quest)
     if not quest then return nil end
     if Addon.QuestRepository:IsPreparedQuest(quest) then
         return "preparing"
+    elseif Addon.QuestRepository:IsOfferedQuest(quest) then
+        return "pending"
     elseif quest.completed then
         return "completed"
     end
@@ -408,10 +419,14 @@ end
 
 function JournalTab:ToggleSection(sectionKey)
     if not sectionKey or not self.collapsedSections then return end
-    if not self.collapsedSections[sectionKey] and self:IsSectionLockedExpanded(sectionKey) then
-        return
+    if self.collapsedSections[sectionKey] ~= false then
+        ExpandOnlySection(self, sectionKey)
+    else
+        if self:IsSectionLockedExpanded(sectionKey) then
+            return
+        end
+        self.collapsedSections[sectionKey] = true
     end
-    self.collapsedSections[sectionKey] = not self.collapsedSections[sectionKey]
     self.listOffset = 0
     self:RefreshQuestList()
 end
@@ -573,8 +588,7 @@ end
 
 local function AppendQuestSectionRows(tab, displayRows, sectionKey, localeKey, quests, isCompleted, activeQuest)
     if #quests == 0 then return end
-    local isLocked = tab:IsSectionLockedExpanded(sectionKey)
-    local isCollapsed = (not isLocked) and tab.collapsedSections and tab.collapsedSections[sectionKey]
+    local isCollapsed = tab.collapsedSections and tab.collapsedSections[sectionKey]
     local arrowTex = isCollapsed and "/esoui/art/buttons/tree_closed_up.dds" or "/esoui/art/buttons/tree_open_up.dds"
     local headerColor = isCollapsed and "|cC5C29E" or "|cFFFFFF"
     table.insert(displayRows, {
