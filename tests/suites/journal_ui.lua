@@ -706,4 +706,85 @@ return function(T)
         AssertEqual(updatedQuest.targets[1].locationRequired, false, "Updated quest target locationRequired is false")
     end)
 
+    RunTest("22. Accordion Animation: ZO_TreeOpenAnimation expand/collapse, easing, mid-animation reversal, and hidden snap", function()
+        local roles = RPQuest.Constants.QUEST_ROLE
+        RPQuest.QuestRepository:Initialize({
+            quests = {
+                { id = 1, title = "Active A", description = "", role = roles.RECEIVED, completed = false },
+                { id = 2, title = "Active B", description = "", role = roles.RECEIVED, completed = false },
+                { id = 3, title = "Prep A", description = "", role = roles.PREPARED, completed = false },
+                { id = 4, title = "Sent A", description = "", role = roles.PREPARED, sentTo = "@Dest", completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        local tab = RPQuest.JournalTab
+        tab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true }
+        tab.panel:SetHidden(true)
+        tab:Refresh()
+        tab.panel:SetHidden(false)
+
+        local secMissions = tab.accordionSections.missions
+        local secPreparing = tab.accordionSections.preparing
+        local secSent = tab.accordionSections.sent
+
+        -- Initial state: missions open (height = 60, alpha = 1), preparing/sent collapsed (height = 0, hidden)
+        AssertEqual(secMissions.openPercentage, 1, "Missions starts at openPercentage = 1")
+        AssertEqual(secMissions.childContainer:GetHeight(), 60, "Missions childContainer height = 2 * 30")
+        AssertEqual(secMissions.childContainer:GetAlpha(), 1, "Missions childContainer alpha = 1")
+        AssertEqual(secPreparing.childContainer:IsHidden(), true, "Preparing childContainer starts hidden")
+
+        -- 1. Toggle Preparing while visible -> Missions collapses with EaseIn, Preparing expands with EaseOut
+        tab:ToggleSection("preparing")
+        AssertEqual(secMissions.timeline:IsPlaying(), true, "Missions collapse timeline starts playing")
+        AssertEqual(secPreparing.timeline:IsPlaying(), true, "Preparing expand timeline starts playing")
+
+        -- Step halfway through the 300ms animation (rawProgress = 0.5)
+        secMissions.timeline:StepTo(0.5)
+        secPreparing.timeline:StepTo(0.5)
+        AssertEqual(secMissions.openPercentage, 0.25, "Missions uses ZO_EaseInQuadratic at 0.5 -> 0.25")
+        AssertEqual(secMissions.childContainer:GetHeight(), 15, "Missions height interpolates to 15 (0.25 * 60)")
+        AssertEqual(secMissions.childContainer:GetAlpha(), 0.5, "Missions alpha interpolates to 0.5")
+        AssertEqual(secPreparing.openPercentage, 0.75, "Preparing uses ZO_EaseOutQuadratic at 0.5 -> 0.75")
+        AssertEqual(secPreparing.childContainer:GetHeight(), 23, "Preparing height interpolates to round(0.75 * 30) = 23")
+        AssertEqual(secPreparing.childContainer:GetAlpha(), 0.5, "Preparing alpha interpolates to 0.5")
+
+        -- Check dynamic Y-anchor of Sent header shifts smoothly during animation
+        local _, _, _, _, _, sentYMid = secSent.headerBtn:GetAnchor(1)
+        -- missions header (30) + missions children (15) + preparing header (30) + preparing children (23) = 98
+        AssertEqual(sentYMid, 98, "Sent header Y-anchor tracks animated heights of sections above")
+
+        -- Finish animations
+        secMissions.timeline:StepTo(0)
+        secPreparing.timeline:StepTo(1)
+        AssertEqual(secMissions.timeline:IsPlaying(), false, "Missions timeline stops at 0")
+        AssertEqual(secMissions.childContainer:IsHidden(), true, "Missions childContainer hides at 0")
+        AssertEqual(secPreparing.timeline:IsPlaying(), false, "Preparing timeline stops at 1")
+        AssertEqual(secPreparing.childContainer:GetHeight(), 30, "Preparing height reaches full 30")
+        AssertEqual(secPreparing.childContainer:GetAlpha(), 1, "Preparing alpha reaches 1")
+
+        -- 2. Reversing mid-animation when toggling Sent while Preparing is still animating
+        tab:ToggleSection("sent")
+        AssertEqual(secPreparing.timeline:IsPlaying(), true, "Preparing starts collapsing")
+        AssertEqual(secSent.timeline:IsPlaying(), true, "Sent starts expanding")
+        secPreparing.timeline:StepTo(0.5)
+        secSent.timeline:StepTo(0.5)
+        -- Reverse back to Preparing mid-flight
+        tab:ToggleSection("preparing")
+        AssertEqual(secPreparing.isOpen, true, "Preparing reverses back to open mid-animation")
+        AssertEqual(secPreparing.timeline._direction, 1, "Preparing timeline direction flips forward")
+        AssertEqual(secSent.isOpen, false, "Sent reverses back to closed mid-animation")
+        AssertEqual(secSent.timeline._direction, -1, "Sent timeline direction flips backward")
+        secPreparing.timeline:StepTo(1)
+        secSent.timeline:StepTo(0)
+
+        -- 3. Hidden panel snaps immediately without playing timelines
+        tab.panel:SetHidden(true)
+        tab:ToggleSection("missions")
+        AssertEqual(secMissions.timeline:IsPlaying(), false, "Hidden panel snaps Missions without playing timeline")
+        AssertEqual(secMissions.openPercentage, 1, "Hidden panel snaps Missions openPercentage to 1")
+        AssertEqual(secPreparing.openPercentage, 0, "Hidden panel snaps Preparing openPercentage to 0")
+        AssertEqual(secPreparing.childContainer:IsHidden(), true, "Hidden panel hides collapsed childContainer")
+        tab.panel:SetHidden(false)
+    end)
+
 end

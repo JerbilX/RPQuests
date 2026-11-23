@@ -12,6 +12,10 @@ local JournalTab = Addon.JournalTab
 
 local PANEL_NAME = Addon.JournalWidgets.PANEL_NAME
 local MAX_VISIBLE_ROWS = 15
+local ROW_HEIGHT = 28
+local ROW_STEP = 30
+local LIST_WIDTH = 320
+local LIST_VIEWPORT_HEIGHT = 506
 local QUEST_SECTIONS = { "pending", "missions", "completed", "preparing", "sent" }
 
 local VIEW_MODE = {
@@ -183,34 +187,55 @@ function JournalTab:BuildLeftColumn(panel)
     emptyLabel:SetHidden(true)
     self.emptyLabel = emptyLabel
 
-    self.rowControls = {}
     self.rowBindings = {}
+    self.accordionSections = {}
 
-    for i = 1, MAX_VISIBLE_ROWS do
-        local rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_Row" .. i, leftCol, CT_BUTTON)
-        rowBtn:SetDimensions(320, 28)
-        rowBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 42 + ((i - 1) * 30))
-        if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
-        if rowBtn.SetHorizontalAlignment then
-            rowBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    local listViewport = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ListViewport", leftCol, CT_SCROLL)
+    listViewport:SetDimensions(LIST_WIDTH + 5, LIST_VIEWPORT_HEIGHT)
+    listViewport:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 0, 42)
+    listViewport:SetHidden(true)
+    self.listViewport = listViewport
+
+    local listScrollChild = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_ListScrollChild", listViewport, CT_CONTROL)
+    listScrollChild:SetDimensions(LIST_WIDTH, 1)
+    listScrollChild:SetAnchor(TOPLEFT, listViewport, TOPLEFT, 0, 0)
+    self.listScrollChild = listScrollChild
+
+    for _, sectionKey in ipairs(QUEST_SECTIONS) do
+        local headerBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_SectionHeader_" .. sectionKey, listScrollChild, CT_BUTTON)
+        headerBtn:SetDimensions(LIST_WIDTH, ROW_HEIGHT)
+        if headerBtn.SetFont then headerBtn:SetFont("ZoFontHeader3") end
+        if headerBtn.SetHorizontalAlignment then
+            headerBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
         end
-        if rowBtn.SetVerticalAlignment then
-            rowBtn:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+        if headerBtn.SetVerticalAlignment then
+            headerBtn:SetVerticalAlignment(TEXT_ALIGN_CENTER)
         end
-        local rowIndex = i
-        rowBtn:SetHandler("OnClicked", function()
-            local binding = self.rowBindings[rowIndex]
-            if not binding then return end
-            if binding.isHeader and binding.sectionKey then
-                PlaySound(SOUNDS.DEFAULT_CLICK)
-                self:ToggleSection(binding.sectionKey)
-            elseif binding.questId then
-                PlaySound(SOUNDS.DEFAULT_CLICK)
-                self:SelectQuest(binding.questId)
-            end
+        local key = sectionKey
+        headerBtn:SetHandler("OnClicked", function()
+            PlaySound(SOUNDS.DEFAULT_CLICK)
+            self:ToggleSection(key)
         end)
-        rowBtn:SetHidden(true)
-        self.rowControls[i] = rowBtn
+        headerBtn:SetHidden(true)
+
+        local childContainer = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_SectionChildren_" .. sectionKey, listScrollChild, CT_SCROLL)
+        childContainer:SetDimensions(LIST_WIDTH, 0)
+        childContainer:SetHidden(true)
+
+        local isOpen = (self.collapsedSections[sectionKey] == false)
+        local timeline = ANIMATION_MANAGER:CreateTimelineFromVirtual("ZO_TreeOpenAnimation", childContainer)
+        childContainer:SetAlpha(isOpen and 1 or 0)
+
+        self.accordionSections[sectionKey] = {
+            headerBtn = headerBtn,
+            childContainer = childContainer,
+            timeline = timeline,
+            isOpen = isOpen,
+            openPercentage = isOpen and 1 or 0,
+            fullHeight = 0,
+            hasQuests = false,
+            rowPool = {},
+        }
     end
 
     self.btnListPrev = CreateStyledButton(PANEL_NAME .. "_ListPrevBtn", leftCol, 60, 26, "<", function()
@@ -595,50 +620,148 @@ local function PartitionQuestsBySection(allQuests)
     return buckets
 end
 
-local function AppendQuestSectionRows(tab, displayRows, sectionKey, localeKey, quests, isCompleted, activeQuest)
-    if #quests == 0 then return end
+local SECTION_DEFINITIONS = {
+    { key = "pending", localeKey = "SECTION_PENDING_QUESTS", isCompleted = false },
+    { key = "missions", localeKey = "SECTION_ACTIVE_QUESTS", isCompleted = false },
+    { key = "completed", localeKey = "SECTION_COMPLETED_QUESTS", isCompleted = true },
+    { key = "preparing", localeKey = "SECTION_PREPARED_QUESTS", isCompleted = false },
+    { key = "sent", localeKey = "SECTION_SENT_QUESTS", isCompleted = false },
+}
+
+local function FormatSectionHeaderText(tab, sectionKey, localeKey, count)
     local isCollapsed = tab.collapsedSections and tab.collapsedSections[sectionKey]
     local arrowTex = isCollapsed and "/esoui/art/buttons/tree_closed_up.dds" or "/esoui/art/buttons/tree_open_up.dds"
     local headerColor = isCollapsed and "|cC5C29E" or "|cFFFFFF"
-    table.insert(displayRows, {
-        isHeader = true,
-        sectionKey = sectionKey,
-        text = string.format("|t28:28:%s|t %s%s|r", arrowTex, headerColor, Addon.Locale:Get(localeKey, #quests)),
-    })
-    if isCollapsed then return end
+    return string.format("|t28:28:%s|t %s%s|r", arrowTex, headerColor, Addon.Locale:Get(localeKey, count))
+end
 
-    for _, q in ipairs(quests) do
-        local isSelected = (tab.selectedQuestId == q.id)
-        local prefix, selColor
-        local suffix = q.failed and Addon.Locale:Get("LIST_FAILED_SUFFIX") or ""
-        if isCompleted then
+local function FormatQuestRowText(tab, q, sectionKey, isCompleted, activeQuest)
+    local isSelected = (tab.selectedQuestId == q.id)
+    local prefix, selColor
+    local suffix = q.failed and Addon.Locale:Get("LIST_FAILED_SUFFIX") or ""
+    if isCompleted then
+        prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
+        selColor = isSelected and "|cFFFFFF" or "|c8899AA"
+    elseif sectionKey == "sent" then
+        local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(q)
+        if pStatus == "completed" then
             prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
-            selColor = isSelected and "|cFFFFFF" or "|c8899AA"
-        elseif sectionKey == "sent" then
-            local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(q)
-            if pStatus == "completed" then
-                prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
-            else
-                prefix = "          "
-            end
-            selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
-            local statusLocaleKey = SENT_STATUS_LOCALE_KEYS[pStatus]
-            if statusLocaleKey then
-                suffix = suffix .. Addon.Locale:Get(statusLocaleKey)
-            end
-        elseif Addon.QuestRepository:IsOfferedQuest(q) then
-            prefix = "      |t18:18:/esoui/art/mail/mail_tabicon_inbox_up.dds|t "
-            selColor = isSelected and "|cFFFFFF" or "|cFFD155"
         else
-            local isAct = (activeQuest and activeQuest.id == q.id)
-            prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
-            selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
+            prefix = "          "
         end
-        table.insert(displayRows, {
-            isHeader = false,
-            questId = q.id,
-            text = prefix .. selColor .. (q.title or "") .. "|r" .. suffix,
-        })
+        selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
+        local statusLocaleKey = SENT_STATUS_LOCALE_KEYS[pStatus]
+        if statusLocaleKey then
+            suffix = suffix .. Addon.Locale:Get(statusLocaleKey)
+        end
+    elseif Addon.QuestRepository:IsOfferedQuest(q) then
+        prefix = "      |t18:18:/esoui/art/mail/mail_tabicon_inbox_up.dds|t "
+        selColor = isSelected and "|cFFFFFF" or "|cFFD155"
+    else
+        local isAct = (activeQuest and activeQuest.id == q.id)
+        prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
+        selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
+    end
+    return prefix .. selColor .. (q.title or "") .. "|r" .. suffix
+end
+
+function JournalTab:EnsureAccordionRow(sectionKey, section, index)
+    local rowBtn = section.rowPool[index]
+    if rowBtn then
+        return rowBtn
+    end
+    rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_SectionRow_" .. sectionKey .. "_" .. index, section.childContainer, CT_BUTTON)
+    rowBtn:SetDimensions(LIST_WIDTH, ROW_HEIGHT)
+    rowBtn:SetAnchor(TOPLEFT, section.childContainer, TOPLEFT, 0, (index - 1) * ROW_STEP)
+    if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
+    if rowBtn.SetHorizontalAlignment then
+        rowBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    end
+    if rowBtn.SetVerticalAlignment then
+        rowBtn:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+    end
+    rowBtn:SetHandler("OnClicked", function(ctrl)
+        if ctrl._questId then
+            PlaySound(SOUNDS.DEFAULT_CLICK)
+            self:SelectQuest(ctrl._questId)
+        end
+    end)
+    section.rowPool[index] = rowBtn
+    return rowBtn
+end
+
+function JournalTab:UpdateAccordionLayout()
+    if not self.accordionSections or not self.listScrollChild then return end
+    local y = 0
+    for _, sectionKey in ipairs(QUEST_SECTIONS) do
+        local section = self.accordionSections[sectionKey]
+        if section and section.hasQuests then
+            section.headerBtn:ClearAnchors()
+            section.headerBtn:SetAnchor(TOPLEFT, self.listScrollChild, TOPLEFT, 0, y)
+            section.headerBtn:SetHidden(false)
+            y = y + ROW_STEP
+
+            local currentHeight = math.floor((section.fullHeight or 0) * (section.openPercentage or 0) + 0.5)
+            section.childContainer:ClearAnchors()
+            section.childContainer:SetAnchor(TOPLEFT, self.listScrollChild, TOPLEFT, 0, y)
+            section.childContainer:SetDimensions(LIST_WIDTH, currentHeight)
+            section.childContainer:SetHidden(currentHeight <= 0)
+            y = y + currentHeight
+        elseif section then
+            section.headerBtn:SetHidden(true)
+            section.childContainer:SetDimensions(LIST_WIDTH, 0)
+            section.childContainer:SetHidden(true)
+        end
+    end
+    self.listScrollChild:SetDimensions(LIST_WIDTH, math.max(1, y))
+    if self.listViewport then
+        self.listScrollChild:ClearAnchors()
+        self.listScrollChild:SetAnchor(TOPLEFT, self.listViewport, TOPLEFT, 0, -((self.listOffset or 0) * ROW_STEP))
+    end
+end
+
+function JournalTab:SetSectionOpenPercentage(sectionKey, openPercentage)
+    local section = self.accordionSections and self.accordionSections[sectionKey]
+    if not section then return end
+    section.openPercentage = openPercentage
+    self:UpdateAccordionLayout()
+end
+
+function JournalTab:AnimateSection(sectionKey, section, targetOpen)
+    local timeline = section.timeline
+    if self.panel:IsHidden() or (section.fullHeight or 0) == 0 then
+        if timeline and timeline:IsPlaying() then
+            timeline:Stop()
+        end
+        section.isOpen = targetOpen
+        section.childContainer:SetAlpha(targetOpen and 1 or 0)
+        self:SetSectionOpenPercentage(sectionKey, targetOpen and 1 or 0)
+        return
+    end
+
+    section.isOpen = targetOpen
+    if timeline:IsPlaying() then
+        if targetOpen then
+            timeline:PlayForward()
+        else
+            timeline:PlayBackward()
+        end
+    else
+        local customAnim = timeline:GetFirstAnimation()
+        customAnim:SetUpdateFunction(function(_, progress)
+            self:SetSectionOpenPercentage(sectionKey, progress)
+        end)
+        local numAnimations = timeline:GetNumAnimations()
+        for i = 2, numAnimations do
+            timeline:GetAnimation(i):SetAnimatedControl(section.childContainer)
+        end
+        if targetOpen then
+            customAnim:SetEasingFunction(ZO_EaseOutQuadratic)
+            timeline:PlayFromStart()
+        else
+            customAnim:SetEasingFunction(ZO_EaseInQuadratic)
+            timeline:PlayFromEnd()
+        end
     end
 end
 
@@ -654,8 +777,22 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
         self._maxListOffset = 0
         self.emptyLabel:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
         self.emptyLabel:SetHidden(false)
-        for i = 1, MAX_VISIBLE_ROWS do
-            self.rowControls[i]:SetHidden(true)
+        if self.listViewport then
+            self.listViewport:SetHidden(true)
+        end
+        if self.accordionSections then
+            for _, sectionKey in ipairs(QUEST_SECTIONS) do
+                local section = self.accordionSections[sectionKey]
+                if section then
+                    section.hasQuests = false
+                    section.fullHeight = 0
+                    if section.timeline and section.timeline:IsPlaying() then
+                        section.timeline:Stop()
+                    end
+                    section.headerBtn:SetHidden(true)
+                    section.childContainer:SetHidden(true)
+                end
+            end
         end
         if self.btnListPrev then self.btnListPrev:SetHidden(true) end
         if self.btnListNext then self.btnListNext:SetHidden(true) end
@@ -664,33 +801,90 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     end
 
     self.emptyLabel:SetHidden(true)
+    if self.listViewport then
+        self.listViewport:SetHidden(false)
+    end
+
     local buckets = PartitionQuestsBySection(allQuests)
     local displayRows = {}
-    AppendQuestSectionRows(self, displayRows, "pending", "SECTION_PENDING_QUESTS", buckets.pending, false, activeQuest)
-    AppendQuestSectionRows(self, displayRows, "missions", "SECTION_ACTIVE_QUESTS", buckets.missions, false, activeQuest)
-    AppendQuestSectionRows(self, displayRows, "completed", "SECTION_COMPLETED_QUESTS", buckets.completed, true, activeQuest)
-    AppendQuestSectionRows(self, displayRows, "preparing", "SECTION_PREPARED_QUESTS", buckets.preparing, false, activeQuest)
-    AppendQuestSectionRows(self, displayRows, "sent", "SECTION_SENT_QUESTS", buckets.sent, false, activeQuest)
+
+    for _, def in ipairs(SECTION_DEFINITIONS) do
+        local sectionKey = def.key
+        local quests = buckets[sectionKey]
+        local section = self.accordionSections and self.accordionSections[sectionKey]
+        local hasQuests = (#quests > 0)
+        local targetOpen = hasQuests and (self.collapsedSections[sectionKey] == false)
+
+        if hasQuests then
+            local headerText = FormatSectionHeaderText(self, sectionKey, def.localeKey, #quests)
+            table.insert(displayRows, {
+                isHeader = true,
+                sectionKey = sectionKey,
+                text = headerText,
+            })
+
+            if section then
+                section.hasQuests = true
+                section.fullHeight = #quests * ROW_STEP
+                section.headerBtn:SetText(headerText)
+                section.headerBtn:SetMouseEnabled(true)
+            end
+
+            for idx, q in ipairs(quests) do
+                local rowText = FormatQuestRowText(self, q, sectionKey, def.isCompleted, activeQuest)
+                if not self.collapsedSections[sectionKey] then
+                    table.insert(displayRows, {
+                        isHeader = false,
+                        questId = q.id,
+                        text = rowText,
+                    })
+                end
+                if section then
+                    local rowBtn = self:EnsureAccordionRow(sectionKey, section, idx)
+                    rowBtn._questId = q.id
+                    rowBtn:SetText(rowText)
+                    rowBtn:SetMouseEnabled(true)
+                    rowBtn:SetHidden(false)
+                end
+            end
+
+            if section then
+                for idx = #quests + 1, #section.rowPool do
+                    section.rowPool[idx]._questId = nil
+                    section.rowPool[idx]:SetHidden(true)
+                end
+            end
+        elseif section then
+            section.hasQuests = false
+            section.fullHeight = 0
+            for idx = 1, #section.rowPool do
+                section.rowPool[idx]._questId = nil
+                section.rowPool[idx]:SetHidden(true)
+            end
+        end
+
+        if section then
+            if targetOpen ~= section.isOpen then
+                self:AnimateSection(sectionKey, section, targetOpen)
+            elseif not (section.timeline and section.timeline:IsPlaying()) then
+                section.openPercentage = targetOpen and 1 or 0
+                section.childContainer:SetAlpha(section.openPercentage)
+            end
+        end
+    end
 
     local maxOffset = math.max(0, #displayRows - MAX_VISIBLE_ROWS)
     self._maxListOffset = maxOffset
     self.listOffset = math.min(math.max(0, self.listOffset or 0), maxOffset)
 
     for i = 1, MAX_VISIBLE_ROWS do
-        local rowCtrl = self.rowControls[i]
         local rowData = displayRows[self.listOffset + i]
         if rowData then
-            rowCtrl:SetHidden(false)
-            if rowCtrl.SetFont then
-                rowCtrl:SetFont(rowData.isHeader and "ZoFontHeader3" or "ZoFontHeader")
-            end
-            rowCtrl:SetText(rowData.text)
-            rowCtrl:SetMouseEnabled(true)
             self.rowBindings[i] = rowData
-        else
-            rowCtrl:SetHidden(true)
         end
     end
+
+    self:UpdateAccordionLayout()
 
     local needsScroll = (#displayRows > MAX_VISIBLE_ROWS)
     if self.btnListPrev then self.btnListPrev:SetHidden(not needsScroll) end
