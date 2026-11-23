@@ -695,6 +695,16 @@ function QuestRepository:ExportRejectionCode(quest)
     return Addon.ShareCodec:EncodeRejection(quest, charName, ts)
 end
 
+function QuestRepository:ExportAcceptanceCode(quest)
+    if type(quest) ~= "table" then
+        return nil, "Invalid quest"
+    end
+    local rawName = GetUnitName("player") or ""
+    local charName = rawName ~= "" and zo_strformat("<<C:1>>", rawName) or rawName
+    local ts = GetTimeStamp() or 0
+    return Addon.ShareCodec:EncodeAcceptance(quest, charName, ts)
+end
+
 function QuestRepository:ValidateResultCode(questId, codeString)
     local quest = self:GetQuestById(questId)
     if not quest then
@@ -709,7 +719,14 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
         return nil
     end
     quest.deliveries = quest.deliveries or {}
-    local status = (validationResult.completed == false) and "rejected" or "completed"
+    local status
+    if validationResult.resultType == "accepted" or validationResult.accepted == true then
+        status = "accepted"
+    elseif validationResult.resultType == "rejected" or validationResult.rejected == true or validationResult.completed == false then
+        status = "rejected"
+    else
+        status = "completed"
+    end
     local entry = {
         senderDisplayName = type(senderDisplayName) == "string" and senderDisplayName or "",
         characterName = validationResult.characterName or "",
@@ -726,7 +743,10 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
         end
     end
     table.insert(quest.deliveries, entry)
-    quest.lastResult = entry
+    local prevStatus = type(quest.lastResult) == "table" and (quest.lastResult.status or "completed") or nil
+    if not (status == "accepted" and (prevStatus == "completed" or prevStatus == "rejected")) then
+        quest.lastResult = entry
+    end
     self:NotifyListeners("DELIVERY_RECORDED", { quest = quest, delivery = entry })
     return entry, true
 end
@@ -752,11 +772,14 @@ function QuestRepository:GetPreparedQuestStatus(quest)
     if type(quest.lastResult) == "table" then
         if quest.lastResult.status == "rejected" then
             return "rejected", quest.lastResult
+        elseif quest.lastResult.status == "accepted" then
+            return "accepted", quest.lastResult
         end
         return "completed", quest.lastResult
     end
     if type(quest.deliveries) == "table" and #quest.deliveries > 0 then
-        return "completed", quest.deliveries[#quest.deliveries]
+        local lastDelivery = quest.deliveries[#quest.deliveries]
+        return lastDelivery.status or "completed", lastDelivery
     end
     if type(quest.sentTo) == "string" and quest.sentTo ~= "" then
         return "sent", { recipient = quest.sentTo, sentAt = quest.sentAt }

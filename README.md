@@ -26,7 +26,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 - **1-to-1 In-Game Mail Flow (Zero Copy/Paste):**
   - Assign a single `@AccountName` recipient (and optional `To (Character)` name) directly in the quest editor and send the quest with one click (automatically splitting larger quests up to 6 parts / ~4,000 chars via `RPQP` over `ShareCodec` internal serialization; works within the same megaserver, e.g. PC-NA to PC-NA or PC-EU to PC-EU). Both `From:` and `To:` character names are displayed below `Status:` in the quest details.
   - **Auto-Ingested Pending Quests:** Incoming quest mails are automatically ingested into the player's **Pending** list with a visible alert and **Accept** / **Reject** actions directly in the RPQuest Journal.
-  - **Automatic Completion & Rejection Reports:** Completing or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Completed` / `Rejected`).
+  - **Automatic Acceptance, Completion & Rejection Reports:** Accepting, completing, or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Accepted` / `Completed` / `Rejected`).
 - **Account-Wide Persistence & Auto-Localization:** Stores quests and progress account-wide via `ZO_SavedVars:NewAccountWide` (matching ESO's account-wide mail, with automatic non-destructive migration from legacy per-character data) and auto-detects client language (`en` / `es`).
 
 ---
@@ -55,7 +55,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
    - **Same-language requirement:** Quests should be played on a game client using the same language as the creator so NPC names and dialogue targets match.
 3. **Play & Auto-Report:**
    - Accepting the quest activates the HUD mini-tracker, World Map search area, and any injected NPC dialogues immediately.
-   - Upon completion (or rejection), RPQuest automatically mails the result back to the Quest Master and updates the quest status.
+   - Accepting, completing, or rejecting the quest automatically mails the result back to the Quest Master and updates the quest status.
 
 ---
 

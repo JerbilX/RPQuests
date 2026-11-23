@@ -241,6 +241,10 @@ local function FormatPreparedStatusText(quest)
             stealthPart = " " .. Addon.Locale:Get("VALIDATE_STEALTH_DETECTED")
         end
         return Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart)
+    elseif pStatus == "accepted" and type(pInfo) == "table" then
+        local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
+        local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
+        return Addon.Locale:Get("PREPARED_STATUS_ACCEPTED", who .. charPart)
     elseif pStatus == "rejected" and type(pInfo) == "table" then
         local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
         local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""

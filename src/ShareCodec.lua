@@ -860,11 +860,15 @@ function ShareCodec:ComputeQuestSignature(quest)
     return ComputeSignature32(rawPayload)
 end
 
-local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
+local function EncodeResultCode(quest, characterName, timestamp, resultType)
     if type(quest) ~= "table" then
         return nil, "Invalid quest"
     end
-    if isCompleted and not quest.completed then
+    local kind = resultType
+    if type(resultType) == "boolean" then
+        kind = resultType and "completed" or "rejected"
+    end
+    if kind == "completed" and not quest.completed then
         return nil, "Quest is not completed"
     end
 
@@ -883,13 +887,19 @@ local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
 
     local ts = math.max(0, math.floor(tonumber(timestamp) or 0))
     local stealthFlag = ""
-    if isCompleted and quest.requireUndetected then
+    if kind == "completed" and quest.requireUndetected then
         stealthFlag = quest.wasDetected and "1" or "0"
+    end
+    local resultFlag = "0"
+    if kind == "completed" then
+        resultFlag = "1"
+    elseif kind == "accepted" then
+        resultFlag = "2"
     end
     local rawPayload = table.concat({
         signature,
         EscapeField(cleanName),
-        isCompleted and "1" or "0",
+        resultFlag,
         tostring(ts),
         stealthFlag,
     }, "|")
@@ -902,11 +912,15 @@ local function EncodeResultCode(quest, characterName, timestamp, isCompleted)
 end
 
 function ShareCodec:EncodeCompletion(quest, characterName, completedAt)
-    return EncodeResultCode(quest, characterName, completedAt, true)
+    return EncodeResultCode(quest, characterName, completedAt, "completed")
 end
 
 function ShareCodec:EncodeRejection(quest, characterName, rejectedAt)
-    return EncodeResultCode(quest, characterName, rejectedAt, false)
+    return EncodeResultCode(quest, characterName, rejectedAt, "rejected")
+end
+
+function ShareCodec:EncodeAcceptance(quest, characterName, acceptedAt)
+    return EncodeResultCode(quest, characterName, acceptedAt, "accepted")
 end
 
 function ShareCodec:DecodeCompletion(codeString)
@@ -945,7 +959,18 @@ function ShareCodec:DecodeCompletion(codeString)
 
     local questSignature = fields[1]
     local characterName = UnescapeField(fields[2])
-    local completed = (fields[3] == "1")
+    local flag = fields[3]
+    local resultType
+    if flag == "1" then
+        resultType = "completed"
+    elseif flag == "0" then
+        resultType = "rejected"
+    elseif flag == "2" then
+        resultType = "accepted"
+    else
+        return nil, "VALIDATE_ERR_INVALID_CODE"
+    end
+    local completed = (resultType == "completed")
     local completedAt = tonumber(fields[4]) or 0
     local wasDetected = nil
     if fields[5] == "1" then
@@ -965,8 +990,9 @@ function ShareCodec:DecodeCompletion(codeString)
         questSignature = questSignature:upper(),
         characterName = characterName,
         completed = completed,
-        rejected = (fields[3] == "0"),
-        resultType = completed and "completed" or "rejected",
+        rejected = (resultType == "rejected"),
+        accepted = (resultType == "accepted"),
+        resultType = resultType,
         completedAt = math.max(0, math.floor(completedAt)),
         wasDetected = wasDetected,
     }
