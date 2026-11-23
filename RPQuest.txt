@@ -13,6 +13,7 @@ src/Locale.lua
 src/BinaryCodec.lua
 src/ShareCodec.lua
 src/QuestDraftStore.lua
+src/QuestMigration.lua
 src/QuestRepository.lua
 src/Announcements.lua
 src/TargetCapture.lua

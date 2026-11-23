@@ -125,7 +125,8 @@ RPQuest/
 │   ├── MailInbox.lua        # Escaneo de bandeja, reensamblado RPQP e ingesta de correos
 │   ├── MailTransport.lua    # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestDraftStore.lua  # Estado de borrador de creación y normalización de objetivos
-│   ├── QuestRepository.lua  # CRUD account-wide, migración y cálculo de offset del círculo
+│   ├── QuestMigration.lua   # Migración no destructiva de SavedVars por personaje a account-wide
+│   ├── QuestRepository.lua  # CRUD account-wide, importación/exportación y seguimiento en runtime
 │   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
 │   ├── CombatTracker.lua    # Seguimiento de bajas y sigilo (EVENT_COMBAT_EVENT)
