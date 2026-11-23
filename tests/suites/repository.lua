@@ -756,4 +756,121 @@ return function(T)
         AssertEqual(#repo:GetAllQuests(), countBefore, "No quest added when copy is rejected")
     end)
 
+    RunTest("Quest schema versioning, sequential migration pipeline, and breaking fallback (ADR-0013)", function()
+        local repo = RPQuest.QuestRepository
+        local mig = RPQuest.QuestMigration
+
+        -- 1. New quests carry CURRENT_VERSION
+        repo:Initialize(nil)
+        local fresh = repo:BuildQuestRecord(1, "Fresh", "Desc", {
+            { name = "Imp", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(fresh.schemaVersion, RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION, "New quest has CURRENT_VERSION")
+
+        -- 2. Sequential migration v1 -> v2 -> v3 with deterministic transforms
+        local legacyQuest = {
+            id = 5,
+            title = "Legacy",
+            description = "Old format",
+            role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+            targets = { { name = "Wolf", currentCount = 0, requiredCount = 1 } },
+            legacyFlag = true,
+        }
+        local migrated, didMigrate = mig:MigrateQuestRecord(legacyQuest, {
+            targetVersion = 3,
+            migrators = {
+                [1] = function(q)
+                    q.step1Applied = (q.legacyFlag == true)
+                    q.legacyFlag = nil
+                    return true
+                end,
+                [2] = function(q)
+                    q.step2Applied = true
+                    return true
+                end,
+            },
+        })
+        AssertTrue(didMigrate, "Legacy quest was migrated")
+        AssertEqual(migrated.schemaVersion, 3, "Quest reached target schemaVersion 3")
+        AssertEqual(migrated.step1Applied, true, "v1->v2 migrator ran")
+        AssertEqual(migrated.step2Applied, true, "v2->v3 migrator ran")
+        AssertTrue(migrated.legacyFlag == nil, "Legacy field cleaned up")
+        AssertTrue(migrated.needsMigration == nil, "Clean migration does not set needsMigration")
+
+        -- 3. Breaking migration marks needsMigration, clears activeQuestId on Initialize, and allows MigratePreparedQuest
+        local origMigrators = mig.SCHEMA_MIGRATORS
+        local origVersion = RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION
+        RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION = 2
+        mig.SCHEMA_MIGRATORS = {
+            [1] = function(q)
+                if q.role == RPQuest.Constants.QUEST_ROLE.PREPARED and q.title == "Broken Prep" then
+                    return false, "Missing required v2 field"
+                end
+                return true
+            end,
+        }
+
+        local sv = {
+            nextId = 3,
+            activeQuestId = 1,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 1,
+                    title = "Broken Prep",
+                    description = "Needs manual update",
+                    role = RPQuest.Constants.QUEST_ROLE.PREPARED,
+                    targets = { { name = "Bandit", currentCount = 0, requiredCount = 1 } },
+                },
+                {
+                    id = 2,
+                    schemaVersion = 1,
+                    title = "Auto Received",
+                    description = "Migrates cleanly",
+                    role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+                    targets = { { name = "Wolf", currentCount = 0, requiredCount = 1 } },
+                },
+            },
+            ingestedMailIds = {},
+        }
+        repo:Initialize(sv)
+
+        local broken = repo:GetQuestById(1)
+        local autoRec = repo:GetQuestById(2)
+        AssertEqual(broken.needsMigration, true, "Breaking PREPARED quest flagged with needsMigration")
+        AssertEqual(broken.migrationReason, "Missing required v2 field", "Migration reason preserved")
+        AssertEqual(autoRec.schemaVersion, 2, "Auto-migratable quest upgraded on Initialize")
+        AssertTrue(repo:GetActiveQuest() == nil, "activeQuestId cleared when active quest needsMigration")
+        AssertEqual(repo:SetActiveQuest(1), false, "Cannot activate quest flagged with needsMigration")
+
+        local draftLoaded, draftErr = repo:LoadQuestIntoDraft(1)
+        AssertTrue(draftLoaded == nil, "Cannot directly edit quest flagged with needsMigration")
+        AssertEqual(draftErr, RPQuest.Locale:Get("ERR_QUEST_NEEDS_MIGRATION"), "Returns migration error on edit")
+
+        local migratedCopy = repo:MigratePreparedQuest(1)
+        AssertTrue(migratedCopy ~= nil, "MigratePreparedQuest creates updated copy")
+        AssertEqual(migratedCopy.schemaVersion, 2, "Migrated copy has CURRENT_VERSION")
+        AssertTrue(migratedCopy.needsMigration == nil, "Migrated copy clears needsMigration")
+        AssertEqual(migratedCopy.title, "Broken Prep", "Migrated copy preserves title")
+
+        -- 4. ShareCodec:DecodeQuest runs migration at boundary
+        local encoded = RPQuest.ShareCodec:EncodeQuest(autoRec)
+        AssertTrue(type(encoded) == "string", "Quest encoded")
+        -- Simulate v1->v2 transform when decoding
+        mig.SCHEMA_MIGRATORS = {
+            [1] = function(q)
+                q.boundaryMigrated = true
+                return true
+            end,
+        }
+        local decoded = RPQuest.ShareCodec:DecodeQuest(encoded)
+        AssertTrue(decoded ~= nil, "Quest decoded")
+        AssertEqual(decoded.schemaVersion, 2, "Decoded quest migrated to CURRENT_VERSION")
+        AssertEqual(decoded.boundaryMigrated, true, "Boundary migrator ran during DecodeQuest")
+
+        -- Restore global constants/migrators
+        RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION = origVersion
+        mig.SCHEMA_MIGRATORS = origMigrators
+    end)
+
 end
