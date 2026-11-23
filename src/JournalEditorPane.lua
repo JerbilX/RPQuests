@@ -57,7 +57,7 @@ function EditorPane.Build(tab, parent)
     EditorSections.BuildDialogueControls(tab, dialogueSec.body, panelName)
     EditorSections.BuildDialogueInputs(tab, dialogueSec.body, panelName)
 
-    local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 96)
+    local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 122)
     EditorSections.BuildOptionsSection(tab, optionsSec.body, panelName)
 
     EditorPane.LayoutSections(tab)
@@ -80,7 +80,9 @@ local function GetSectionBadge(draft, key)
         end
         return ""
     elseif key == "options" then
-        if (draft.completionMessage or "") ~= "" or draft.requireUndetected then
+        local modes = Addon.Constants.STEALTH_MODE
+        local stealthMode = draft.stealthMode or modes.DISABLED
+        if (draft.completionMessage or "") ~= "" or stealthMode ~= modes.DISABLED then
             return "  |c33FF33[*]|r"
         end
         return ""
@@ -350,8 +352,14 @@ local function RefreshEditorDialoguesAndOptions(tab, draft)
         end
     end
 
-    if tab.btnRequireUndetected then
-        tab.btnRequireUndetected:SetText(Addon.Locale:Get(draft.requireUndetected and "OPT_REQUIRE_UNDETECTED_ACTIVE" or "OPT_REQUIRE_UNDETECTED"))
+    if tab.stealthComboBox then
+        local targetMode = Addon.QuestDraftStore:NormalizeStealthMode(draft.stealthMode, draft.requireUndetected)
+        local selected = tab.stealthComboBox:GetSelectedItemData()
+        if not selected or selected.stealthMode ~= targetMode then
+            tab.stealthComboBox:SetSelectedItemByEval(function(item)
+                return item.stealthMode == targetMode
+            end, true)
+        end
     end
 end
 

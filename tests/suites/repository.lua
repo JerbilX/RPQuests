@@ -711,7 +711,7 @@ return function(T)
         AssertEqual(copyFromPrep.title, "Contract One", "Title preserved")
         AssertEqual(copyFromPrep.description, "Desc One", "Description preserved")
         AssertEqual(copyFromPrep.completionMessage, "Well done", "Completion message preserved")
-        AssertEqual(copyFromPrep.requireUndetected, true, "Stealth flag preserved")
+        AssertEqual(copyFromPrep.stealthMode, "optional", "Stealth mode preserved")
         AssertEqual(copyFromPrep.recipientAccount, "@TargetUser", "Recipient account preserved")
         AssertEqual(copyFromPrep.recipientCharacterName, "HeroChar", "Recipient character preserved")
         AssertEqual(#copyFromPrep.targets, 1, "Targets cloned")
@@ -871,6 +871,54 @@ return function(T)
         -- Restore global constants/migrators
         RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION = origVersion
         mig.SCHEMA_MIGRATORS = origMigrators
+    end)
+
+    RunTest("v1 -> v2 migration converts requireUndetected quests and saved drafts to stealthMode", function()
+        local repo = RPQuest.QuestRepository
+        local sv = {
+            nextId = 3,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 1,
+                    role = "prepared",
+                    title = "Legacy Stealth",
+                    description = "D",
+                    requireUndetected = true,
+                    targets = { { name = "Guard", requiredCount = 1, currentCount = 0 } },
+                },
+                {
+                    id = 2,
+                    schemaVersion = 1,
+                    role = "received",
+                    title = "Legacy Normal",
+                    description = "D",
+                    requireUndetected = false,
+                    targets = { { name = "Bandit", requiredCount = 1, currentCount = 0 } },
+                },
+            },
+            draft = {
+                title = "Old Draft",
+                requireUndetected = true,
+                targets = {},
+                discoveries = {},
+                dialogues = {},
+            },
+        }
+        repo:Initialize(sv)
+
+        local q1 = repo:GetQuestById(1)
+        local q2 = repo:GetQuestById(2)
+        AssertEqual(q1.schemaVersion, 2, "Quest 1 upgraded to schema v2")
+        AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
+        AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
+        AssertEqual(q2.schemaVersion, 2, "Quest 2 upgraded to schema v2")
+        AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
+        AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
+
+        local draft = repo:GetDraft()
+        AssertEqual(draft.stealthMode, "optional", "Legacy draft requireUndetected = true normalized to stealthMode = optional")
+        AssertEqual(draft.requireUndetected, nil, "Legacy draft requireUndetected cleared")
     end)
 
 end

@@ -363,7 +363,7 @@ return function(T)
             targetX = 0.50,
             targetY = 0.50,
         })
-        RPQuest.QuestRepository:UpdateDraftFields({ requireUndetected = true })
+        RPQuest.QuestRepository:UpdateDraftFields({ stealthMode = "required" })
         local q = RPQuest.QuestRepository:SaveDraft("Misión Acordeón", "Prueba.", nil, "Listo.")
         AssertTrue(q ~= nil, "Quest saved for edit accordion test")
 
@@ -980,6 +980,46 @@ return function(T)
         AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "MigrateSelectedQuest opens editor on migrated copy")
         AssertEqual(repo:GetDraft().editingQuestId, migrated.id, "Editor loads migrated copy")
         AssertTrue(migrated.needsMigration == nil, "Migrated copy clears needsMigration")
+    end)
+
+    RunTest("JournalEditorPane dropdown & JournalDetailPane stealth mode rendering", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        local combo = tab.stealthComboBox
+        AssertTrue(combo ~= nil, "Stealth combo box created")
+        AssertEqual(combo:GetNumItems(), 3, "Stealth combo box has 3 options (Disabled, Optional, Required)")
+
+        -- Select Required via dropdown callback
+        local items = combo:GetItems()
+        combo:SelectItem(items[3], false)
+        AssertEqual(repo:GetDraft().stealthMode, "required", "Selecting item 3 updates draft stealthMode to required")
+
+        -- RefreshEditorPane syncs dropdown without overwriting draft
+        repo:UpdateDraftFields({ stealthMode = "optional" })
+        tab:RefreshEditorPane()
+        AssertEqual(combo:GetSelectedItemData().stealthMode, "optional", "RefreshEditorPane syncs dropdown to optional")
+
+        -- Detail pane distinguishes Optional vs Required vs Required+Failed
+        local qOpt = repo:BuildQuestRecord(10, "Opt Quest", "D", {
+            { name = "G", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "optional" }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, qOpt)
+        repo._questById[10] = qOpt
+        tab:SelectQuest(10)
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_UNDETECTED"), 1, true) ~= nil, "Detail pane shows Optional Undetected")
+
+        local qReq = repo:BuildQuestRecord(11, "Req Quest", "D", {
+            { name = "G", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "required" }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        qReq.wasDetected = true
+        qReq.failed = true
+        table.insert(repo.savedVars.quests, qReq)
+        repo._questById[11] = qReq
+        tab:SelectQuest(11)
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Detail pane shows Required Failed")
     end)
 
 end

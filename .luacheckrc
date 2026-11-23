@@ -88,6 +88,7 @@ read_globals = {
     "SetMapToPlayerLocation",
     "SetWorldMapToId",
     "ZO_Alert",
+    "ZO_ComboBox_ObjectFromContainer",
     "ZO_CreateStringId",
     "ZO_Dialogs_ShowDialog",
     "ZO_EaseInQuadratic",

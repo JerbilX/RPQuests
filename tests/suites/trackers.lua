@@ -254,20 +254,21 @@ return function(T)
             targetX = 0.42,
             targetY = 0.61,
         })
-        RPQuest.QuestRepository:UpdateDraftFields({ requireUndetected = true })
+        RPQuest.QuestRepository:UpdateDraftFields({ stealthMode = "optional" })
         RPQuest.JournalTab:RefreshEditorPane()
-        AssertTrue(RPQuest.JournalTab.btnRequireUndetected:GetText():find("%[X%]") ~= nil, "Editor toggle shows [X] when requireUndetected is true")
+        local selectedItem = RPQuest.JournalTab.stealthComboBox:GetSelectedItemData()
+        AssertEqual(selectedItem and selectedItem.stealthMode, "optional", "Editor dropdown selects optional when stealthMode is optional")
 
         local prepared = RPQuest.QuestRepository:SaveDraft("Contrato de Sigilo", "Sin testigos.", nil, "Trabajo limpio.")
         AssertTrue(prepared ~= nil, "Saved stealth quest")
-        AssertEqual(prepared.requireUndetected, true, "Prepared quest has requireUndetected = true")
+        AssertEqual(prepared.stealthMode, "optional", "Prepared quest has stealthMode = optional")
         AssertEqual(prepared.wasDetected, false, "Prepared quest starts with wasDetected = false")
 
-        -- 2. ShareCodec preserves requireUndetected
+        -- 2. ShareCodec preserves stealthMode = optional
         local shareCode = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
         local imported = RPQuest.QuestRepository:ImportQuestFromCode(shareCode)
         AssertTrue(imported ~= nil, "Imported stealth quest")
-        AssertEqual(imported.requireUndetected, true, "Imported quest preserves requireUndetected = true")
+        AssertEqual(imported.stealthMode, "optional", "Imported quest preserves stealthMode = optional")
         AssertEqual(imported.wasDetected, false, "Imported quest starts with wasDetected = false")
         AssertEqual(RPQuest.CombatTracker._isJusticeRegistered, true, "Justice events registered for active undetected quest")
 
@@ -334,6 +335,49 @@ return function(T)
         RPQuest.QuestRepository:ResetQuest(imported.id)
         RPQuest.CombatTracker:OnJusticeInfamyUpdated(EVENT_JUSTICE_INFAMY_UPDATED, 0, 50, 0, 1)
         AssertEqual(imported.wasDetected, true, "Infamy increase inside quest area marks wasDetected = true")
+    end)
+
+    RunTest("23b. Stealth mode 'required': detection immediately fails active quest and announces failure", function()
+        RPQuest.QuestRepository:Initialize(nil)
+        RPQuest.CombatTracker:Initialize()
+        RPQuest.JournalTab:Initialize()
+        mockState.mapId = 32
+        mockState.zoneId = 381
+        mockState.playerX = 0.42
+        mockState.playerY = 0.61
+        mockState.csaMessages = {}
+        mockState.chatMessages = {}
+
+        local failedEvents = 0
+        RPQuest.QuestRepository:RegisterListener(function(ev)
+            if ev == "QUEST_FAILED" then failedEvents = failedEvents + 1 end
+        end)
+
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Centinela Real",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.42,
+            targetY = 0.61,
+        })
+        RPQuest.QuestRepository:UpdateDraftFields({ stealthMode = "required" })
+        local prepared = RPQuest.QuestRepository:SaveDraft("Infiltración Estricta", "Prohibido ser visto.")
+        local shareCode = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(shareCode)
+        AssertEqual(imported.stealthMode, "required", "Imported quest preserves stealthMode = required")
+        AssertEqual(RPQuest.CombatTracker._isJusticeRegistered, true, "Justice events registered for required stealth quest")
+
+        mockState.playerX = imported.areaCenterX
+        mockState.playerY = imported.areaCenterY
+        RPQuest.CombatTracker:OnJusticePickpocketFailed(EVENT_JUSTICE_PICKPOCKET_FAILED)
+
+        AssertEqual(imported.wasDetected, true, "Detection marks wasDetected = true")
+        AssertEqual(imported.failed, true, "Required stealth marks quest failed = true on detection")
+        AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Active quest cleared on stealth failure")
+        AssertEqual(failedEvents, 1, "QUEST_FAILED event emitted")
+        AssertEqual(RPQuest.CombatTracker._isJusticeRegistered, false, "Justice events unregistered after failure")
+        AssertTrue(#mockState.csaMessages >= 1, "Failure announcement emitted via CSA")
     end)
 
     RunTest("Hidden discovery points: capture, ShareCodec, proximity trigger, no map pins, mixed quest", function()

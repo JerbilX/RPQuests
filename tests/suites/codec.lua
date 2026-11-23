@@ -158,7 +158,7 @@ return function(T)
             areaCenterY = 0.654351,
             areaRadius = 0.075,
             hideMapArea = true,
-            requireUndetected = true,
+            stealthMode = "optional",
             targets = {
                 {
                     name = "Explorador del Velo",
@@ -260,7 +260,7 @@ return function(T)
         AssertTrue(math.abs(decoded.areaCenterY - complexQuest.areaCenterY) <= 0.0001, "areaCenterY uint16 precision <= 0.0001")
         AssertTrue(math.abs(decoded.areaRadius - complexQuest.areaRadius) <= 0.0001, "areaRadius uint16 precision <= 0.0001")
         AssertEqual(decoded.hideMapArea, true, "hideMapArea preserved")
-        AssertEqual(decoded.requireUndetected, true, "requireUndetected preserved")
+        AssertEqual(decoded.stealthMode, "optional", "stealthMode = optional preserved")
         AssertEqual(#decoded.targets, 2, "2 targets preserved")
         AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
         AssertEqual(decoded.targets[1].worldZ, -78901, "Negative worldZ preserved via ZigZag varint")
@@ -354,6 +354,73 @@ return function(T)
         AssertEqual(#valRes.optionalTargets, 2, "optionalTargets has 2 entries for 2 optional targets")
         AssertEqual(valRes.optionalTargets[1], true, "First optional target reported completed")
         AssertEqual(valRes.optionalTargets[2], false, "Second optional target reported incomplete")
+    end)
+
+    RunTest("ShareCodec: stealthMode disabled/optional/required round-trip with and without charNames/dialogues", function()
+        local cases = {
+            { mode = "disabled", withNames = false, withDialogues = false },
+            { mode = "optional", withNames = false, withDialogues = false },
+            { mode = "required", withNames = false, withDialogues = false },
+            { mode = "required", withNames = true, withDialogues = false },
+            { mode = "required", withNames = false, withDialogues = true },
+            { mode = "required", withNames = true, withDialogues = true },
+        }
+        for _, c in ipairs(cases) do
+            local q = {
+                title = "Stealth " .. c.mode,
+                description = "Test",
+                mapId = 32,
+                zoneId = 381,
+                mapName = "Auridon",
+                targetX = 0.5,
+                targetY = 0.5,
+                areaCenterX = 0.5,
+                areaCenterY = 0.5,
+                areaRadius = 0.075,
+                stealthMode = c.mode,
+                senderCharacterName = c.withNames and "SenderChar" or nil,
+                recipientCharacterName = c.withNames and "RecipChar" or nil,
+                targets = { { name = "Guard", requiredCount = 1 } },
+                discoveries = {},
+                dialogues = c.withDialogues and { { npcName = "Informant", zoneId = 381, response = "Be quiet.", clue = "Ask about the guard" } } or {},
+            }
+            local code, err = RPQuest.ShareCodec:EncodeQuest(q)
+            AssertTrue(code ~= nil, "Encode succeeds for " .. c.mode .. ": " .. tostring(err))
+            local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
+            AssertTrue(decoded ~= nil, "Decode succeeds for " .. c.mode .. ": " .. tostring(decErr))
+            AssertEqual(decoded.stealthMode, c.mode, "stealthMode preserved for " .. c.mode)
+            if c.withNames then
+                AssertEqual(decoded.senderCharacterName, "SenderChar", "senderCharacterName preserved")
+                AssertEqual(decoded.recipientCharacterName, "RecipChar", "recipientCharacterName preserved")
+            end
+            if c.withDialogues then
+                AssertEqual(#decoded.dialogues, 1, "Dialogue preserved")
+                AssertEqual(decoded.dialogues[1].clue, "Ask about the guard", "Dialogue clue preserved")
+            end
+        end
+
+        -- Signatures differ between disabled, optional, and required
+        local baseQ = {
+            title = "Sig Test", description = "D", mapId = 1, zoneId = 1, mapName = "Z",
+            targetX = 0.5, targetY = 0.5, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.075,
+            targets = { { name = "T", requiredCount = 1 } }, discoveries = {}, dialogues = {},
+            stealthMode = "disabled",
+        }
+        local sigDis = RPQuest.ShareCodec:ComputeQuestSignature(baseQ)
+        baseQ.stealthMode = "optional"
+        local sigOpt = RPQuest.ShareCodec:ComputeQuestSignature(baseQ)
+        baseQ.stealthMode = "required"
+        local sigReq = RPQuest.ShareCodec:ComputeQuestSignature(baseQ)
+        AssertTrue(sigDis ~= sigOpt and sigOpt ~= sigReq and sigDis ~= sigReq, "Signatures distinguish disabled/optional/required")
+
+        -- Legacy requireUndetected = true encodes/hashes identically to stealthMode = optional
+        local legacyQ = {
+            title = "Sig Test", description = "D", mapId = 1, zoneId = 1, mapName = "Z",
+            targetX = 0.5, targetY = 0.5, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.075,
+            targets = { { name = "T", requiredCount = 1 } }, discoveries = {}, dialogues = {},
+            requireUndetected = true,
+        }
+        AssertEqual(RPQuest.ShareCodec:ComputeQuestSignature(legacyQ), sigOpt, "Legacy requireUndetected = true matches optional signature")
     end)
 
 end

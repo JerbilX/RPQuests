@@ -95,12 +95,14 @@ function Announcements:AnnounceTargetCustomMessage(_quest, target)
     emitDiscoveryStyleMessage(text)
 end
 
-function Announcements:AnnounceQuestFailed(quest, target)
+function Announcements:AnnounceQuestFailed(quest, target, reasonText)
     if not quest then return end
 
     local mainText = Addon.Locale:Get("CSA_QUEST_FAILED", quest.title or "")
     local subText = nil
-    if target and target.name and target.name ~= "" then
+    if type(reasonText) == "string" and reasonText ~= "" then
+        subText = reasonText
+    elseif target and target.name and target.name ~= "" then
         subText = Addon.Locale:Get("ALERT_QUEST_FAILED_LOCATION", target.name)
     end
     local soundId = SOUNDS.QUEST_STEP_FAILED or SOUNDS.GENERAL_ALERT_ERROR

@@ -203,7 +203,7 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         areaCenterY = data.areaCenterY,
         areaRadius = data.areaRadius,
         hideMapArea = data.hideMapArea and true or false,
-        requireUndetected = data.requireUndetected and true or false,
+        stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(data.stealthMode, data.requireUndetected),
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
@@ -809,7 +809,7 @@ local function ClonePreparedQuestRecord(repo, source)
         areaCenterY = source.areaCenterY,
         areaRadius = source.areaRadius,
         hideMapArea = source.hideMapArea,
-        requireUndetected = source.requireUndetected,
+        stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(source.stealthMode, source.requireUndetected),
     }
 
     local newQuest = repo:BuildQuestRecord(
@@ -1026,8 +1026,13 @@ end
 
 function QuestRepository:RecordPlayerDetected(playerContext)
     local activeQuest = self:GetActiveQuest()
-    if not activeQuest or activeQuest.completed or activeQuest.failed or not activeQuest.requireUndetected or activeQuest.wasDetected then
-        return false, nil
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthMode = activeQuest and activeQuest.stealthMode
+    if not activeQuest or activeQuest.completed or activeQuest.failed or activeQuest.wasDetected then
+        return false, nil, false
+    end
+    if stealthMode ~= modes.OPTIONAL and stealthMode ~= modes.REQUIRED then
+        return false, nil, false
     end
 
     if type(playerContext) == "table" then
@@ -1039,13 +1044,23 @@ function QuestRepository:RecordPlayerDetected(playerContext)
             playerContext.y
         )
         if not inArea then
-            return false, nil
+            return false, nil, false
         end
     end
 
     activeQuest.wasDetected = true
+    if stealthMode == modes.REQUIRED then
+        activeQuest.failed = true
+        if self.savedVars and self.savedVars.activeQuestId == activeQuest.id then
+            self.savedVars.activeQuestId = nil
+        end
+        self:InvalidateActiveTargetCache()
+        self:NotifyListeners("QUEST_FAILED", activeQuest)
+        return true, activeQuest, true
+    end
+
     self:NotifyListeners("QUEST_DETECTED", activeQuest)
-    return true, activeQuest
+    return true, activeQuest, false
 end
 
 function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)
