@@ -85,15 +85,11 @@ jobs:
           fi
 
           API_VERSION=$(awk -F': *' '/^## APIVersion:/{print $2; exit}' RPQuest.txt | tr -d '\r' | awk '{print $NF}')
-          COMPATIBILITY=""
-          case "$API_VERSION" in
-            101049) COMPATIBILITY="11.3.0" ;;
-            101050) COMPATIBILITY="12.0.0" ;;
-            101051) COMPATIBILITY="12.1.0" ;;
-            *)
-              echo "::warning::Unmapped APIVersion '${API_VERSION}' in RPQuest.txt; omitting compatibility parameter."
-              ;;
-          esac
+          COMPATIBLE_JSON=$(curl -fsS -H "x-api-token: ${ESOUI_API_TOKEN}" "https://api.esoui.com/addons/compatible.json" || true)
+          COMPATIBILITY=$(printf '%s' "$COMPATIBLE_JSON" | jq -r --arg api "$API_VERSION" 'map(select(.interface == $api)) | .[0].id // empty' 2>/dev/null || true)
+          if [ -z "$COMPATIBILITY" ]; then
+            echo "::warning::Could not resolve ESOUI compatible version for APIVersion '${API_VERSION}'; omitting compatible parameter."
+          fi
 
           ENDPOINT="https://api.esoui.com/addons/update"
           if [ "$IS_DRY_RUN" = "true" ]; then
