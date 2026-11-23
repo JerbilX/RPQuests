@@ -36,7 +36,7 @@ return function(T)
         RPQuest.JournalTab.titleEdit:SetText("Cacería Nocturna")
         RPQuest.JournalTab.descEdit:SetText("Derrota al vampiro en las ruinas.")
         AssertEqual(RPQuest.JournalTab.countEdit, nil, "Manual countEdit must not exist in JournalTab")
-        AssertEqual(RPQuest.JournalTab.btnSaveEditor:GetText(), "Crear Misión", "Spanish button label is Crear Misión")
+        AssertEqual(RPQuest.JournalTab.btnSaveEditor:GetText(), "Guardar Borrador", "Spanish button label is Guardar Borrador")
         RPQuest.JournalTab.titleEdit:FireHandler("OnMouseDown")
         AssertTrue(RPQuest.JournalTab.titleEdit._focused, "Clicking titleEdit focuses it for keyboard input")
         RPQuest.JournalTab.descEdit:FireHandler("OnMouseDown")
@@ -82,10 +82,10 @@ return function(T)
         AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, nil, "Selecting a quest in list clears orphaned editingQuestId")
     end)
 
-    RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs + Create Quest button", function()
+    RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs + Save Draft button", function()
         mockState.language = "en"
         RPQuest.Locale:Initialize("en")
-        AssertEqual(RPQuest.Locale:Get("BTN_SAVE"), "Create Quest", "English create button label is Create Quest")
+        AssertEqual(RPQuest.Locale:Get("BTN_SAVE"), "Save Draft", "English save button label is Save Draft")
 
         RPQuest.QuestRepository:Initialize({})
         mockState.reticleExists = true
