@@ -576,13 +576,4 @@ function EditorSections.BuildFooterButtons(tab, pane, panelName)
         tab:OnSaveDraftClicked()
     end)
     tab.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 514)
-
-    tab.btnShowMapEditor = CreateStyledButton(panelName .. "_BtnShowMapEditor", pane, 155, 34, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
-        local draft = Addon.QuestRepository:GetDraft()
-        if draft and draft.mapId and draft.mapId > 0 then
-            Addon.WorldMapArea:ShowQuestOnMap(draft)
-        end
-    end)
-    tab.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
-    tab.btnShowMapEditor:SetHidden(true)
 end

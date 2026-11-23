@@ -231,11 +231,6 @@ local function RefreshEditorBaseAndArea(tab, draft)
         tab.btnClearTargets:SetHidden(true)
     end
 
-    if tab.btnShowMapEditor then
-        local hasDraftArea = summary ~= "" and not draft.hideMapArea and draft.mapId and draft.mapId > 0 and draft.areaCenterX and draft.areaCenterY
-        tab.btnShowMapEditor:SetHidden(not hasDraftArea)
-    end
-
     local radii = Addon.Constants.AREA_RADIUS
     local curRad = draft.areaRadius or radii.MEDIUM
     tab.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
