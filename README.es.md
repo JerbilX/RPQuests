@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.5.1-blue)
+![Version](https://img.shields.io/badge/version-1.6.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
