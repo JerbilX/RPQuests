@@ -596,4 +596,65 @@ return function(T)
         AssertEqual(q2.completed, true, "Quest completed")
     end)
 
+    RunTest("22. Issue 158: Exclusive accordion in JournalTab quest list", function()
+        local roles = RPQuest.Constants.QUEST_ROLE
+        local statuses = RPQuest.Constants.QUEST_STATUS
+        RPQuest.QuestRepository:Initialize({
+            activeQuestId = 1,
+            quests = {
+                { id = 1, title = "Active Mission", description = "", role = roles.RECEIVED, completed = false },
+                { id = 2, title = "Pending Offer", description = "", role = roles.RECEIVED, status = statuses.OFFERED, completed = false },
+                { id = 3, title = "Completed Mission", description = "", role = roles.RECEIVED, completed = true },
+                { id = 4, title = "Prepared Mission", description = "", role = roles.PREPARED, completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true }
+        RPQuest.JournalTab:SelectQuest(1)
+
+        local function hasRowForQuest(questId)
+            for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+                if b.questId == questId then return true end
+            end
+            return false
+        end
+
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "Missions starts expanded")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.pending, true, "Pending starts collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed starts collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing starts collapsed")
+        AssertEqual(hasRowForQuest(1), true, "Active mission row is visible initially")
+        AssertEqual(hasRowForQuest(2), false, "Pending quest row is hidden initially")
+
+        -- Clicking Pending while an active/selected quest is in Missions collapses Missions and expands Pending
+        RPQuest.JournalTab:ToggleSection("pending")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.pending, false, "Pending expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, true, "Missions collapses when Pending expands")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed remains collapsed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing remains collapsed")
+        AssertEqual(hasRowForQuest(2), true, "Pending quest row is visible after expanding Pending")
+        AssertEqual(hasRowForQuest(1), false, "Missions quest row is hidden even though it is active/selected")
+
+        -- Expanding Preparing collapses Pending
+        RPQuest.JournalTab:ToggleSection("preparing")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "Preparing expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.pending, true, "Pending collapses when Preparing expands")
+        AssertEqual(hasRowForQuest(4), true, "Prepared quest row is visible")
+        AssertEqual(hasRowForQuest(2), false, "Pending quest row is hidden")
+
+        -- Expanding Completed collapses Preparing
+        RPQuest.JournalTab:ToggleSection("completed")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, false, "Completed expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "Preparing collapses when Completed expands")
+        AssertEqual(hasRowForQuest(3), true, "Completed quest row is visible")
+        AssertEqual(hasRowForQuest(4), false, "Prepared quest row is hidden")
+
+        -- Expanding Missions again collapses Completed
+        RPQuest.JournalTab:ToggleSection("missions")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "Missions expands on click")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed collapses when Missions expands")
+        AssertEqual(hasRowForQuest(1), true, "Active mission row is visible again")
+        AssertEqual(hasRowForQuest(3), false, "Completed quest row is hidden")
+    end)
+
 end
