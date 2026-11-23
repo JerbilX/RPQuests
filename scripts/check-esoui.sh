@@ -85,7 +85,7 @@ else
   pass "AI Disclosure present in all required documentation files."
 fi
 
-# 6. docs/esoui-description.bbcode: prominent Notice block and zero slash commands
+# 6. Public docs: prominent Notice block in BBCode and zero slash commands across all docs
 BBCODE_FILE="docs/esoui-description.bbcode"
 if ! grep -qF '[SIZE="4"][COLOR="DarkRed"][B]Notice:[/B][/COLOR]' "$BBCODE_FILE"; then
   fail "$BBCODE_FILE is missing the prominent [SIZE=\"4\"][COLOR=\"DarkRed\"][B]Notice:[/B][/COLOR] block."
@@ -93,11 +93,12 @@ else
   pass "$BBCODE_FILE preserves the prominent Notice block."
 fi
 
-if grep -nE '(^|[^A-Za-z0-9_])/(rpquest|rpq)\b' "$BBCODE_FILE"; then
-  fail "$BBCODE_FILE must not contain slash commands (/rpquest or /rpq)."
-else
-  pass "$BBCODE_FILE contains no slash commands."
-fi
+for doc_file in "$BBCODE_FILE" README.md README.es.md readme.txt; do
+  if grep -nE '(^|[^A-Za-z0-9_])/(rpquest|rpq)\b' "$doc_file"; then
+    fail "$doc_file must not contain slash commands (/rpquest or /rpq)."
+  fi
+done
+pass "Public documentation contains no slash commands."
 
 # 7. Package build must succeed cleanly (unless --skip-package is passed, e.g. in CI)
 if [[ "$SKIP_PACKAGE" -eq 0 ]]; then

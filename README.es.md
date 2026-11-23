@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.6.0-blue)
+![Version](https://img.shields.io/badge/version-1.7.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -16,8 +16,8 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 ## Características Principales
 
 - **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuest** dentro del Diario de Misiones (`ZO_QuestJournal_Keyboard`) con secciones en acordeón exclusivo para ofertas **Pendientes**, **Misiones** activas, **Completadas**, **Preparando** (borradores sin enviar) y **Enviadas** (contratos enviados con estado en vivo y resultados al completar).
-- **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de teclado (o `/rpquest capture`). Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones opcionales de ubicación (`Requerida` / `No requerida`), selector de objetivo `Opcional` (habilita completar manualmente la misión al cumplir los obligatorios) y mensajes personalizados al eliminarlos.
-- **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo (`Keybind` o `/rpquest discovery`) con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
+- **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo de **Capturar Objetivo bajo Retícula**. Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones opcionales de ubicación (`Requerida` / `No requerida`), selector de objetivo `Opcional` (habilita completar manualmente la misión al cumplir los obligatorios) y mensajes personalizados al eliminarlos.
+- **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo mediante tu atajo **Capturar Punto de Descubrimiento** con radio configurable (`Pequeño`, `Mediano`, `Grande`) sin mostrar spoilers en el mapa ni en la brújula.
 - **Condición Opcional de Sigilo:** Permite exigir que los objetivos se completen sin ser detectado en combate.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_PinBlob`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto. Desaparece automáticamente al completar o desactivar la misión.
 - **Inyección de Diálogos en NPCs Nativos:** Asocia líneas de diálogo personalizadas y opciones de respuesta del jugador por NPC a NPCs nativos de ESO (mediante captura por retícula o nombre), inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
@@ -46,9 +46,9 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 ## Guía Rápida
 
 1. **Crear una Misión (Quest Master):**
-   - Abre el Diario de Misiones (`J`) y entra en la pestaña **RPQuest** (o escribe `/rpquest`).
+   - Abre el Diario de Misiones (`J`) y entra en la pestaña **RPQuest** (o pulsa tu atajo **Abrir / Cerrar Pestaña RPQuest**).
    - Pulsa **Crear Misión**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Historia**, tamaño del **Área de búsqueda** (`Pequeña`, `Mediana`, `Grande`), opcionalmente activar **No ser detectado** y configurar líneas de **Diálogo de NPC**.
-   - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo** (`/rpquest capture`), o párate en un lugar y usa **Capturar Punto de Descubrimiento** (`/rpquest discovery`).
+   - En el mundo, apunta a NPCs y usa el atajo **Capturar Objetivo**, o párate en un lugar y usa **Capturar Punto de Descubrimiento**.
 2. **Enviar al Jugador (Correo 1-a-1):**
    - Define el destinatario `@Cuenta` (y opcionalmente el personaje destinatario) en el editor de la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
    - El jugador recibe una alerta y ve la misión en **Pendientes** dentro de su pestaña **RPQuest** para **Aceptar** o **Rechazar**.
@@ -74,8 +74,8 @@ La pestaña **RPQuest** dentro del Diario de Misiones (`J`) usa un acordeón exc
 - **Enviadas:** Contratos que ya enviaste por correo a jugadores, mostrando su estado en vivo (`Enviada`, `Aceptada`, `Rechazada`, `Completada`) y los resultados automáticos al finalizar (como `No detectado` frente a `Detectado` y objetivos opcionales).
 
 ### 3. Bloques de Construcción de Misiones
-- **Objetivos (Eliminación de NPCs):** Apunta a cualquier NPC vivo y pulsa tu atajo de **Capturar Objetivo bajo Retícula** (o `/rpquest capture`). Capturar varias veces un mismo nombre de NPC se acumula (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos separados. Para cada objetivo puedes alternar una condición de **Ubicación** (`Requerida` en la zona/subzona capturada o `No requerida`), añadir un mensaje personalizado al eliminarlo o marcarlo como **Opcional** (permitiendo completar la misión cuando todos los obligatorios estén listos).
-- **Puntos de Descubrimiento Ocultos:** Párate en un punto de exploración y pulsa tu atajo de **Capturar Punto de Descubrimiento** (o `/rpquest discovery`). Puedes configurar el radio de detección (`Pequeño`, `Mediano` o `Grande`). Los puntos permanecen ocultos en el mapa y la brújula para evitar spoilers.
+- **Objetivos (Eliminación de NPCs):** Apunta a cualquier NPC vivo y pulsa tu atajo de **Capturar Objetivo bajo Retícula**. Capturar varias veces un mismo nombre de NPC se acumula (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos separados. Para cada objetivo puedes alternar una condición de **Ubicación** (`Requerida` en la zona/subzona capturada o `No requerida`), añadir un mensaje personalizado al eliminarlo o marcarlo como **Opcional** (permitiendo completar la misión cuando todos los obligatorios estén listos).
+- **Puntos de Descubrimiento Ocultos:** Párate en un punto de exploración y pulsa tu atajo de **Capturar Punto de Descubrimiento**. Puedes configurar el radio de detección (`Pequeño`, `Mediano` o `Grande`). Los puntos permanecen ocultos en el mapa y la brújula para evitar spoilers.
 - **Sigilo (`No detectado`):** Activa **No detectado (Opcional)** en el editor para desafiar al jugador a completar la misión sin ser detectado en combate. La misión registra si permaneció `No detectado` o fue `Detectado` y lo reporta al Quest Master.
 - **Área de Búsqueda en el Mapa Mundial (`M`):** Muestra un círculo aproximado en el Mapa Mundial usando un desplazamiento aleatorio fijo para que el objetivo quede dentro del círculo sin revelar su centro exacto. El círculo desaparece automáticamente al completar o desactivar la misión.
 - **Diálogos de NPC:** Abre diálogo (`E`) con hasta 3 NPCs nativos de ESO para capturarlos en la sección **Diálogos de NPC** de la misión y redacta una opción de respuesta del jugador y la réplica del NPC para cada uno. Cuando el jugador hable con esos NPCs, tu línea personalizada se inyectará de forma nativa sin modificar las opciones originales del juego.
@@ -88,22 +88,13 @@ La pestaña **RPQuest** dentro del Diario de Misiones (`J`) usa un acordeón exc
 
 ---
 
-## Controles y Comandos Slash
+## Controles (`Ajustes -> Controles -> RPQuest`)
 
-### Atajos de Teclado (`Ajustes -> Controles -> RPQuest`)
 | Acción | Descripción |
 | :--- | :--- |
 | **Capturar Objetivo bajo Retícula** | Registra el NPC vivo apuntado con la retícula en el borrador de la misión. |
 | **Capturar Punto de Descubrimiento** | Registra tu posición actual como un objetivo de descubrimiento oculto. |
 | **Abrir / Cerrar Pestaña RPQuest** | Abre o cierra el Diario directamente en la pestaña de **RPQuest**. |
-
-### Comandos de Chat
-| Comando | Argumentos | Descripción |
-| :--- | :--- | :--- |
-| `/rpquest` | *(ninguno)* | Abre o cierra la pestaña de **RPQuest** en el Diario de Misiones. |
-| `/rpquest` | `capture` / `target` | Captura el NPC actualmente apuntado con la retícula. |
-| `/rpquest` | `discovery` / `point` | Captura tu posición actual como punto de descubrimiento oculto. |
-| `/rpquest` | `map` | Abre el Mapa Mundial centrado en el área de búsqueda de la misión activa. |
 
 ---
 
@@ -130,11 +121,12 @@ RPQuest/
 │   ├── Constants.lua        # Constantes, radios y metadatos
 │   ├── Locale.lua           # Selector de idioma del cliente e i18n
 │   ├── BinaryCodec.lua      # Primitivas binarias Base85, Base64Url, LZSS y Varint
-│   ├── ShareCodec.lua       # Serialización de misiones/resultados RPQ3 / RPQ2 / RPQ1 y RPQC1
+│   ├── ShareCodec.lua       # Serialización de misiones/resultados RPQ3 y RPQC1
 │   ├── MailInbox.lua        # Escaneo de bandeja, reensamblado RPQP e ingesta de correos
 │   ├── MailTransport.lua    # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestDraftStore.lua  # Estado de borrador de creación y normalización de objetivos
-│   ├── QuestRepository.lua  # CRUD account-wide, migración y cálculo de offset del círculo
+│   ├── QuestMigration.lua   # Migración no destructiva de SavedVars por personaje a account-wide
+│   ├── QuestRepository.lua  # CRUD account-wide, importación/exportación y seguimiento en runtime
 │   ├── Announcements.lua    # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua    # Captura de NPC bajo retícula y puntos de descubrimiento
 │   ├── CombatTracker.lua    # Seguimiento de bajas y sigilo (EVENT_COMBAT_EVENT)
@@ -143,7 +135,8 @@ RPQuest/
 │   ├── WorldMapArea.lua     # Círculo de búsqueda nativo en ZO_WorldMap
 │   ├── JournalWidgets.lua   # Helpers de widgets UI y formato reutilizables para JournalTab
 │   ├── JournalDetailPane.lua# Panel de detalle de misión y actualización de acciones
-│   ├── JournalEditorPane.lua# Panel editor multi-sección para misiones preparadas
+│   ├── JournalEditorSections.lua# Constructores de secciones acordeón y campos del editor
+│   ├── JournalEditorPane.lua# Panel editor multi-sección: layout y actualización
 │   ├── JournalMailSendPane.lua# Panel de envío por correo in-game y progreso de transporte
 │   └── JournalTab.lua       # Coordinador de la pestaña en el Diario de Misiones
 ├── docs/adr/                # Registros de Decisiones de Arquitectura (MADR)

@@ -8,7 +8,7 @@ return function(T)
     local mockState = T.mockState
     local mockPinManager = T.mockPinManager
 
-    RunTest("NPC Dialogues, Clue, HideMapArea, RPQ2 & RPQ1 compat, and DialogueInjector hook", function()
+    RunTest("NPC Dialogues, Clue, HideMapArea, RPQ3 codec, and DialogueInjector hook", function()
         RPQuest.QuestRepository:ResetDraft()
         RPQuest.QuestRepository:SetActiveQuest(nil)
 
@@ -71,12 +71,12 @@ return function(T)
         RPQuest.WorldMapArea:RefreshPins()
         AssertEqual(#mockPinManager._createdPins, 0, "WorldMapArea does not render pin when hideMapArea is true")
 
-        -- 4. ShareCodec RPQ2 roundtrip
+        -- 4. ShareCodec RPQ3 roundtrip
         local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
         AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ3:", "Exported code uses RPQ3 prefix")
 
         local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
-        AssertTrue(imported ~= nil, "RPQ2 quest imported successfully")
+        AssertTrue(imported ~= nil, "RPQ3 quest imported successfully")
         AssertEqual(imported.clue, "el sello roto", "Imported clue preserved")
         AssertEqual(imported.hideMapArea, true, "Imported hideMapArea preserved")
         AssertEqual(#imported.dialogues, 3, "Imported 3 dialogues preserved")
@@ -166,12 +166,17 @@ return function(T)
         AssertEqual(cappedCount, 10, "At MAX_CHATTER_OPTIONS=10 (9 native + goodbye), does not overflow")
         AssertEqual(populatedOptions[10].optionType, CHATTER_GOODBYE, "CHATTER_GOODBYE preserved at cap")
 
-        -- 6. Backward compatibility with RPQ1 codes
-        local rpq1Code = code:gsub("^RPQ2:", "RPQ1:")
-        -- Recompute checksum? No, RPQ1 had 14 fields; let's test DecodeCompletion rejecting RPQ1 as not-completion-code
-        local okComp, errComp = RPQuest.ShareCodec:DecodeCompletion(rpq1Code)
-        AssertEqual(okComp, nil, "DecodeCompletion rejects RPQ1 code")
-        AssertEqual(errComp, "VALIDATE_ERR_NOT_COMPLETION_CODE", "RPQ1 rejected with VALIDATE_ERR_NOT_COMPLETION_CODE")
+        -- 6. Legacy RPQ1/RPQ2 rejected and RPQ3 rejected as completion code
+        local decRpq1, errRpq1 = RPQuest.ShareCodec:DecodeQuest("RPQ1:1234:abcd")
+        AssertEqual(decRpq1, nil, "DecodeQuest rejects legacy RPQ1 code")
+        AssertEqual(errRpq1, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ1 rejected with ERR_IMPORT_UNSUPPORTED_VERSION")
+        local decRpq2, errRpq2 = RPQuest.ShareCodec:DecodeQuest("RPQ2:1234:abcd")
+        AssertEqual(decRpq2, nil, "DecodeQuest rejects legacy RPQ2 code")
+        AssertEqual(errRpq2, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ2 rejected with ERR_IMPORT_UNSUPPORTED_VERSION")
+
+        local okComp, errComp = RPQuest.ShareCodec:DecodeCompletion(code)
+        AssertEqual(okComp, nil, "DecodeCompletion rejects RPQ3 code")
+        AssertEqual(errComp, "VALIDATE_ERR_NOT_COMPLETION_CODE", "RPQ3 rejected with VALIDATE_ERR_NOT_COMPLETION_CODE")
     end)
 
     RunTest("30. Per-NPC player dialogue option, ShareCodec RPQ3 roundtrip, and JournalTab selected NPC indicator", function()

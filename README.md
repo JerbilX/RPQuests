@@ -1,7 +1,7 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.6.0-blue)
+![Version](https://img.shields.io/badge/version-1.7.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
@@ -16,8 +16,8 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 ## Key Features
 
 - **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with exclusive accordion sections for **Pending** offers, active **Quests**, **Completed** missions, **Preparing** (unsent drafts), and **Sent** (dispatched contracts with live status and completion results).
-- **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`), an `Optional` objective toggle (enabling manual quest completion once mandatory objectives are done), and custom elimination messages.
-- **Hidden Discovery Points:** Capture in-world exploration coordinates (`Keybind` or `/rpquest discovery`) with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
+- **Reticle NPC Target Capture:** Aim at any living NPC and press your **Capture Target under Reticle** keybind to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`), an `Optional` objective toggle (enabling manual quest completion once mandatory objectives are done), and custom elimination messages.
+- **Hidden Discovery Points:** Capture in-world exploration coordinates via your **Capture Discovery Point** keybind with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
 - **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
 - **World Map Search Area (`M`):** Displays an approximate search circle (`ZO_PinBlob`) on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.
 - **Native NPC Dialogue Injection:** Bind custom RPQuest dialogue lines and per-NPC player response options to native ESO NPCs (via reticle capture or NPC name), injected seamlessly into the native interaction window without altering original NPC options.
@@ -46,9 +46,9 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 ## Quick Start
 
 1. **Create a Quest (Quest Master):**
-   - Open the Quest Journal (`J`) and switch to the **RPQuest** tab (or type `/rpquest`).
+   - Open the Quest Journal (`J`) and switch to the **RPQuest** tab (or press your **Toggle Custom Quests Tab** keybind).
    - Click **Create Quest**, use the collapsible form sections to set **Title**, **Description / Lore**, **Search Area** size (`Small`, `Medium`, `Large`), optional **Do not be detected**, and optional **NPC Dialogue** lines.
-   - In the world, aim at NPCs and press your **Capture Target** keybind (or `/rpquest capture`), or stand at a location and press **Capture Discovery Point** (or `/rpquest discovery`).
+   - In the world, aim at NPCs and press your **Capture Target** keybind, or stand at a location and press **Capture Discovery Point**.
 2. **Send to a Player (1-to-1 Mail):**
    - Set the target `@AccountName` (and optional character name) in the quest editor and click **Send Quest** from the prepared quest details.
    - The player receives an alert and sees the quest under **Pending** in their **RPQuest** tab to **Accept** or **Reject**.
@@ -74,8 +74,8 @@ The **RPQuest** tab inside the Quest Journal (`J`) uses an exclusive accordion�
 - **Sent:** Contracts you have already mailed to players, showing live status (`Sent`, `Accepted`, `Rejected`, `Completed`) and automatic completion results (such as `Undetected` vs `Detected` and optional objectives).
 
 ### 3. Quest Building Blocks
-- **Targets (NPC Elimination):** Aim at any living NPC and press your **Capture Target under Reticle** keybind (or `/rpquest capture`). Capturing the same NPC name multiple times stacks into a count (e.g. `Imp x3`); different named NPCs become separate objectives. For each target, you can toggle a **Location** condition (`Required` in the captured zone/subzone or `Not Required`), add a custom elimination message, or mark the objective as **Optional** (allowing the player to finish the quest once all mandatory objectives are complete).
-- **Hidden Discovery Points:** Stand at an exploration spot and press your **Capture Discovery Point** keybind (or `/rpquest discovery`). You can configure the trigger radius (`Small`, `Medium`, or `Large`). Discovery points remain hidden on the map and compass to avoid spoilers.
+- **Targets (NPC Elimination):** Aim at any living NPC and press your **Capture Target under Reticle** keybind. Capturing the same NPC name multiple times stacks into a count (e.g. `Imp x3`); different named NPCs become separate objectives. For each target, you can toggle a **Location** condition (`Required` in the captured zone/subzone or `Not Required`), add a custom elimination message, or mark the objective as **Optional** (allowing the player to finish the quest once all mandatory objectives are complete).
+- **Hidden Discovery Points:** Stand at an exploration spot and press your **Capture Discovery Point** keybind. You can configure the trigger radius (`Small`, `Medium`, or `Large`). Discovery points remain hidden on the map and compass to avoid spoilers.
 - **Stealth (`Undetected`):** Enable **Undetected (Optional)** in the quest editor to challenge the player to complete the quest without being detected in combat. The quest tracks whether the player remained `Undetected` or was `Detected` and reports that outcome to the Quest Master.
 - **World Map Search Area (`M`):** Displays an approximate search circle on the World Map using a fixed random offset so the objective stays inside the circle without giving away its exact center. The circle clears automatically when the quest is completed or deactivated.
 - **NPC Dialogues:** Open dialogue (`E`) with up to 3 native ESO NPCs to capture them into the quest's **NPC Dialogues** section, then write a custom player response option and NPC reply for each. When the player speaks to those NPCs, your custom line is injected seamlessly into the native dialogue window without modifying original game options.
@@ -88,22 +88,13 @@ The **RPQuest** tab inside the Quest Journal (`J`) uses an exclusive accordion�
 
 ---
 
-## Controls & Slash Commands
+## Controls (`Settings -> Controls -> RPQuest`)
 
-### Keybinds (`Settings -> Controls -> RPQuest`)
 | Action | Description |
 | :--- | :--- |
 | **Capture Target under Reticle** | Captures the living NPC currently under your reticle into the quest draft. |
 | **Capture Discovery Point** | Captures your current character position as a hidden discovery objective. |
 | **Toggle Custom Quests Tab** | Opens or closes the Quest Journal directly on the **RPQuest** tab. |
-
-### Slash Commands
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| `/rpquest` | *(none)* | Opens or closes the **RPQuest** tab in the Quest Journal. |
-| `/rpquest` | `capture` / `target` | Captures the NPC currently aimed at under the reticle. |
-| `/rpquest` | `discovery` / `point` | Captures your current position as a hidden discovery point. |
-| `/rpquest` | `map` | Opens the World Map centered on the active quest's search area. |
 
 ---
 
@@ -130,11 +121,12 @@ RPQuest/
 │   ├── Constants.lua        # Constants, radii, and metadata
 │   ├── Locale.lua           # Client language selector & i18n
 │   ├── BinaryCodec.lua      # Base85, Base64Url, LZSS, and Varint binary primitives
-│   ├── ShareCodec.lua       # RPQ3 / RPQ2 / RPQ1 & RPQC1 quest/result serialization
+│   ├── ShareCodec.lua       # RPQ3 & RPQC1 quest/result serialization
 │   ├── MailInbox.lua        # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua    # In-game quest & completion mail transport
 │   ├── QuestDraftStore.lua  # Draft authoring state & objective normalization
-│   ├── QuestRepository.lua  # Account-wide CRUD, migration & search area offset logic
+│   ├── QuestMigration.lua   # Non-destructive character SavedVars migration to account-wide
+│   ├── QuestRepository.lua  # Account-wide CRUD, quest import/export & runtime tracking
 │   ├── Announcements.lua    # CENTER_SCREEN_ANNOUNCE & sound alerts
 │   ├── TargetCapture.lua    # Reticle NPC & discovery point capture
 │   ├── CombatTracker.lua    # Kill & stealth tracking (EVENT_COMBAT_EVENT)
@@ -143,7 +135,8 @@ RPQuest/
 │   ├── WorldMapArea.lua     # Native search circle on ZO_WorldMap
 │   ├── JournalWidgets.lua   # Reusable UI widget & formatting helpers for JournalTab
 │   ├── JournalDetailPane.lua# Quest detail pane & action button builders/refresh
-│   ├── JournalEditorPane.lua# Multi-section quest editor pane builders/refresh
+│   ├── JournalEditorSections.lua# Accordion section & field builders for quest editor
+│   ├── JournalEditorPane.lua# Multi-section quest editor pane layout/refresh
 │   ├── JournalMailSendPane.lua# In-game mail send pane & transport event UI
 │   └── JournalTab.lua       # Native Quest Journal tab coordinator
 ├── docs/adr/                # Architecture Decision Records (MADR)

@@ -402,6 +402,7 @@ dofile("src/Locale.lua")
 dofile("src/BinaryCodec.lua")
 dofile("src/ShareCodec.lua")
 dofile("src/QuestDraftStore.lua")
+dofile("src/QuestMigration.lua")
 dofile("src/QuestRepository.lua")
 dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
@@ -413,6 +414,7 @@ dofile("src/MailInbox.lua")
 dofile("src/MailTransport.lua")
 dofile("src/JournalWidgets.lua")
 dofile("src/JournalDetailPane.lua")
+dofile("src/JournalEditorSections.lua")
 dofile("src/JournalEditorPane.lua")
 dofile("src/JournalMailSendPane.lua")
 dofile("src/JournalTab.lua")
@@ -462,7 +464,9 @@ local suitePaths = {
     "tests/suites/trackers.lua",
     "tests/suites/codec.lua",
     "tests/suites/dialogue.lua",
-    "tests/suites/mail.lua",
+    "tests/suites/mail_transport.lua",
+    "tests/suites/mail_inbox.lua",
+    "tests/suites/mail_lifecycle.lua",
 }
 
 for _, suitePath in ipairs(suitePaths) do

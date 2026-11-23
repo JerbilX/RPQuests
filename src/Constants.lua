@@ -9,7 +9,7 @@ Addon.Constants = {
     METADATA = {
         NAME = "RPQuest",
         TITLE = "RPQuest",
-        VERSION = "1.6.0",
+        VERSION = "1.7.0",
         AUTHOR = "JerbilX",
     },
     SAVED_VARS = {
@@ -18,8 +18,6 @@ Addon.Constants = {
     },
     SHARE_CODEC = {
         PREFIX = "RPQ3",
-        LEGACY_PREFIX_V2 = "RPQ2",
-        LEGACY_PREFIX = "RPQ1",
         COMPLETION_PREFIX = "RPQC1",
         VERSION = 3,
     },
