@@ -110,8 +110,8 @@ jobs:
             -F "description=<docs/esoui-description.bbcode"
           )
           if [ -n "$COMPATIBILITY" ]; then
-            CURL_ARGS+=(-F "compatibility=${COMPATIBILITY}")
-            echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}, compatibility=${COMPATIBILITY}) to ${ENDPOINT}..."
+            CURL_ARGS+=(-F "compatible=${COMPATIBILITY}")
+            echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}, compatible=${COMPATIBILITY}) to ${ENDPOINT}..."
           else
             echo "Publishing RPQuest v${VERSION} (${ZIP_PATH}) to ${ENDPOINT}..."
           fi
