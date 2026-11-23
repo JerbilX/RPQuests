@@ -551,4 +551,49 @@ return function(T)
         AssertEqual(#found.deliveries, 1, "Delivery recorded on shared quest")
     end)
 
+    RunTest("Optional objectives: manual completion when mandatory satisfied, auto-complete when all satisfied", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.QuestRepository:SetDraftCapturedTarget({ targetName = "Boss", mapId = 1, zoneId = 2, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({ targetName = "BonusGuard", mapId = 1, zoneId = 2, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        local draft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(draft.targets[1].optional, false, "Captured target defaults to optional=false")
+        RPQuest.QuestRepository:UpdateDraftTarget(2, { optional = true })
+
+        local prepared = RPQuest.QuestRepository:SaveDraft("Optional Test", "Desc")
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master")
+        RPQuest.QuestRepository:SetActiveQuest(imported.id)
+
+        AssertEqual(RPQuest.QuestRepository:CanManuallyCompleteQuest(imported), false, "Cannot manually complete before mandatory target")
+
+        -- Eliminate mandatory target only
+        local ok, q1, justCompleted = RPQuest.QuestRepository:RecordTargetEliminated("Boss")
+        AssertEqual(ok, true, "Mandatory target recorded")
+        AssertEqual(justCompleted, false, "Quest does not auto-complete while optional target remains")
+        AssertEqual(q1.completed, false, "Quest still incomplete")
+        AssertEqual(RPQuest.QuestRepository:CanManuallyCompleteQuest(q1), true, "Can manually complete once mandatory target is done")
+
+        -- Complete manually
+        local completedEventFired = false
+        RPQuest.QuestRepository:RegisterListener(function(ev)
+            if ev == "QUEST_COMPLETED" then
+                completedEventFired = true
+            end
+        end)
+        local compOk, compQ = RPQuest.QuestRepository:CompleteQuest(q1.id)
+        AssertEqual(compOk, true, "CompleteQuest succeeds")
+        AssertEqual(compQ.completed, true, "Quest marked completed")
+        AssertEqual(completedEventFired, true, "QUEST_COMPLETED event fired on manual completion")
+        AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Active quest cleared after manual completion")
+
+        -- Reset and complete both mandatory and optional -> auto-completes seamlessly
+        RPQuest.QuestRepository:ResetQuest(compQ.id)
+        RPQuest.QuestRepository:SetActiveQuest(compQ.id)
+        RPQuest.QuestRepository:RecordTargetEliminated("Boss")
+        local ok2, q2, justCompleted2 = RPQuest.QuestRepository:RecordTargetEliminated("BonusGuard")
+        AssertEqual(ok2, true, "Optional target recorded")
+        AssertEqual(justCompleted2, true, "Quest auto-completes when all targets including optional are done")
+        AssertEqual(q2.completed, true, "Quest completed")
+    end)
+
 end

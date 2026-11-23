@@ -312,4 +312,48 @@ return function(T)
         AssertEqual(impErr, RPQuest.Locale:Get("ERR_IMPORT_UNSUPPORTED_VERSION"), "ImportQuestFromCode returns localized unsupported version error")
     end)
 
+    RunTest("ShareCodec encodes/decodes optional targets in RPQ3 and optional completion mask in RPQC1", function()
+        local quest = {
+            title = "Optional Ops",
+            description = "Eliminate leader, optionally scouts.",
+            mapId = 1,
+            zoneId = 2,
+            mapName = "Glenumbra",
+            targetX = 0.5,
+            targetY = 0.5,
+            areaCenterX = 0.5,
+            areaCenterY = 0.5,
+            areaRadius = 0.05,
+            targets = {
+                { name = "Captain", requiredCount = 1, currentCount = 1, optional = false },
+                { name = "Scout", requiredCount = 1, currentCount = 1, optional = true },
+                { name = "Lookout", requiredCount = 1, currentCount = 0, optional = true },
+            },
+            discoveries = {},
+            dialogues = {},
+        }
+        local code, err = RPQuest.ShareCodec:EncodeQuest(quest)
+        AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "RPQ3 encodes quest with optional targets: " .. tostring(err))
+        local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(decoded ~= nil, "RPQ3 decodes quest with optional targets: " .. tostring(decErr))
+        AssertEqual(#decoded.targets, 3, "All 3 targets decoded")
+        AssertEqual(decoded.targets[1].optional, false, "Target 1 optional is false")
+        AssertEqual(decoded.targets[2].optional, true, "Target 2 optional is true")
+        AssertEqual(decoded.targets[3].optional, true, "Target 3 optional is true")
+
+        local sig1 = RPQuest.ShareCodec:ComputeQuestSignature(quest)
+        local sig2 = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+        AssertEqual(sig1, sig2, "Signature matches between original and decoded quest with optional targets")
+
+        quest.completed = true
+        local compCode = RPQuest.ShareCodec:EncodeCompletion(quest, "Hero", 5000)
+        AssertTrue(compCode ~= nil, "EncodeCompletion succeeds")
+        local okVal, valRes = RPQuest.ShareCodec:ValidateCompletionForQuest(quest, compCode)
+        AssertEqual(okVal, true, "ValidateCompletionForQuest succeeds")
+        AssertTrue(type(valRes.optionalTargets) == "table", "optionalTargets table present in decoded completion")
+        AssertEqual(#valRes.optionalTargets, 2, "optionalTargets has 2 entries for 2 optional targets")
+        AssertEqual(valRes.optionalTargets[1], true, "First optional target reported completed")
+        AssertEqual(valRes.optionalTargets[2], false, "Second optional target reported incomplete")
+    end)
+
 end

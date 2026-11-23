@@ -482,6 +482,16 @@ function JournalTab:OnToggleActiveClicked()
     end
 end
 
+function JournalTab:OnCompleteQuestClicked()
+    local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+    if not q then return end
+
+    local ok, completedQuest = Addon.QuestRepository:CompleteQuest(q.id)
+    if ok and completedQuest then
+        Addon.Announcements:AnnounceQuestCompleted(completedQuest)
+    end
+end
+
 function JournalTab:ConfirmAbandonQuest(questId)
     local q = Addon.QuestRepository:GetQuestById(questId)
     if not q or Addon.QuestRepository:IsOfferedQuest(q) then return false end

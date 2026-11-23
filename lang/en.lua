@@ -23,6 +23,7 @@ RPQuest.Locales["en"] = {
     -- Buttons
     BTN_NEW_QUEST = "+ New",
     BTN_ACTIVATE = "Set Active",
+    BTN_COMPLETE_QUEST = "Complete",
     BTN_DEACTIVATE = "Untrack",
     BTN_TEST_QUEST = "Test Quest",
     BTN_STOP_TEST = "Stop Testing",
@@ -55,6 +56,7 @@ RPQuest.Locales["en"] = {
     LABEL_OBJECTIVE_HEADER = "TASKS",
     OBJECTIVE_KILL_FORMAT = "• Eliminate %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completed)|r",
+    OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optional)|r",
     STEALTH_STATUS_UNDETECTED = "Stealth: |c33FF33Undetected|r",
     STEALTH_STATUS_DETECTED = "Stealth: |cFFAA33Detected|r",
 
@@ -116,6 +118,8 @@ RPQuest.Locales["en"] = {
     -- Validate Delivery (Inline)
     VALIDATE_STEALTH_UNDETECTED = "\nStealth: |c33FF33Undetected|r",
     VALIDATE_STEALTH_DETECTED = "\nStealth: |cFFAA33Detected|r",
+    VALIDATE_OPTIONAL_COMPLETED = "\nOptional: |c33FF33%d/%d|r (%s)",
+    VALIDATE_OPTIONAL_NONE = "\nOptional: |cFFAA330/%d|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444That is a quest share code (RPQ2/RPQ1), not a delivery code (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444This delivery code belongs to a different quest.|r",
     VALIDATE_ERR_NOT_COMPLETED = "|cFF4444The code does not indicate that the quest was completed.|r",
@@ -156,6 +160,8 @@ RPQuest.Locales["en"] = {
     BTN_CLEAR_TARGET_LOC = "Clear Loc",
     BTN_TARGET_LOC_REQUIRED = "Loc: Required",
     BTN_TARGET_LOC_OPTIONAL = "Loc: Not Required",
+    BTN_TARGET_OPTIONAL_ON = "Optional: Yes",
+    BTN_TARGET_OPTIONAL_OFF = "Optional: No",
     HINT_TARGET_CUSTOM_MSG = "Optional custom message on elimination...",
     ALERT_TARGET_LOC_CAPTURED = "RPQuest: Target location captured for %s (%dm)",
     TARGET_DETAIL_LOC_REQUIRED = " (Required location)",
