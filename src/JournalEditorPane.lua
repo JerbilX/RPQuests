@@ -198,7 +198,10 @@ local function RefreshEditorTargetConfig(tab, draft)
             tab.lblTargetCfgIndex:SetText(Addon.Locale:Get("TARGET_CFG_HEADER", tab.selectedTargetIndex, totalTargets, selTarget.name or ""))
         end
     end
-    if tab.btnCaptureTargetLoc then tab.btnCaptureTargetLoc:SetHidden(not showTargetCfg) end
+    if tab.btnCaptureTargetLoc then
+        tab.btnCaptureTargetLoc:SetHidden(not showTargetCfg)
+        tab.btnCaptureTargetLoc:SetText(FormatSelected(Addon.Locale:Get("BTN_CAPTURE_TARGET_LOC"), hasTargetLoc))
+    end
     if tab.btnClearTargetLoc then tab.btnClearTargetLoc:SetHidden(not (showTargetCfg and hasTargetLoc)) end
     if tab.btnTargetLocRequired then
         tab.btnTargetLocRequired:SetHidden(not (showTargetCfg and hasTargetLoc))
