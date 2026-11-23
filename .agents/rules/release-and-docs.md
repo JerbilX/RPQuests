@@ -9,7 +9,7 @@ trigger: always_on
    - Si cambian las instrucciones de instalación o uso general del paquete ESOUI, actualizar también `readme.txt`.
 
 2. **Checklist Obligatorio al Promover `dev` -> `main` (`vX.Y.Z`):**
-   - Verificar que los badges `![Version](https://img.shields.io/badge/version-X.Y.Z-blue)` en **`README.md`** y **`README.es.md`** coincidan con la versión SemVer `X.Y.Z` a publicar.
+   - Ejecutar `./scripts/bump-version.sh --dry-run` para calcular automáticamente el próximo SemVer según Conventional Commits desde el último tag `v*` (o usar `./scripts/bump-version.sh --version X.Y.Z` / `major|minor|patch` si se requiere override manual), y luego `./scripts/bump-version.sh` para actualizar de forma sincronizada `RPQuest.txt` (`## Version:` y sufijo `(vX.Y.Z)` en `## Description:`), `src/Constants.lua` (`METADATA.VERSION`) y los badges `![Version](https://img.shields.io/badge/version-X.Y.Z-blue)` en **`README.md`** y **`README.es.md`**.
    - Confirmar que todas las funcionalidades nuevas incluidas desde el último tag estén documentadas en ambos READMEs y en **`docs/esoui-description.bbcode`**.
    - **Tag SemVer obligatorio (`vX.Y.Z`) sobre `main`:** El workflow `.github/workflows/release.yml` (GitHub Release + publicación automática en ESOUI.com) se dispara exclusivamente al pushear un tag `v*` sobre `main`. Nunca omitir la creación y push del tag `vX.Y.Z` tras el merge a `main`, ni ejecutar `workflow_dispatch` en modo live (`dry_run=false`) desde `dev` (los tags de `main` no son ancestros de `dev`).
    - Tras crear el tag `vX.Y.Z` sobre `main` (y antes de volver a `dev`), ejecutar `./scripts/package.sh` para regenerar la distribución local en `dist/RPQuest-X.Y.Z.zip` (el script limpia versiones anteriores automáticamente).
