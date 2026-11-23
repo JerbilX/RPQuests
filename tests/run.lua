@@ -368,6 +368,9 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
     CreateTopLevelWindow = function(self, name)
         return CreateControl(name, GuiRoot, CT_TOPLEVELCONTROL)
     end,
+    CreateControlFromVirtual = function(self, name, parent, templateName, optionalId)
+        return CreateControlFromVirtual(name, parent, templateName, optionalId)
+    end,
 }
 
 QUEST_JOURNAL_KEYBOARD = {

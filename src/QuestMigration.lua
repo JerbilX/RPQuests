@@ -11,6 +11,23 @@ local QuestMigration = Addon.QuestMigration
 -- A migrator may return `false, reason` to flag a breaking PREPARED quest with `needsMigration = true`.
 QuestMigration.SCHEMA_MIGRATORS = QuestMigration.SCHEMA_MIGRATORS or {}
 
+QuestMigration.SCHEMA_MIGRATORS[1] = function(quest)
+    if type(quest) ~= "table" then
+        return true
+    end
+    local modes = Addon.Constants and Addon.Constants.STEALTH_MODE
+    local disabled = (modes and modes.DISABLED) or "disabled"
+    local optional = (modes and modes.OPTIONAL) or "optional"
+    local required = (modes and modes.REQUIRED) or "required"
+
+    local mode = quest.stealthMode
+    if mode ~= disabled and mode ~= optional and mode ~= required then
+        quest.stealthMode = (quest.requireUndetected == true) and optional or disabled
+    end
+    quest.requireUndetected = nil
+    return true
+end
+
 function QuestMigration:GetCurrentSchemaVersion()
     local schema = Addon.Constants and Addon.Constants.QUEST_SCHEMA
     return (schema and tonumber(schema.CURRENT_VERSION)) or 1

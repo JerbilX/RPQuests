@@ -177,6 +177,21 @@ local function ComputeSignature32(data)
     return string.format("%04X%04X", h1, h2)
 end
 
+local function ResolveStealthMode(quest)
+    local modes = Addon.Constants and Addon.Constants.STEALTH_MODE
+    local disabled = (modes and modes.DISABLED) or "disabled"
+    local optional = (modes and modes.OPTIONAL) or "optional"
+    local required = (modes and modes.REQUIRED) or "required"
+    local mode = quest and quest.stealthMode
+    if mode == disabled or mode == optional or mode == required then
+        return mode
+    end
+    if quest and quest.requireUndetected == true then
+        return optional
+    end
+    return disabled
+end
+
 local function BuildQuestPayloadString(quest)
     if type(quest) ~= "table" then
         return nil, "Invalid quest table"
@@ -191,6 +206,9 @@ local function BuildQuestPayloadString(quest)
         return nil, "Invalid quest table"
     end
 
+    local stealthMode = ResolveStealthMode(quest)
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthSig = (stealthMode == modes.REQUIRED and "2") or (stealthMode == modes.OPTIONAL and "1") or "0"
     local fields = {
         EscapeField(quest.title or ""),
         EscapeField(quest.description or ""),
@@ -204,7 +222,7 @@ local function BuildQuestPayloadString(quest)
         string.format("%.4f", tonumber(quest.areaRadius) or 0.075),
         encodedTargets,
         EscapeField(quest.completionMessage or ""),
-        quest.requireUndetected and "1" or "0",
+        stealthSig,
         encodedDiscoveries,
         EscapeField(quest.clue or ""),
         quest.hideMapArea and "1" or "0",
@@ -302,8 +320,10 @@ local function PackQuestBinary(quest)
     local clue = type(quest.clue) == "string" and quest.clue or ""
     local lang = (type(quest.language) == "string" and quest.language ~= "" and quest.language:lower()) or GetClientLanguage()
 
+    local stealthMode = ResolveStealthMode(quest)
+    local modes = Addon.Constants.STEALTH_MODE
     local flags = 0
-    if quest.requireUndetected then flags = flags + 1 end
+    if stealthMode == modes.OPTIONAL or stealthMode == modes.REQUIRED then flags = flags + 1 end
     if quest.hideMapArea then flags = flags + 2 end
     if #targets > 0 then flags = flags + 4 end
     if #discoveries > 0 then flags = flags + 8 end
@@ -338,14 +358,20 @@ local function PackQuestBinary(quest)
     local senderChar = (type(quest.senderCharacterName) == "string") and quest.senderCharacterName or ""
     local recipientChar = (type(quest.recipientCharacterName) == "string") and quest.recipientCharacterName or ""
     local hasCharNames = (senderChar ~= "" or recipientChar ~= "")
+    local isStealthRequired = (stealthMode == modes.REQUIRED)
+    local hasTrailing = hasCharNames or isStealthRequired
 
     if #dialogues > 0 then
-        PackDialogueCluesBlock(buf, dialogues, hasCharNames)
+        PackDialogueCluesBlock(buf, dialogues, hasTrailing)
     end
 
-    if hasCharNames then
+    if hasTrailing then
         BinaryCodec:WriteStr(buf, senderChar)
         BinaryCodec:WriteStr(buf, recipientChar)
+    end
+
+    if isStealthRequired then
+        BinaryCodec:WriteByte(buf, 1)
     end
 
     return table.concat(buf)
@@ -559,9 +585,19 @@ local function UnpackQuestBinary(data)
         end
     end
     if pos <= len then
-        local rc = BinaryCodec:ReadStr(data, pos, len)
+        local rc, nextPos = BinaryCodec:ReadStr(data, pos, len)
         if rc then
             recipientCharacterName = rc
+            pos = nextPos
+        end
+    end
+
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthMode = requireUndetected and modes.OPTIONAL or modes.DISABLED
+    if pos <= len then
+        local extFlags = BinaryCodec:ReadByte(data, pos, len)
+        if extFlags and (extFlags % 2) == 1 then
+            stealthMode = modes.REQUIRED
         end
     end
 
@@ -595,7 +631,7 @@ local function UnpackQuestBinary(data)
         areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
         areaRadius = areaRadius or 0.075,
         hideMapArea = hideMapArea,
-        requireUndetected = requireUndetected,
+        stealthMode = stealthMode,
         language = (sourceLanguage ~= "" and sourceLanguage) or nil,
         senderCharacterName = (senderCharacterName ~= "" and senderCharacterName) or nil,
         recipientCharacterName = (recipientCharacterName ~= "" and recipientCharacterName) or nil,
@@ -731,7 +767,8 @@ local function EncodeResultCode(quest, characterName, timestamp, resultType)
 
     local ts = math.max(0, math.floor(tonumber(timestamp) or 0))
     local stealthFlag = ""
-    if kind == "completed" and quest.requireUndetected then
+    local stealthMode = ResolveStealthMode(quest)
+    if kind == "completed" and stealthMode ~= Addon.Constants.STEALTH_MODE.DISABLED then
         stealthFlag = quest.wasDetected and "1" or "0"
     end
     local optionalFlag = ""

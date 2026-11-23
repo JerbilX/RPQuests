@@ -381,12 +381,25 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pI
         end
     end
 
-    if selectedQuest.requireUndetected then
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(selectedQuest.stealthMode, selectedQuest.requireUndetected)
+    if stealthMode ~= modes.DISABLED then
         local wasDetected = selectedQuest.wasDetected
         if isSentCompleted and pInfo.wasDetected ~= nil then
             wasDetected = pInfo.wasDetected
         end
-        local stealthKey = wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
+        local stealthKey
+        if stealthMode == modes.REQUIRED then
+            if selectedQuest.failed and wasDetected then
+                stealthKey = "STEALTH_STATUS_REQUIRED_FAILED"
+            elseif wasDetected then
+                stealthKey = "STEALTH_STATUS_REQUIRED_DETECTED"
+            else
+                stealthKey = "STEALTH_STATUS_REQUIRED_UNDETECTED"
+            end
+        else
+            stealthKey = wasDetected and "STEALTH_STATUS_OPTIONAL_DETECTED" or "STEALTH_STATUS_OPTIONAL_UNDETECTED"
+        end
         table.insert(objLines, bullet .. Addon.Locale:Get(stealthKey))
     end
 

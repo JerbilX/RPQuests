@@ -14,7 +14,12 @@ Addon.Constants = {
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 1,
+        CURRENT_VERSION = 2,
+    },
+    STEALTH_MODE = {
+        DISABLED = "disabled",
+        OPTIONAL = "optional",
+        REQUIRED = "required",
     },
     SAVED_VARS = {
         NAME = "RPQuest_SavedVariables",

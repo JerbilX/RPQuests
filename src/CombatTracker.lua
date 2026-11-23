@@ -29,9 +29,12 @@ local function RegisterDeathFilter(listenerName, expectedResult, callback)
 end
 
 function CombatTracker:UpdateJusticeRegistration(activeQuest)
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthMode = activeQuest and activeQuest.stealthMode
     local shouldTrack = (activeQuest ~= nil)
         and not activeQuest.completed
-        and (activeQuest.requireUndetected == true)
+        and not activeQuest.failed
+        and (stealthMode == modes.OPTIONAL or stealthMode == modes.REQUIRED)
         and not activeQuest.wasDetected
 
     if not shouldTrack then
@@ -189,13 +192,21 @@ end
 
 function CombatTracker:HandleJusticeViolation()
     local activeQuest = Addon.QuestRepository:GetActiveQuest()
-    if not activeQuest or activeQuest.completed or not activeQuest.requireUndetected or activeQuest.wasDetected then
+    local modes = Addon.Constants.STEALTH_MODE
+    if not activeQuest or activeQuest.completed or activeQuest.failed or activeQuest.wasDetected then
+        return
+    end
+    if activeQuest.stealthMode ~= modes.OPTIONAL and activeQuest.stealthMode ~= modes.REQUIRED then
         return
     end
     local playerContext = GetAreaContextIfNeeded(activeQuest)
-    local recorded, updatedQuest = Addon.QuestRepository:RecordPlayerDetected(playerContext)
+    local recorded, updatedQuest, questFailed = Addon.QuestRepository:RecordPlayerDetected(playerContext)
     if recorded and updatedQuest then
-        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_STEALTH_DETECTED"), true)
+        if questFailed then
+            Addon.Announcements:AnnounceQuestFailed(updatedQuest, nil, Addon.Locale:Get("ALERT_QUEST_FAILED_STEALTH"))
+        else
+            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_STEALTH_DETECTED"), true)
+        end
     end
 end
 

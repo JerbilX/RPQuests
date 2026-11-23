@@ -11,6 +11,23 @@ local Addon = RPQuest
 Addon.QuestDraftStore = {}
 local QuestDraftStore = Addon.QuestDraftStore
 
+function QuestDraftStore:NormalizeStealthMode(value, legacyBool)
+    local modes = Addon.Constants and Addon.Constants.STEALTH_MODE
+    local disabled = (modes and modes.DISABLED) or "disabled"
+    local optional = (modes and modes.OPTIONAL) or "optional"
+    local required = (modes and modes.REQUIRED) or "required"
+    if value == disabled or value == optional or value == required then
+        return value
+    end
+    if type(value) == "boolean" then
+        return value and optional or disabled
+    end
+    if legacyBool == true then
+        return optional
+    end
+    return disabled
+end
+
 function QuestDraftStore:CreateDefaultDraft()
     return {
         editingQuestId = nil,
@@ -35,7 +52,7 @@ function QuestDraftStore:CreateDefaultDraft()
         areaCenterY = nil,
         areaRadius = Addon.Constants.AREA_RADIUS.MEDIUM,
         hideMapArea = false,
-        requireUndetected = false,
+        stealthMode = Addon.Constants.STEALTH_MODE.DISABLED,
     }
 end
 
@@ -46,6 +63,8 @@ function QuestDraftStore:EnsureDraft(draft)
     draft.targets = draft.targets or {}
     draft.discoveries = draft.discoveries or {}
     draft.dialogues = draft.dialogues or {}
+    draft.stealthMode = self:NormalizeStealthMode(draft.stealthMode, draft.requireUndetected)
+    draft.requireUndetected = nil
     return draft
 end
 
@@ -347,7 +366,7 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         areaCenterY = quest.areaCenterY,
         areaRadius = quest.areaRadius or 0.075,
         hideMapArea = quest.hideMapArea and true or false,
-        requireUndetected = quest.requireUndetected and true or false,
+        stealthMode = self:NormalizeStealthMode(quest.stealthMode, quest.requireUndetected),
     }
     repo:NotifyListeners("DRAFT_UPDATED", repo.savedVars.draft)
     return repo.savedVars.draft
@@ -371,7 +390,11 @@ function QuestDraftStore:UpdateDraftFields(repo, fields, silent)
             draft.discoveryRadius = math.floor(newDiscRadius)
         end
     end
-    if fields.requireUndetected ~= nil then draft.requireUndetected = (fields.requireUndetected == true) end
+    if fields.stealthMode ~= nil then
+        draft.stealthMode = self:NormalizeStealthMode(fields.stealthMode)
+    elseif fields.requireUndetected ~= nil then
+        draft.stealthMode = self:NormalizeStealthMode(fields.requireUndetected)
+    end
     if fields.areaRadius ~= nil then
         local newRadius = tonumber(fields.areaRadius) or draft.areaRadius
         if newRadius > 0 then
@@ -546,9 +569,10 @@ local function ApplyDraftToExistingQuest(store, repo, existing, draft, fields)
     existing.areaCenterY = draft.areaCenterY
     existing.areaRadius = draft.areaRadius
     existing.hideMapArea = draft.hideMapArea and true or false
-    local reqUndetected = draft.requireUndetected and true or false
-    existing.requireUndetected = reqUndetected
-    if not reqUndetected then
+    local stealthMode = store:NormalizeStealthMode(draft.stealthMode)
+    existing.stealthMode = stealthMode
+    existing.requireUndetected = nil
+    if stealthMode == Addon.Constants.STEALTH_MODE.DISABLED then
         existing.wasDetected = false
     end
     existing.failed = false
@@ -586,7 +610,7 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
         areaCenterY = draft.areaCenterY,
         areaRadius = draft.areaRadius,
         hideMapArea = draft.hideMapArea,
-        requireUndetected = draft.requireUndetected,
+        stealthMode = store:NormalizeStealthMode(draft.stealthMode),
     }
 
     local newQuest = repo:BuildQuestRecord(
@@ -608,7 +632,7 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
     return newQuest
 end
 
-function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiusInput, completionMessageInput, requireUndetectedInput, recipientAccountInput, recipientCharacterNameInput)
+function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiusInput, completionMessageInput, stealthModeInput, recipientAccountInput, recipientCharacterNameInput)
     local draft = self:GetDraft(repo)
 
     if titleInput ~= nil then draft.title = tostring(titleInput) end
@@ -616,7 +640,7 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
     if recipientAccountInput ~= nil then draft.recipientAccount = tostring(recipientAccountInput) end
     if recipientCharacterNameInput ~= nil then draft.recipientCharacterName = tostring(recipientCharacterNameInput) end
     if completionMessageInput ~= nil then draft.completionMessage = tostring(completionMessageInput) end
-    if requireUndetectedInput ~= nil then draft.requireUndetected = (requireUndetectedInput == true) end
+    if stealthModeInput ~= nil then draft.stealthMode = self:NormalizeStealthMode(stealthModeInput) end
     if areaRadiusInput ~= nil and tonumber(areaRadiusInput) and tonumber(areaRadiusInput) > 0 then
         draft.areaRadius = tonumber(areaRadiusInput)
     end
