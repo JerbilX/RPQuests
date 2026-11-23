@@ -464,7 +464,9 @@ local suitePaths = {
     "tests/suites/trackers.lua",
     "tests/suites/codec.lua",
     "tests/suites/dialogue.lua",
-    "tests/suites/mail.lua",
+    "tests/suites/mail_transport.lua",
+    "tests/suites/mail_inbox.lua",
+    "tests/suites/mail_lifecycle.lua",
 }
 
 for _, suitePath in ipairs(suitePaths) do
