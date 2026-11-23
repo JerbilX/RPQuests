@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/badge/version-1.8.1-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
-![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
+![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20DE%20%7C%20ES%20%7C%20FR%20%7C%20JP%20%7C%20RU%20%7C%20ZH-informational)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
 [English](README.md) | **Español**
@@ -27,7 +27,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
   - Asigna un único destinatario (`@Cuenta`) (y opcionalmente **Para (Personaje)**) en el editor de la misión preparada y pulsa **Enviar Misión** desde el detalle de la misión (abriendo el panel de envío por correo con un **Mensaje de Roleplay opcional** y contador en vivo de 1–6 partes mediante `RPQP` sobre `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA, y ESO impide enviarse correos a la propia cuenta). Los nombres de personaje `De:` y `Para:` se muestran debajo de `Estado:` en el detalle de la misión.
   - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario (los correos en idioma incompatible se rechazan automáticamente con una alerta de error).
   - **Reportes Automáticos de Aceptación, Completado y Rechazo:** Al aceptar, completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Aceptada` / `Completada` / `Rechazada`).
-- **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente el idioma del cliente (`es` / `en`).
+- **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente los 7 idiomas oficiales del cliente de ESO (`en`, `de`, `es`, `fr`, `jp`, `ru`, `zh`).
 
 ---
 
@@ -103,7 +103,7 @@ La pestaña **RPQuests** dentro del Diario de Misiones (`J`) usa un acordeón ex
 - **Versión del Juego:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **Librerías Externas:** Ninguna (`Zero-Dependency`)
 - **SavedVariables:** `RPQuest_SavedVariables` (por cuenta / account-wide)
-- **Idiomas Soportados:** Español (`es`), Inglés (`en`)
+- **Idiomas Soportados:** Inglés (`en`), Alemán (`de`), Español (`es`), Francés (`fr`), Japonés (`jp`), Ruso (`ru`), Chino Simplificado (`zh`)
 
 ---
 
@@ -118,7 +118,12 @@ RPQuest/
 ├── LICENSE                      # Licencia GNU General Public License v3.0
 ├── lang/
 │   ├── en.lua                   # Diccionario en Inglés (Base / Fallback)
-│   └── es.lua                   # Diccionario en Castellano
+│   ├── de.lua                   # Diccionario en Alemán
+│   ├── es.lua                   # Diccionario en Castellano
+│   ├── fr.lua                   # Diccionario en Francés
+│   ├── jp.lua                   # Diccionario en Japonés
+│   ├── ru.lua                   # Diccionario en Ruso
+│   └── zh.lua                   # Diccionario en Chino Simplificado
 ├── src/
 │   ├── Constants.lua            # Constantes, radios y metadatos
 │   ├── Locale.lua               # Selector de idioma del cliente e i18n

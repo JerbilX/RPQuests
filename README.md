@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/badge/version-1.8.1-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
-![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
+![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20DE%20%7C%20ES%20%7C%20FR%20%7C%20JP%20%7C%20RU%20%7C%20ZH-informational)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
 **English** | [Español](README.es.md)
@@ -27,7 +27,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
   - Assign a single `@AccountName` recipient (and optional `To (Character)` name) in the quest editor and click **Send Quest** from the quest detail pane (opening the Mail Send pane with an **Optional Roleplay Message** and a live 1–6 part counter via `RPQP` over `ShareCodec`; works within the same megaserver, e.g. PC-NA to PC-NA, and ESO prevents sending mail to your own account). Both `From:` and `To:` character names are displayed below `Status:` in the quest details.
   - **Auto-Ingested Pending Quests:** Incoming quest mails are automatically ingested into the player's **Pending** list with a visible alert and **Accept** / **Reject** actions directly in the RPQuests Journal (mismatched-language quest mails are automatically rejected with an error alert).
   - **Automatic Acceptance, Completion & Rejection Reports:** Accepting, completing, or rejecting a received quest automatically sends an `RPQC1` result mail back to the Quest Master, updating the prepared quest's live status (`Draft` / `Sent` / `Accepted` / `Completed` / `Rejected`).
-- **Account-Wide Persistence & Auto-Localization:** Stores quests and progress account-wide via `ZO_SavedVars:NewAccountWide` (matching ESO's account-wide mail, with automatic non-destructive migration from legacy per-character data) and auto-detects client language (`en` / `es`).
+- **Account-Wide Persistence & Auto-Localization:** Stores quests and progress account-wide via `ZO_SavedVars:NewAccountWide` (matching ESO's account-wide mail, with automatic non-destructive migration from legacy per-character data) and auto-detects all 7 official ESO client languages (`en`, `de`, `es`, `fr`, `jp`, `ru`, `zh`).
 
 ---
 
@@ -103,7 +103,7 @@ The **RPQuests** tab inside the Quest Journal (`J`) uses an exclusive accordion�
 - **Game Version:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **External Libraries:** None (`Zero-Dependency`)
 - **SavedVariables:** `RPQuest_SavedVariables` (account-wide)
-- **Supported Languages:** English (`en`), Spanish (`es`)
+- **Supported Languages:** English (`en`), German (`de`), Spanish (`es`), French (`fr`), Japanese (`jp`), Russian (`ru`), Simplified Chinese (`zh`)
 
 ---
 
@@ -118,7 +118,12 @@ RPQuest/
 ├── LICENSE                      # GNU General Public License v3.0
 ├── lang/
 │   ├── en.lua                   # English strings (Base / Fallback)
-│   └── es.lua                   # Spanish strings
+│   ├── de.lua                   # German strings
+│   ├── es.lua                   # Spanish strings
+│   ├── fr.lua                   # French strings
+│   ├── jp.lua                   # Japanese strings
+│   ├── ru.lua                   # Russian strings
+│   └── zh.lua                   # Simplified Chinese strings
 ├── src/
 │   ├── Constants.lua            # Constants, radii, and metadata
 │   ├── Locale.lua               # Client language selector & i18n
