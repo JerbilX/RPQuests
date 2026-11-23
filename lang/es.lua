@@ -73,6 +73,7 @@ RPQuest.Locales["es"] = {
     EDITOR_EDIT_TITLE = "EDITAR MISIÓN CUSTOM",
     LABEL_INPUT_TITLE = "Título de la Misión:",
     DEFAULT_QUEST_TITLE = "Misión Custom #%d",
+    DEFAULT_NEW_QUEST_TITLE = "Nueva Misión",
     LABEL_INPUT_DESCRIPTION = "Descripción / Trasfondo:",
     LABEL_INPUT_RECIPIENT = "Destinatario (@Cuenta):",
     LABEL_INPUT_RECIPIENT_CHAR = "Para (Personaje):",

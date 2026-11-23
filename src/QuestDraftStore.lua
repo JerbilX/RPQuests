@@ -540,7 +540,28 @@ function QuestDraftStore:ClearDraftTargetLocation(repo, index)
     return self:UpdateDraftTarget(repo, index, { clearLocation = true })
 end
 
-local function ApplyDraftToExistingQuest(store, repo, existing, draft, fields)
+local function BuildNormalizedDraftFields(repo, draft, fallbackTitle)
+    local cleanTitle = (draft.title or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if cleanTitle == "" then
+        cleanTitle = fallbackTitle
+    end
+
+    local fields = {
+        title = cleanTitle,
+        description = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", ""),
+        clue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", ""),
+        completionMessage = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", ""),
+        recipientAccount = repo:NormalizeAccountName(draft.recipientAccount),
+        recipientCharacterName = repo:NormalizeCharacterName(draft.recipientCharacterName),
+    }
+    draft.clue = fields.clue
+    draft.completionMessage = fields.completionMessage
+    draft.recipientAccount = fields.recipientAccount
+    draft.recipientCharacterName = fields.recipientCharacterName
+    return fields
+end
+
+local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
     local prevProgress = {}
     for _, t in ipairs(existing.targets or {}) do
         prevProgress[t.name:lower()] = t.currentCount or 0
@@ -588,9 +609,59 @@ local function ApplyDraftToExistingQuest(store, repo, existing, draft, fields)
     if repo._activeTargetCache and repo._activeTargetCache.questId == existing.id then
         repo:InvalidateActiveTargetCache()
     end
+end
 
+local function ApplyDraftToExistingQuest(store, repo, existing, draft, fields)
+    ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
     store:ResetDraft(repo)
     repo:NotifyListeners("QUEST_UPDATED", existing)
+    return existing
+end
+
+function QuestDraftStore:CreateNewPreparedDraft(repo)
+    if not repo.savedVars then
+        repo:Initialize()
+    end
+    local targetId = repo.savedVars.nextId
+    repo.savedVars.nextId = targetId + 1
+
+    local title = Addon.Locale:Get("DEFAULT_NEW_QUEST_TITLE")
+    local newQuest = repo:BuildQuestRecord(
+        targetId,
+        title,
+        "",
+        {},
+        { senderCharacterName = repo:GetPlayerCharacterName() },
+        Addon.Constants.QUEST_ROLE.PREPARED
+    )
+
+    table.insert(repo.savedVars.quests, newQuest)
+    if repo._questById then
+        repo._questById[newQuest.id] = newQuest
+    end
+
+    self:LoadQuestIntoDraft(repo, newQuest.id)
+    repo:NotifyListeners("QUEST_DRAFT_CREATED", newQuest)
+    return newQuest
+end
+
+function QuestDraftStore:CommitDraftChanges(repo)
+    local draft = self:GetDraft(repo)
+    local existing = draft.editingQuestId and repo:GetQuestById(draft.editingQuestId) or nil
+    if not existing or not repo:IsPreparedQuest(existing) then
+        return nil
+    end
+
+    draft.targets = draft.targets or {}
+    draft.discoveries = draft.discoveries or {}
+    if #draft.targets > 0 and draft.targetX and draft.targetY and (not draft.areaCenterX or not draft.areaCenterY) then
+        local effectiveRadius = Addon.WorldMapArea:GetEffectiveAreaRadius(draft.areaRadius, draft.mapType)
+        draft.areaCenterX, draft.areaCenterY = repo:ComputeOffsetCenter(draft.targetX, draft.targetY, effectiveRadius)
+    end
+
+    local fallbackTitle = Addon.Locale:Get("DEFAULT_NEW_QUEST_TITLE")
+    local fields = BuildNormalizedDraftFields(repo, draft, fallbackTitle)
+    ApplyDraftFieldsToQuest(self, repo, existing, draft, fields)
     return existing
 end
 
@@ -666,24 +737,7 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
 
     local existing = draft.editingQuestId and repo:GetQuestById(draft.editingQuestId) or nil
     local targetId = existing and existing.id or repo.savedVars.nextId
-
-    local cleanTitle = (draft.title or ""):gsub("^%s+", ""):gsub("%s+$", "")
-    if cleanTitle == "" then
-        cleanTitle = Addon.Locale:Get("DEFAULT_QUEST_TITLE", targetId)
-    end
-
-    local fields = {
-        title = cleanTitle,
-        description = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", ""),
-        clue = (draft.clue or ""):gsub("^%s+", ""):gsub("%s+$", ""),
-        completionMessage = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", ""),
-        recipientAccount = repo:NormalizeAccountName(draft.recipientAccount),
-        recipientCharacterName = repo:NormalizeCharacterName(draft.recipientCharacterName),
-    }
-    draft.clue = fields.clue
-    draft.completionMessage = fields.completionMessage
-    draft.recipientAccount = fields.recipientAccount
-    draft.recipientCharacterName = fields.recipientCharacterName
+    local fields = BuildNormalizedDraftFields(repo, draft, Addon.Locale:Get("DEFAULT_QUEST_TITLE", targetId))
 
     if existing then
         return ApplyDraftToExistingQuest(self, repo, existing, draft, fields)

@@ -577,20 +577,12 @@ function EditorSections.BuildFooterButtons(tab, pane, panelName)
     end)
     tab.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 514)
 
-    tab.btnCancelEditor = CreateStyledButton(panelName .. "_BtnCancelEditor", pane, 150, 34, Addon.Locale:Get("BTN_CANCEL"), function()
-        tab.viewMode = tab.VIEW_MODE.DETAIL
-        Addon.QuestRepository:ResetDraft()
-        tab:ClearEditorInputs()
-        tab:Refresh()
-    end)
-    tab.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
-
     tab.btnShowMapEditor = CreateStyledButton(panelName .. "_BtnShowMapEditor", pane, 155, 34, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
         local draft = Addon.QuestRepository:GetDraft()
         if draft and draft.mapId and draft.mapId > 0 then
             Addon.WorldMapArea:ShowQuestOnMap(draft)
         end
     end)
-    tab.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 514)
+    tab.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
     tab.btnShowMapEditor:SetHidden(true)
 end

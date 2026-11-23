@@ -149,6 +149,7 @@ end
 
 local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
     local DETAIL_MODE = tab.VIEW_MODE.DETAIL
+    local EDITOR_MODE = tab.VIEW_MODE.EDITOR
 
     if not ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
         ESO_Dialogs["RPQUEST_ABANDON_QUEST"] = {
@@ -170,7 +171,7 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
     end
 
     local function CanAbandonSelectedQuest()
-        if tab.viewMode ~= DETAIL_MODE or not tab.selectedQuestId then
+        if (tab.viewMode ~= DETAIL_MODE and tab.viewMode ~= EDITOR_MODE) or not tab.selectedQuestId then
             return false
         end
         local quest = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)

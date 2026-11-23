@@ -307,6 +307,7 @@ local DRAFT_DELEGATES = {
     "AddDraftDialogue", "AddDraftDialogueFromLastNpc", "UpdateDraftDialogue",
     "RemoveDraftDialogue", "ClearDraftDialogues", "LoadQuestIntoDraft",
     "UpdateDraftFields", "SetDraftCapturedTarget", "SaveDraft",
+    "CreateNewPreparedDraft", "CommitDraftChanges",
     "UpdateDraftTarget", "CaptureDraftTargetLocation", "ClearDraftTargetLocation",
 }
 
