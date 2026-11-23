@@ -172,11 +172,20 @@ local function BuildTargetSectionConfigControls(tab, targetBody, panelName)
     tab.btnTargetPrev:SetHidden(true)
 
     local lblTargetCfgIndex = WINDOW_MANAGER:CreateControl(panelName .. "_LblTargetCfgIndex", targetBody, CT_LABEL)
-    lblTargetCfgIndex:SetDimensions(440, 24)
+    lblTargetCfgIndex:SetDimensions(300, 24)
     lblTargetCfgIndex:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 34, 132)
     if lblTargetCfgIndex.SetFont then lblTargetCfgIndex:SetFont("ZoFontGameBold") end
     lblTargetCfgIndex:SetHidden(true)
     tab.lblTargetCfgIndex = lblTargetCfgIndex
+
+    tab.btnTargetOptional = CreateStyledButton(panelName .. "_BtnTargetOptional", targetBody, 134, 24, "", function()
+        local idx = tab.selectedTargetIndex
+        local draft = Addon.QuestRepository:GetDraft()
+        local target = idx and draft.targets and draft.targets[idx]
+        if target then Addon.QuestRepository:UpdateDraftTarget(idx, { optional = target.optional ~= true }) end
+    end)
+    tab.btnTargetOptional:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 340, 130)
+    tab.btnTargetOptional:SetHidden(true)
 
     tab.btnTargetNext = CreateStyledButton(panelName .. "_BtnTargetNext", targetBody, 28, 24, ">", function()
         local total = #(Addon.QuestRepository:GetDraft().targets or {})
@@ -720,6 +729,13 @@ local function RefreshEditorTargetConfig(tab, draft)
 
     if tab.btnTargetPrev then tab.btnTargetPrev:SetHidden(not showTargetCfg) end
     if tab.btnTargetNext then tab.btnTargetNext:SetHidden(not showTargetCfg) end
+    if tab.btnTargetOptional then
+        tab.btnTargetOptional:SetHidden(not showTargetCfg)
+        if selTarget then
+            local optKey = selTarget.optional and "BTN_TARGET_OPTIONAL_ON" or "BTN_TARGET_OPTIONAL_OFF"
+            tab.btnTargetOptional:SetText(FormatSelected(Addon.Locale:Get(optKey), selTarget.optional == true))
+        end
+    end
     if tab.lblTargetCfgIndex then
         tab.lblTargetCfgIndex:SetHidden(not showTargetCfg)
         if showTargetCfg and selTarget then

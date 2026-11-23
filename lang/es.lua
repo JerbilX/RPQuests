@@ -23,6 +23,7 @@ RPQuest.Locales["es"] = {
     -- Buttons
     BTN_NEW_QUEST = "+ Nueva",
     BTN_ACTIVATE = "Activar",
+    BTN_COMPLETE_QUEST = "Completar",
     BTN_DEACTIVATE = "Desactivar",
     BTN_TEST_QUEST = "Probar",
     BTN_STOP_TEST = "Dejar de probar",
@@ -55,6 +56,7 @@ RPQuest.Locales["es"] = {
     LABEL_OBJECTIVE_HEADER = "OBJETIVOS",
     OBJECTIVE_KILL_FORMAT = "• Eliminar a %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completado)|r",
+    OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Opcional)|r",
     STEALTH_STATUS_UNDETECTED = "Sigilo: |c33FF33No detectado|r",
     STEALTH_STATUS_DETECTED = "Sigilo: |cFFAA33Detectado|r",
 
@@ -116,6 +118,8 @@ RPQuest.Locales["es"] = {
     -- Validate Delivery (Inline)
     VALIDATE_STEALTH_UNDETECTED = "\nSigilo: |c33FF33No detectado|r",
     VALIDATE_STEALTH_DETECTED = "\nSigilo: |cFFAA33Detectado|r",
+    VALIDATE_OPTIONAL_COMPLETED = "\nOpcionales: |c33FF33%d/%d|r (%s)",
+    VALIDATE_OPTIONAL_NONE = "\nOpcionales: |cFFAA330/%d|r",
     VALIDATE_ERR_NOT_COMPLETION_CODE = "|cFF4444Ese es un código de misión (RPQ2/RPQ1), no un código de entrega (RPQC1).|r",
     VALIDATE_ERR_WRONG_QUEST = "|cFF4444Este código de entrega pertenece a otra misión distinta.|r",
     VALIDATE_ERR_NOT_COMPLETED = "|cFF4444El código no indica que la misión haya sido completada.|r",
@@ -156,6 +160,8 @@ RPQuest.Locales["es"] = {
     BTN_CLEAR_TARGET_LOC = "Limpiar Ubic.",
     BTN_TARGET_LOC_REQUIRED = "Ubic.: Requerida",
     BTN_TARGET_LOC_OPTIONAL = "Ubic.: No requerida",
+    BTN_TARGET_OPTIONAL_ON = "Opcional: Sí",
+    BTN_TARGET_OPTIONAL_OFF = "Opcional: No",
     HINT_TARGET_CUSTOM_MSG = "Mensaje personalizado opcional al eliminar...",
     ALERT_TARGET_LOC_CAPTURED = "RPQuest: Ubicación capturada para %s (%dm)",
     TARGET_DETAIL_LOC_REQUIRED = " (Ubicación requerida)",

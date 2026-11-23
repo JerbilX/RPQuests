@@ -106,6 +106,12 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
     end)
     tab.btnActivate:SetAnchor(TOPLEFT, objText, BOTTOMLEFT, -25, 16)
 
+    tab.btnComplete = CreateStyledButton(panelName .. "_BtnComplete", contentParent, 160, 32, Addon.Locale:Get("BTN_COMPLETE_QUEST"), function()
+        tab:OnCompleteQuestClicked()
+    end)
+    tab.btnComplete:SetAnchor(TOPLEFT, tab.btnActivate, TOPRIGHT, 12, 0)
+    tab.btnComplete:SetHidden(true)
+
     tab.btnEdit = CreateStyledButton(panelName .. "_BtnEdit", contentParent, 160, 32, Addon.Locale:Get("BTN_EDIT"), function()
         tab:OpenEditEditor(tab.selectedQuestId)
     end)
@@ -240,7 +246,28 @@ local function FormatPreparedStatusText(quest)
         elseif pInfo.wasDetected == true then
             stealthPart = " " .. Addon.Locale:Get("VALIDATE_STEALTH_DETECTED")
         end
-        return Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart)
+        local optionalPart = ""
+        if type(pInfo.optionalTargets) == "table" and #pInfo.optionalTargets > 0 then
+            local optNames = {}
+            for _, t in ipairs(quest.targets or {}) do
+                if t.optional == true then
+                    table.insert(optNames, t.name or "")
+                end
+            end
+            local doneNames = {}
+            local totalOpt = #pInfo.optionalTargets
+            for i = 1, totalOpt do
+                if pInfo.optionalTargets[i] == true then
+                    table.insert(doneNames, optNames[i] or tostring(i))
+                end
+            end
+            if #doneNames > 0 then
+                optionalPart = Addon.Locale:Get("VALIDATE_OPTIONAL_COMPLETED", #doneNames, totalOpt, table.concat(doneNames, ", "))
+            else
+                optionalPart = Addon.Locale:Get("VALIDATE_OPTIONAL_NONE", totalOpt)
+            end
+        end
+        return Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart .. optionalPart)
     elseif pStatus == "accepted" and type(pInfo) == "table" then
         local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
         local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
@@ -295,6 +322,9 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
             t.currentCount or 0,
             t.requiredCount or 1
         ):gsub("^•%s*", bullet)
+        if t.optional == true then
+            line = line .. Addon.Locale:Get("OBJECTIVE_OPTIONAL_SUFFIX")
+        end
         if (t.currentCount or 0) >= (t.requiredCount or 1) then
             line = line .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
         elseif isPrepared and Addon.QuestRepository:HasTargetLocation(t) then
@@ -356,17 +386,21 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
 
     if isOffered then
         tab.btnActivate:SetHidden(true)
+        if tab.btnComplete then tab.btnComplete:SetHidden(true) end
         tab.btnEdit:SetHidden(true)
         tab.btnReset:SetHidden(true)
     elseif isPrepared then
         tab.btnActivate:SetHidden(false)
+        if tab.btnComplete then tab.btnComplete:SetHidden(true) end
         tab.btnEdit:SetHidden(false)
         tab.btnReset:SetAnchor(TOPLEFT, tab.btnActivate, BOTTOMLEFT, 0, 10)
         tab.btnReset:SetHidden(false)
     else
         local showCompletion = selectedQuest.completed and true or false
         local showFailed = selectedQuest.failed and true or false
+        local canManualComplete = Addon.QuestRepository:CanManuallyCompleteQuest(selectedQuest)
         tab.btnActivate:SetHidden(showCompletion or showFailed)
+        if tab.btnComplete then tab.btnComplete:SetHidden(not canManualComplete) end
         tab.btnEdit:SetHidden(true)
         tab.btnReset:SetHidden(not showFailed)
         if showFailed then
@@ -389,6 +423,7 @@ local function RenderEmptyDetailPane(tab)
     tab.detailObjHeader:SetHidden(true)
     tab.detailObjText:SetText("")
     tab.btnActivate:SetHidden(true)
+    if tab.btnComplete then tab.btnComplete:SetHidden(true) end
     if tab.btnAcceptOffered then tab.btnAcceptOffered:SetHidden(true) end
     if tab.btnRejectOffered then tab.btnRejectOffered:SetHidden(true) end
     tab.selectedQuestId = nil

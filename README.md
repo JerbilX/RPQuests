@@ -16,7 +16,7 @@ A native, **zero-dependency** add-on for **The Elder Scrolls Online** (`APIVersi
 ## Key Features
 
 - **Native Quest Journal Integration (`J`):** Adds a dedicated **RPQuest** tab inside the standard Quest Journal (`ZO_QuestJournal_Keyboard`) with separate **Prepared** (authored) and **Received** (active/playable) quest lists.
-- **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`) and custom elimination messages.
+- **Reticle NPC Target Capture:** Aim at any living NPC and press your keybind (or `/rpquest capture`) to register objectives automatically. Capturing the same NPC name multiple times stacks into `Imp x3`; different named NPCs are tracked individually, with optional per-target location conditions (`Required` / `Not Required`), an `Optional` objective toggle (enabling manual quest completion once mandatory objectives are done), and custom elimination messages.
 - **Hidden Discovery Points:** Capture in-world exploration coordinates (`Keybind` or `/rpquest discovery`) with configurable trigger radii (`Small`, `Medium`, `Large`) without cluttering the map or compass with spoilers.
 - **Optional Stealth / Undetected Condition:** Require players to complete objectives without being detected in combat.
 - **World Map Search Area (`M`):** Displays an approximate search circle (`ZO_PinBlob`) on the World Map using a deterministic, fixed random offset—keeping the target inside the circle without revealing its exact center. Automatically clears upon completion or deactivation.

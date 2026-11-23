@@ -558,4 +558,50 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible again when returning to Detail mode")
     end)
 
+    RunTest("Journal UI: Optional target editor toggle, detail label, manual Complete button, and master report", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        RPQuest.QuestRepository:SetDraftCapturedTarget({ targetName = "MainTarget", mapId = 1, zoneId = 2, mapName = "Auridon", targetX = 0.5, targetY = 0.5 })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({ targetName = "OptionalTarget", mapId = 1, zoneId = 2, mapName = "Auridon", targetX = 0.5, targetY = 0.5 })
+        RPQuest.JournalTab.selectedTargetIndex = 2
+        RPQuest.JournalTab:RefreshEditorPane()
+
+        AssertEqual(RPQuest.JournalTab.btnTargetOptional:IsHidden(), false, "btnTargetOptional visible when targets exist")
+        RPQuest.JournalTab.btnTargetOptional:GetHandler("OnClicked")()
+        local draft = RPQuest.QuestRepository:GetDraft()
+        AssertEqual(draft.targets[2].optional, true, "Clicking btnTargetOptional toggles optional=true on selected target")
+
+        local prepared = RPQuest.QuestRepository:SaveDraft("UI Optional Quest", "Desc")
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master")
+        RPQuest.QuestRepository:SetActiveQuest(imported.id)
+        RPQuest.JournalTab:SelectQuest(imported.id)
+        RPQuest.JournalTab:Refresh()
+
+        local objText = RPQuest.JournalTab.detailObjText:GetText()
+        AssertTrue(objText:find("Optional", 1, true) ~= nil, "Detail objectives label optional target with (Optional)")
+        AssertEqual(RPQuest.JournalTab.btnComplete:IsHidden(), true, "btnComplete hidden before mandatory target is done")
+
+        RPQuest.QuestRepository:RecordTargetEliminated("MainTarget")
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.btnComplete:IsHidden(), false, "btnComplete visible once mandatory target is done")
+
+        RPQuest.JournalTab:OnCompleteQuestClicked()
+        AssertEqual(imported.completed, true, "OnCompleteQuestClicked completes the quest")
+        AssertEqual(RPQuest.JournalTab.btnComplete:IsHidden(), true, "btnComplete hidden after quest is completed")
+
+        -- Master report shows optional target completion status
+        imported.completed = true
+        local compCode = RPQuest.QuestRepository:ExportCompletionCode(imported.id)
+        local okVal, valRes = RPQuest.QuestRepository:ValidateResultCode(prepared.id, compCode)
+        AssertEqual(okVal, true, "Prepared quest validates completion code")
+        RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@Player", valRes)
+        RPQuest.JournalTab:SelectQuest(prepared.id)
+        RPQuest.JournalTab:Refresh()
+        local statusText = RPQuest.JournalTab.detailStatus:GetText()
+        AssertTrue(statusText:find("0/1", 1, true) ~= nil, "Prepared quest status shows 0/1 optional objectives completed")
+    end)
+
 end

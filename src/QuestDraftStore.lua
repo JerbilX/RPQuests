@@ -117,6 +117,7 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
                 locationRequired = (t.locationRequired == true),
+                optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
             })
         end
@@ -419,6 +420,7 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
             requiredCount = 1,
             targetX = tx,
             targetY = ty,
+            optional = false,
         }
         table.insert(draft.targets, matchedEntry)
     end
@@ -474,6 +476,10 @@ function QuestDraftStore:UpdateDraftTarget(repo, index, fields, silent)
         if fields.locationRequired ~= nil then
             target.locationRequired = (fields.locationRequired == true)
         end
+    end
+
+    if fields.optional ~= nil then
+        target.optional = (fields.optional == true)
     end
 
     if fields.customMessage ~= nil then

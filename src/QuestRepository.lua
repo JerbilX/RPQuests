@@ -82,6 +82,40 @@ local function AreAllTargetsCompleted(targets)
     return true
 end
 
+local function HasOptionalTargets(targets)
+    if type(targets) ~= "table" then
+        return false
+    end
+    for _, t in ipairs(targets) do
+        if t.optional == true then
+            return true
+        end
+    end
+    return false
+end
+
+local function AreMandatoryTargetsCompleted(targets)
+    if type(targets) ~= "table" then
+        return true, false, false
+    end
+    local hasMandatory = false
+    local anyOptionalDone = false
+    for _, t in ipairs(targets) do
+        local done = (t.currentCount or 0) >= (t.requiredCount or 1)
+        if t.optional == true then
+            if done then
+                anyOptionalDone = true
+            end
+        else
+            hasMandatory = true
+            if not done then
+                return false, true, anyOptionalDone
+            end
+        end
+    end
+    return true, hasMandatory, anyOptionalDone
+end
+
 local function AreAllDiscoveriesCompleted(discoveries)
     if type(discoveries) ~= "table" or #discoveries == 0 then
         return false
@@ -107,6 +141,44 @@ function QuestRepository:AreAllObjectivesCompleted(targets, discoveries)
         return false
     end
     return true
+end
+
+function QuestRepository:CanManuallyCompleteQuest(quest)
+    if not quest or quest.completed or quest.failed or self:IsOfferedQuest(quest) then
+        return false
+    end
+    if not HasOptionalTargets(quest.targets) then
+        return false
+    end
+    if self:AreAllObjectivesCompleted(quest.targets, quest.discoveries) then
+        return false
+    end
+    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
+    if hasDiscoveries and not AreAllDiscoveriesCompleted(quest.discoveries) then
+        return false
+    end
+    local mandatoryDone, hasMandatory, anyOptionalDone = AreMandatoryTargetsCompleted(quest.targets)
+    if not mandatoryDone then
+        return false
+    end
+    if not hasMandatory and not hasDiscoveries and not anyOptionalDone then
+        return false
+    end
+    return true
+end
+
+function QuestRepository:CompleteQuest(questId)
+    local quest = self:GetQuestById(questId)
+    if not self:CanManuallyCompleteQuest(quest) then
+        return false, nil
+    end
+    quest.completed = true
+    if self.savedVars.activeQuestId == quest.id then
+        self.savedVars.activeQuestId = nil
+    end
+    self:InvalidateActiveTargetCache()
+    self:NotifyListeners("QUEST_COMPLETED", quest)
+    return true, quest
 end
 
 function QuestRepository:BuildQuestRecord(id, title, description, targets, data, role)
@@ -565,6 +637,7 @@ function QuestRepository:ImportQuestFromCode(codeString, senderDisplayName, opti
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
                 locationRequired = (t.locationRequired == true),
+                optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
             })
         end
@@ -732,6 +805,7 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
         characterName = validationResult.characterName or "",
         completedAt = tonumber(validationResult.completedAt) or 0,
         wasDetected = validationResult.wasDetected,
+        optionalTargets = validationResult.optionalTargets,
         status = status,
     }
     -- Avoid duplicate entries for same characterName + completedAt + status
