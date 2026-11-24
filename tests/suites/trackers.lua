@@ -1331,4 +1331,113 @@ return function(T)
         _G.GetNormalizedWorldPosition = origGetNormWorld
     end)
 
+    RunTest("Issue #309: repeated ShowQuestOnMap preserves quest mapId and pan when SetMapToMapId is unchanged", function()
+        local sv = {}
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        -- Create quest in Stonefalls (mapId = 27)
+        mockState.reticleExists = true
+        mockState.reticleName = "Cultista"
+        mockState.reticleIsPlayer = false
+        mockState.reticleIsDead = false
+        mockState.reticleAttackable = true
+        mockState.mapId = 27
+        mockState.zoneId = 41
+        mockState.mapName = "Stonefalls"
+        mockState.playerX = 0.62
+        mockState.playerY = 0.38
+
+        RPQuest.TargetCapture:CaptureFromReticle()
+        local quest = RPQuest.QuestRepository:SaveDraft("Repeated Map", "Desc", RPQuest.Constants.AREA_RADIUS.MEDIUM)
+        local targetX = quest.targets[1].areaCenterX
+        local targetY = quest.targets[1].areaCenterY
+
+        -- Player is currently in Deshaan (mapId = 45), but internal mapId stayed on 27 after closing map
+        local playerMapId = 45
+        local playerChoseCurrentMap = false
+        local origSetMapById = WORLD_MAP_MANAGER.SetMapById
+        local origSetMapToMapId = SetMapToMapId
+        local origMainMenuShow = MAIN_MENU_KEYBOARD.ShowCategory
+        local origSceneShow = SCENE_MANAGER.Show
+        local origSceneHide = SCENE_MANAGER.Hide
+
+        SetMapToMapId = function(mapId)
+            if mockState.mapId == mapId then
+                return SET_MAP_RESULT_CURRENT_MAP_UNCHANGED
+            end
+            mockState.mapId = mapId
+            return SET_MAP_RESULT_MAP_CHANGED
+        end
+
+        WORLD_MAP_MANAGER.SetMapById = function(self, mapId)
+            if SetMapToMapId(mapId) == SET_MAP_RESULT_MAP_CHANGED then
+                playerChoseCurrentMap = true
+            end
+        end
+
+        local function SimulateWorldMapShowing()
+            -- Simulate ZO_MapPanAndZoom:OnWorldMapShowing resetting to player location when g_playerChoseCurrentMap is false.
+            WORLD_MAP_SCENE:FireCallbacks("StateChange", SCENE_HIDDEN, SCENE_SHOWING)
+            if not playerChoseCurrentMap then
+                mockState.mapId = playerMapId
+                mockState.lastPannedX = 0.11
+                mockState.lastPannedY = 0.12
+            end
+        end
+
+        SCENE_MANAGER.Show = function(self, sceneName)
+            if sceneName == "worldMap" then
+                SimulateWorldMapShowing()
+            end
+            return origSceneShow(self, sceneName)
+        end
+        SCENE_MANAGER.Hide = function(self, sceneName)
+            if sceneName == "worldMap" then
+                playerChoseCurrentMap = false
+                WORLD_MAP_SCENE:FireCallbacks("StateChange", SCENE_SHOWN, SCENE_HIDDEN)
+            end
+            return origSceneHide(self, sceneName)
+        end
+        MAIN_MENU_KEYBOARD.ShowCategory = function(self, category)
+            if category == MENU_CATEGORY_MAP then
+                SCENE_MANAGER:Show("worldMap")
+            end
+        end
+
+        -- 1. First [M] from Deshaan: mapId changes 45 -> 27, playerChoseCurrentMap = true
+        SCENE_MANAGER:Hide("worldMap")
+        mockState.mapId = playerMapId
+        local ok1 = RPQuest.WorldMapArea:ShowQuestOnMap(quest)
+        AssertEqual(ok1, true, "First ShowQuestOnMap succeeds")
+        AssertEqual(mockState.mapId, 27, "First [M] opens quest mapId 27")
+        AssertEqual(mockState.lastPannedX, targetX, "First [M] pans to quest targetX")
+        AssertEqual(mockState.lastPannedY, targetY, "First [M] pans to quest targetY")
+
+        -- Close map (resets g_playerChoseCurrentMap = false, keeps internal mapId = 27)
+        SCENE_MANAGER:Hide("worldMap")
+        AssertEqual(mockState.mapId, 27, "Internal mapId stays 27 after closing map")
+        AssertEqual(playerChoseCurrentMap, false, "g_playerChoseCurrentMap reset on map hide")
+
+        -- 2. Second [M] on same quest: SetMapToMapId(27) returns UNCHANGED, OnWorldMapShowing resets to 45,
+        --    and SCENE_SHOWN callback restores quest mapId 27 and pans to quest area.
+        local ok2 = RPQuest.WorldMapArea:ShowQuestOnMap(quest)
+        AssertEqual(ok2, true, "Second ShowQuestOnMap succeeds")
+        AssertEqual(mockState.mapId, 27, "Second [M] preserves quest mapId 27 instead of reverting to player map 45")
+        AssertEqual(mockState.lastPannedX, targetX, "Second [M] pans to quest targetX")
+        AssertEqual(mockState.lastPannedY, targetY, "Second [M] pans to quest targetY")
+
+        -- 3. Normal [M] outside RPQuest still resets to player location
+        SCENE_MANAGER:Hide("worldMap")
+        mockState.mapId = 27
+        MAIN_MENU_KEYBOARD:ShowCategory(MENU_CATEGORY_MAP)
+        AssertEqual(mockState.mapId, playerMapId, "Normal [M] outside RPQuest still opens on player mapId")
+
+        WORLD_MAP_MANAGER.SetMapById = origSetMapById
+        SetMapToMapId = origSetMapToMapId
+        MAIN_MENU_KEYBOARD.ShowCategory = origMainMenuShow
+        SCENE_MANAGER.Show = origSceneShow
+        SCENE_MANAGER.Hide = origSceneHide
+    end)
+
 end

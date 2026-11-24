@@ -38,26 +38,60 @@ local function IsMapSceneShowing()
     return SCENE_MANAGER:IsShowing("worldMap") or SCENE_MANAGER:IsShowing("gamepad_worldMap")
 end
 
-local function RegisterMapSceneCallbacks(self, scene)
-    if not scene or not scene.RegisterCallback then
-        return
-    end
-    scene:RegisterCallback("StateChange", function(_, newState)
-        if newState == SCENE_SHOWING or newState == SCENE_SHOWN then
-            if self._pinsDirty then
-                self:RefreshPins()
-            end
-        elseif newState == SCENE_HIDDEN then
-            self.previewQuestId = nil
-        end
-    end)
-end
-
 local function SetWorldMapToId(mapId)
     if not mapId or mapId <= 0 then
         return
     end
     WORLD_MAP_MANAGER:SetMapById(mapId)
+end
+
+local function PanWorldMapToNormalizedPosition(x, y)
+    local fn = _G["ZO_WorldMap_PanToNormalizedPosition"]
+    if type(fn) == "function" then
+        fn(x, y)
+    end
+end
+
+local function ApplyPendingMapTarget(self)
+    local pending = self._pendingMapTarget
+    if not pending then
+        return
+    end
+    self._pendingMapTarget = nil
+    SetWorldMapToId(pending.mapId)
+    if self._pinsDirty then
+        self:RefreshPins()
+    end
+    if pending.panX and pending.panY then
+        PanWorldMapToNormalizedPosition(pending.panX, pending.panY)
+        local targetPanX, targetPanY = pending.panX, pending.panY
+        zo_callLater(function()
+            if IsMapSceneShowing() then
+                PanWorldMapToNormalizedPosition(targetPanX, targetPanY)
+            end
+        end, 50)
+    end
+end
+
+local function RegisterMapSceneCallbacks(self, scene)
+    if not scene or not scene.RegisterCallback then
+        return
+    end
+    scene:RegisterCallback("StateChange", function(_, newState)
+        if newState == SCENE_SHOWN then
+            ApplyPendingMapTarget(self)
+            if self._pinsDirty then
+                self:RefreshPins()
+            end
+        elseif newState == SCENE_SHOWING then
+            if self._pinsDirty then
+                self:RefreshPins()
+            end
+        elseif newState == SCENE_HIDDEN then
+            self._pendingMapTarget = nil
+            self.previewQuestId = nil
+        end
+    end)
 end
 
 local function OpenWorldMapScene()
@@ -817,13 +851,6 @@ function WorldMapArea:RefreshPins()
     end
 end
 
-local function PanWorldMapToNormalizedPosition(x, y)
-    local fn = _G["ZO_WorldMap_PanToNormalizedPosition"]
-    if type(fn) == "function" then
-        fn(x, y)
-    end
-end
-
 local function ResolveQuestMapTarget(quest)
     if type(quest) ~= "table" then
         return 0, nil, nil
@@ -895,6 +922,16 @@ function WorldMapArea:ShowQuestOnMap(quest)
 
     self.previewQuestId = targetQuest.id or targetQuest.editingQuestId or DRAFT_PIN_TAG
     self._pinsDirty = true
+    local wasShowing = IsMapSceneShowing()
+    if not wasShowing then
+        self._pendingMapTarget = {
+            mapId = mapId,
+            panX = panX,
+            panY = panY,
+        }
+    else
+        self._pendingMapTarget = nil
+    end
 
     SetWorldMapToId(mapId)
     OpenWorldMapScene()
