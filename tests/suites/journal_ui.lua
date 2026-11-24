@@ -274,6 +274,7 @@ return function(T)
         RPQuest.JournalTab:OpenEditEditor(q.id)
         RPQuest.QuestRepository:UpdateDraftFields({ areaRadius = RPQuest.Constants.AREA_RADIUS.LARGE, recommendHideMapAreas = false })
         RPQuest.JournalTab:OnSaveDraftClicked()
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", true)
         RPQuest.QuestRepository:SetActiveQuest(q.id)
 
         -- Simular apertura del mapa mundial via WORLD_MAP_SCENE

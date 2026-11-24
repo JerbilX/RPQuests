@@ -828,4 +828,134 @@ return function(T)
         _G.GetUnitWorldPosition = origGetWorldPos
     end)
 
+    RunTest("Issue #278: per-target search areas, soft-orange location pins, edit vs play visibility, and ShowQuestOnMap", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(zoneId, wx, wy, wz)
+            return wx / 100000, wz / 100000
+        end
+
+        -- 1. Edit mode (draft): ALWAYS renders both search areas and soft-orange Location areas even when toggles are false
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", false)
+        RPQuest.QuestRepository:SetSetting("showLocationAreas", false)
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:UpdateDraftFields({ mapId = 45, zoneId = 104, recommendHideMapAreas = true })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit A",
+            mapId = 45,
+            zoneId = 104,
+            targetX = 0.25,
+            targetY = 0.25,
+            areaRadius = 0.07,
+        })
+        RPQuest.QuestRepository:UpdateDraftTarget(1, {
+            areaCenterX = 0.26,
+            areaCenterY = 0.24,
+            areaRadius = 0.07,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 104, 25000, 25000, 800)
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit B",
+            mapId = 45,
+            zoneId = 104,
+            targetX = 0.75,
+            targetY = 0.75,
+            areaRadius = 0.125,
+        })
+        RPQuest.QuestRepository:UpdateDraftTarget(2, {
+            areaCenterX = 0.74,
+            areaCenterY = 0.76,
+            areaRadius = 0.125,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(2, 104, 75000, 75000, 3000)
+
+        RPQuest.WorldMapArea:RefreshPins()
+        local draftSearchPins = {}
+        local draftLocPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.pinTypeId then
+                table.insert(draftSearchPins, p)
+            elseif p.pinTypeId == RPQuest.WorldMapArea.locationPinTypeId then
+                table.insert(draftLocPins, p)
+            end
+        end
+        AssertEqual(#draftSearchPins, 2, "Edit mode always renders 1 search area pin per pending target")
+        AssertEqual(#draftLocPins, 2, "Edit mode always renders 1 location pin per pending target")
+        local orange = RPQuest.Constants.UI.LOCATION_AREA_COLOR
+        AssertEqual(draftLocPins[1].pinBlob.color.r, orange.r, "Location pin blob uses soft-orange red channel")
+        AssertEqual(draftLocPins[1].pinBlob.color.g, orange.g, "Location pin blob uses soft-orange green channel")
+        AssertEqual(draftLocPins[1].pinBlob.color.b, orange.b, "Location pin blob uses soft-orange blue channel")
+        AssertTrue(draftLocPins[2].radius > draftLocPins[1].radius, "Projected location radius scales with world radius (30m > 8m)")
+
+        -- 2. Play mode: both hidden by default (even if recommendHideMapAreas == false)
+        RPQuest.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = false })
+        local quest = RPQuest.QuestRepository:SaveDraft("Multi Target Hunt", "Hunt both targets.")
+        RPQuest.QuestRepository:SetActiveQuest(quest.id)
+
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 0, "Play mode hides both search and location areas by default")
+
+        -- 3. ShowQuestOnMap opens and centers map even when both visibility toggles are false
+        mockState.mapId = 99
+        mockState.lastPannedX = nil
+        mockState.lastPannedY = nil
+        local shown = RPQuest.WorldMapArea:ShowQuestOnMap(quest)
+        AssertEqual(shown, true, "ShowQuestOnMap succeeds when area visibility toggles are false")
+        AssertEqual(mockState.mapId, 45, "ShowQuestOnMap switches map to quest.mapId")
+        AssertEqual(mockState.lastPannedX, 0.26, "ShowQuestOnMap pans to quest area X")
+        AssertEqual(mockState.lastPannedY, 0.24, "ShowQuestOnMap pans to quest area Y")
+        AssertEqual(#mockPinManager._createdPins, 0, "ShowQuestOnMap does not force-render hidden area pins")
+
+        -- 4. Play mode: independent visibility toggles (showSearchAreas only)
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", true)
+        RPQuest.QuestRepository:SetSetting("showLocationAreas", false)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 2, "showSearchAreas=true renders 2 search area pins")
+        for _, p in ipairs(mockPinManager._createdPins) do
+            AssertEqual(p.pinTypeId, RPQuest.WorldMapArea.pinTypeId, "Only search area pins rendered when showLocationAreas=false")
+        end
+
+        -- 5. Play mode: independent visibility toggles (showLocationAreas only)
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", false)
+        RPQuest.QuestRepository:SetSetting("showLocationAreas", true)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 2, "showLocationAreas=true renders 2 location pins")
+        for _, p in ipairs(mockPinManager._createdPins) do
+            AssertEqual(p.pinTypeId, RPQuest.WorldMapArea.locationPinTypeId, "Only location pins rendered when showSearchAreas=false")
+        end
+
+        -- 6. Play mode: both enabled + completed target excluded
+        quest.targets[1].currentCount = 1
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", true)
+        RPQuest.QuestRepository:SetSetting("showLocationAreas", true)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 2, "Completed target is excluded: 1 search pin + 1 location pin for target 2")
+
+        -- 7. IsPlayerInsideQuestArea checks all pending targets' search areas
+        quest.targets[1].currentCount = 0
+        AssertEqual(RPQuest.WorldMapArea:IsPlayerInsideQuestArea(quest, 45, 104, 0.26, 0.24), true, "Player inside target 1 search area")
+        AssertEqual(RPQuest.WorldMapArea:IsPlayerInsideQuestArea(quest, 45, 104, 0.74, 0.76), true, "Player inside target 2 search area")
+        AssertEqual(RPQuest.WorldMapArea:IsPlayerInsideQuestArea(quest, 45, 104, 0.50, 0.50), false, "Player outside all pending search areas")
+
+        -- Completed target 1 search area no longer counts
+        quest.targets[1].currentCount = 1
+        AssertEqual(RPQuest.WorldMapArea:IsPlayerInsideQuestArea(quest, 45, 104, 0.26, 0.24), false, "Completed target 1 search area ignored")
+        AssertEqual(RPQuest.WorldMapArea:IsPlayerInsideQuestArea(quest, 45, 104, 0.74, 0.76), true, "Pending target 2 search area still valid")
+
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+    end)
+
 end

@@ -347,6 +347,13 @@ local mockPinManager = {
                 table.insert(pinSelf.pingAnimations, animation)
             end,
         }
+        if radius and radius > 0 then
+            p.pinBlob = {
+                SetColor = function(blobSelf, r, g, b, a)
+                    blobSelf.color = { r = r, g = g, b = b, a = a }
+                end,
+            }
+        end
         table.insert(self._createdPins, p)
         return p
     end,
