@@ -7,6 +7,7 @@
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0012-savedvars-account-wide-y-migracion-por-personaje.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -163,12 +164,40 @@ function QuestRepository:CanManuallyCompleteQuest(quest)
     return true
 end
 
+local VALID_LIFECYCLE = {
+    draft = true,
+    sent = true,
+    received = true,
+}
+
+local VALID_RESOLUTION = {
+    accepted = true,
+    rejected = true,
+    completed = true,
+    failed = true,
+}
+
 local function FinalizeCompletedQuest(self, quest)
     quest.completed = true
+    if self:GetQuestLifecycle(quest) == Addon.Constants.QUEST_LIFECYCLE.RECEIVED then
+        quest.resolution = Addon.Constants.QUEST_RESOLUTION.COMPLETED
+    end
     if self.savedVars.activeQuestId == quest.id then
         self.savedVars.activeQuestId = nil
     end
     self:InvalidateActiveTargetCache()
+end
+
+local function FinalizeFailedQuest(self, quest)
+    quest.failed = true
+    if self:GetQuestLifecycle(quest) == Addon.Constants.QUEST_LIFECYCLE.RECEIVED then
+        quest.resolution = Addon.Constants.QUEST_RESOLUTION.FAILED
+    end
+    if self.savedVars and self.savedVars.activeQuestId == quest.id then
+        self.savedVars.activeQuestId = nil
+    end
+    self:InvalidateActiveTargetCache()
+    self:NotifyListeners("QUEST_FAILED", quest)
 end
 
 function QuestRepository:CompleteQuest(questId)
@@ -196,6 +225,44 @@ end
 
 function QuestRepository:BuildQuestRecord(id, title, description, targets, data, role)
     local schemaVersion = (Addon.QuestMigration and Addon.QuestMigration:GetCurrentSchemaVersion()) or 1
+    local roles = Addon.Constants.QUEST_ROLE
+    local statuses = Addon.Constants.QUEST_STATUS
+    local lifecycles = Addon.Constants.QUEST_LIFECYCLE
+    local resolutions = Addon.Constants.QUEST_RESOLUTION
+
+    local resolvedRole = role or roles.RECEIVED
+    local lifecycle
+    local resolution
+
+    if resolvedRole == roles.PREPARED or data.lifecycle == lifecycles.DRAFT or data.lifecycle == lifecycles.SENT then
+        resolvedRole = roles.PREPARED
+        local hasSent = data.lifecycle == lifecycles.SENT
+            or (type(data.sentTo) == "string" and data.sentTo ~= "")
+            or type(data.lastResult) == "table"
+            or (type(data.deliveries) == "table" and #data.deliveries > 0)
+        if hasSent then
+            lifecycle = lifecycles.SENT
+            resolution = VALID_RESOLUTION[data.resolution] and data.resolution or nil
+        else
+            lifecycle = lifecycles.DRAFT
+            resolution = nil
+        end
+    else
+        resolvedRole = roles.RECEIVED
+        lifecycle = lifecycles.RECEIVED
+        if data.status == statuses.OFFERED then
+            resolution = nil
+        elseif VALID_RESOLUTION[data.resolution] then
+            resolution = data.resolution
+        elseif data.failed == true then
+            resolution = resolutions.FAILED
+        elseif data.completed == true then
+            resolution = resolutions.COMPLETED
+        else
+            resolution = resolutions.ACCEPTED
+        end
+    end
+
     return {
         id = id,
         schemaVersion = schemaVersion,
@@ -207,7 +274,9 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         discoveries = data.discoveries or {},
         dialogues = Addon.QuestDraftStore:CloneDialoguesList(data.dialogues, data.clue),
         completed = false,
-        role = role or Addon.Constants.QUEST_ROLE.RECEIVED,
+        role = resolvedRole,
+        lifecycle = lifecycle,
+        resolution = resolution,
         mapId = data.mapId or 0,
         zoneId = data.zoneId or 0,
         mapName = data.mapName or "",
@@ -230,6 +299,7 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         status = data.status,
         sourceMailId = data.sourceMailId,
         completionReported = (data.completionReported == true),
+        failureReported = (data.failureReported == true),
         deliveries = type(data.deliveries) == "table" and data.deliveries or {},
     }
 end
@@ -370,7 +440,11 @@ function QuestRepository:GetLastInteractedNpc()
 end
 
 function QuestRepository:IsOfferedQuest(quest)
-    return quest ~= nil and quest.status == Addon.Constants.QUEST_STATUS.OFFERED
+    if type(quest) ~= "table" then
+        return false
+    end
+    return self:GetQuestLifecycle(quest) == Addon.Constants.QUEST_LIFECYCLE.RECEIVED
+        and self:GetQuestResolution(quest) == nil
 end
 
 function QuestRepository:HasIngestedMail(mailKey)
@@ -450,6 +524,11 @@ function QuestRepository:ApplyImportedSenderMetadata(decoded, senderDisplayName,
         decoded.recipientCharacterName = self:NormalizeCharacterName(decoded.recipientCharacterName)
     end
     decoded.status = options.status or Addon.Constants.QUEST_STATUS.ACTIVE
+    decoded.lifecycle = Addon.Constants.QUEST_LIFECYCLE.RECEIVED
+    decoded.role = Addon.Constants.QUEST_ROLE.RECEIVED
+    decoded.resolution = (decoded.status == Addon.Constants.QUEST_STATUS.OFFERED)
+        and nil
+        or Addon.Constants.QUEST_RESOLUTION.ACCEPTED
     decoded.sourceMailId = options.sourceMailId
 end
 
@@ -518,6 +597,7 @@ function QuestRepository:AcceptOfferedQuest(questId)
         return false, nil
     end
     q.status = Addon.Constants.QUEST_STATUS.ACTIVE
+    q.resolution = Addon.Constants.QUEST_RESOLUTION.ACCEPTED
     self:SetActiveQuest(q.id)
     self:NotifyListeners("QUEST_ACCEPTED", q)
     return true, q
@@ -528,6 +608,7 @@ function QuestRepository:RejectOfferedQuest(questId)
     if not q or not self:IsOfferedQuest(q) then
         return false, nil
     end
+    q.resolution = Addon.Constants.QUEST_RESOLUTION.REJECTED
     self:DeleteQuest(q.id)
     self:NotifyListeners("QUEST_REJECTED", q)
     return true, q
@@ -598,6 +679,15 @@ function QuestRepository:ExportAcceptanceCode(quest)
     return Addon.ShareCodec:EncodeAcceptance(quest, charName, ts)
 end
 
+function QuestRepository:ExportFailureCode(questOrId)
+    local quest = type(questOrId) == "table" and questOrId or self:GetQuestById(questOrId)
+    if type(quest) ~= "table" or not quest.failed then
+        return nil, "Quest has not failed"
+    end
+    local charName, ts = GetPlayerExportContext()
+    return Addon.ShareCodec:EncodeFailure(quest, charName, ts)
+end
+
 function QuestRepository:ValidateResultCode(questId, codeString)
     local quest = self:GetQuestById(questId)
     if not quest then
@@ -615,6 +705,8 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
     local status
     if validationResult.resultType == "accepted" or validationResult.accepted == true then
         status = "accepted"
+    elseif validationResult.resultType == "failed" or validationResult.failed == true then
+        status = "failed"
     elseif validationResult.resultType == "rejected" or validationResult.rejected == true or validationResult.completed == false then
         status = "rejected"
     else
@@ -637,9 +729,14 @@ function QuestRepository:RecordMailDelivery(questId, senderDisplayName, validati
         end
     end
     table.insert(quest.deliveries, entry)
-    local prevStatus = type(quest.lastResult) == "table" and (quest.lastResult.status or "completed") or nil
-    if not (status == "accepted" and (prevStatus == "completed" or prevStatus == "rejected")) then
+    if self:IsPreparedQuest(quest) then
+        quest.lifecycle = Addon.Constants.QUEST_LIFECYCLE.SENT
+    end
+    local prevResolution = quest.resolution or (type(quest.lastResult) == "table" and (quest.lastResult.status or "completed") or nil)
+    local isTerminal = (prevResolution == "completed" or prevResolution == "rejected" or prevResolution == "failed")
+    if not (status == "accepted" and isTerminal) then
         quest.lastResult = entry
+        quest.resolution = status
     end
     self:NotifyListeners("DELIVERY_RECORDED", { quest = quest, delivery = entry })
     return entry, true
@@ -650,6 +747,8 @@ function QuestRepository:MarkPreparedQuestSent(questId, recipient)
     if not quest then return false end
     local cleanRecipient = self:NormalizeAccountName(recipient)
     if cleanRecipient == "" then return false end
+    quest.lifecycle = Addon.Constants.QUEST_LIFECYCLE.SENT
+    quest.role = Addon.Constants.QUEST_ROLE.PREPARED
     quest.sentTo = cleanRecipient
     if (quest.recipientAccount or "") == "" then
         quest.recipientAccount = cleanRecipient
@@ -659,26 +758,41 @@ function QuestRepository:MarkPreparedQuestSent(questId, recipient)
     return true
 end
 
-function QuestRepository:GetPreparedQuestStatus(quest)
+function QuestRepository:GetQuestLifecycle(quest)
+    local lifecycles = Addon.Constants.QUEST_LIFECYCLE
     if type(quest) ~= "table" then
-        return "draft", nil
+        return lifecycles.DRAFT
     end
-    if type(quest.lastResult) == "table" then
-        if quest.lastResult.status == "rejected" then
-            return "rejected", quest.lastResult
-        elseif quest.lastResult.status == "accepted" then
-            return "accepted", quest.lastResult
+    if VALID_LIFECYCLE[quest.lifecycle] then
+        return quest.lifecycle
+    end
+    if quest.role == Addon.Constants.QUEST_ROLE.PREPARED then
+        local hasSent = (type(quest.sentTo) == "string" and quest.sentTo ~= "")
+            or type(quest.lastResult) == "table"
+            or (type(quest.deliveries) == "table" and #quest.deliveries > 0)
+        return hasSent and lifecycles.SENT or lifecycles.DRAFT
+    end
+    return lifecycles.RECEIVED
+end
+
+function QuestRepository:GetQuestResolution(quest)
+    if type(quest) ~= "table" then
+        return nil, nil
+    end
+    local lifecycles = Addon.Constants.QUEST_LIFECYCLE
+    local lifecycle = self:GetQuestLifecycle(quest)
+    if lifecycle == lifecycles.DRAFT then
+        return nil, nil
+    elseif lifecycle == lifecycles.SENT then
+        local res = VALID_RESOLUTION[quest.resolution] and quest.resolution or nil
+        if res ~= nil then
+            return res, quest.lastResult
         end
-        return "completed", quest.lastResult
+        return nil, { recipient = quest.sentTo, sentAt = quest.sentAt }
+    else
+        local res = VALID_RESOLUTION[quest.resolution] and quest.resolution or nil
+        return res, nil
     end
-    if type(quest.deliveries) == "table" and #quest.deliveries > 0 then
-        local lastDelivery = quest.deliveries[#quest.deliveries]
-        return lastDelivery.status or "completed", lastDelivery
-    end
-    if type(quest.sentTo) == "string" and quest.sentTo ~= "" then
-        return "sent", { recipient = quest.sentTo, sentAt = quest.sentAt }
-    end
-    return "draft", nil
 end
 
 function QuestRepository:MarkCompletionReported(questId)
@@ -686,6 +800,14 @@ function QuestRepository:MarkCompletionReported(questId)
     if not quest then return false end
     quest.completionReported = true
     self:NotifyListeners("COMPLETION_REPORTED", quest)
+    return true
+end
+
+function QuestRepository:MarkFailureReported(questId)
+    local quest = self:GetQuestById(questId)
+    if not quest then return false end
+    quest.failureReported = true
+    self:NotifyListeners("FAILURE_REPORTED", quest)
     return true
 end
 
@@ -726,7 +848,12 @@ function QuestRepository:SetLastSelectedQuestId(questId)
 end
 
 function QuestRepository:IsPreparedQuest(quest)
-    return quest ~= nil and quest.role == Addon.Constants.QUEST_ROLE.PREPARED
+    if type(quest) ~= "table" then
+        return false
+    end
+    local lifecycle = self:GetQuestLifecycle(quest)
+    local lifecycles = Addon.Constants.QUEST_LIFECYCLE
+    return lifecycle == lifecycles.DRAFT or lifecycle == lifecycles.SENT or quest.role == Addon.Constants.QUEST_ROLE.PREPARED
 end
 
 function QuestRepository:GetAllQuests()
@@ -862,6 +989,10 @@ function QuestRepository:ResetQuest(questId, options)
     q.failed = false
     q.wasDetected = false
     q.completionReported = false
+    q.failureReported = false
+    if self:GetQuestLifecycle(q) == Addon.Constants.QUEST_LIFECYCLE.RECEIVED and not self:IsOfferedQuest(q) then
+        q.resolution = Addon.Constants.QUEST_RESOLUTION.ACCEPTED
+    end
     if self._completionCodeCache then
         self._completionCodeCache[questId] = nil
     end
@@ -921,6 +1052,11 @@ local function ClonePreparedQuestRecord(repo, source)
         Addon.Constants.QUEST_ROLE.PREPARED
     )
     newQuest.createdAt = GetTimeStamp() or 0
+    newQuest.lifecycle = Addon.Constants.QUEST_LIFECYCLE.DRAFT
+    newQuest.resolution = nil
+    newQuest.sentTo = nil
+    newQuest.lastResult = nil
+    newQuest.deliveries = {}
     newQuest.needsMigration = nil
     newQuest.migrationReason = nil
 
@@ -1060,12 +1196,7 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
         local pWZ = type(playerContext) == "table" and playerContext.worldZ or nil
         local inTargetLoc = self:IsPlayerInsideTargetLocation(matchedTarget, pZone, pWX, pWZ)
         if not inTargetLoc then
-            activeQuest.failed = true
-            if self.savedVars.activeQuestId == activeQuest.id then
-                self.savedVars.activeQuestId = nil
-            end
-            self:InvalidateActiveTargetCache()
-            self:NotifyListeners("QUEST_FAILED", activeQuest)
+            FinalizeFailedQuest(self, activeQuest)
             local failMsg = TrimText(matchedTarget.customMessageOutsideLocation)
             return false, activeQuest, false, matchedTarget, true, (failMsg ~= "" and failMsg or nil)
         end
@@ -1153,12 +1284,7 @@ function QuestRepository:RecordPlayerDetected(playerContext)
 
     activeQuest.wasDetected = true
     if stealthMode == modes.REQUIRED then
-        activeQuest.failed = true
-        if self.savedVars and self.savedVars.activeQuestId == activeQuest.id then
-            self.savedVars.activeQuestId = nil
-        end
-        self:InvalidateActiveTargetCache()
-        self:NotifyListeners("QUEST_FAILED", activeQuest)
+        FinalizeFailedQuest(self, activeQuest)
         return true, activeQuest, true
     end
 

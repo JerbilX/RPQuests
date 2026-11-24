@@ -959,7 +959,8 @@ return function(T)
 
         local copied = tab:DuplicateSelectedQuest()
         AssertTrue(copied ~= nil, "DuplicateSelectedQuest creates copy from Sent quest")
-        AssertEqual(repo:GetPreparedQuestStatus(copied), "draft", "Copied quest is in Preparing")
+        AssertEqual(repo:GetQuestLifecycle(copied), "draft", "Copied quest is in Preparing")
+        AssertEqual(repo:GetQuestResolution(copied), nil, "Copied quest has no resolution")
         AssertEqual(tab.selectedQuestId, copied.id, "UI selects the newly copied quest")
     end)
 

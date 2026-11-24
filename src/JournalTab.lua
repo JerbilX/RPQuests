@@ -3,6 +3,7 @@
 -- Ref: docs/adr/0005-separacion-misiones-preparacion-y-juego.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
+-- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -67,8 +68,8 @@ end
 local function GetQuestSectionKey(quest)
     if not quest then return nil end
     if Addon.QuestRepository:IsPreparedQuest(quest) then
-        local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(quest)
-        return (pStatus == "draft") and "preparing" or "sent"
+        local lifecycle = Addon.QuestRepository:GetQuestLifecycle(quest)
+        return (lifecycle == Addon.Constants.QUEST_LIFECYCLE.DRAFT) and "preparing" or "sent"
     elseif Addon.QuestRepository:IsOfferedQuest(quest) then
         return "pending"
     elseif quest.completed then
@@ -760,15 +761,15 @@ function JournalTab:ToggleTab()
     end
 end
 
-local SENT_STATUS_LOCALE_KEYS = {
-    sent = "LIST_SENT_STATUS_SENT",
+local SENT_RESOLUTION_LOCALE_KEYS = {
     accepted = "LIST_SENT_STATUS_ACCEPTED",
     rejected = "LIST_SENT_STATUS_REJECTED",
     completed = "LIST_SENT_STATUS_COMPLETED",
+    failed = "LIST_SENT_STATUS_FAILED",
 }
 
 local function PartitionQuestsBySection(allQuests)
-    local roles = Addon.Constants.QUEST_ROLE
+    local lifecycles = Addon.Constants.QUEST_LIFECYCLE
     local buckets = {
         pending = {},
         missions = {},
@@ -777,9 +778,9 @@ local function PartitionQuestsBySection(allQuests)
         sent = {},
     }
     for _, q in ipairs(allQuests) do
-        if q.role == roles.PREPARED then
-            local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(q)
-            if pStatus == "draft" then
+        if Addon.QuestRepository:IsPreparedQuest(q) then
+            local lifecycle = Addon.QuestRepository:GetQuestLifecycle(q)
+            if lifecycle == lifecycles.DRAFT then
                 table.insert(buckets.preparing, q)
             else
                 table.insert(buckets.sent, q)
@@ -813,22 +814,20 @@ end
 local function FormatQuestRowText(tab, q, sectionKey, isCompleted, activeQuest)
     local isSelected = (tab.selectedQuestId == q.id)
     local prefix, selColor
-    local suffix = q.failed and Addon.Locale:Get("LIST_FAILED_SUFFIX") or ""
+    local suffix = ""
     if isCompleted then
         prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
         selColor = isSelected and "|cFFFFFF" or "|c8899AA"
     elseif sectionKey == "sent" then
-        local pStatus = Addon.QuestRepository:GetPreparedQuestStatus(q)
-        if pStatus == "completed" then
+        local resolution = Addon.QuestRepository:GetQuestResolution(q)
+        if resolution == "completed" then
             prefix = "      |t16:16:/esoui/art/cadwell/check.dds|t "
         else
             prefix = "          "
         end
         selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
-        local statusLocaleKey = SENT_STATUS_LOCALE_KEYS[pStatus]
-        if statusLocaleKey then
-            suffix = suffix .. Addon.Locale:Get(statusLocaleKey)
-        end
+        local statusLocaleKey = (resolution and SENT_RESOLUTION_LOCALE_KEYS[resolution]) or "LIST_SENT_STATUS_SENT"
+        suffix = Addon.Locale:Get(statusLocaleKey)
     elseif Addon.QuestRepository:IsOfferedQuest(q) then
         prefix = "      |t18:18:/esoui/art/mail/mail_tabicon_inbox_up.dds|t "
         selColor = isSelected and "|cFFFFFF" or "|cFFD155"
@@ -836,6 +835,12 @@ local function FormatQuestRowText(tab, q, sectionKey, isCompleted, activeQuest)
         local isAct = (activeQuest and activeQuest.id == q.id)
         prefix = isAct and "      |t18:18:/esoui/art/journal/journal_quest_selected.dds|t " or "          "
         selColor = isSelected and "|cFFFFFF" or "|cC5C29E"
+        if sectionKey == "missions" then
+            local resolution = Addon.QuestRepository:GetQuestResolution(q)
+            if resolution == "failed" then
+                suffix = Addon.Locale:Get("LIST_FAILED_SUFFIX")
+            end
+        end
     end
     return prefix .. selColor .. (q.title or "") .. "|r" .. suffix
 end

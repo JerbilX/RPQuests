@@ -15,8 +15,10 @@ Usage:
 - Click "+ New" to create a quest, or use "Test Quest" / "Reset" on prepared quests.
 - Assign a recipient (@AccountName) in the editor and click "Send Quest" in the
   quest details pane to send via in-game mail.
-- Incoming quests appear automatically in Pending (Accept or Reject), and results
-  are reported back to the Quest Master automatically via mail.
+- Incoming quests appear automatically in Pending (Accept or Reject), and
+  Accepted, Rejected, Completed, and Failed results are reported back to the
+  Quest Master automatically via mail (separately from Draft/Sent/Received
+  lifecycle).
 - In the quest details pane, view any Master map-hiding recommendation notice and
   independently toggle "Show search areas on map" and "Show location areas on map"
   (both off by default), or use "Show on Map" whenever a map/area is defined.

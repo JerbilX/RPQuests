@@ -4,6 +4,7 @@
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0008-codec-compacto-rpq3-lzss-base85.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -828,8 +829,10 @@ local function EncodeResultCode(quest, characterName, timestamp, resultType)
     local ts = math.max(0, math.floor(tonumber(timestamp) or 0))
     local stealthFlag = ""
     local stealthMode = ResolveStealthMode(quest)
-    if kind == "completed" and stealthMode ~= Addon.Constants.STEALTH_MODE.DISABLED then
-        stealthFlag = quest.wasDetected and "1" or "0"
+    if stealthMode ~= Addon.Constants.STEALTH_MODE.DISABLED then
+        if kind == "completed" or (kind == "failed" and quest.wasDetected ~= nil) then
+            stealthFlag = quest.wasDetected and "1" or "0"
+        end
     end
     local optionalFlag = ""
     if kind == "completed" and type(quest.targets) == "table" then
@@ -849,6 +852,8 @@ local function EncodeResultCode(quest, characterName, timestamp, resultType)
         resultFlag = "1"
     elseif kind == "accepted" then
         resultFlag = "2"
+    elseif kind == "failed" then
+        resultFlag = "3"
     end
     local rawPayload = table.concat({
         signature,
@@ -876,6 +881,10 @@ end
 
 function ShareCodec:EncodeAcceptance(quest, characterName, acceptedAt)
     return EncodeResultCode(quest, characterName, acceptedAt, "accepted")
+end
+
+function ShareCodec:EncodeFailure(quest, characterName, failedAt)
+    return EncodeResultCode(quest, characterName, failedAt, "failed")
 end
 
 function ShareCodec:DecodeCompletion(codeString)
@@ -918,6 +927,8 @@ function ShareCodec:DecodeCompletion(codeString)
         resultType = "rejected"
     elseif flag == "2" then
         resultType = "accepted"
+    elseif flag == "3" then
+        resultType = "failed"
     else
         return nil, "VALIDATE_ERR_INVALID_CODE"
     end
@@ -951,6 +962,7 @@ function ShareCodec:DecodeCompletion(codeString)
         completed = completed,
         rejected = (resultType == "rejected"),
         accepted = (resultType == "accepted"),
+        failed = (resultType == "failed"),
         resultType = resultType,
         completedAt = math.max(0, math.floor(completedAt)),
         wasDetected = wasDetected,

@@ -2,6 +2,7 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
 -- Ref: docs/adr/0011-flujo-solo-correo-1-a-1-y-eliminacion-codigos-manuales.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -299,12 +300,15 @@ function DetailPane.Build(tab, parent)
 end
 
 local function FormatPreparedStatusText(quest)
-    local pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(quest)
+    local lifecycle = Addon.QuestRepository:GetQuestLifecycle(quest)
+    local resolution, pInfo = Addon.QuestRepository:GetQuestResolution(quest)
     local recLabel = (type(quest.recipientAccount) == "string" and quest.recipientAccount ~= "")
         and quest.recipientAccount
         or Addon.Locale:Get("LABEL_NO_RECIPIENT")
 
-    if pStatus == "completed" and type(pInfo) == "table" then
+    if lifecycle == Addon.Constants.QUEST_LIFECYCLE.DRAFT then
+        return Addon.Locale:Get("PREPARED_STATUS_DRAFT", recLabel)
+    elseif resolution == "completed" and type(pInfo) == "table" then
         local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
         local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
         local stealthPart = ""
@@ -335,18 +339,21 @@ local function FormatPreparedStatusText(quest)
             end
         end
         return Addon.Locale:Get("PREPARED_STATUS_COMPLETED", who .. charPart .. stealthPart .. optionalPart)
-    elseif pStatus == "accepted" and type(pInfo) == "table" then
+    elseif resolution == "failed" and type(pInfo) == "table" then
+        local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
+        local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
+        local stealthPart = (pInfo.wasDetected == true) and (" " .. Addon.Locale:Get("VALIDATE_STEALTH_DETECTED")) or ""
+        return Addon.Locale:Get("PREPARED_STATUS_FAILED", who .. charPart .. stealthPart)
+    elseif resolution == "accepted" and type(pInfo) == "table" then
         local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
         local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
         return Addon.Locale:Get("PREPARED_STATUS_ACCEPTED", who .. charPart)
-    elseif pStatus == "rejected" and type(pInfo) == "table" then
+    elseif resolution == "rejected" and type(pInfo) == "table" then
         local who = (pInfo.senderDisplayName and pInfo.senderDisplayName ~= "") and pInfo.senderDisplayName or recLabel
         local charPart = (pInfo.characterName and pInfo.characterName ~= "") and (" (" .. pInfo.characterName .. ")") or ""
         return Addon.Locale:Get("PREPARED_STATUS_REJECTED", who .. charPart)
-    elseif pStatus == "sent" then
-        return Addon.Locale:Get("PREPARED_STATUS_SENT", (pInfo and pInfo.recipient) or recLabel)
     end
-    return Addon.Locale:Get("PREPARED_STATUS_DRAFT", recLabel)
+    return Addon.Locale:Get("PREPARED_STATUS_SENT", (pInfo and pInfo.recipient) or recLabel)
 end
 
 local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
@@ -364,18 +371,23 @@ local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, 
     elseif isPrepared then
         tab.detailStatus:SetText(FormatPreparedStatusText(selectedQuest))
         tab.btnActivate:SetText(isCurrentActive and deactivateLabel or activateLabel)
-    elseif selectedQuest.failed then
-        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_FAILED"))
-        tab.btnActivate:SetText(activateLabel)
-    elseif isCurrentActive then
-        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_ACTIVE"))
-        tab.btnActivate:SetText(deactivateLabel)
-    elseif selectedQuest.completed then
-        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_COMPLETED"))
-        tab.btnActivate:SetText(activateLabel)
     else
-        tab.detailStatus:SetText(Addon.Locale:Get("STATUS_AVAILABLE"))
-        tab.btnActivate:SetText(activateLabel)
+        local resolution = Addon.QuestRepository:GetQuestResolution(selectedQuest)
+        if resolution == nil then
+            tab.detailStatus:SetText(Addon.Locale:Get("STATUS_PENDING"))
+        elseif resolution == "failed" or selectedQuest.failed then
+            tab.detailStatus:SetText(Addon.Locale:Get("STATUS_FAILED"))
+            tab.btnActivate:SetText(activateLabel)
+        elseif isCurrentActive then
+            tab.detailStatus:SetText(Addon.Locale:Get("STATUS_ACTIVE"))
+            tab.btnActivate:SetText(deactivateLabel)
+        elseif resolution == "completed" or selectedQuest.completed then
+            tab.detailStatus:SetText(Addon.Locale:Get("STATUS_COMPLETED"))
+            tab.btnActivate:SetText(activateLabel)
+        else
+            tab.detailStatus:SetText(Addon.Locale:Get("STATUS_AVAILABLE"))
+            tab.btnActivate:SetText(activateLabel)
+        end
     end
 end
 
@@ -428,7 +440,7 @@ local function AppendTargetObjectiveLines(objLines, selectedQuest, isPrepared, p
     end
 end
 
-local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
+local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, isSentFailed, bullet)
     local discoveries = selectedQuest.discoveries or {}
     if #discoveries > 0 then
         if isPrepared then
@@ -448,12 +460,12 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pI
     local stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(selectedQuest.stealthMode, selectedQuest.requireUndetected)
     if stealthMode ~= modes.DISABLED then
         local wasDetected = selectedQuest.wasDetected
-        if isSentCompleted and pInfo.wasDetected ~= nil then
+        if (isSentCompleted or isSentFailed) and pInfo.wasDetected ~= nil then
             wasDetected = pInfo.wasDetected
         end
         local stealthKey
         if stealthMode == modes.REQUIRED then
-            if selectedQuest.failed and wasDetected then
+            if (selectedQuest.failed or isSentFailed) and wasDetected then
                 stealthKey = "STEALTH_STATUS_REQUIRED_FAILED"
             elseif wasDetected then
                 stealthKey = "STEALTH_STATUS_REQUIRED_DETECTED"
@@ -487,14 +499,16 @@ end
 local function BuildObjectiveLines(selectedQuest, isPrepared)
     local objLines = {}
     local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
-    local pStatus, pInfo
+    local lifecycle = Addon.QuestRepository:GetQuestLifecycle(selectedQuest)
+    local resolution, pInfo
     if isPrepared then
-        pStatus, pInfo = Addon.QuestRepository:GetPreparedQuestStatus(selectedQuest)
+        resolution, pInfo = Addon.QuestRepository:GetQuestResolution(selectedQuest)
     end
-    local isSentCompleted = isPrepared and pStatus == "completed" and type(pInfo) == "table"
+    local isSentCompleted = isPrepared and lifecycle == Addon.Constants.QUEST_LIFECYCLE.SENT and resolution == "completed" and type(pInfo) == "table"
+    local isSentFailed = isPrepared and lifecycle == Addon.Constants.QUEST_LIFECYCLE.SENT and resolution == "failed" and type(pInfo) == "table"
 
     AppendTargetObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
-    AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
+    AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, isSentFailed, bullet)
 
     return objLines
 end
