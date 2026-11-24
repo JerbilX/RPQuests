@@ -100,7 +100,7 @@ local function BuildDetailMapControls(tab, contentParent, panelName)
     mapNotice:SetHidden(true)
     tab.detailMapRecommendNotice = mapNotice
 
-    tab.btnShowSearchAreas = CreateStyledButton(panelName .. "_BtnShowSearchAreas", contentParent, 360, 26, "", function()
+    tab.btnShowSearchAreas = CreateStyledButton(panelName .. "_BtnShowSearchAreas", contentParent, 495, 26, "", function()
         if not tab.selectedQuestId then return end
         local q = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
         if not q then return end
@@ -111,7 +111,7 @@ local function BuildDetailMapControls(tab, contentParent, panelName)
     tab.btnShowSearchAreas:SetAnchor(TOPLEFT, mapNotice, BOTTOMLEFT, 0, 8)
     tab.btnShowSearchAreas:SetHidden(true)
 
-    tab.btnShowLocationAreas = CreateStyledButton(panelName .. "_BtnShowLocationAreas", contentParent, 360, 26, "", function()
+    tab.btnShowLocationAreas = CreateStyledButton(panelName .. "_BtnShowLocationAreas", contentParent, 495, 26, "", function()
         if not tab.selectedQuestId then return end
         local q = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
         if not q or not Addon.QuestRepository:HasQuestTargetLocation(q) then return end

@@ -71,4 +71,16 @@ return function(T)
         end
     end)
 
+    RunTest("All 7 locales have balanced color tags and no accidental double spaces", function()
+        for _, lang in ipairs(OFFICIAL_LOCALES) do
+            local dict = RPQuest.Locales[lang]
+            for key, val in pairs(dict) do
+                local _, openCount = val:gsub("|c%x%x%x%x%x%x", "")
+                local _, closeCount = val:gsub("|r", "")
+                AssertEqual(openCount, closeCount, string.format("Balanced color tags for '%s' in locale '%s'", key, lang))
+                AssertTrue(val:find("  ", 1, true) == nil, string.format("No double spaces for '%s' in locale '%s'", key, lang))
+            end
+        end
+    end)
+
 end

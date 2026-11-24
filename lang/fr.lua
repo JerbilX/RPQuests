@@ -233,7 +233,7 @@ RPQuest.Locales["fr"] = {
     ERR_MAIL_INCOMPLETE = "Il manque encore des parties à cette quête en plusieurs courriers.",
     MAIL_SENDING_PROGRESS = "Envoi %d/%d (%s)...",
     MAIL_SEND_DONE = "RPQuest : Envoyée à %d/%d destinataires.",
-    MAIL_SEND_DONE_ERRORS = "RPQuest : %d/%d envoyés (%d échec).",
+    MAIL_SEND_DONE_ERRORS = "RPQuest : %d/%d envoyés (%d échec(s)).",
     MAIL_FROM_LABEL = "De : %s",
     MAIL_TO_LABEL = "À : %s",
     ERR_MAIL_NO_RECIPIENTS = "Saisissez au moins 1 destinataire (@Compte).",
@@ -251,5 +251,5 @@ RPQuest.Locales["fr"] = {
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest : Remise vérifiée de %s pour « %s » !",
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest : %s a accepté « %s ».",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest : %s a refusé « %s ».",
-    ALERT_MAIL_FAILURE_RECEIVED = "RPQuest : %s a échoué « %s ».",
+    ALERT_MAIL_FAILURE_RECEIVED = "RPQuest : %s a échoué à « %s ».",
 }
