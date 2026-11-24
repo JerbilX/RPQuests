@@ -4,6 +4,7 @@
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -70,20 +71,23 @@ end
 local function GetSectionBadge(draft, key)
     if key == "target" then
         local count = #(draft.targets or {})
-        return count > 0 and string.format("  |c33FF33[%d]|r", count) or ""
+        local maxTargets = (Addon.Constants and Addon.Constants.TARGET and Addon.Constants.TARGET.MAX_TARGETS) or 4
+        return count > 0 and string.format("  |c33FF33[%d/%d]|r", count, maxTargets) or ""
     elseif key == "discovery" then
         local count = #(draft.discoveries or {})
+        local maxPoints = (Addon.Constants and Addon.Constants.DISCOVERY and Addon.Constants.DISCOVERY.MAX_POINTS) or 4
         if count > 0 then
             if Addon.QuestRepository:HasMissingDiscoveryMessage(draft) then
-                return string.format("  |cFF5555[%d !]|r", count)
+                return string.format("  |cFF5555[%d/%d !]|r", count, maxPoints)
             end
-            return string.format("  |c33FF33[%d]|r", count)
+            return string.format("  |c33FF33[%d/%d]|r", count, maxPoints)
         end
         return ""
     elseif key == "dialogue" then
         local count = #(draft.dialogues or {})
+        local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
         if count > 0 then
-            return string.format("  |c33FF33[%d/3]|r", count)
+            return string.format("  |c33FF33[%d/%d]|r", count, maxNpcs)
         elseif (draft.clue or "") ~= "" then
             return "  |c33FF33[*]|r"
         end
@@ -487,7 +491,7 @@ local function RefreshEditorDialoguesAndOptions(tab, draft)
 
     local dialogues = draft.dialogues or {}
     local totalDlg = #dialogues
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
     if totalDlg > 0 then
         if not tab.selectedDialogueIndex or tab.selectedDialogueIndex < 1 or tab.selectedDialogueIndex > totalDlg then
             tab.selectedDialogueIndex = totalDlg

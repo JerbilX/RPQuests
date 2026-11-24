@@ -4,6 +4,7 @@
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -64,6 +65,7 @@ end
 
 function EditorSections.BuildBaseFields(tab, formParent, panelName)
     local CreateEditBox = Addon.JournalWidgets.CreateEditBoxWithBackdrop
+    local limits = Addon.Constants.TEXT_LIMITS
 
     local lblTitle = WINDOW_MANAGER:CreateControl(panelName .. "_LblInputTitle", formParent, CT_LABEL)
     lblTitle:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 0)
@@ -72,7 +74,7 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
     tab.lblInputTitle = lblTitle
 
     local titleBg, titleEdit = CreateEditBox(
-        panelName .. "_TitleEdit", formParent, 510, 30, 90, false,
+        panelName .. "_TitleEdit", formParent, 510, 30, limits.TITLE, false,
         function(val) Addon.QuestRepository:UpdateDraftFields({ title = val }, true) end
     )
     titleBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 22)
@@ -86,7 +88,7 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
     tab.lblInputDesc = lblDesc
 
     local descBg, descEdit = CreateEditBox(
-        panelName .. "_DescEdit", formParent, 510, 72, 400, true,
+        panelName .. "_DescEdit", formParent, 510, 72, limits.DESCRIPTION, true,
         function(val) Addon.QuestRepository:UpdateDraftFields({ description = val }, true) end
     )
     descBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 86)
@@ -100,7 +102,7 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
     tab.lblInputRecipient = lblRecipient
 
     local recipientBg, recipientEdit = CreateEditBox(
-        panelName .. "_RecipientEdit", formParent, 250, 30, 64, false,
+        panelName .. "_RecipientEdit", formParent, 250, 30, limits.ACCOUNT_NAME, false,
         function(val) Addon.QuestRepository:UpdateDraftFields({ recipientAccount = val }, true) end
     )
     recipientBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 188)
@@ -114,7 +116,7 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
     tab.lblInputRecipientChar = lblRecipientChar
 
     local recipientCharBg, recipientCharEdit = CreateEditBox(
-        panelName .. "_RecipientCharEdit", formParent, 250, 30, 64, false,
+        panelName .. "_RecipientCharEdit", formParent, 250, 30, limits.CHARACTER_NAME, false,
         function(val) Addon.QuestRepository:UpdateDraftFields({ recipientCharacterName = val }, true) end
     )
     recipientCharBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 188)
@@ -329,7 +331,7 @@ local function BuildTargetLocationControls(tab, targetBody, panelName)
     end
 
     local targetCustomBg, targetCustomEdit = CreateEditBox(
-        panelName .. "_TargetCustomMsgEdit", targetBody, 510, 30, 160, false,
+        panelName .. "_TargetCustomMsgEdit", targetBody, 510, 30, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, false,
         function(val)
             local idx = tab.selectedTargetIndex
             if not idx then return end
@@ -360,9 +362,9 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
         local draft = Addon.QuestRepository:GetDraft()
         local hasExisting = #(draft.discoveries or {}) > 0
         local msgText = (not hasExisting and tab.discoveryMsgEdit) and tab.discoveryMsgEdit:GetText() or nil
-        local _, count = Addon.TargetCapture:CaptureDiscoveryPoint(msgText)
-        if count and count > 0 then
-            tab.selectedDiscoveryIndex = count
+        local updatedDraft, countOrErr = Addon.TargetCapture:CaptureDiscoveryPoint(msgText)
+        if updatedDraft and type(countOrErr) == "number" and countOrErr > 0 then
+            tab.selectedDiscoveryIndex = countOrErr
             Addon.QuestRepository:UpdateDraftFields({ discoveryMessage = "" }, true)
             tab:RefreshEditorPane()
         end
@@ -457,7 +459,7 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
     tab.lblDiscoveryMsg = lblDiscoveryMsg
 
     local discMsgBg, discMsgEdit = CreateEditBox(
-        panelName .. "_DiscoveryMsgEdit", discBody, 510, 30, 160, false,
+        panelName .. "_DiscoveryMsgEdit", discBody, 510, 30, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, false,
         function(val)
             local draft = Addon.QuestRepository:GetDraft()
             local idx = tab.selectedDiscoveryIndex
@@ -565,7 +567,7 @@ function EditorSections.BuildDialogueInputs(tab, dlgBody, panelName)
     tab.lblInputClue = lblClue
 
     local clueBg, clueEdit = CreateEditBox(
-        panelName .. "_ClueEdit", dlgBody, 510, 30, 100, false,
+        panelName .. "_ClueEdit", dlgBody, 510, 30, Addon.Constants.TEXT_LIMITS.DIALOGUE_OPTION, false,
         function(val)
             local draft = Addon.QuestRepository:GetDraft()
             local idx = tab.selectedDialogueIndex
@@ -585,7 +587,7 @@ function EditorSections.BuildDialogueInputs(tab, dlgBody, panelName)
     tab.lblDlgResponse = lblDlgResponse
 
     local dlgResponseBg, dlgResponseEdit = CreateEditBox(
-        panelName .. "_DlgResponseEdit", dlgBody, 510, 52, 300, true,
+        panelName .. "_DlgResponseEdit", dlgBody, 510, 52, Addon.Constants.TEXT_LIMITS.DIALOGUE_RESPONSE, true,
         function(val)
             local draft = Addon.QuestRepository:GetDraft()
             local idx = tab.selectedDialogueIndex
@@ -615,7 +617,7 @@ function EditorSections.BuildOptionsSection(tab, optBody, panelName)
     tab.lblInputCompletionMsg = lblCompletionMsg
 
     local compBg, compEdit = CreateEditBox(
-        panelName .. "_CompletionEdit", optBody, 510, 30, 140, false,
+        panelName .. "_CompletionEdit", optBody, 510, 30, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, false,
         function(val) Addon.QuestRepository:UpdateDraftFields({ completionMessage = val }, true) end
     )
     compBg:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 22)

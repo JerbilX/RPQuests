@@ -171,7 +171,7 @@ return function(T)
                     worldZ = -78901,
                     radius = 1500,
                     locationRequired = true,
-                    customMessage = "Has interceptado al explorador en el puente secreto.",
+                    customMessageInLocation = "Has interceptado al explorador en el puente secreto.",
                 },
                 {
                     name = "Capitán Contrabandista",
@@ -271,7 +271,7 @@ return function(T)
         AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
         AssertEqual(decoded.targets[1].worldZ, -78901, "Negative worldZ preserved via ZigZag varint")
         AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved")
-        AssertEqual(decoded.targets[1].customMessage, complexQuest.targets[1].customMessage, "Target customMessage preserved")
+        AssertEqual(decoded.targets[1].customMessageInLocation, complexQuest.targets[1].customMessageInLocation, "Target customMessageInLocation preserved")
         AssertEqual(decoded.targets[2].worldX, nil, "Target without location has nil worldX")
         AssertEqual(#decoded.discoveries, 2, "2 discoveries preserved")
         AssertEqual(decoded.discoveries[1].worldX, -45000, "Discovery negative worldX preserved")
@@ -572,6 +572,72 @@ return function(T)
         local locDecoded = RPQuest.ShareCodec:DecodeCompletion(locCode)
         AssertEqual(locDecoded.resultType, "failed", "Location failure resultType is 'failed'")
         AssertEqual(locDecoded.wasDetected, nil, "wasDetected is nil when stealthMode is disabled")
+    end)
+
+    RunTest("Issue #295: ShareCodec prunes inactive target elimination messages and round-trips 4/4/4 caps", function()
+        local quest = {
+            title = "Prune Test",
+            description = "Verify inactive elimination messages are pruned",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targets = {
+                {
+                    name = "Target A",
+                    requiredCount = 1,
+                    zoneId = 381,
+                    worldX = 1000,
+                    worldZ = 2000,
+                    radius = 1500,
+                    locationRequired = false,
+                    customMessage = "Active general msg",
+                    customMessageInLocation = "Stale in-loc msg",
+                    customMessageOutsideLocation = "Stale out-loc msg",
+                },
+                {
+                    name = "Target B",
+                    requiredCount = 2,
+                    zoneId = 381,
+                    worldX = 3000,
+                    worldZ = 4000,
+                    radius = 1500,
+                    locationRequired = true,
+                    customMessage = "Stale general msg",
+                    customMessageInLocation = "Active in-loc msg",
+                    customMessageOutsideLocation = "Active out-loc msg",
+                },
+                { name = "Target C", requiredCount = 1 },
+                { name = "Target D", requiredCount = 1 },
+            },
+            discoveries = {
+                { zoneId = 381, worldX = 100, worldY = 10, worldZ = 100, mapId = 32, x = 0.1, y = 0.1, radius = 800, message = "D1" },
+                { zoneId = 381, worldX = 200, worldY = 10, worldZ = 200, mapId = 32, x = 0.2, y = 0.2, radius = 800, message = "D2" },
+                { zoneId = 381, worldX = 300, worldY = 10, worldZ = 300, mapId = 32, x = 0.3, y = 0.3, radius = 800, message = "D3" },
+                { zoneId = 381, worldX = 400, worldY = 10, worldZ = 400, mapId = 32, x = 0.4, y = 0.4, radius = 800, message = "D4" },
+            },
+            dialogues = {
+                { npcName = "NPC 1", zoneId = 381, clue = "C1", response = "R1" },
+                { npcName = "NPC 2", zoneId = 381, clue = "C2", response = "R2" },
+                { npcName = "NPC 3", zoneId = 381, clue = "C3", response = "R3" },
+                { npcName = "NPC 4", zoneId = 381, clue = "C4", response = "R4" },
+            },
+        }
+
+        local code = RPQuest.ShareCodec:EncodeQuest(quest)
+        AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "Max-cap quest encodes to RPQ3")
+        local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(decoded ~= nil, "Max-cap quest decodes cleanly")
+        AssertEqual(#decoded.targets, 4, "4 targets round-trip")
+        AssertEqual(#decoded.discoveries, 4, "4 discoveries round-trip")
+        AssertEqual(#decoded.dialogues, 4, "4 dialogues round-trip")
+
+        AssertEqual(decoded.targets[1].customMessage, "Active general msg", "Target A keeps active customMessage")
+        AssertEqual(decoded.targets[1].customMessageInLocation, "", "Target A prunes inactive customMessageInLocation")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, "", "Target A prunes inactive customMessageOutsideLocation")
+
+        AssertEqual(decoded.targets[2].customMessage, "", "Target B prunes inactive customMessage")
+        AssertEqual(decoded.targets[2].customMessageInLocation, "Active in-loc msg", "Target B keeps active customMessageInLocation")
+        AssertEqual(decoded.targets[2].customMessageOutsideLocation, "Active out-loc msg", "Target B keeps active customMessageOutsideLocation")
     end)
 
 end

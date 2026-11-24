@@ -5,6 +5,7 @@
 -- Ref: docs/adr/0008-codec-compacto-rpq3-lzss-base85.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
+-- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -88,9 +89,9 @@ local function EncodeTargetsList(targets)
             local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
             local reqLoc = (t.locationRequired == true)
             local isOpt = (t.optional == true)
-            local msg = type(t.customMessage) == "string" and t.customMessage or ""
-            local msgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
-            local msgOutLoc = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or ""
+            local msg = (not reqLoc and type(t.customMessage) == "string") and t.customMessage or ""
+            local msgInLoc = (reqLoc and type(t.customMessageInLocation) == "string") and t.customMessageInLocation or ""
+            local msgOutLoc = (reqLoc and type(t.customMessageOutsideLocation) == "string") and t.customMessageOutsideLocation or ""
             local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and tonumber(t.areaRadius) > 0)
             if hasLoc or reqLoc or msg ~= "" or msgInLoc ~= "" or msgOutLoc ~= "" or isOpt or hasArea then
                 local parts = {
@@ -147,7 +148,7 @@ local function EncodeDialoguesList(dialogues)
     if type(dialogues) ~= "table" or #dialogues == 0 then
         return ""
     end
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
     local items = {}
     for _, d in ipairs(dialogues) do
         if #items >= maxNpcs then break end
@@ -260,9 +261,9 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
         local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
         local reqLoc = (t.locationRequired == true)
         local isOpt = (t.optional == true)
-        local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
-        local tMsgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
-        local tMsgOutLoc = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or ""
+        local tMsg = (not reqLoc and type(t.customMessage) == "string") and t.customMessage or ""
+        local tMsgInLoc = (reqLoc and type(t.customMessageInLocation) == "string") and t.customMessageInLocation or ""
+        local tMsgOutLoc = (reqLoc and type(t.customMessageOutsideLocation) == "string") and t.customMessageOutsideLocation or ""
         local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and (tonumber(t.areaRadius) or 0) > 0)
         local tFlags = (hasLoc and 1 or 0)
             + (reqLoc and 2 or 0)
@@ -313,7 +314,7 @@ local function PackDiscoveriesBlock(buf, discoveries, defaultRad)
 end
 
 local function PackDialoguesBlock(buf, dialogues)
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
     local count = math.min(#dialogues, maxNpcs)
     BinaryCodec:WriteUVarint(buf, count)
     for idx = 1, count do
@@ -325,7 +326,7 @@ local function PackDialoguesBlock(buf, dialogues)
 end
 
 local function PackDialogueCluesBlock(buf, dialogues, forceWrite)
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
     local count = math.min(#dialogues, maxNpcs)
     local hasPerNpcClue = forceWrite and true or false
     if not hasPerNpcClue then

@@ -1871,7 +1871,7 @@ return function(T)
         AssertEqual(tab.discoveryMsgEdit._hasWarning, true, "discoveryMsgEdit marks warning state when message is empty")
         AssertEqual(tab.lblDiscoveryMsg:GetText(), RPQuest.Locale:Get("LABEL_DISCOVERY_MSG_MISSING"), "Label highlights missing required message")
         local discHeaderText = tab.editorSectionsByKey.discovery.headerBtn:GetText()
-        AssertTrue(discHeaderText:find("[1 !]", 1, true) ~= nil, "Discovery accordion badge shows [1 !] alert")
+        AssertTrue(discHeaderText:find("[1/4 !]", 1, true) ~= nil, "Discovery accordion badge shows [1/4 !] alert")
 
         -- Changing discRadComboBox with selected point updates point radius
         tab.discRadComboBox:SelectItemByIndex(1)
@@ -1915,7 +1915,7 @@ return function(T)
         AssertEqual(tab.discoveryMsgEdit._hasWarning, false, "discoveryMsgEdit clears warning when message is filled")
         AssertEqual(tab.lblDiscoveryMsg:GetText(), RPQuest.Locale:Get("LABEL_DISCOVERY_MSG_REQUIRED"), "Label shows required-ok state")
         local discHeaderOk = tab.editorSectionsByKey.discovery.headerBtn:GetText()
-        AssertTrue(discHeaderOk:find("[1]", 1, true) ~= nil and discHeaderOk:find("!", 1, true) == nil, "Discovery accordion badge clears alert")
+        AssertTrue(discHeaderOk:find("[1/4]", 1, true) ~= nil and discHeaderOk:find("!", 1, true) == nil, "Discovery accordion badge clears alert")
 
         tab.recipientEdit:SetText("@GuildMate")
         tab.recipientEdit:FireHandler("OnTextChanged")

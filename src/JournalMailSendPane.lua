@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
 -- Ref: docs/adr/0011-flujo-solo-correo-1-a-1-y-eliminacion-codigos-manuales.md
+-- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -32,8 +33,9 @@ function MailSendPane.Build(tab, parent)
     if lblRec.SetFont then lblRec:SetFont("ZoFontGameBold") end
     lblRec:SetText(Addon.Locale:Get("MAIL_RECIPIENTS_LABEL"))
 
+    local limits = Addon.Constants.TEXT_LIMITS
     local recBg, recEdit = CreateEditBoxWithBackdrop(
-        panelName .. "_MailRecEdit", pane, 510, 32, 200, false, nil, false
+        panelName .. "_MailRecEdit", pane, 510, 32, limits.ACCOUNT_NAME, false, nil, false
     )
     recBg:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 68)
     tab.mailRecEdit = recEdit
@@ -45,7 +47,7 @@ function MailSendPane.Build(tab, parent)
     lblRole:SetText(Addon.Locale:Get("MAIL_ROLE_MSG_LABEL"))
 
     local roleBg, roleEdit = CreateEditBoxWithBackdrop(
-        panelName .. "_MailRoleEdit", pane, 510, 110, 700, true, function()
+        panelName .. "_MailRoleEdit", pane, 510, 110, limits.MAIL_ROLE_MESSAGE, true, function()
             tab:RefreshMailSendCounter()
         end, false
     )

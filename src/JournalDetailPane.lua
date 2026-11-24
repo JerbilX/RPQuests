@@ -502,7 +502,7 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, is
         end
         local dialogues = selectedQuest.dialogues or {}
         if #dialogues > 0 then
-            local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+            local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
             local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)
             table.insert(objLines, dlgLine)
         end
