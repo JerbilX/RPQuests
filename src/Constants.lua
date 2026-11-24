@@ -11,7 +11,7 @@ Addon.Constants = {
     METADATA = {
         NAME = "RPQuest",
         TITLE = "RPQuest",
-        VERSION = "1.9.0",
+        VERSION = "1.10.0",
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
