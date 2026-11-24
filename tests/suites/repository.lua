@@ -1186,4 +1186,102 @@ return function(T)
         AssertEqual(q3.sentTo, nil, "Changing recipient clears sentTo")
     end)
 
+    RunTest("Issue #295: Entity caps (4/4/4), localized alerts, dynamic badges, and legacy backwards compatibility", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({})
+        RPQuest.JournalTab:Initialize()
+
+        AssertEqual(RPQuest.Constants.TARGET.MAX_TARGETS, 4, "MAX_TARGETS is 4")
+        AssertEqual(RPQuest.Constants.DISCOVERY.MAX_POINTS, 4, "MAX_POINTS is 4")
+        AssertEqual(RPQuest.Constants.DIALOGUE.MAX_NPCS, 4, "MAX_NPCS is 4")
+
+        -- 1. Target cap (4) blocks 5th distinct target, but allows stacking existing target
+        repo:ResetDraft()
+        for i = 1, 4 do
+            mockState.reticleExists = true
+            mockState.reticleName = "Target " .. tostring(i)
+            local d = RPQuest.TargetCapture:CaptureFromReticle()
+            AssertTrue(d ~= nil, "Target " .. tostring(i) .. " captured")
+        end
+        -- Stacking existing target at cap 4/4 must still succeed
+        mockState.reticleName = "Target 1"
+        local stackedDraft = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertTrue(stackedDraft ~= nil and stackedDraft.targets[1].requiredCount == 2, "Stacking existing target allowed at cap")
+
+        -- 5th distinct target must fail with ALERT_TARGET_LIMIT
+        mockState.alerts = {}
+        mockState.reticleName = "Target 5"
+        local blockedTarget, targetErr = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertEqual(blockedTarget, nil, "5th distinct target rejected")
+        AssertEqual(targetErr, RPQuest.Locale:Get("ALERT_TARGET_LIMIT", 4), "Target limit returns ALERT_TARGET_LIMIT")
+        AssertEqual(#mockState.alerts, 1, "Target limit emits alert")
+
+        -- 2. Discovery cap (4) blocks 5th discovery point with ALERT_DISCOVERY_LIMIT
+        for i = 1, 4 do
+            local d, idx = RPQuest.TargetCapture:CaptureDiscoveryPoint("Point " .. tostring(i))
+            AssertTrue(d ~= nil and idx == i, "Discovery " .. tostring(i) .. " captured")
+        end
+        mockState.alerts = {}
+        local blockedDisc, discErr = RPQuest.TargetCapture:CaptureDiscoveryPoint("Point 5")
+        AssertEqual(blockedDisc, nil, "5th discovery point rejected")
+        AssertEqual(discErr, RPQuest.Locale:Get("ALERT_DISCOVERY_LIMIT", 4), "Discovery limit returns ALERT_DISCOVERY_LIMIT")
+        AssertEqual(#mockState.alerts, 1, "Discovery limit emits alert")
+
+        -- 3. Dialogue cap (4) allows 4 NPCs and blocks 5th with ALERT_DIALOGUE_LIMIT
+        for i = 1, 4 do
+            local d, idx = repo:AddDraftDialogue("NPC " .. tostring(i), 381, "Resp " .. tostring(i), "Clue " .. tostring(i))
+            AssertTrue(d ~= nil and idx == i, "Dialogue " .. tostring(i) .. " added")
+        end
+        local blockedDlg, dlgErr = repo:AddDraftDialogue("NPC 5", 381, "Resp 5", "Clue 5")
+        AssertEqual(blockedDlg, nil, "5th dialogue NPC rejected")
+        AssertEqual(dlgErr, RPQuest.Locale:Get("ALERT_DIALOGUE_LIMIT", 4), "Dialogue limit returns ALERT_DIALOGUE_LIMIT")
+
+        -- 4. Dynamic [%d/%d] badges in JournalEditorPane
+        RPQuest.JournalTab:RefreshEditorPane()
+        local targetHdrText = RPQuest.JournalTab.editorSectionsByKey.target.headerBtn:GetText()
+        local discHdrText = RPQuest.JournalTab.editorSectionsByKey.discovery.headerBtn:GetText()
+        local dlgHdrText = RPQuest.JournalTab.editorSectionsByKey.dialogue.headerBtn:GetText()
+        AssertTrue(targetHdrText:find("[4/4]", 1, true) ~= nil, "Target section badge shows [4/4]")
+        AssertTrue(discHdrText:find("[4/4]", 1, true) ~= nil, "Discovery section badge shows [4/4]")
+        AssertTrue(dlgHdrText:find("[4/4]", 1, true) ~= nil, "Dialogue section badge shows [4/4]")
+
+        -- 5. Backwards compatibility: legacy quest exceeding new caps/lengths loads cleanly
+        local longTitle = string.rep("T", 95)
+        local longDesc = string.rep("D", 380)
+        repo:Initialize({
+            nextId = 2,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 4,
+                    role = "received",
+                    status = "active",
+                    title = longTitle,
+                    description = longDesc,
+                    targets = {
+                        { name = "A", requiredCount = 1 },
+                        { name = "B", requiredCount = 1 },
+                        { name = "C", requiredCount = 1 },
+                        { name = "D", requiredCount = 1 },
+                        { name = "E", requiredCount = 1 },
+                    },
+                    discoveries = {
+                        { zoneId = 1, worldX = 1, worldY = 1, worldZ = 1, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "1" },
+                        { zoneId = 1, worldX = 2, worldY = 1, worldZ = 2, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "2" },
+                        { zoneId = 1, worldX = 3, worldY = 1, worldZ = 3, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "3" },
+                        { zoneId = 1, worldX = 4, worldY = 1, worldZ = 4, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "4" },
+                        { zoneId = 1, worldX = 5, worldY = 1, worldZ = 5, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "5" },
+                    },
+                },
+            },
+        })
+        local legacy = repo:GetQuestById(1)
+        AssertEqual(legacy.title, longTitle, "Legacy long title preserved")
+        AssertEqual(legacy.description, longDesc, "Legacy long description preserved")
+        AssertEqual(#legacy.targets, 5, "Legacy 5-target quest preserved")
+        AssertEqual(#legacy.discoveries, 5, "Legacy 5-discovery quest preserved")
+    end)
+
 end

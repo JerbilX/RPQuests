@@ -630,7 +630,7 @@ return function(T)
         AssertEqual(decoded.targets[1].worldZ, 20000, "Target worldZ preserved in ShareCodec")
         AssertEqual(decoded.targets[1].radius, 1000, "Target radius preserved in ShareCodec")
         AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved in ShareCodec")
-        AssertEqual(decoded.targets[1].customMessage, "Should NOT fire when locationRequired is true.", "Target customMessage preserved in ShareCodec")
+        AssertEqual(decoded.targets[1].customMessage, "", "Inactive customMessage pruned when locationRequired is true")
         AssertEqual(decoded.targets[1].customMessageInLocation, "Silent takedown in the alley.", "Target customMessageInLocation preserved in ShareCodec")
         AssertEqual(decoded.targets[1].customMessageOutsideLocation, "You alerted the district!", "Target customMessageOutsideLocation preserved in ShareCodec")
 

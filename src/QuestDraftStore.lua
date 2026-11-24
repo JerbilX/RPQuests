@@ -5,6 +5,7 @@
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -81,7 +82,7 @@ end
 function QuestDraftStore:CloneDialoguesList(dialogues, fallbackClue)
     local out = {}
     if type(dialogues) ~= "table" then return out end
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
     local fallback = type(fallbackClue) == "string" and fallbackClue or ""
     for _, d in ipairs(dialogues) do
         if #out >= maxNpcs then break end
@@ -251,6 +252,10 @@ function QuestDraftStore:AddDraftDiscoveryPoint(repo, data)
     end
     local draft = self:GetDraft(repo)
     draft.discoveries = draft.discoveries or {}
+    local maxPoints = (Addon.Constants and Addon.Constants.DISCOVERY and Addon.Constants.DISCOVERY.MAX_POINTS) or 4
+    if #draft.discoveries >= maxPoints then
+        return nil, Addon.Locale:Get("ALERT_DISCOVERY_LIMIT", maxPoints)
+    end
     local defaultRad = draft.discoveryRadius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
     local point = {
         zoneId = math.floor(tonumber(data.zoneId) or 0),
@@ -329,7 +334,7 @@ end
 function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, clueText)
     local draft = self:GetDraft(repo)
     draft.dialogues = draft.dialogues or {}
-    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 3
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
     if #draft.dialogues >= maxNpcs then
         return nil, Addon.Locale:Get("ALERT_DIALOGUE_LIMIT", maxNpcs)
     end
@@ -528,6 +533,10 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
         matchedEntry.areaCenterX = tAreaCenterX
         matchedEntry.areaCenterY = tAreaCenterY
     else
+        local maxTargets = (Addon.Constants and Addon.Constants.TARGET and Addon.Constants.TARGET.MAX_TARGETS) or 4
+        if #draft.targets >= maxTargets then
+            return nil, Addon.Locale:Get("ALERT_TARGET_LIMIT", maxTargets)
+        end
         matchedEntry = {
             name = cleanName,
             currentCount = 0,

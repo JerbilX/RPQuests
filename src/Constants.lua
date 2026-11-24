@@ -4,6 +4,7 @@
 -- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
+-- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -32,8 +33,24 @@ Addon.Constants = {
         COMPLETION_PREFIX = "RPQC1",
         VERSION = 3,
     },
+    TARGET = {
+        MAX_TARGETS = 4,
+    },
+    DISCOVERY = {
+        MAX_POINTS = 4,
+    },
     DIALOGUE = {
-        MAX_NPCS = 3,
+        MAX_NPCS = 4,
+    },
+    TEXT_LIMITS = {
+        TITLE = 80,
+        DESCRIPTION = 250,
+        ACCOUNT_NAME = 64,
+        CHARACTER_NAME = 64,
+        SHORT_MESSAGE = 100,
+        DIALOGUE_OPTION = 60,
+        DIALOGUE_RESPONSE = 150,
+        MAIL_ROLE_MESSAGE = 300,
     },
     QUEST_ROLE = {
         PREPARED = "prepared",

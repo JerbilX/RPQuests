@@ -51,8 +51,13 @@ return function(T)
 
         currentInteractName = "Cuarto NPC"
         RPQuest.DialogueInjector:OnChatterBegin()
+        local ok4, idx4 = RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Cuarta pista.")
+        AssertTrue(ok4 ~= nil and idx4 == 4, "4th NPC dialogue accepted (max 4)")
+
+        currentInteractName = "Quinto NPC"
+        RPQuest.DialogueInjector:OnChatterBegin()
         local limitOk, limitErr = RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Excede")
-        AssertEqual(limitOk, nil, "4th NPC dialogue rejected (max 3)")
+        AssertEqual(limitOk, nil, "5th NPC dialogue rejected (max 4)")
         AssertTrue(type(limitErr) == "string" and limitErr ~= "", "Limit error returned")
 
         -- Capture target and save quest
@@ -63,7 +68,7 @@ return function(T)
         AssertTrue(saved ~= nil, "Quest with dialogues and recommendHideMapAreas saved")
         AssertEqual(saved.clue, "el sello roto", "Clue persisted on quest")
         AssertEqual(saved.recommendHideMapAreas, true, "recommendHideMapAreas persisted on quest")
-        AssertEqual(#saved.dialogues, 3, "3 dialogues persisted on quest")
+        AssertEqual(#saved.dialogues, 4, "4 dialogues persisted on quest")
 
         -- 3. WorldMapArea respects recommendHideMapAreas when showSearchAreas is false
         RPQuest.QuestRepository:SetActiveQuest(saved.id)
@@ -79,7 +84,7 @@ return function(T)
         AssertTrue(imported ~= nil, "RPQ3 quest imported successfully")
         AssertEqual(imported.clue, "el sello roto", "Imported clue preserved")
         AssertEqual(imported.recommendHideMapAreas, true, "Imported recommendHideMapAreas preserved")
-        AssertEqual(#imported.dialogues, 3, "Imported 3 dialogues preserved")
+        AssertEqual(#imported.dialogues, 4, "Imported 4 dialogues preserved")
         AssertEqual(imported.dialogues[3].response, "Dejó una nota bajo la mesa 4~5; busca allí.", "Special chars in dialogue response preserved")
 
         -- Imported quest with hideMapArea also hides pin
