@@ -46,21 +46,21 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
     if titleLabel.SetModifyTextType then titleLabel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE) end
     tab.detailTitle = titleLabel
 
-    tab.detailStatus = CreateDetailLabel(contentParent, panelName .. "_DetailStatus", 500, 22, "ZoFontWinH4", titleLabel, BOTTOMLEFT, 0, 5)
+    tab.detailStatus = CreateDetailLabel(contentParent, panelName .. "_DetailStatus", 500, 24, "ZoFontWinH4", titleLabel, BOTTOMLEFT, 0, 8)
 
-    local fromLabel = CreateDetailLabel(contentParent, panelName .. "_DetailFrom", 500, 20, "ZoFontWinH4", tab.detailStatus, BOTTOMLEFT, 0, 2)
+    local fromLabel = CreateDetailLabel(contentParent, panelName .. "_DetailFrom", 500, 22, "ZoFontWinH4", tab.detailStatus, BOTTOMLEFT, 0, 6)
     if fromLabel.SetColor then fromLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailFrom = fromLabel
 
-    local toLabel = CreateDetailLabel(contentParent, panelName .. "_DetailTo", 500, 20, "ZoFontWinH4", fromLabel, BOTTOMLEFT, 0, 2)
+    local toLabel = CreateDetailLabel(contentParent, panelName .. "_DetailTo", 500, 22, "ZoFontWinH4", fromLabel, BOTTOMLEFT, 0, 6)
     if toLabel.SetColor then toLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailTo = toLabel
 
-    local locLabel = CreateDetailLabel(contentParent, panelName .. "_DetailLoc", 500, 22, "ZoFontWinH4", toLabel, BOTTOMLEFT, 0, 8)
+    local locLabel = CreateDetailLabel(contentParent, panelName .. "_DetailLoc", 500, 24, "ZoFontWinH4", toLabel, BOTTOMLEFT, 0, 10)
     if locLabel.SetColor then locLabel:SetColor(0.77, 0.76, 0.62, 1) end
     tab.detailLocation = locLabel
 
-    local descBody = CreateDetailLabel(contentParent, panelName .. "_DetailDescBody", 495, 104, "ZoFontWinH4", locLabel, BOTTOMLEFT, 25, 8)
+    local descBody = CreateDetailLabel(contentParent, panelName .. "_DetailDescBody", 495, 104, "ZoFontWinH4", locLabel, BOTTOMLEFT, 25, 12)
     if descBody.SetColor then descBody:SetColor(0.77, 0.76, 0.62, 1) end
     if descBody.SetMaxLineCount then descBody:SetMaxLineCount(5) end
     tab.detailDescBody = descBody
@@ -440,7 +440,7 @@ local function AppendTargetObjectiveLines(objLines, selectedQuest, isPrepared, p
     end
 end
 
-local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, isSentFailed, bullet)
+local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, isCurrentActive, pInfo, isSentCompleted, isSentFailed, bullet)
     local discoveries = selectedQuest.discoveries or {}
     if #discoveries > 0 then
         if isPrepared then
@@ -458,9 +458,15 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pI
 
     local modes = Addon.Constants.STEALTH_MODE
     local stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(selectedQuest.stealthMode, selectedQuest.requireUndetected)
-    if stealthMode ~= modes.DISABLED then
+    local showLiveStealth = (not isPrepared) or isCurrentActive or isSentCompleted or isSentFailed or (selectedQuest.failed == true)
+    if isPrepared and stealthMode == modes.DISABLED then
+        table.insert(objLines, bullet .. Addon.Locale:Get("MASTER_STEALTH_DISABLED"))
+    elseif isPrepared and not showLiveStealth then
+        local masterStealthKey = (stealthMode == modes.REQUIRED) and "MASTER_STEALTH_REQUIRED" or "MASTER_STEALTH_OPTIONAL"
+        table.insert(objLines, bullet .. Addon.Locale:Get(masterStealthKey))
+    elseif stealthMode ~= modes.DISABLED then
         local wasDetected = selectedQuest.wasDetected
-        if (isSentCompleted or isSentFailed) and pInfo.wasDetected ~= nil then
+        if (isSentCompleted or isSentFailed) and pInfo and pInfo.wasDetected ~= nil then
             wasDetected = pInfo.wasDetected
         end
         local stealthKey
@@ -489,14 +495,14 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pI
             local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)
             table.insert(objLines, dlgLine)
         end
-        if selectedQuest.recommendHideMapAreas or selectedQuest.hideMapArea then
-            local mapHiddenLine = Addon.Locale:Get("DIALOGUE_DETAIL_MAP_HIDDEN"):gsub("^•%s*", bullet)
-            table.insert(objLines, mapHiddenLine)
-        end
+        local hideRecommended = (selectedQuest.recommendHideMapAreas == true) or (selectedQuest.hideMapArea == true)
+        local mapRecKey = hideRecommended and "MASTER_MAP_MARKERS_HIDE" or "MASTER_MAP_MARKERS_SHOW"
+        local mapRecLine = Addon.Locale:Get(mapRecKey):gsub("^•%s*", bullet)
+        table.insert(objLines, mapRecLine)
     end
 end
 
-local function BuildObjectiveLines(selectedQuest, isPrepared)
+local function BuildObjectiveLines(selectedQuest, isPrepared, isCurrentActive)
     local objLines = {}
     local bullet = "|t16:16:/esoui/art/miscellaneous/bullet.dds|t "
     local lifecycle = Addon.QuestRepository:GetQuestLifecycle(selectedQuest)
@@ -508,14 +514,14 @@ local function BuildObjectiveLines(selectedQuest, isPrepared)
     local isSentFailed = isPrepared and lifecycle == Addon.Constants.QUEST_LIFECYCLE.SENT and resolution == "failed" and type(pInfo) == "table"
 
     AppendTargetObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, bullet)
-    AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pInfo, isSentCompleted, isSentFailed, bullet)
+    AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, isCurrentActive, pInfo, isSentCompleted, isSentFailed, bullet)
 
     return objLines
 end
 
 local function UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
     local needsMigration = isPrepared and (selectedQuest.needsMigration == true)
-    local showNotice = (selectedQuest.recommendHideMapAreas == true) or (selectedQuest.hideMapArea == true)
+    local showNotice = (not isPrepared) and ((selectedQuest.recommendHideMapAreas == true) or (selectedQuest.hideMapArea == true))
     local showToggles = (not isOffered) and (not needsMigration) and ((not isPrepared) or isCurrentActive)
 
     local anchorControl = tab.detailObjText
@@ -680,15 +686,17 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local isOffered = Addon.QuestRepository:IsOfferedQuest(selectedQuest)
     local isCurrentActive = (activeQuest and activeQuest.id == selectedQuest.id)
 
+    tab.detailObjHeader:SetText(Addon.Locale:Get(isPrepared and "LABEL_MISSION_DETAILS_HEADER" or "LABEL_OBJECTIVE_HEADER"))
+
     ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
     local statusText = tab.detailStatus:GetText() or ""
     tab.detailStatus:SetDimensions(500, 0)
     local statusHeight = tab.detailStatus.GetTextHeight and tab.detailStatus:GetTextHeight()
     if not statusHeight then
         local _, newlines = statusText:gsub("\n", "\n")
-        statusHeight = (newlines + 1) * 22
+        statusHeight = (newlines + 1) * 24
     end
-    statusHeight = math.max(22, statusHeight)
+    statusHeight = math.max(24, statusHeight)
     tab.detailStatus:SetDimensions(500, statusHeight)
 
     local fromName = (type(selectedQuest.senderCharacterName) == "string" and selectedQuest.senderCharacterName ~= "")
@@ -717,7 +725,7 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
         or Addon.Locale:Get("LABEL_NO_DESCRIPTION")
     tab.detailDescBody:SetText(descText)
 
-    local objLines = BuildObjectiveLines(selectedQuest, isPrepared)
+    local objLines = BuildObjectiveLines(selectedQuest, isPrepared, isCurrentActive)
     tab.detailObjText:SetDimensions(495, 0)
     tab.detailObjText:SetText(table.concat(objLines, "\n"))
     local textHeight = tab.detailObjText.GetTextHeight and tab.detailObjText:GetTextHeight()
@@ -725,7 +733,7 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
     local anchorControl, offsetX, offsetY, extraMapHeight = UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
     if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 620 + objHeight + math.max(0, statusHeight - 22) + extraMapHeight))
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 645 + objHeight + math.max(0, statusHeight - 24) + extraMapHeight))
     end
 
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared, anchorControl, offsetX, offsetY)

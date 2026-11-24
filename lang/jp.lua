@@ -56,6 +56,7 @@ RPQuest.Locales["jp"] = {
     LABEL_UNKNOWN_LOCATION = "不明な場所",
     LABEL_NO_DESCRIPTION = "追加の説明はありません。",
     LABEL_OBJECTIVE_HEADER = "目標",
+    LABEL_MISSION_DETAILS_HEADER = "ミッション詳細",
     OBJECTIVE_KILL_FORMAT = "• %s を倒す: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(完了)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(任意)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["jp"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "隠密（必須）: |c33FF33未発見|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "隠密（必須）: |cFF4444発見済み|r",
     STEALTH_STATUS_REQUIRED_FAILED = "隠密（必須）: |cFF4444失敗（発見）|r",
+    MASTER_STEALTH_DISABLED = "隠密: 無効",
+    MASTER_STEALTH_OPTIONAL = "隠密: 任意（発見を記録）",
+    MASTER_STEALTH_REQUIRED = "隠密: 必須（発見されると失敗）",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "新規カスタムクエスト作成",
@@ -125,7 +129,8 @@ RPQuest.Locales["jp"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "%s の返答:",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• 手がかり: %s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• 会話NPC: %d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• マップ捜索範囲: 非表示",
+    MASTER_MAP_MARKERS_HIDE = "• マップマーカー: 非表示推奨",
+    MASTER_MAP_MARKERS_SHOW = "• マップマーカー: 表示推奨",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest: 先にNPCと会話 ([E]) して登録してください。",
     ALERT_DIALOGUE_LIMIT = "RPQuest: 会話NPCの上限 (%d人) に達しました。",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest: そのNPCは既に会話リストに含まれています。",

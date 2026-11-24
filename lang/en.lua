@@ -56,6 +56,7 @@ RPQuest.Locales["en"] = {
     LABEL_UNKNOWN_LOCATION = "Unknown Location",
     LABEL_NO_DESCRIPTION = "No additional description provided.",
     LABEL_OBJECTIVE_HEADER = "TASKS",
+    LABEL_MISSION_DETAILS_HEADER = "MISSION DETAILS",
     OBJECTIVE_KILL_FORMAT = "• Eliminate %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completed)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optional)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["en"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "Stealth (Required): |c33FF33Undetected|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "Stealth (Required): |cFF4444Detected|r",
     STEALTH_STATUS_REQUIRED_FAILED = "Stealth (Required): |cFF4444Failed (Detected)|r",
+    MASTER_STEALTH_DISABLED = "Stealth: Disabled",
+    MASTER_STEALTH_OPTIONAL = "Stealth: Optional (Record detection)",
+    MASTER_STEALTH_REQUIRED = "Stealth: Required (Fail if detected)",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "CREATE NEW CUSTOM QUEST",
@@ -125,7 +129,8 @@ RPQuest.Locales["en"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "%s's Response:",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• Clue: %s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• Dialogue NPCs: %d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• Map search area: Hidden",
+    MASTER_MAP_MARKERS_HIDE = "• Map markers: Recommend hiding",
+    MASTER_MAP_MARKERS_SHOW = "• Map markers: Show recommended",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest: Talk to an NPC ([E]) first to capture them.",
     ALERT_DIALOGUE_LIMIT = "RPQuest: Maximum of %d dialogue NPCs reached.",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest: That NPC is already in the dialogue list.",

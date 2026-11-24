@@ -56,6 +56,7 @@ RPQuest.Locales["zh"] = {
     LABEL_UNKNOWN_LOCATION = "未知位置",
     LABEL_NO_DESCRIPTION = "未提供额外描述。",
     LABEL_OBJECTIVE_HEADER = "任务目标",
+    LABEL_MISSION_DETAILS_HEADER = "任务详情",
     OBJECTIVE_KILL_FORMAT = "• 消灭 %s：%d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(已完成)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(可选)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["zh"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "潜行（必需）：|c33FF33未被发现|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "潜行（必需）：|cFF4444已被发现|r",
     STEALTH_STATUS_REQUIRED_FAILED = "潜行（必需）：|cFF4444失败（已被发现）|r",
+    MASTER_STEALTH_DISABLED = "潜行：已禁用",
+    MASTER_STEALTH_OPTIONAL = "潜行：可选（记录是否被发现）",
+    MASTER_STEALTH_REQUIRED = "潜行：必需（被发现则失败）",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "创建新自定义任务",
@@ -125,7 +129,8 @@ RPQuest.Locales["zh"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "%s 的回复：",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• 线索：%s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• 对话 NPC：%d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• 地图搜索区域：已隐藏",
+    MASTER_MAP_MARKERS_HIDE = "• 地图标记：建议隐藏",
+    MASTER_MAP_MARKERS_SHOW = "• 地图标记：建议显示",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest：请先与一位 NPC 对话 ([E]) 再进行捕获。",
     ALERT_DIALOGUE_LIMIT = "RPQuest：已达到最多 %d 个对话 NPC 的上限。",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest：该 NPC 已在对话列表中。",
