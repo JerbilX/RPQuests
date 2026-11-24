@@ -614,6 +614,12 @@ return function(T)
                 { zoneId = 381, worldX = 200, worldY = 10, worldZ = 200, mapId = 32, x = 0.2, y = 0.2, radius = 800, message = "D2" },
                 { zoneId = 381, worldX = 300, worldY = 10, worldZ = 300, mapId = 32, x = 0.3, y = 0.3, radius = 800, message = "D3" },
                 { zoneId = 381, worldX = 400, worldY = 10, worldZ = 400, mapId = 32, x = 0.4, y = 0.4, radius = 800, message = "D4" },
+                { zoneId = 381, worldX = 500, worldY = 10, worldZ = 500, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "D5" },
+                { zoneId = 381, worldX = 600, worldY = 10, worldZ = 600, mapId = 32, x = 0.6, y = 0.6, radius = 800, message = "D6" },
+                { zoneId = 381, worldX = 700, worldY = 10, worldZ = 700, mapId = 32, x = 0.7, y = 0.7, radius = 800, message = "D7" },
+                { zoneId = 381, worldX = 800, worldY = 10, worldZ = 800, mapId = 32, x = 0.8, y = 0.8, radius = 800, message = "D8" },
+                { zoneId = 381, worldX = 900, worldY = 10, worldZ = 900, mapId = 32, x = 0.9, y = 0.9, radius = 800, message = "D9" },
+                { zoneId = 381, worldX = 1000, worldY = 10, worldZ = 1000, mapId = 32, x = 0.95, y = 0.95, radius = 800, message = "D10" },
             },
             dialogues = {
                 { npcName = "NPC 1", zoneId = 381, clue = "C1", response = "R1" },
@@ -628,7 +634,7 @@ return function(T)
         local decoded = RPQuest.ShareCodec:DecodeQuest(code)
         AssertTrue(decoded ~= nil, "Max-cap quest decodes cleanly")
         AssertEqual(#decoded.targets, 4, "4 targets round-trip")
-        AssertEqual(#decoded.discoveries, 4, "4 discoveries round-trip")
+        AssertEqual(#decoded.discoveries, 10, "10 discoveries round-trip")
         AssertEqual(#decoded.dialogues, 4, "4 dialogues round-trip")
 
         AssertEqual(decoded.targets[1].customMessage, "Active general msg", "Target A keeps active customMessage")

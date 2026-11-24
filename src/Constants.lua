@@ -37,7 +37,7 @@ Addon.Constants = {
         MAX_TARGETS = 4,
     },
     DISCOVERY = {
-        MAX_POINTS = 4,
+        MAX_POINTS = 10,
     },
     DIALOGUE = {
         MAX_NPCS = 4,

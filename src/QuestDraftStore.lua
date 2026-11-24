@@ -252,7 +252,7 @@ function QuestDraftStore:AddDraftDiscoveryPoint(repo, data)
     end
     local draft = self:GetDraft(repo)
     draft.discoveries = draft.discoveries or {}
-    local maxPoints = (Addon.Constants and Addon.Constants.DISCOVERY and Addon.Constants.DISCOVERY.MAX_POINTS) or 4
+    local maxPoints = (Addon.Constants and Addon.Constants.DISCOVERY and Addon.Constants.DISCOVERY.MAX_POINTS) or 10
     if #draft.discoveries >= maxPoints then
         return nil, Addon.Locale:Get("ALERT_DISCOVERY_LIMIT", maxPoints)
     end
