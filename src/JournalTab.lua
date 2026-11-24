@@ -47,6 +47,44 @@ local function GetQuestSectionKey(quest)
     return "missions"
 end
 
+local function EnsureExpandedSectionWithQuests(self, buckets, activeQuest)
+    if not self.collapsedSections then return end
+    for _, key in ipairs(QUEST_SECTIONS) do
+        if #buckets[key] > 0 and self.collapsedSections[key] == false then
+            return
+        end
+    end
+
+    local targetKey = nil
+    if self.selectedQuestId then
+        local selected = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+        local selectedKey = GetQuestSectionKey(selected)
+        if selectedKey and buckets[selectedKey] and #buckets[selectedKey] > 0 then
+            targetKey = selectedKey
+        end
+    end
+
+    if not targetKey and activeQuest then
+        local activeKey = GetQuestSectionKey(activeQuest)
+        if activeKey and buckets[activeKey] and #buckets[activeKey] > 0 then
+            targetKey = activeKey
+        end
+    end
+
+    if not targetKey then
+        for _, key in ipairs(QUEST_SECTIONS) do
+            if #buckets[key] > 0 then
+                targetKey = key
+                break
+            end
+        end
+    end
+
+    if targetKey then
+        ExpandOnlySection(self, targetKey)
+    end
+end
+
 function JournalTab:RegisterRepositoryListener()
     Addon.QuestRepository:RegisterListener(function(eventType, quest)
         if eventType == "QUEST_CREATED" or eventType == "QUEST_UPDATED" or eventType == "QUEST_SENT" then
@@ -517,31 +555,12 @@ function JournalTab:OpenCreateEditor()
     ApplyDraftToEditor(self, draft)
 end
 
-function JournalTab:IsSectionLockedExpanded(sectionKey)
-    if not sectionKey then return false end
-    if self.selectedQuestId then
-        local selected = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
-        if GetQuestSectionKey(selected) == sectionKey then
-            return true
-        end
-    end
-    local activeQuest = Addon.QuestRepository:GetActiveQuest()
-    if activeQuest and GetQuestSectionKey(activeQuest) == sectionKey then
-        return true
-    end
-    return false
-end
-
 function JournalTab:ToggleSection(sectionKey)
     if not sectionKey or not self.collapsedSections then return end
-    if self.collapsedSections[sectionKey] ~= false then
-        ExpandOnlySection(self, sectionKey)
-    else
-        if self:IsSectionLockedExpanded(sectionKey) then
-            return
-        end
-        self.collapsedSections[sectionKey] = true
+    if self.collapsedSections[sectionKey] == false then
+        return
     end
+    ExpandOnlySection(self, sectionKey)
     self.listOffset = 0
     self:RefreshQuestList()
 end
@@ -924,6 +943,7 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
     end
 
     local buckets = PartitionQuestsBySection(allQuests)
+    EnsureExpandedSectionWithQuests(self, buckets, activeQuest)
     local displayRows = {}
 
     for _, def in ipairs(SECTION_DEFINITIONS) do
