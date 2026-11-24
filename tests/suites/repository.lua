@@ -85,28 +85,18 @@ return function(T)
         AssertEqual(updated.title, "Purga Real en el Bosque", "Quest title updated in place")
         AssertEqual(#RPQuest.QuestRepository:GetAllQuests(), 1, "Still 1 quest after edit")
 
-        -- 4. Progreso de bajas en mapa incorrecto (debe ignorarse)
-        local recWrongMap = RPQuest.QuestRepository:RecordTargetEliminated("Nigromante Oscuro", {
+        -- 4. Progreso de bajas en cualquier lugar de Tamriel cuando locationRequired == false
+        local recAnywhere = RPQuest.QuestRepository:RecordTargetEliminated("Nigromante Oscuro", {
             mapId = 999,
             zoneId = 999,
             x = 0.40,
             y = 0.60,
         })
-        AssertEqual(recWrongMap, false, "Kill in wrong map/zone must not count")
+        AssertTrue(recAnywhere, "Kill in any map/zone counts when locationRequired is false")
+        AssertEqual(quest.targets[1].currentCount, 1, "Current count is 1 after Tamriel-wide kill")
 
-        -- 5. Primera baja válida (1/2)
-        local rec1, _, comp1 = RPQuest.QuestRepository:RecordTargetEliminated("Nigromante Oscuro^m", {
-            mapId = 32,
-            zoneId = 381,
-            x = 0.40,
-            y = 0.60,
-        })
-        AssertTrue(rec1, "First valid kill recorded")
-        AssertEqual(comp1, false, "Not completed at 1/2")
-        AssertEqual(quest.targets[1].currentCount, 1, "Current count is 1")
-
-        -- 6. Segunda baja válida (2/2 -> Completada)
-        local rec2, _, comp2 = RPQuest.QuestRepository:RecordTargetEliminated("Nigromante Oscuro", {
+        -- 5. Segunda baja válida (2/2 -> Completada)
+        local rec2, _, comp2 = RPQuest.QuestRepository:RecordTargetEliminated("Nigromante Oscuro^m", {
             mapId = 32,
             zoneId = 381,
             x = 0.40,
@@ -185,22 +175,21 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), false, "Edit button visible for prepared quest")
         AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Probar", "Activate button says Probar for prepared quest")
 
-        -- 2b. Sección con item seleccionado no se colapsa; sin item seleccionado/activo sí colapsa y expande
+        -- 2b. Acordeón excluyente: la sección abierta nunca se colapsa al hacer clic de nuevo (con o sin ítem seleccionado)
         RPQuest.JournalTab:ToggleSection("preparing")
         AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "Section with selected quest stays expanded")
         RPQuest.JournalTab:SelectQuest(nil)
         RPQuest.JournalTab:ToggleSection("preparing")
-        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "ToggleSection collapses preparing when no item is selected/active")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection keeps preparing expanded even when no item is selected/active")
         local prepRowVisible = false
         for _, b in pairs(RPQuest.JournalTab.rowBindings) do
             if b.questId == prep.id then prepRowVisible = true end
         end
-        AssertEqual(prepRowVisible, false, "Collapsed section hides its quest rows")
-        RPQuest.JournalTab:ToggleSection("preparing")
-        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection expands preparing again")
+        AssertEqual(prepRowVisible, true, "Expanded section keeps its quest rows visible")
         RPQuest.JournalTab:SelectQuest(prep.id)
 
         -- 2c. Mostrar en mapa una misión en preparación (aunque no esté activa)
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", true)
         RPQuest.WorldMapArea:Initialize()
         RPQuest.WorldMapArea:ShowQuestOnMap(prep)
         local pins = ZO_WorldMap_GetPinManager()._createdPins
@@ -362,6 +351,7 @@ return function(T)
             })
         end
         local longDesc = string.rep("Descripcion extensa para probar limites de Base64Url. ", 8)
+        RPQuest.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = false })
         local q = RPQuest.QuestRepository:SaveDraft("Mision Extensa", longDesc, nil, "Completada con exito!")
         AssertTrue(q ~= nil, "Saved quest with 10 targets")
 
@@ -691,6 +681,11 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed collapses when Missions expands")
         AssertEqual(hasRowForQuest(1), true, "Active mission row is visible again")
         AssertEqual(hasRowForQuest(3), false, "Completed quest row is hidden")
+
+        -- Clicking an already-expanded section keeps it open (never leaves all sections collapsed)
+        RPQuest.JournalTab:ToggleSection("missions")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "Clicking already-open Missions keeps it expanded")
+        AssertEqual(hasRowForQuest(1), true, "Active mission row remains visible")
     end)
 
     RunTest("QuestRepository:DuplicateQuest copies Preparing and Sent into Preparing and rejects Received", function()
@@ -934,10 +929,10 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 2, "Quest 1 upgraded to schema v2")
+        AssertEqual(q1.schemaVersion, 3, "Quest 1 upgraded to current schema v3")
         AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
         AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
-        AssertEqual(q2.schemaVersion, 2, "Quest 2 upgraded to schema v2")
+        AssertEqual(q2.schemaVersion, 3, "Quest 2 upgraded to current schema v3")
         AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
         AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
 
@@ -1014,6 +1009,103 @@ return function(T)
         local found = repo:MarkDiscoveryTriggered(imported.id, 1)
         AssertEqual(found, true, "Discovery point recorded")
         AssertEqual(imported.completed, true, "Discovery-only quest completes without any NPC target")
+    end)
+
+    RunTest("Issue #277: v2 -> v3 migration, RemoveDraftTarget, and local map visibility defaults", function()
+        local repo = RPQuest.QuestRepository
+        local defaults = repo:GetDefaults()
+        AssertEqual(defaults.draft.recommendHideMapAreas, true, "New draft defaults recommendHideMapAreas = true")
+        AssertEqual(defaults.settings.showSearchAreas, false, "Local setting showSearchAreas defaults to false")
+        AssertEqual(defaults.settings.showLocationAreas, false, "Local setting showLocationAreas defaults to false")
+
+        local sv = {
+            nextId = 10,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 2,
+                    role = RPQuest.Constants.QUEST_ROLE.PREPARED,
+                    title = "Legacy v2 Hidden",
+                    description = "Desc",
+                    mapId = 32,
+                    zoneId = 381,
+                    areaCenterX = 0.41,
+                    areaCenterY = 0.62,
+                    areaRadius = 0.125,
+                    hideMapArea = true,
+                    targets = {
+                        { name = "Target A", requiredCount = 1, currentCount = 0 },
+                        { name = "Target B", requiredCount = 2, currentCount = 1 },
+                    },
+                },
+                {
+                    id = 2,
+                    schemaVersion = 2,
+                    role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+                    title = "Legacy v2 Visible",
+                    description = "Desc",
+                    mapId = 32,
+                    zoneId = 381,
+                    areaCenterX = 0.33,
+                    areaCenterY = 0.44,
+                    areaRadius = 0.070,
+                    hideMapArea = false,
+                    targets = {
+                        { name = "Target C", requiredCount = 1, currentCount = 0 },
+                    },
+                },
+            },
+        }
+        repo:Initialize(sv)
+
+        local q1 = repo:GetQuestById(1)
+        local q2 = repo:GetQuestById(2)
+        AssertEqual(q1.schemaVersion, 3, "v2 quest 1 migrated to schema v3")
+        AssertEqual(q1.recommendHideMapAreas, true, "v2 hideMapArea=true preserved in recommendHideMapAreas")
+        AssertEqual(q1.hideMapArea, nil, "Legacy hideMapArea cleared on q1")
+        AssertEqual(q1.areaCenterX, nil, "Legacy quest-level areaCenterX cleared on q1")
+        AssertEqual(q1.areaCenterY, nil, "Legacy quest-level areaCenterY cleared on q1")
+        AssertEqual(q1.areaRadius, nil, "Legacy quest-level areaRadius cleared on q1")
+        AssertEqual(q1.targets[1].areaCenterX, 0.41, "Target 1 inherits q1 areaCenterX")
+        AssertEqual(q1.targets[2].areaCenterY, 0.62, "Target 2 inherits q1 areaCenterY")
+        AssertEqual(q1.targets[2].areaRadius, 0.125, "Target 2 inherits q1 areaRadius")
+        AssertEqual(q1.targets[1].customMessageInLocation, "", "Target 1 initializes customMessageInLocation")
+        AssertEqual(q1.targets[1].customMessageOutsideLocation, "", "Target 1 initializes customMessageOutsideLocation")
+
+        AssertEqual(q2.schemaVersion, 3, "v2 quest 2 migrated to schema v3")
+        AssertEqual(q2.recommendHideMapAreas, false, "v2 hideMapArea=false preserved in recommendHideMapAreas")
+        AssertEqual(q2.targets[1].areaRadius, 0.070, "q2 target inherits 0.070 areaRadius")
+
+        -- RemoveDraftTarget
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({
+            targetName = "First",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.2,
+            targetY = 0.3,
+        })
+        repo:SetDraftCapturedTarget({
+            targetName = "Second",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.6,
+            targetY = 0.7,
+        })
+        AssertEqual(#repo:GetDraft().targets, 2, "2 targets in draft before RemoveDraftTarget")
+        AssertEqual(repo:RemoveDraftTarget(99), nil, "RemoveDraftTarget returns nil for invalid index")
+        local dAfter1 = repo:RemoveDraftTarget(1)
+        AssertEqual(#dAfter1.targets, 1, "1 target remains after removing index 1")
+        AssertEqual(dAfter1.targets[1].name, "Second", "Remaining target is Second")
+        AssertEqual(dAfter1.lastCapturedDisplay, "Second", "lastCapturedDisplay updated to remaining target")
+        AssertTrue(math.abs(dAfter1.targetX - 0.6) < 0.0001, "Centroid targetX updated after RemoveDraftTarget")
+
+        local dAfter2 = repo:RemoveDraftTarget(1)
+        AssertEqual(#dAfter2.targets, 0, "0 targets remain after removing last target")
+        AssertEqual(dAfter2.lastCapturedDisplay, nil, "lastCapturedDisplay cleared when empty")
+        AssertEqual(dAfter2.mapId, 0, "mapId cleared when targets and discoveries are empty")
     end)
 
 end

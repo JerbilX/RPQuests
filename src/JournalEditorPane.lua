@@ -3,6 +3,7 @@
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
+-- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -47,7 +48,7 @@ function EditorPane.Build(tab, parent)
     local headerSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "header", "LABEL_HEADER_SECTION", 218)
     EditorSections.BuildBaseFields(tab, headerSec.body, panelName)
 
-    local targetSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "target", "LABEL_TARGET_SECTION", 256)
+    local targetSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "target", "LABEL_TARGET_SECTION", 342)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
     EditorSections.BuildTargetConfigControls(tab, targetSec.body, panelName)
 
@@ -59,7 +60,7 @@ function EditorPane.Build(tab, parent)
     EditorSections.BuildDialogueControls(tab, dialogueSec.body, panelName)
     EditorSections.BuildDialogueInputs(tab, dialogueSec.body, panelName)
 
-    local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 122)
+    local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 152)
     EditorSections.BuildOptionsSection(tab, optionsSec.body, panelName)
 
     EditorPane.LayoutSections(tab)
@@ -210,40 +211,96 @@ local function SyncUnfocusedEdit(editCtrl, text)
 end
 
 local function RefreshEditorBaseAndArea(tab, draft)
-    local FormatSelected = Addon.JournalWidgets.FormatSelected
-
     tab.editorHeader:SetText(Addon.Locale:Get(draft.editingQuestId and "EDITOR_EDIT_TITLE" or "EDITOR_CREATE_TITLE"))
     SyncUnfocusedEdit(tab.titleEdit, draft.title or "")
     SyncUnfocusedEdit(tab.descEdit, draft.description or "")
     SyncUnfocusedEdit(tab.recipientEdit, draft.recipientAccount or "")
     SyncUnfocusedEdit(tab.recipientCharEdit, draft.recipientCharacterName or "")
     SyncUnfocusedEdit(tab.completionEdit, draft.completionMessage or "")
+end
 
-    local targets = draft.targets or {}
-    local summary = Addon.QuestRepository:FormatTargetsSummary(targets)
-    if summary ~= "" then
-        local locName = (draft.mapName and draft.mapName ~= "" and draft.mapName)
-            or Addon.Locale:Get("LABEL_UNKNOWN_LOCATION")
-        tab.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_CAPTURED_FORMAT", summary, locName))
-        tab.btnClearTargets:SetHidden(false)
+local function SetButtonEnabled(btn, enabled)
+    if not btn then return end
+    if btn.SetEnabled then btn:SetEnabled(enabled) end
+    if btn.SetAlpha then btn:SetAlpha(enabled and 1 or 0.45) end
+end
+
+local function RefreshTargetDropdown(tab, targets, hasTargets)
+    local combo = tab.targetComboBox
+    if not combo then return end
+    combo:ClearItems()
+    if hasTargets then
+        for i, t in ipairs(targets) do
+            local label = Addon.QuestRepository:FormatTargetEntry(t)
+            local entry = combo:CreateItemEntry(label, function()
+                tab.selectedTargetIndex = i
+                tab:RefreshEditorPane()
+            end)
+            entry.targetIndex = i
+            combo:AddItem(entry)
+        end
+        combo:SetEnabled(true)
+        combo:SetSelectedItemByEval(function(item)
+            return item.targetIndex == tab.selectedTargetIndex
+        end, true)
     else
-        tab.lblCapturedTarget:SetText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
-        tab.btnClearTargets:SetHidden(true)
-    end
-
-    local radii = Addon.Constants.AREA_RADIUS
-    local curRad = draft.areaRadius or radii.MEDIUM
-    tab.btnRadiusSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_SMALL"), math.abs(curRad - radii.SMALL) < 0.005))
-    tab.btnRadiusMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_MEDIUM"), math.abs(curRad - radii.MEDIUM) < 0.005))
-    tab.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
-
-    if tab.btnHideMapArea then
-        tab.btnHideMapArea:SetText(Addon.Locale:Get(draft.hideMapArea and "OPT_HIDE_MAP_AREA_ACTIVE" or "OPT_HIDE_MAP_AREA"))
+        combo:SetEnabled(false)
+        combo:SetSelectedItemText(Addon.Locale:Get("TARGET_NOT_CAPTURED"))
     end
 end
 
+local function RefreshTargetMessageControls(tab, selTarget, hasTargets, isLocRequired)
+    local validState = tab.selectedTargetMsgState
+    if isLocRequired then
+        if validState ~= "in_location" and validState ~= "outside_location" then
+            validState = "in_location"
+        end
+    else
+        validState = "elimination"
+    end
+    tab.selectedTargetMsgState = validState
+
+    local msgCombo = tab.targetMsgComboBox
+    if msgCombo then
+        msgCombo:ClearItems()
+        local msgOptions = {
+            { state = "elimination", label = Addon.Locale:Get("OPT_TARGET_MSG_ELIMINATION"), enabled = not isLocRequired },
+            { state = "in_location", label = Addon.Locale:Get("OPT_TARGET_MSG_IN_LOCATION"), enabled = isLocRequired },
+            { state = "outside_location", label = Addon.Locale:Get("OPT_TARGET_MSG_OUTSIDE_LOCATION"), enabled = isLocRequired },
+        }
+        for _, opt in ipairs(msgOptions) do
+            local entry = msgCombo:CreateItemEntry(opt.label, function()
+                tab.selectedTargetMsgState = opt.state
+                tab:RefreshEditorPane()
+            end, opt.enabled)
+            entry.msgState = opt.state
+            msgCombo:AddItem(entry)
+        end
+        msgCombo:SetEnabled(hasTargets)
+        msgCombo:SetSelectedItemByEval(function(item)
+            return item.msgState == tab.selectedTargetMsgState
+        end, true)
+    end
+
+    local isEditable = hasTargets and (
+        (tab.selectedTargetMsgState == "elimination" and not isLocRequired)
+        or ((tab.selectedTargetMsgState == "in_location" or tab.selectedTargetMsgState == "outside_location") and isLocRequired)
+    )
+    local msgText = ""
+    if selTarget then
+        if tab.selectedTargetMsgState == "in_location" then
+            msgText = selTarget.customMessageInLocation or ""
+        elseif tab.selectedTargetMsgState == "outside_location" then
+            msgText = selTarget.customMessageOutsideLocation or ""
+        else
+            msgText = selTarget.customMessage or ""
+        end
+    end
+    Addon.JournalWidgets.SetEditBoxEnabled(tab.targetCustomBg, tab.targetCustomEdit, isEditable)
+    SyncUnfocusedEdit(tab.targetCustomEdit, msgText)
+end
+
 local function RefreshEditorTargetConfig(tab, draft)
-    local FormatSelected = Addon.JournalWidgets.FormatSelected
     local targets = draft.targets or {}
     local totalTargets = #targets
     if totalTargets > 0 then
@@ -254,63 +311,47 @@ local function RefreshEditorTargetConfig(tab, draft)
         tab.selectedTargetIndex = nil
     end
 
-    local showTargetCfg = totalTargets > 0
+    local hasTargets = totalTargets > 0
     local selTarget = tab.selectedTargetIndex and targets[tab.selectedTargetIndex] or nil
     local hasTargetLoc = selTarget and Addon.QuestRepository:HasTargetLocation(selTarget) or false
+    local isLocRequired = hasTargetLoc and (selTarget.locationRequired == true)
 
-    if tab.btnTargetPrev then tab.btnTargetPrev:SetHidden(not showTargetCfg) end
-    if tab.btnTargetNext then tab.btnTargetNext:SetHidden(not showTargetCfg) end
-    if tab.btnTargetOptional then
-        tab.btnTargetOptional:SetHidden(not showTargetCfg)
-        if selTarget then
-            local optKey = selTarget.optional and "BTN_TARGET_OPTIONAL_ON" or "BTN_TARGET_OPTIONAL_OFF"
-            tab.btnTargetOptional:SetText(FormatSelected(Addon.Locale:Get(optKey), selTarget.optional == true))
-        end
-    end
-    if tab.lblTargetCfgIndex then
-        tab.lblTargetCfgIndex:SetHidden(not showTargetCfg)
-        if showTargetCfg and selTarget then
-            tab.lblTargetCfgIndex:SetText(Addon.Locale:Get("TARGET_CFG_HEADER", tab.selectedTargetIndex, totalTargets, selTarget.name or ""))
-        end
-    end
-    if tab.btnCaptureTargetLoc then
-        tab.btnCaptureTargetLoc:SetHidden(not showTargetCfg)
-        tab.btnCaptureTargetLoc:SetText(FormatSelected(Addon.Locale:Get("BTN_CAPTURE_TARGET_LOC"), hasTargetLoc))
-    end
-    if tab.btnClearTargetLoc then tab.btnClearTargetLoc:SetHidden(not (showTargetCfg and hasTargetLoc)) end
-    if tab.btnTargetLocRequired then
-        tab.btnTargetLocRequired:SetHidden(not (showTargetCfg and hasTargetLoc))
-        if selTarget then
-            local reqKey = selTarget.locationRequired and "BTN_TARGET_LOC_REQUIRED" or "BTN_TARGET_LOC_OPTIONAL"
-            tab.btnTargetLocRequired:SetText(FormatSelected(Addon.Locale:Get(reqKey), selTarget.locationRequired == true))
-        end
+    RefreshTargetDropdown(tab, targets, hasTargets)
+    SetButtonEnabled(tab.btnRemoveTarget, hasTargets)
+    SetButtonEnabled(tab.btnClearTargets, hasTargets)
+
+    if tab.chkTargetOptional then
+        ZO_CheckButton_SetCheckState(tab.chkTargetOptional, selTarget and selTarget.optional == true or false)
+        ZO_CheckButton_SetEnableState(tab.chkTargetOptional, hasTargets)
     end
 
-    local discRadii = Addon.Constants.DISCOVERY_RADIUS
-    local curTargetRad = (selTarget and selTarget.radius) or discRadii.MEDIUM
-    if tab.btnTargetRadSmall then
-        tab.btnTargetRadSmall:SetHidden(not (showTargetCfg and hasTargetLoc))
-        tab.btnTargetRadSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_SMALL"), curTargetRad == discRadii.SMALL))
+    if tab.areaSizeComboBox then
+        local radii = Addon.Constants.AREA_RADIUS
+        local curRad = (selTarget and selTarget.areaRadius) or draft.areaRadius or radii.MEDIUM
+        tab.areaSizeComboBox:SetEnabled(hasTargets)
+        tab.areaSizeComboBox:SetSelectedItemByEval(function(item)
+            return math.abs(item.areaRadius - curRad) < 0.005
+        end, true)
     end
-    if tab.btnTargetRadMedium then
-        tab.btnTargetRadMedium:SetHidden(not (showTargetCfg and hasTargetLoc))
-        tab.btnTargetRadMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_MEDIUM"), curTargetRad == discRadii.MEDIUM))
+
+    if tab.chkTargetLocRequired then
+        ZO_CheckButton_SetCheckState(tab.chkTargetLocRequired, isLocRequired)
+        ZO_CheckButton_SetEnableState(tab.chkTargetLocRequired, hasTargetLoc)
     end
-    if tab.btnTargetRadLarge then
-        tab.btnTargetRadLarge:SetHidden(not (showTargetCfg and hasTargetLoc))
-        tab.btnTargetRadLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_LARGE"), curTargetRad == discRadii.LARGE))
+
+    SetButtonEnabled(tab.btnCaptureTargetLoc, hasTargets)
+    SetButtonEnabled(tab.btnClearTargetLoc, hasTargetLoc)
+
+    if tab.targetLocRadComboBox then
+        local discRadii = Addon.Constants.DISCOVERY_RADIUS
+        local curTargetRad = (selTarget and selTarget.radius) or discRadii.MEDIUM
+        tab.targetLocRadComboBox:SetEnabled(hasTargetLoc)
+        tab.targetLocRadComboBox:SetSelectedItemByEval(function(item)
+            return item.locRadius == curTargetRad
+        end, true)
     end
-    if tab.lblTargetLocStatus then
-        tab.lblTargetLocStatus:SetHidden(not showTargetCfg)
-        if showTargetCfg then
-            local statusText = hasTargetLoc
-                and Addon.Locale:Get("TARGET_LOC_STATUS_SET", math.floor(curTargetRad / 100))
-                or Addon.Locale:Get("TARGET_LOC_STATUS_NONE")
-            tab.lblTargetLocStatus:SetText(statusText)
-        end
-    end
-    if tab.targetCustomBg then tab.targetCustomBg:SetHidden(not showTargetCfg) end
-    SyncUnfocusedEdit(tab.targetCustomEdit, (selTarget and selTarget.customMessage) or "")
+
+    RefreshTargetMessageControls(tab, selTarget, hasTargets, isLocRequired)
 end
 
 local function RefreshEditorDiscoveries(tab, draft)
@@ -433,6 +474,11 @@ local function RefreshEditorDialoguesAndOptions(tab, draft)
                 return item.stealthMode == targetMode
             end, true)
         end
+    end
+
+    if tab.chkHideMapArea then
+        local recHide = (draft.recommendHideMapAreas ~= nil) and (draft.recommendHideMapAreas == true) or (draft.hideMapArea == true)
+        ZO_CheckButton_SetCheckState(tab.chkHideMapArea, recHide)
     end
 end
 

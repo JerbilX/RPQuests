@@ -2,6 +2,7 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
+-- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -10,11 +11,11 @@ Addon.Constants = {
     METADATA = {
         NAME = "RPQuest",
         TITLE = "RPQuest",
-        VERSION = "1.9.0",
+        VERSION = "1.10.0",
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 2,
+        CURRENT_VERSION = 3,
     },
     STEALTH_MODE = {
         DISABLED = "disabled",
@@ -61,6 +62,8 @@ Addon.Constants = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",
         TAB_DESCRIPTOR = "rpquest_custom_quests",
         PIN_TYPE_STRING = "RPQUEST_SEARCH_AREA_PIN",
+        LOCATION_PIN_TYPE_STRING = "RPQUEST_TARGET_LOCATION_PIN",
+        LOCATION_AREA_COLOR = { r = 1.0, g = 0.58, b = 0.18, a = 0.65 },
         ZOOM_OUT_PIN_TYPE_STRING = "RPQUEST_ZOOM_OUT_PIN",
         ICON_TAB_UP = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_up.dds",
         ICON_TAB_DOWN = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_down.dds",

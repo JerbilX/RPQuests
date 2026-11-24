@@ -40,9 +40,9 @@ return function(T)
         AssertEqual(decoded.mapId, 32, "MapId matches")
         AssertEqual(decoded.zoneId, 381, "ZoneId matches")
         AssertEqual(decoded.mapName, "Auridon", "MapName matches")
-        AssertTrue(math.abs(decoded.areaCenterX - original.areaCenterX) < 0.001, "AreaCenterX matches")
-        AssertTrue(math.abs(decoded.areaCenterY - original.areaCenterY) < 0.001, "AreaCenterY matches")
-        AssertTrue(math.abs(decoded.areaRadius - original.areaRadius) < 0.001, "AreaRadius matches")
+        AssertTrue(math.abs(decoded.targets[1].areaCenterX - original.areaCenterX) < 0.001, "AreaCenterX matches on target")
+        AssertTrue(math.abs(decoded.targets[1].areaCenterY - original.areaCenterY) < 0.001, "AreaCenterY matches on target")
+        AssertTrue(math.abs(decoded.targets[1].areaRadius - original.areaRadius) < 0.001, "AreaRadius matches on target")
     end)
 
     RunTest("ShareCodec rejects tampered or malformed codes", function()
@@ -157,12 +157,15 @@ return function(T)
             areaCenterX = 0.451249,
             areaCenterY = 0.654351,
             areaRadius = 0.075,
-            hideMapArea = true,
+            recommendHideMapAreas = true,
             stealthMode = "optional",
             targets = {
                 {
                     name = "Explorador del Velo",
                     requiredCount = 3,
+                    areaCenterX = 0.451249,
+                    areaCenterY = 0.654351,
+                    areaRadius = 0.075,
                     zoneId = 381,
                     worldX = -123456,
                     worldZ = -78901,
@@ -173,6 +176,9 @@ return function(T)
                 {
                     name = "Capitán Contrabandista",
                     requiredCount = 1,
+                    areaCenterX = 0.451249,
+                    areaCenterY = 0.654351,
+                    areaRadius = 0.075,
                     locationRequired = false,
                     customMessage = "El capitán cae tras una breve escaramuza.",
                 },
@@ -256,10 +262,10 @@ return function(T)
         AssertEqual(decoded.completionMessage, complexQuest.completionMessage, "Completion message preserved")
         AssertTrue(math.abs(decoded.targetX - complexQuest.targetX) <= 0.0001, "targetX uint16 precision <= 0.0001")
         AssertTrue(math.abs(decoded.targetY - complexQuest.targetY) <= 0.0001, "targetY uint16 precision <= 0.0001")
-        AssertTrue(math.abs(decoded.areaCenterX - complexQuest.areaCenterX) <= 0.0001, "areaCenterX uint16 precision <= 0.0001")
-        AssertTrue(math.abs(decoded.areaCenterY - complexQuest.areaCenterY) <= 0.0001, "areaCenterY uint16 precision <= 0.0001")
-        AssertTrue(math.abs(decoded.areaRadius - complexQuest.areaRadius) <= 0.0001, "areaRadius uint16 precision <= 0.0001")
-        AssertEqual(decoded.hideMapArea, true, "hideMapArea preserved")
+        AssertTrue(math.abs(decoded.targets[1].areaCenterX - complexQuest.areaCenterX) <= 0.0001, "areaCenterX uint16 precision <= 0.0001")
+        AssertTrue(math.abs(decoded.targets[1].areaCenterY - complexQuest.areaCenterY) <= 0.0001, "areaCenterY uint16 precision <= 0.0001")
+        AssertTrue(math.abs(decoded.targets[1].areaRadius - complexQuest.areaRadius) <= 0.0001, "areaRadius uint16 precision <= 0.0001")
+        AssertEqual(decoded.recommendHideMapAreas, true, "recommendHideMapAreas preserved")
         AssertEqual(decoded.stealthMode, "optional", "stealthMode = optional preserved")
         AssertEqual(#decoded.targets, 2, "2 targets preserved")
         AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
@@ -325,9 +331,9 @@ return function(T)
             areaCenterY = 0.5,
             areaRadius = 0.05,
             targets = {
-                { name = "Captain", requiredCount = 1, currentCount = 1, optional = false },
-                { name = "Scout", requiredCount = 1, currentCount = 1, optional = true },
-                { name = "Lookout", requiredCount = 1, currentCount = 0, optional = true },
+                { name = "Captain", requiredCount = 1, currentCount = 1, optional = false, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.05 },
+                { name = "Scout", requiredCount = 1, currentCount = 1, optional = true, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.05 },
+                { name = "Lookout", requiredCount = 1, currentCount = 0, optional = true, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.05 },
             },
             discoveries = {},
             dialogues = {},
@@ -421,6 +427,101 @@ return function(T)
             requireUndetected = true,
         }
         AssertEqual(RPQuest.ShareCodec:ComputeQuestSignature(legacyQ), sigOpt, "Legacy requireUndetected = true matches optional signature")
+    end)
+
+    RunTest("Issue #277: ShareCodec per-target areas, 3-state messages, and backward-compatible RPQ3 decoding", function()
+        local questV3 = {
+            title = "Per-Target Areas",
+            description = "Two distinct areas on one map",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+            recommendHideMapAreas = false,
+            targets = {
+                {
+                    name = "Vanguard",
+                    requiredCount = 2,
+                    areaCenterX = 0.25,
+                    areaCenterY = 0.35,
+                    areaRadius = 0.070,
+                    zoneId = 381,
+                    worldX = 11000,
+                    worldZ = 22000,
+                    radius = 1200,
+                    locationRequired = true,
+                    customMessage = "Unused when locationRequired=true",
+                    customMessageInLocation = "Struck down inside the outpost!",
+                    customMessageOutsideLocation = "The vanguard escaped the outpost!",
+                },
+                {
+                    name = "Courier",
+                    requiredCount = 1,
+                    areaCenterX = 0.75,
+                    areaCenterY = 0.65,
+                    areaRadius = 0.195,
+                    locationRequired = false,
+                    customMessage = "Courier intercepted anywhere!",
+                },
+            },
+            discoveries = {},
+            dialogues = {},
+        }
+
+        local code, err = RPQuest.ShareCodec:EncodeQuest(questV3)
+        AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "v3 quest encoded cleanly: " .. tostring(err))
+
+        local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(decoded ~= nil, "v3 quest decoded cleanly: " .. tostring(decErr))
+        AssertEqual(decoded.schemaVersion, 3, "Decoded quest has schemaVersion = 3")
+        AssertEqual(decoded.recommendHideMapAreas, false, "recommendHideMapAreas = false preserved")
+        AssertEqual(decoded.showSearchAreas, nil, "Local preference showSearchAreas never serialized")
+        AssertEqual(decoded.showLocationAreas, nil, "Local preference showLocationAreas never serialized")
+        AssertEqual(#decoded.targets, 2, "2 targets decoded")
+
+        AssertTrue(math.abs(decoded.targets[1].areaCenterX - 0.25) < 0.001, "Target 1 areaCenterX preserved")
+        AssertTrue(math.abs(decoded.targets[1].areaCenterY - 0.35) < 0.001, "Target 1 areaCenterY preserved")
+        AssertTrue(math.abs(decoded.targets[1].areaRadius - 0.070) < 0.001, "Target 1 areaRadius preserved")
+        AssertEqual(decoded.targets[1].customMessageInLocation, "Struck down inside the outpost!", "Target 1 customMessageInLocation preserved")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, "The vanguard escaped the outpost!", "Target 1 customMessageOutsideLocation preserved")
+
+        AssertTrue(math.abs(decoded.targets[2].areaCenterX - 0.75) < 0.001, "Target 2 areaCenterX preserved")
+        AssertTrue(math.abs(decoded.targets[2].areaCenterY - 0.65) < 0.001, "Target 2 areaCenterY preserved")
+        AssertTrue(math.abs(decoded.targets[2].areaRadius - 0.195) < 0.001, "Target 2 areaRadius preserved")
+        AssertEqual(decoded.targets[2].customMessage, "Courier intercepted anywhere!", "Target 2 customMessage preserved")
+
+        local sig1 = RPQuest.ShareCodec:ComputeQuestSignature(questV3)
+        local sig2 = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+        AssertEqual(sig1, sig2, "Quest signature matches between v3 original and decoded")
+
+        -- Backward compatibility: older RPQ3 payload without per-target area bits (bits 16/32/64 = 0)
+        local legacyV2Payload = {
+            title = "Older RPQ3",
+            description = "No per-target area bits",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+            areaCenterX = 0.42,
+            areaCenterY = 0.58,
+            areaRadius = 0.125,
+            hideMapArea = true,
+            targets = {
+                { name = "LegacyGuard", requiredCount = 1 },
+            },
+            discoveries = {},
+            dialogues = {},
+        }
+        local legacyCode = RPQuest.ShareCodec:EncodeQuest(legacyV2Payload)
+        local legacyDecoded = RPQuest.ShareCodec:DecodeQuest(legacyCode)
+        AssertTrue(legacyDecoded ~= nil, "Older RPQ3-style payload decodes cleanly")
+        AssertEqual(legacyDecoded.schemaVersion, 3, "Decoded older RPQ3 payload upgraded to schema v3")
+        AssertEqual(legacyDecoded.recommendHideMapAreas, true, "Older hideMapArea bit mapped to recommendHideMapAreas")
+        AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterX - 0.42) < 0.001, "Target inherits header areaCenterX")
+        AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterY - 0.58) < 0.001, "Target inherits header areaCenterY")
+        AssertTrue(math.abs(legacyDecoded.targets[1].areaRadius - 0.125) < 0.001, "Target inherits header areaRadius")
     end)
 
 end

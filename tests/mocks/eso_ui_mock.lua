@@ -177,10 +177,15 @@ local function CreateControlMock(name, parent, controlType)
     function ctrl:SetHandler(eventName, handler) self._handlers[eventName] = handler end
     function ctrl:GetHandler(eventName) return self._handlers[eventName] end
     function ctrl:FireHandler(eventName, ...)
+        if eventName == "OnClicked" and self._enabled == false then
+            return
+        end
         if self._handlers[eventName] then
             return self._handlers[eventName](self, ...)
         end
     end
+    function ctrl:SetEnabled(enabled) self._enabled = (enabled ~= false) end
+    function ctrl:IsEnabled() return self._enabled ~= false end
     function ctrl:SetMouseEnabled(enabled) self._mouseEnabled = not not enabled end
     function ctrl:IsMouseEnabled() return self._mouseEnabled end
     function ctrl:GetParent() return self._parent end
@@ -211,9 +216,12 @@ local function AttachComboBoxMock(container)
         m_selectedItemData = nil,
         m_selectedText = "",
         m_sortsItems = true,
+        m_enabled = true,
     }
     function combo:GetContainer() return self.m_container end
     function combo:SetSortsItems(sorts) self.m_sortsItems = not not sorts end
+    function combo:SetEnabled(enabled) self.m_enabled = (enabled ~= false) end
+    function combo:IsEnabled() return self.m_enabled ~= false end
     function combo:ClearItems()
         self.m_sortedItems = {}
         self.m_selectedItemData = nil
@@ -264,11 +272,46 @@ ZO_ComboBox_ObjectFromContainer = ZO_ComboBox_ObjectFromContainer or function(co
     return container and container.m_comboBox
 end
 
+TOP = TOP or 1
+ZO_Tooltips_ShowTextTooltip = ZO_Tooltips_ShowTextTooltip or function() end
+ZO_Tooltips_HideTextTooltip = ZO_Tooltips_HideTextTooltip or function() end
+
+ZO_CheckButton_SetLabelText = ZO_CheckButton_SetLabelText or function(btn, text)
+    if btn then btn._labelText = text end
+end
+ZO_CheckButton_SetCheckState = ZO_CheckButton_SetCheckState or function(btn, checked)
+    if btn then btn._checked = (checked == true) end
+end
+ZO_CheckButton_IsChecked = ZO_CheckButton_IsChecked or function(btn)
+    return btn and btn._checked == true or false
+end
+ZO_CheckButton_SetToggleFunction = ZO_CheckButton_SetToggleFunction or function(btn, fn)
+    if btn then btn.toggleFunction = fn end
+end
+ZO_CheckButton_SetEnableState = ZO_CheckButton_SetEnableState or function(btn, enabled)
+    if btn then btn:SetEnabled(enabled) end
+end
+ZO_CheckButton_IsEnabled = ZO_CheckButton_IsEnabled or function(btn)
+    return btn and btn:IsEnabled() or false
+end
+ZO_CheckButton_OnClicked = ZO_CheckButton_OnClicked or function(btn)
+    if not btn or not btn:IsEnabled() then return end
+    btn._checked = not btn._checked
+    if btn.toggleFunction then
+        btn:toggleFunction(btn._checked)
+    end
+end
+
 function CreateControlFromVirtual(name, parent, templateName, optionalId)
     local ctrl = CreateControlMock(name, parent or GuiRoot, CT_CONTROL)
     ctrl._template = templateName
     if templateName == "ZO_ComboBox" then
         AttachComboBoxMock(ctrl)
+    elseif templateName == "ZO_CheckButton" then
+        ctrl._checked = false
+        ctrl:SetHandler("OnClicked", function(self)
+            ZO_CheckButton_OnClicked(self)
+        end)
     end
     return ctrl
 end

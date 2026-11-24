@@ -17,6 +17,9 @@ Usage:
   quest details pane to send via in-game mail.
 - Incoming quests appear automatically in Pending (Accept or Reject), and results
   are reported back to the Quest Master automatically via mail.
+- In the quest details pane, view any Master map-hiding recommendation notice and
+  independently toggle "Show search areas on map" and "Show location areas on map"
+  (both off by default), or use "Show on Map" whenever a map/area is defined.
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:

@@ -3,6 +3,7 @@
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0008-codec-compacto-rpq3-lzss-base85.md
+-- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -87,7 +88,10 @@ local function EncodeTargetsList(targets)
             local reqLoc = (t.locationRequired == true)
             local isOpt = (t.optional == true)
             local msg = type(t.customMessage) == "string" and t.customMessage or ""
-            if hasLoc or reqLoc or msg ~= "" or isOpt then
+            local msgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
+            local msgOutLoc = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or ""
+            local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and tonumber(t.areaRadius) > 0)
+            if hasLoc or reqLoc or msg ~= "" or msgInLoc ~= "" or msgOutLoc ~= "" or isOpt or hasArea then
                 local parts = {
                     EscapeField(t.name),
                     tostring(req),
@@ -98,6 +102,11 @@ local function EncodeTargetsList(targets)
                     reqLoc and "1" or "0",
                     EscapeField(msg),
                     isOpt and "1" or "0",
+                    hasArea and string.format("%.4f", tonumber(t.areaCenterX)) or "",
+                    hasArea and string.format("%.4f", tonumber(t.areaCenterY)) or "",
+                    hasArea and string.format("%.4f", tonumber(t.areaRadius)) or "",
+                    EscapeField(msgInLoc),
+                    EscapeField(msgOutLoc),
                 }
                 table.insert(items, table.concat(parts, "~"))
             else
@@ -206,6 +215,11 @@ local function BuildQuestPayloadString(quest)
         return nil, "Invalid quest table"
     end
 
+    local firstTarget = targets[1]
+    local areaCX = (firstTarget and firstTarget.areaCenterX) or quest.areaCenterX or 0.5
+    local areaCY = (firstTarget and firstTarget.areaCenterY) or quest.areaCenterY or 0.5
+    local areaRad = (firstTarget and firstTarget.areaRadius) or quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM
+    local recommendHide = (quest.recommendHideMapAreas ~= nil) and (quest.recommendHideMapAreas == true) or (quest.hideMapArea == true)
     local stealthMode = ResolveStealthMode(quest)
     local modes = Addon.Constants.STEALTH_MODE
     local stealthSig = (stealthMode == modes.REQUIRED and "2") or (stealthMode == modes.OPTIONAL and "1") or "0"
@@ -217,15 +231,15 @@ local function BuildQuestPayloadString(quest)
         EscapeField(quest.mapName or ""),
         string.format("%.4f", tonumber(quest.targetX) or 0.5),
         string.format("%.4f", tonumber(quest.targetY) or 0.5),
-        string.format("%.4f", tonumber(quest.areaCenterX) or 0.5),
-        string.format("%.4f", tonumber(quest.areaCenterY) or 0.5),
-        string.format("%.4f", tonumber(quest.areaRadius) or Addon.Constants.AREA_RADIUS.MEDIUM),
+        string.format("%.4f", tonumber(areaCX) or 0.5),
+        string.format("%.4f", tonumber(areaCY) or 0.5),
+        string.format("%.4f", tonumber(areaRad) or Addon.Constants.AREA_RADIUS.MEDIUM),
         encodedTargets,
         EscapeField(quest.completionMessage or ""),
         stealthSig,
         encodedDiscoveries,
         EscapeField(quest.clue or ""),
-        quest.hideMapArea and "1" or "0",
+        recommendHide and "1" or "0",
         EncodeDialoguesList(quest.dialogues),
         EscapeField((type(quest.language) == "string" and quest.language ~= "" and quest.language:lower()) or GetClientLanguage()),
     }
@@ -234,18 +248,28 @@ local function BuildQuestPayloadString(quest)
 end
 
 local function PackTargetsBlock(buf, quest, targets, defaultRad)
-    BinaryCodec:WriteUInt16(buf, quest.targetX or 0.5)
-    BinaryCodec:WriteUInt16(buf, quest.targetY or 0.5)
-    BinaryCodec:WriteUInt16(buf, quest.areaCenterX or 0.5)
-    BinaryCodec:WriteUInt16(buf, quest.areaCenterY or 0.5)
-    BinaryCodec:WriteUInt16(buf, quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM)
+    local firstTarget = targets[1]
+    BinaryCodec:WriteUInt16(buf, quest.targetX or (firstTarget and firstTarget.targetX) or 0.5)
+    BinaryCodec:WriteUInt16(buf, quest.targetY or (firstTarget and firstTarget.targetY) or 0.5)
+    BinaryCodec:WriteUInt16(buf, (firstTarget and firstTarget.areaCenterX) or quest.areaCenterX or 0.5)
+    BinaryCodec:WriteUInt16(buf, (firstTarget and firstTarget.areaCenterY) or quest.areaCenterY or 0.5)
+    BinaryCodec:WriteUInt16(buf, (firstTarget and firstTarget.areaRadius) or quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM)
     BinaryCodec:WriteUVarint(buf, #targets)
     for _, t in ipairs(targets) do
         local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
         local reqLoc = (t.locationRequired == true)
         local isOpt = (t.optional == true)
         local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
-        local tFlags = (hasLoc and 1 or 0) + (reqLoc and 2 or 0) + (tMsg ~= "" and 4 or 0) + (isOpt and 8 or 0)
+        local tMsgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
+        local tMsgOutLoc = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or ""
+        local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and (tonumber(t.areaRadius) or 0) > 0)
+        local tFlags = (hasLoc and 1 or 0)
+            + (reqLoc and 2 or 0)
+            + (tMsg ~= "" and 4 or 0)
+            + (isOpt and 8 or 0)
+            + (hasArea and 16 or 0)
+            + (tMsgInLoc ~= "" and 32 or 0)
+            + (tMsgOutLoc ~= "" and 64 or 0)
         BinaryCodec:WriteByte(buf, tFlags)
         BinaryCodec:WriteStr(buf, t.name or "")
         BinaryCodec:WriteUVarint(buf, math.max(1, math.floor(tonumber(t.requiredCount) or 1)))
@@ -257,6 +281,17 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
         end
         if tMsg ~= "" then
             BinaryCodec:WriteStr(buf, tMsg)
+        end
+        if hasArea then
+            BinaryCodec:WriteUInt16(buf, t.areaCenterX)
+            BinaryCodec:WriteUInt16(buf, t.areaCenterY)
+            BinaryCodec:WriteUInt16(buf, t.areaRadius)
+        end
+        if tMsgInLoc ~= "" then
+            BinaryCodec:WriteStr(buf, tMsgInLoc)
+        end
+        if tMsgOutLoc ~= "" then
+            BinaryCodec:WriteStr(buf, tMsgOutLoc)
         end
     end
 end
@@ -322,9 +357,10 @@ local function PackQuestBinary(quest)
 
     local stealthMode = ResolveStealthMode(quest)
     local modes = Addon.Constants.STEALTH_MODE
+    local recommendHide = (quest.recommendHideMapAreas ~= nil) and (quest.recommendHideMapAreas == true) or (quest.hideMapArea == true)
     local flags = 0
     if stealthMode == modes.OPTIONAL or stealthMode == modes.REQUIRED then flags = flags + 1 end
-    if quest.hideMapArea then flags = flags + 2 end
+    if recommendHide then flags = flags + 2 end
     if #targets > 0 then flags = flags + 4 end
     if #discoveries > 0 then flags = flags + 8 end
     if #dialogues > 0 then flags = flags + 16 end
@@ -397,6 +433,9 @@ local function UnpackTargetsBlock(data, pos, len)
         local tReqLoc = (floor(tFlags / 2) % 2) == 1
         local tHasMsg = (floor(tFlags / 4) % 2) == 1
         local tOptional = (floor(tFlags / 8) % 2) == 1
+        local tHasArea = (floor(tFlags / 16) % 2) == 1
+        local tHasMsgInLoc = (floor(tFlags / 32) % 2) == 1
+        local tHasMsgOutLoc = (floor(tFlags / 64) % 2) == 1
         local tName; tName, pos = BinaryCodec:ReadStr(data, pos, len)
         local tReq; tReq, pos = BinaryCodec:ReadUVarint(data, pos, len)
         if not tName or not tReq or tName == "" or tReq < 1 then
@@ -417,10 +456,32 @@ local function UnpackTargetsBlock(data, pos, len)
             tMsg, pos = BinaryCodec:ReadStr(data, pos, len)
             if not tMsg then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
         end
+        local tAreaCX, tAreaCY, tAreaRad
+        if tHasArea then
+            tAreaCX, pos = BinaryCodec:ReadUInt16(data, pos, len)
+            tAreaCY, pos = BinaryCodec:ReadUInt16(data, pos, len)
+            tAreaRad, pos = BinaryCodec:ReadUInt16(data, pos, len)
+            if not tAreaCX or not tAreaCY or not tAreaRad then
+                return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+            end
+        end
+        local tMsgInLoc = ""
+        if tHasMsgInLoc then
+            tMsgInLoc, pos = BinaryCodec:ReadStr(data, pos, len)
+            if not tMsgInLoc then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+        end
+        local tMsgOutLoc = ""
+        if tHasMsgOutLoc then
+            tMsgOutLoc, pos = BinaryCodec:ReadStr(data, pos, len)
+            if not tMsgOutLoc then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+        end
         table.insert(decodedTargets, {
             name = tName,
             currentCount = 0,
             requiredCount = math.max(1, floor(tReq)),
+            areaCenterX = tHasArea and tAreaCX or areaCenterX,
+            areaCenterY = tHasArea and tAreaCY or areaCenterY,
+            areaRadius = (tHasArea and tAreaRad and tAreaRad > 0) and tAreaRad or areaRadius,
             zoneId = tHasLoc and floor(tZone) or nil,
             worldX = tHasLoc and tWX or nil,
             worldZ = tHasLoc and tWZ or nil,
@@ -428,6 +489,8 @@ local function UnpackTargetsBlock(data, pos, len)
             locationRequired = tReqLoc,
             optional = tOptional,
             customMessage = tMsg,
+            customMessageInLocation = tMsgInLoc,
+            customMessageOutsideLocation = tMsgOutLoc,
         })
     end
 
@@ -627,10 +690,7 @@ local function UnpackQuestBinary(data)
         mapName = mapName,
         targetX = (#decodedTargets > 0) and (targetsResult.targetX or areaCenterX) or nil,
         targetY = (#decodedTargets > 0) and (targetsResult.targetY or areaCenterY) or nil,
-        areaCenterX = (#decodedTargets > 0) and areaCenterX or nil,
-        areaCenterY = (#decodedTargets > 0) and areaCenterY or nil,
-        areaRadius = areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM,
-        hideMapArea = hideMapArea,
+        recommendHideMapAreas = hideMapArea,
         stealthMode = stealthMode,
         language = (sourceLanguage ~= "" and sourceLanguage) or nil,
         senderCharacterName = (senderCharacterName ~= "" and senderCharacterName) or nil,

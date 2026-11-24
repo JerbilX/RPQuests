@@ -107,6 +107,7 @@ RETIRED_DOC_TERMS=(
   "Click 'Import'|Pulsa 'Importar'|Validate Delivery|Validar Entrega"
   "Create Quest|Crear Misión"
   "ZO_PinBlob|ZO_QuestJournal_Keyboard"
+  "Hide area on map|Ocultar área en el mapa"
 )
 RETIRED_HITS=0
 for doc_file in "$BBCODE_FILE" README.md README.es.md readme.txt; do

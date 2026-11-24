@@ -6,6 +6,7 @@
 -- Ref: docs/adr/0006-puntos-de-descubrimiento-ocultos.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0012-savedvars-account-wide-y-migracion-por-personaje.md
+-- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -180,6 +181,19 @@ function QuestRepository:CompleteQuest(questId)
     return true, quest
 end
 
+local function ResolveRecommendHideMapAreas(data)
+    if type(data) ~= "table" then
+        return true
+    end
+    if data.recommendHideMapAreas ~= nil then
+        return data.recommendHideMapAreas == true
+    end
+    if data.hideMapArea ~= nil then
+        return data.hideMapArea == true
+    end
+    return true
+end
+
 function QuestRepository:BuildQuestRecord(id, title, description, targets, data, role)
     local schemaVersion = (Addon.QuestMigration and Addon.QuestMigration:GetCurrentSchemaVersion()) or 1
     return {
@@ -202,10 +216,7 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         worldX = data.worldX,
         worldY = data.worldY,
         worldZ = data.worldZ,
-        areaCenterX = data.areaCenterX,
-        areaCenterY = data.areaCenterY,
-        areaRadius = data.areaRadius,
-        hideMapArea = data.hideMapArea and true or false,
+        recommendHideMapAreas = ResolveRecommendHideMapAreas(data),
         stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(data.stealthMode, data.requireUndetected),
         wasDetected = false,
         failed = false,
@@ -235,6 +246,12 @@ function QuestRepository:GetDefaults()
             autoDeleteMail = true,
             autoAcceptMail = false,
             autoSendCompletionMail = true,
+            showSearchAreas = false,
+            showLocationAreas = false,
+        },
+        uiState = {
+            lastSectionKey = nil,
+            lastSelectedQuestId = nil,
         },
     }
 end
@@ -251,7 +268,13 @@ function QuestRepository:Initialize(savedVars)
     if type(self.savedVars.settings) ~= "table" then
         self.savedVars.settings = {}
     end
-    local defaultSettings = { autoDeleteMail = true, autoAcceptMail = false, autoSendCompletionMail = true }
+    local defaultSettings = {
+        autoDeleteMail = true,
+        autoAcceptMail = false,
+        autoSendCompletionMail = true,
+        showSearchAreas = false,
+        showLocationAreas = false,
+    }
     for k, v in pairs(defaultSettings) do
         if self.savedVars.settings[k] == nil then
             self.savedVars.settings[k] = v
@@ -280,6 +303,15 @@ function QuestRepository:Initialize(savedVars)
         if not active or active.needsMigration then
             self.savedVars.activeQuestId = nil
         end
+    end
+    if type(self.savedVars.uiState) ~= "table" then
+        self.savedVars.uiState = {}
+    end
+    if self.savedVars.uiState.lastSectionKey ~= nil and type(self.savedVars.uiState.lastSectionKey) ~= "string" then
+        self.savedVars.uiState.lastSectionKey = nil
+    end
+    if self.savedVars.uiState.lastSelectedQuestId and not self._questById[self.savedVars.uiState.lastSelectedQuestId] then
+        self.savedVars.uiState.lastSelectedQuestId = nil
     end
     self._listeners = self._listeners or {}
 end
@@ -311,7 +343,7 @@ local DRAFT_DELEGATES = {
     "RemoveDraftDialogue", "ClearDraftDialogues", "LoadQuestIntoDraft",
     "UpdateDraftFields", "SetDraftCapturedTarget", "SaveDraft",
     "CreateNewPreparedDraft", "CommitDraftChanges",
-    "UpdateDraftTarget", "CaptureDraftTargetLocation", "ClearDraftTargetLocation",
+    "UpdateDraftTarget", "RemoveDraftTarget", "CaptureDraftTargetLocation", "ClearDraftTargetLocation",
 }
 
 for _, methodName in ipairs(DRAFT_DELEGATES) do
@@ -378,12 +410,16 @@ function QuestRepository:NormalizeImportedTargets(rawTargets, targetX, targetY)
         local cleanTName = self:NormalizeName(t.name)
         if cleanTName ~= "" then
             local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
+            local tAreaRad = tonumber(t.areaRadius)
             table.insert(importedTargets, {
                 name = cleanTName,
                 currentCount = 0,
                 requiredCount = math.max(1, math.floor(tonumber(t.requiredCount) or 1)),
                 targetX = targetX,
                 targetY = targetY,
+                areaCenterX = tonumber(t.areaCenterX),
+                areaCenterY = tonumber(t.areaCenterY),
+                areaRadius = (tAreaRad and tAreaRad > 0) and tAreaRad or nil,
                 zoneId = hasLoc and math.floor(tonumber(t.zoneId) or 0) or nil,
                 worldX = hasLoc and tonumber(t.worldX) or nil,
                 worldZ = hasLoc and tonumber(t.worldZ) or nil,
@@ -391,6 +427,8 @@ function QuestRepository:NormalizeImportedTargets(rawTargets, targetX, targetY)
                 locationRequired = (t.locationRequired == true),
                 optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
+                customMessageInLocation = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or "",
+                customMessageOutsideLocation = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or "",
             })
         end
     end
@@ -667,6 +705,26 @@ function QuestRepository:SetSetting(key, value)
     self:NotifyListeners("SETTINGS_UPDATED", self.savedVars.settings)
 end
 
+function QuestRepository:GetJournalUiState()
+    if not self.savedVars then
+        return { lastSectionKey = nil, lastSelectedQuestId = nil }
+    end
+    if type(self.savedVars.uiState) ~= "table" then
+        self.savedVars.uiState = { lastSectionKey = nil, lastSelectedQuestId = nil }
+    end
+    return self.savedVars.uiState
+end
+
+function QuestRepository:SetLastSectionKey(sectionKey)
+    local uiState = self:GetJournalUiState()
+    uiState.lastSectionKey = sectionKey
+end
+
+function QuestRepository:SetLastSelectedQuestId(questId)
+    local uiState = self:GetJournalUiState()
+    uiState.lastSelectedQuestId = questId
+end
+
 function QuestRepository:IsPreparedQuest(quest)
     return quest ~= nil and quest.role == Addon.Constants.QUEST_ROLE.PREPARED
 end
@@ -712,6 +770,31 @@ end
 
 function QuestRepository:HasTargetLocation(target)
     return type(target) == "table" and target.worldX ~= nil and target.worldZ ~= nil
+end
+
+function QuestRepository:HasQuestTargetLocation(quest)
+    if type(quest) ~= "table" or type(quest.targets) ~= "table" then
+        return false
+    end
+    for _, target in ipairs(quest.targets) do
+        if self:HasTargetLocation(target) then
+            return true
+        end
+    end
+    return false
+end
+
+function QuestRepository:SetQuestMapVisibility(questId, key, enabled)
+    if key ~= "showSearchAreas" and key ~= "showLocationAreas" then
+        return false
+    end
+    local quest = self:GetQuestById(questId)
+    if not quest then
+        return false
+    end
+    quest[key] = (enabled == true)
+    self:NotifyListeners("QUEST_MAP_VISIBILITY_CHANGED", quest)
+    return true
 end
 
 function QuestRepository:IsPlayerInsideTargetLocation(target, playerZoneId, playerWorldX, playerWorldZ)
@@ -825,10 +908,7 @@ local function ClonePreparedQuestRecord(repo, source)
         mapName = source.mapName,
         targetX = source.targetX,
         targetY = source.targetY,
-        areaCenterX = source.areaCenterX,
-        areaCenterY = source.areaCenterY,
-        areaRadius = source.areaRadius,
-        hideMapArea = source.hideMapArea,
+        recommendHideMapAreas = (source.recommendHideMapAreas ~= false),
         stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(source.stealthMode, source.requireUndetected),
     }
 
@@ -891,6 +971,9 @@ function QuestRepository:DeleteQuest(questId)
             if self.savedVars.draft and self.savedVars.draft.editingQuestId == questId then
                 self:ResetDraft()
             end
+            if self.savedVars.uiState and self.savedVars.uiState.lastSelectedQuestId == questId then
+                self.savedVars.uiState.lastSelectedQuestId = nil
+            end
             if wasActive then
                 self.savedVars.activeQuestId = nil
                 self:InvalidateActiveTargetCache()
@@ -951,6 +1034,13 @@ function QuestRepository:FindPendingTarget(rawTargetName)
     return nil, nil
 end
 
+local function TrimText(val)
+    if type(val) ~= "string" then
+        return ""
+    end
+    return (val:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
 function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, preMatchedQuest, preMatchedTarget)
     local activeQuest, matchedTarget = preMatchedQuest, preMatchedTarget
     if not activeQuest or not matchedTarget then
@@ -960,44 +1050,37 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
         return false, nil, false, nil
     end
 
-    if type(playerContext) == "table" then
-        local inArea = self:IsPlayerInsideQuestArea(
-            activeQuest,
-            playerContext.mapId,
-            playerContext.zoneId,
-            playerContext.x,
-            playerContext.y
-        )
-        if not inArea then
-            return false, nil, false, nil
-        end
-    end
-
     local hasTargetLoc = self:HasTargetLocation(matchedTarget)
-    local inTargetLoc = true
-    if hasTargetLoc then
+    local isLocRequired = hasTargetLoc and (matchedTarget.locationRequired == true)
+    local customMsgToShow = nil
+
+    if isLocRequired then
         local pZone = type(playerContext) == "table" and playerContext.worldZoneId or nil
         local pWX = type(playerContext) == "table" and playerContext.worldX or nil
         local pWZ = type(playerContext) == "table" and playerContext.worldZ or nil
-        inTargetLoc = self:IsPlayerInsideTargetLocation(matchedTarget, pZone, pWX, pWZ)
-    end
-
-    if hasTargetLoc and matchedTarget.locationRequired and not inTargetLoc then
-        activeQuest.failed = true
-        if self.savedVars.activeQuestId == activeQuest.id then
-            self.savedVars.activeQuestId = nil
+        local inTargetLoc = self:IsPlayerInsideTargetLocation(matchedTarget, pZone, pWX, pWZ)
+        if not inTargetLoc then
+            activeQuest.failed = true
+            if self.savedVars.activeQuestId == activeQuest.id then
+                self.savedVars.activeQuestId = nil
+            end
+            self:InvalidateActiveTargetCache()
+            self:NotifyListeners("QUEST_FAILED", activeQuest)
+            local failMsg = TrimText(matchedTarget.customMessageOutsideLocation)
+            return false, activeQuest, false, matchedTarget, true, (failMsg ~= "" and failMsg or nil)
         end
-        self:InvalidateActiveTargetCache()
-        self:NotifyListeners("QUEST_FAILED", activeQuest)
-        return false, activeQuest, false, matchedTarget, true, false
+        local inLocMsg = TrimText(matchedTarget.customMessageInLocation)
+        if inLocMsg ~= "" then
+            customMsgToShow = inLocMsg
+        end
+    else
+        local generalMsg = TrimText(matchedTarget.customMessage)
+        if generalMsg ~= "" then
+            customMsgToShow = generalMsg
+        end
     end
 
     matchedTarget.currentCount = math.min(matchedTarget.requiredCount or 1, (matchedTarget.currentCount or 0) + 1)
-
-    local customMsg = type(matchedTarget.customMessage) == "string"
-        and matchedTarget.customMessage:gsub("^%s+", ""):gsub("%s+$", "")
-        or ""
-    local showCustomMessage = (customMsg ~= "") and (not hasTargetLoc or inTargetLoc)
 
     if self:AreAllObjectivesCompleted(activeQuest.targets, activeQuest.discoveries) then
         FinalizeCompletedQuest(self, activeQuest)
@@ -1006,7 +1089,7 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
         self:NotifyListeners("QUEST_PROGRESS", activeQuest)
     end
 
-    return true, activeQuest, activeQuest.completed, matchedTarget, false, showCustomMessage
+    return true, activeQuest, activeQuest.completed, matchedTarget, false, customMsgToShow
 end
 
 function QuestRepository:HasPendingDiscoveries(quest)
