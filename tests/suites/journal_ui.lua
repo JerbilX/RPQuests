@@ -36,7 +36,7 @@ return function(T)
         RPQuest.JournalTab.titleEdit:SetText("Cacería Nocturna")
         RPQuest.JournalTab.descEdit:SetText("Derrota al vampiro en las ruinas.")
         AssertEqual(RPQuest.JournalTab.countEdit, nil, "Manual countEdit must not exist in JournalTab")
-        AssertEqual(RPQuest.JournalTab.btnSaveEditor:GetText(), "Crear Misión", "Spanish button label is Crear Misión")
+        AssertEqual(RPQuest.JournalTab.btnSaveEditor:GetText(), "Guardar Borrador", "Spanish button label is Guardar Borrador")
         RPQuest.JournalTab.titleEdit:FireHandler("OnMouseDown")
         AssertTrue(RPQuest.JournalTab.titleEdit._focused, "Clicking titleEdit focuses it for keyboard input")
         RPQuest.JournalTab.descEdit:FireHandler("OnMouseDown")
@@ -82,10 +82,10 @@ return function(T)
         AssertEqual(RPQuest.QuestRepository:GetDraft().editingQuestId, nil, "Selecting a quest in list clears orphaned editingQuestId")
     end)
 
-    RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs + Create Quest button", function()
+    RunTest("Reticle inference: repeated same NPC (Imp x3) and multiple named NPCs + Save Draft button", function()
         mockState.language = "en"
         RPQuest.Locale:Initialize("en")
-        AssertEqual(RPQuest.Locale:Get("BTN_SAVE"), "Create Quest", "English create button label is Create Quest")
+        AssertEqual(RPQuest.Locale:Get("BTN_SAVE"), "Save Draft", "English save button label is Save Draft")
 
         RPQuest.QuestRepository:Initialize({})
         mockState.reticleExists = true
@@ -301,11 +301,13 @@ return function(T)
         mockState.playerX = 0.50
         mockState.playerY = 0.50
 
-        -- 1. En creación (sin guardar), capturar objetivo muestra el pin en el mapa y habilita Ver en Mapa en el editor
+        -- 1. En creación (sin guardar), capturar objetivo muestra el pin en el mapa y habilita [M] Show On Map en el editor
         RPQuest.JournalTab:OpenCreateEditor()
-        AssertEqual(RPQuest.JournalTab.btnShowMapEditor:IsHidden(), true, "ShowMapEditor hidden before target capture")
+        AssertEqual(RPQuest.JournalTab.btnShowMapEditor == nil, true, "Standalone ShowMapEditor button removed")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map keybind hidden before target capture")
         RPQuest.TargetCapture:CaptureFromReticle()
-        AssertEqual(RPQuest.JournalTab.btnShowMapEditor:IsHidden(), false, "ShowMapEditor visible after target capture")
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map keybind visible after target capture")
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin rendered immediately during draft preparation")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft pin starts with MEDIUM radius")
 
@@ -326,10 +328,48 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed when editing quest radius")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "Edited draft pin immediately reflects SMALL radius")
 
-        -- 4. Pulsar Ver en Mapa desde el editor abre el mapa mostrando el pin editado
-        RPQuest.JournalTab.btnShowMapEditor:FireHandler("OnClicked")
+        -- 4. Pulsar [M] Show On Map desde el editor abre el mapa mostrando el pin editado
+        RPQuest.JournalTab.showOnMapDescriptor.callback()
         AssertEqual(#mockPinManager._createdPins, 1, "ShowQuestOnMap from editor renders pin")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
+    end)
+
+    RunTest("City/subzone map detection enlarges effective search area radius on Show on Map", function()
+        RPQuest.QuestRepository:Initialize({})
+        RPQuest.JournalTab:Initialize()
+        RPQuest.WorldMapArea:Initialize()
+
+        local mockPinManager = ZO_WorldMap_GetPinManager()
+        mockPinManager._createdPins = {}
+
+        mockState.reticleExists = true
+        mockState.reticleName = "Guardia de la Ciudad"
+        mockState.reticleIsPlayer = false
+        mockState.reticleIsDead = false
+        mockState.reticleAttackable = true
+        mockState.mapId = 200
+        mockState.zoneId = 381
+        mockState.mapName = "Vulkhel Guard"
+        mockState.mapType = MAPTYPE_SUBZONE
+        mockState.playerX = 0.45
+        mockState.playerY = 0.55
+
+        RPQuest.JournalTab:OpenCreateEditor()
+        local draft = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertEqual(draft.mapType, MAPTYPE_SUBZONE, "Captured draft stores MAPTYPE_SUBZONE")
+        AssertEqual(draft.areaRadius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft keeps base MEDIUM selection for editor UI")
+
+        local expectedSubzoneRadius = RPQuest.Constants.AREA_RADIUS.MEDIUM * RPQuest.Constants.AREA_SUBZONE_MULTIPLIER
+        AssertEqual(#mockPinManager._createdPins, 1, "Map pin rendered on subzone map")
+        AssertTrue(math.abs(mockPinManager._createdPins[1].radius - expectedSubzoneRadius) < 0.0001, "Subzone pin uses enlarged effective radius")
+
+        local dx = draft.targetX - draft.areaCenterX
+        local dy = draft.targetY - draft.areaCenterY
+        local dist = math.sqrt((dx * dx) + (dy * dy))
+        AssertTrue(dist < expectedSubzoneRadius, "Target remains inside enlarged subzone search circle")
+
+        -- Restaurar mapType a MAPTYPE_ZONE para evitar fuga de estado en tests siguientes
+        mockState.mapType = MAPTYPE_ZONE
     end)
 
     RunTest("Editor Accordion Sections: default state, toggle layout, and auto-expand on edit", function()
@@ -340,21 +380,85 @@ return function(T)
 
         local sections = RPQuest.JournalTab.editorSectionsByKey
         AssertTrue(sections ~= nil, "editorSectionsByKey initialized")
+        AssertTrue(sections.header ~= nil, "Header section initialized")
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section starts expanded by default")
         AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed")
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed")
         AssertEqual(sections.dialogue.body:IsHidden(), true, "Dialogue section starts collapsed")
         AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed")
 
-        local yCollapsed = sections.dialogue.divider._anchors[1].y
-        RPQuest.JournalTab:ToggleEditorSection("discovery")
-        AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery section expands on toggle")
-        local yExpanded = sections.dialogue.divider._anchors[1].y
-        AssertTrue(yExpanded > yCollapsed, "Subsequent section Y offset increases when discovery accordion expands")
+        local yTargetWhenHeaderExpanded = sections.target.divider._anchors[1].y
+        RPQuest.JournalTab:ToggleEditorSection("header")
+        AssertEqual(sections.header.isOpen, false, "Header section marks closed on toggle")
+        AssertEqual(sections.header.timeline:IsPlaying(), true, "Header collapse timeline starts playing")
+        sections.header.timeline:StepTo(0.5)
+        AssertEqual(sections.header.openPercentage, 0.25, "Header uses ZO_EaseInQuadratic at 0.5 -> 0.25")
+        AssertEqual(sections.header.body:GetAlpha(), 0.5, "Header body alpha interpolates to 0.5")
+        local yTargetMidCollapse = sections.target.divider._anchors[1].y
+        AssertTrue(yTargetMidCollapse < yTargetWhenHeaderExpanded, "Subsequent section Y offset decreases mid-collapse")
+        sections.header.timeline:StepTo(0)
+        AssertEqual(sections.header.timeline:IsPlaying(), false, "Header collapse timeline stops at 0")
+        AssertEqual(sections.header.body:IsHidden(), true, "Header section hides at end of collapse")
+        local yTargetWhenHeaderCollapsed = sections.target.divider._anchors[1].y
+        AssertTrue(yTargetWhenHeaderCollapsed < yTargetMidCollapse, "Subsequent section Y offset decreases further when header accordion finishes collapsing")
 
+        RPQuest.JournalTab:ToggleEditorSection("header")
+        AssertEqual(sections.header.isOpen, true, "Header section marks open on second toggle")
+        AssertEqual(sections.header.timeline:IsPlaying(), true, "Header expand timeline starts playing")
+        sections.header.timeline:StepTo(0.5)
+        AssertEqual(sections.header.openPercentage, 0.75, "Header uses ZO_EaseOutQuadratic at 0.5 -> 0.75")
+        sections.header.timeline:StepTo(1)
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section visible after expand")
+        AssertEqual(sections.target.divider._anchors[1].y, yTargetWhenHeaderExpanded, "Subsequent section Y offset restores when header accordion expands")
+
+        -- Single-open (exclusive): opening discovery automatically collapses header
+        local yDialogueBefore = sections.dialogue.divider._anchors[1].y
         RPQuest.JournalTab:ToggleEditorSection("discovery")
+        AssertEqual(sections.header.isOpen, false, "Opening discovery collapses currently open header")
+        AssertEqual(RPQuest.JournalTab.editorSectionsCollapsed.header, true, "Header marked collapsed in editorSectionsCollapsed")
+        AssertEqual(sections.discovery.isOpen, true, "Discovery section opens")
+        AssertEqual(RPQuest.JournalTab.editorSectionsCollapsed.discovery, false, "Discovery marked expanded in editorSectionsCollapsed")
+        AssertEqual(sections.header.timeline:IsPlaying(), true, "Header collapse animation plays when discovery opens")
+        AssertEqual(sections.discovery.timeline:IsPlaying(), true, "Discovery expand animation plays")
+
+        sections.header.timeline:StepTo(0.5)
+        sections.discovery.timeline:StepTo(0.5)
+        AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery body becomes visible during expand")
+        AssertTrue(sections.discovery.divider._anchors[1].y >= sections.header.body:GetHeight(), "Discovery divider does not overlap header body mid-animation")
+
+        sections.header.timeline:StepTo(0)
+        sections.discovery.timeline:StepTo(1)
+        AssertEqual(sections.header.body:IsHidden(), true, "Header body hides after exclusive collapse")
+        AssertEqual(sections.discovery.body:IsHidden(), false, "Discovery body remains visible after expand")
+        AssertEqual(sections.discovery.body:GetHeight(), sections.discovery.bodyHeight, "Discovery body reaches full height")
+        local yDialogueAfter = sections.dialogue.divider._anchors[1].y
+        AssertTrue(yDialogueAfter < yDialogueBefore, "Dialogue Y offset reflects smaller discovery body vs header body")
+
+        -- Opening options collapses discovery, and reversing mid-animation flips directions cleanly
+        RPQuest.JournalTab:ToggleEditorSection("options")
+        AssertEqual(sections.discovery.isOpen, false, "Opening options collapses discovery")
+        AssertEqual(sections.options.isOpen, true, "Options opens")
+        sections.discovery.timeline:StepTo(0.5)
+        sections.options.timeline:StepTo(0.5)
+        RPQuest.JournalTab:ToggleEditorSection("discovery")
+        AssertEqual(sections.discovery.isOpen, true, "Reversing mid-animation reopens discovery")
+        AssertEqual(sections.discovery.timeline._direction, 1, "Discovery timeline direction flips forward")
+        AssertEqual(sections.options.isOpen, false, "Reversing mid-animation collapses options")
+        AssertEqual(sections.options.timeline._direction, -1, "Options timeline direction flips backward")
+        sections.discovery.timeline:StepTo(1)
+        sections.options.timeline:StepTo(0)
+        AssertEqual(sections.options.body:IsHidden(), true, "Options body hides at 0")
+        if RPQuest.JournalTab.editorScrollChild then
+            local scrollHeightWithDiscovery = RPQuest.JournalTab.editorScrollChild:GetHeight()
+            AssertTrue(scrollHeightWithDiscovery >= 474, "editorScrollChild height stays synchronized")
+        end
+
+        -- Collapsing the only open section leaves all sections collapsed
+        RPQuest.JournalTab:ToggleEditorSection("discovery")
+        sections.discovery.timeline:StepTo(0)
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section collapses on second toggle")
 
-        -- Save a quest with options configured and verify OpenEditEditor keeps all accordions collapsed by default
+        -- Save a quest with options configured and verify OpenEditEditor keeps header expanded and other accordions collapsed by default
         RPQuest.QuestRepository:SetDraftCapturedTarget({
             targetName = "Bandido",
             mapId = 32,
@@ -363,11 +467,12 @@ return function(T)
             targetX = 0.50,
             targetY = 0.50,
         })
-        RPQuest.QuestRepository:UpdateDraftFields({ requireUndetected = true })
+        RPQuest.QuestRepository:UpdateDraftFields({ stealthMode = "required" })
         local q = RPQuest.QuestRepository:SaveDraft("Misión Acordeón", "Prueba.", nil, "Listo.")
         AssertTrue(q ~= nil, "Quest saved for edit accordion test")
 
         RPQuest.JournalTab:OpenEditEditor(q.id)
+        AssertEqual(sections.header.body:IsHidden(), false, "Header section starts expanded on edit")
         AssertEqual(sections.target.body:IsHidden(), true, "Target section starts collapsed on edit")
         AssertEqual(sections.options.body:IsHidden(), true, "Options section starts collapsed on edit")
         AssertEqual(sections.discovery.body:IsHidden(), true, "Discovery section starts collapsed on edit")
@@ -541,10 +646,46 @@ return function(T)
         AssertEqual(shownQuestId, hiddenAreaQuest.id, "showOnMapDescriptor callback calls ShowQuestOnMap with selected quest")
         RPQuest.WorldMapArea.ShowQuestOnMap = origShowQuestOnMap
 
-        -- 6. Editor mode -> hidden
+        -- 6. Editor mode -> hidden when draft has no coordinates, visible when draft has target or discovery
         RPQuest.JournalTab:OpenCreateEditor()
-        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Editor mode")
-        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false in Editor mode")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:GetParent(), RPQuest.JournalTab.rightCol, "Show On Map keybind parented to rightCol so it remains visible in Editor mode")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Editor mode when draft has no coordinates")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false in Editor mode when draft has no coordinates")
+
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 381,
+            worldX = 1000,
+            worldY = 100,
+            worldZ = 2000,
+            mapId = 32,
+            x = 0.42,
+            y = 0.61,
+            mapName = "Auridon",
+        })
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible in Editor mode after adding discovery point")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible true in Editor mode after adding discovery point")
+
+        local origEditorShow = RPQuest.WorldMapArea.ShowQuestOnMap
+        local shownEditorTarget = nil
+        RPQuest.WorldMapArea.ShowQuestOnMap = function(_, target)
+            shownEditorTarget = target
+            return true
+        end
+        RPQuest.JournalTab.showOnMapDescriptor.callback()
+        AssertEqual(shownEditorTarget, RPQuest.QuestRepository:GetDraft(), "showOnMapDescriptor callback in Editor mode passes live draft")
+        RPQuest.WorldMapArea.ShowQuestOnMap = origEditorShow
+
+        -- Text-only quest without coordinates in Detail mode -> hidden (vanilla behavior)
+        RPQuest.QuestRepository:ClearDraftDiscoveries()
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden again after clearing draft coordinates")
+        RPQuest.JournalTab.titleEdit:SetText("Solo Texto")
+        RPQuest.JournalTab:OnSaveDraftClicked()
+        local textOnlyQuest = RPQuest.JournalTab.selectedQuestId and RPQuest.QuestRepository:GetQuestById(RPQuest.JournalTab.selectedQuestId)
+        AssertEqual(textOnlyQuest ~= nil, true, "Text-only quest saved")
+        RPQuest.JournalTab:SelectQuest(textOnlyQuest.id)
+        RPQuest.JournalTab:Refresh()
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), true, "Show On Map hidden in Detail mode when quest has no coordinates")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), false, "showOnMapDescriptor.visible false when quest has no coordinates")
 
         -- 7. Mail Send mode -> hidden
         RPQuest.JournalTab:SelectQuest(hiddenAreaQuest.id)
@@ -980,6 +1121,177 @@ return function(T)
         AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "MigrateSelectedQuest opens editor on migrated copy")
         AssertEqual(repo:GetDraft().editingQuestId, migrated.id, "Editor loads migrated copy")
         AssertTrue(migrated.needsMigration == nil, "Migrated copy clears needsMigration")
+    end)
+
+    RunTest("JournalEditorPane dropdown & JournalDetailPane stealth mode rendering", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        local combo = tab.stealthComboBox
+        AssertTrue(combo ~= nil, "Stealth combo box created")
+        AssertEqual(combo:GetNumItems(), 3, "Stealth combo box has 3 options (Disabled, Optional, Required)")
+
+        -- Select Required via dropdown callback
+        local items = combo:GetItems()
+        combo:SelectItem(items[3], false)
+        AssertEqual(repo:GetDraft().stealthMode, "required", "Selecting item 3 updates draft stealthMode to required")
+
+        -- RefreshEditorPane syncs dropdown without overwriting draft
+        repo:UpdateDraftFields({ stealthMode = "optional" })
+        tab:RefreshEditorPane()
+        AssertEqual(combo:GetSelectedItemData().stealthMode, "optional", "RefreshEditorPane syncs dropdown to optional")
+
+        -- Detail pane distinguishes Optional vs Required vs Required+Failed
+        local qOpt = repo:BuildQuestRecord(10, "Opt Quest", "D", {
+            { name = "G", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "optional" }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, qOpt)
+        repo._questById[10] = qOpt
+        tab:SelectQuest(10)
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_UNDETECTED"), 1, true) ~= nil, "Detail pane shows Optional Undetected")
+
+        local qReq = repo:BuildQuestRecord(11, "Req Quest", "D", {
+            { name = "G", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "required" }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        qReq.wasDetected = true
+        qReq.failed = true
+        table.insert(repo.savedVars.quests, qReq)
+        repo._questById[11] = qReq
+        tab:SelectQuest(11)
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Detail pane shows Required Failed")
+    end)
+
+    RunTest("Issue #253: + New creates localized Preparing draft, auto-preserves edits, removes Cancel, and allows Abandon", function()
+        -- 1. English: + New creates "New Quest" immediately in Preparing, allows duplicates, expands Preparing, selects it
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenTab()
+
+        AssertEqual(tab.btnCancelEditor, nil, "Cancel button removed from editor footer")
+
+        tab:OpenCreateEditor()
+        local prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 1, "First + New immediately creates 1 quest in Preparing")
+        local q1 = prepared[1]
+        AssertEqual(q1.title, "New Quest", "EN default title is 'New Quest' without numeric suffix")
+        AssertEqual(tab.selectedQuestId, q1.id, "Newly created quest is selected in left tree")
+        AssertEqual(tab.collapsedSections.preparing, false, "Preparing accordion expands automatically")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "Editor opens immediately")
+        AssertEqual(tab.titleEdit:GetText(), "New Quest", "Editor title input prefilled with 'New Quest'")
+
+        -- [X] Abandon is available for newly created Preparing draft in Editor mode
+        AssertEqual(tab.abandonQuestDescriptor.visible(), true, "Abandon keybind visible in Editor mode for Preparing draft")
+        AssertEqual(tab.abandonQuestDescriptor.enabled(), true, "Abandon keybind enabled in Editor mode for Preparing draft")
+
+        -- 2. Edit fields + dialogue + discovery without clicking Save Draft, then switch via + New -> auto-preserved!
+        tab.titleEdit:SetText("Moonlit Contract")
+        tab.titleEdit:FireHandler("OnTextChanged")
+        tab.descEdit:SetText("Meet at the docks.")
+        tab.descEdit:FireHandler("OnTextChanged")
+        tab.recipientEdit:SetText("@GuildMate")
+        tab.recipientEdit:FireHandler("OnTextChanged")
+        tab.completionEdit:SetText("Well done.")
+        tab.completionEdit:FireHandler("OnTextChanged")
+        repo:AddDraftDialogue("Razum-dar", 381, "Check the crates.", "Any news?")
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 1000, worldY = 50, worldZ = 2000, mapId = 32, message = "Hidden note" })
+
+        -- Second + New creates another "New Quest" (duplicates allowed) and auto-preserves q1
+        tab:OpenCreateEditor()
+        prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 2, "Second + New creates second quest in Preparing")
+        local q2 = prepared[2]
+        AssertEqual(q2.title, "New Quest", "Second draft also gets 'New Quest' without numbering")
+        AssertEqual(tab.selectedQuestId, q2.id, "Second draft selected")
+
+        -- Verify q1 preserved all edits
+        local q1Reloaded = repo:GetQuestById(q1.id)
+        AssertEqual(q1Reloaded.title, "Moonlit Contract", "Auto-preserved title on + New switch")
+        AssertEqual(q1Reloaded.description, "Meet at the docks.", "Auto-preserved description on + New switch")
+        AssertEqual(q1Reloaded.recipientAccount, "@GuildMate", "Auto-preserved recipient on + New switch")
+        AssertEqual(q1Reloaded.completionMessage, "Well done.", "Auto-preserved completionMessage on + New switch")
+        AssertEqual(#q1Reloaded.dialogues, 1, "Auto-preserved dialogue on + New switch")
+        AssertEqual(#q1Reloaded.discoveries, 1, "Auto-preserved discovery on + New switch")
+
+        -- Third + New creates duplicate "New Quest" alongside q2
+        tab:OpenCreateEditor()
+        prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 3, "Third + New creates third quest")
+        local q3 = prepared[3]
+        AssertEqual(q3.title, "New Quest", "Duplicate 'New Quest' title allowed")
+
+        -- 3. Edit q3 and close/hide journal -> auto-preserved without Save Draft
+        tab.titleEdit:SetText("Closed Journal Draft")
+        tab.descEdit:SetText("Saved on close.")
+        tab.panel:FireHandler("OnHide")
+        local q3Reloaded = repo:GetQuestById(q3.id)
+        AssertEqual(q3Reloaded.title, "Closed Journal Draft", "Auto-preserved title on journal OnHide")
+        AssertEqual(q3Reloaded.description, "Saved on close.", "Auto-preserved description on journal OnHide")
+
+        -- 4. Switch to q1 via SelectQuest while editing q3 -> auto-preserves q3 edits
+        tab.descEdit:SetText("Updated before SelectQuest.")
+        tab:SelectQuest(q1.id)
+        AssertEqual(repo:GetQuestById(q3.id).description, "Updated before SelectQuest.", "Auto-preserved edits on SelectQuest")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.DETAIL, "SelectQuest switches to Detail mode")
+
+        -- 5. Abandoning a Preparing draft from Editor mode deletes it and returns to Detail mode
+        tab:OpenEditEditor(q2.id)
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "Opened q2 in Editor mode")
+        AssertEqual(tab:ConfirmAbandonQuest(q2.id), true, "ConfirmAbandonQuest opens dialog for Preparing draft")
+        local dlg = ESO_Dialogs["RPQUEST_ABANDON_QUEST"]
+        dlg.buttons[1].callback({ data = { questId = q2.id } })
+        AssertEqual(repo:GetQuestById(q2.id), nil, "Confirmed Abandon deletes Preparing draft")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.DETAIL, "Deleting active editor draft returns to Detail mode")
+
+        -- 6. Spanish locale: + New creates "Nueva Misión"
+        mockState.language = "es"
+        RPQuest.Locale:Initialize("es")
+        tab:OpenCreateEditor()
+        local qEs = repo:GetQuestById(tab.selectedQuestId)
+        AssertEqual(qEs.title, "Nueva Misión", "ES default title is 'Nueva Misión' without numeric suffix")
+    end)
+
+    RunTest("Issue #270: JournalTab allows OnSaveDraftClicked without objectives and alerts on Test/Send", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({})
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        local tab = RPQuest.JournalTab
+        tab:OpenCreateEditor()
+        tab.titleEdit:SetText("Empty Objective Draft")
+        tab.descEdit:SetText("Story only so far.")
+        tab.completionEdit:SetText("All done.")
+        tab.recipientEdit:SetText("@Friend")
+
+        mockState.csaMessages = {}
+        tab:OnSaveDraftClicked()
+
+        local prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 1, "Objective-less draft saved via OnSaveDraftClicked")
+        local q = prepared[1]
+        AssertEqual(q.title, "Empty Objective Draft", "Saved draft title matches")
+        AssertEqual(q.description, "Story only so far.", "Saved draft description matches")
+        AssertEqual(q.completionMessage, "All done.", "Saved draft completionMessage matches")
+        AssertEqual(q.recipientAccount, "@Friend", "Saved draft recipient matches")
+
+        tab:SelectQuest(q.id)
+        mockState.alerts = {}
+        tab:OnToggleActiveClicked()
+        AssertEqual(repo:GetActiveQuest(), nil, "Test Quest does not activate objective-less draft")
+        AssertTrue(#(mockState.alerts or {}) > 0, "Test Quest shows localized alert for missing objective")
+
+        mockState.alerts = {}
+        local sent = tab:SendSelectedPreparedQuest()
+        AssertEqual(sent, false, "SendSelectedPreparedQuest rejects objective-less draft")
+        AssertTrue(#(mockState.alerts or {}) > 0, "Send shows localized alert for missing objective")
     end)
 
 end

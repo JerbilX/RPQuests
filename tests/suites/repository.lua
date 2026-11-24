@@ -21,6 +21,31 @@ return function(T)
         end
     end)
 
+    RunTest("AREA_RADIUS enlarged progression and ComputeOffsetCenter bounds for zone and subzone radii", function()
+        RPQuest.QuestRepository:Initialize({})
+        local radii = RPQuest.Constants.AREA_RADIUS
+        local mult = RPQuest.Constants.AREA_SUBZONE_MULTIPLIER
+        AssertTrue(radii.MEDIUM > 0.075, "Default MEDIUM radius is enlarged beyond legacy 0.075")
+        AssertTrue(radii.SMALL < radii.MEDIUM and radii.MEDIUM < radii.LARGE, "AREA_RADIUS maintains coherent progression")
+        AssertTrue(mult > 1.0, "Subzone multiplier enlarges city/subzone maps")
+
+        local testRadii = { radii.SMALL, radii.MEDIUM, radii.LARGE, radii.MEDIUM * mult, radii.LARGE * mult }
+        local corners = { { 0.01, 0.01 }, { 0.99, 0.01 }, { 0.01, 0.99 }, { 0.99, 0.99 }, { 0.50, 0.50 } }
+        for _, r in ipairs(testRadii) do
+            for _, pt in ipairs(corners) do
+                for i = 0, 7 do
+                    local cx, cy = RPQuest.WorldMapArea:ComputeOffsetCenter(pt[1], pt[2], r, i / 8, 1.0)
+                    AssertTrue(cx >= 0 and cx <= 1, "Offset center X stays within [0, 1]")
+                    AssertTrue(cy >= 0 and cy <= 1, "Offset center Y stays within [0, 1]")
+                    local dx = pt[1] - cx
+                    local dy = pt[2] - cy
+                    local dist = math.sqrt((dx * dx) + (dy * dy))
+                    AssertTrue(dist < r, "Target remains strictly inside enlarged circle")
+                end
+            end
+        end
+    end)
+
     RunTest("QuestRepository full lifecycle: Draft, Save, Edit, Kill Progress, Complete, Reset, Export/Import, Delete", function()
         mockState.language = "es"
         RPQuest.Locale:Initialize("es")
@@ -711,7 +736,7 @@ return function(T)
         AssertEqual(copyFromPrep.title, "Contract One", "Title preserved")
         AssertEqual(copyFromPrep.description, "Desc One", "Description preserved")
         AssertEqual(copyFromPrep.completionMessage, "Well done", "Completion message preserved")
-        AssertEqual(copyFromPrep.requireUndetected, true, "Stealth flag preserved")
+        AssertEqual(copyFromPrep.stealthMode, "optional", "Stealth mode preserved")
         AssertEqual(copyFromPrep.recipientAccount, "@TargetUser", "Recipient account preserved")
         AssertEqual(copyFromPrep.recipientCharacterName, "HeroChar", "Recipient character preserved")
         AssertEqual(#copyFromPrep.targets, 1, "Targets cloned")
@@ -871,6 +896,124 @@ return function(T)
         -- Restore global constants/migrators
         RPQuest.Constants.QUEST_SCHEMA.CURRENT_VERSION = origVersion
         mig.SCHEMA_MIGRATORS = origMigrators
+    end)
+
+    RunTest("v1 -> v2 migration converts requireUndetected quests and saved drafts to stealthMode", function()
+        local repo = RPQuest.QuestRepository
+        local sv = {
+            nextId = 3,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 1,
+                    role = "prepared",
+                    title = "Legacy Stealth",
+                    description = "D",
+                    requireUndetected = true,
+                    targets = { { name = "Guard", requiredCount = 1, currentCount = 0 } },
+                },
+                {
+                    id = 2,
+                    schemaVersion = 1,
+                    role = "received",
+                    title = "Legacy Normal",
+                    description = "D",
+                    requireUndetected = false,
+                    targets = { { name = "Bandit", requiredCount = 1, currentCount = 0 } },
+                },
+            },
+            draft = {
+                title = "Old Draft",
+                requireUndetected = true,
+                targets = {},
+                discoveries = {},
+                dialogues = {},
+            },
+        }
+        repo:Initialize(sv)
+
+        local q1 = repo:GetQuestById(1)
+        local q2 = repo:GetQuestById(2)
+        AssertEqual(q1.schemaVersion, 2, "Quest 1 upgraded to schema v2")
+        AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
+        AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
+        AssertEqual(q2.schemaVersion, 2, "Quest 2 upgraded to schema v2")
+        AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
+        AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
+
+        local draft = repo:GetDraft()
+        AssertEqual(draft.stealthMode, "optional", "Legacy draft requireUndetected = true normalized to stealthMode = optional")
+        AssertEqual(draft.requireUndetected, nil, "Legacy draft requireUndetected cleared")
+    end)
+
+    RunTest("Issue #270: SaveDraft allows objective-less drafts; send/export/activate reject with ERR_MISSING_TARGET; discovery-only works end-to-end", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({})
+        RPQuest.MailTransport:Initialize()
+
+        -- 1. SaveDraft with 0 targets and 0 discoveries preserves all fields
+        repo:AddDraftDialogue("Informant", 381, "Bring the seal.", "Meet at the pier")
+        local saved, saveErr = repo:SaveDraft(
+            "Investigation Draft",
+            "Follow the clues at the harbor.",
+            nil,
+            "Case closed!",
+            nil,
+            "@Investigator",
+            "Detective"
+        )
+        AssertTrue(saved ~= nil, "SaveDraft succeeds without targets or discoveries: " .. tostring(saveErr))
+        AssertEqual(saved.title, "Investigation Draft", "Title preserved")
+        AssertEqual(saved.description, "Follow the clues at the harbor.", "Description preserved")
+        AssertEqual(saved.completionMessage, "Case closed!", "Completion message preserved")
+        AssertEqual(saved.recipientAccount, "@Investigator", "Recipient account preserved")
+        AssertEqual(saved.recipientCharacterName, "Detective", "Recipient character preserved")
+        AssertEqual(#saved.dialogues, 1, "Dialogues preserved")
+        AssertEqual(saved.completed, false, "Objective-less draft stays completed=false")
+
+        -- 2. Export, activate/reset, and mail send reject objective-less draft with ERR_MISSING_TARGET
+        local code, exportErr = repo:ExportQuestToCode(saved.id)
+        AssertEqual(code, nil, "ExportQuestToCode rejects objective-less draft")
+        AssertEqual(exportErr, "ERR_MISSING_TARGET", "Export returns ERR_MISSING_TARGET")
+
+        local actOk, actErr = repo:SetActiveQuest(saved.id)
+        AssertEqual(actOk, false, "SetActiveQuest rejects objective-less draft")
+        AssertEqual(actErr, "ERR_MISSING_TARGET", "SetActiveQuest returns ERR_MISSING_TARGET")
+
+        local resetOk, resetErr = repo:ResetQuest(saved.id)
+        AssertEqual(resetOk, false, "ResetQuest(activate=true) rejects objective-less draft")
+        AssertEqual(resetErr, "ERR_MISSING_TARGET", "ResetQuest returns ERR_MISSING_TARGET")
+
+        local sendOk, sendErr = RPQuest.MailTransport:SendQuestToRecipients(saved, "@Investigator", "Roleplay intro")
+        AssertEqual(sendOk, false, "SendQuestToRecipients rejects objective-less draft")
+        AssertEqual(sendErr, "ERR_MISSING_TARGET", "SendQuestToRecipients returns ERR_MISSING_TARGET instead of ERR_INVALID_CODE")
+
+        -- 3. Adding a discovery point (still 0 NPC targets) enables test, export, send, and completion
+        repo:LoadQuestIntoDraft(saved.id)
+        repo:AddDraftDiscoveryPoint({
+            zoneId = 381,
+            worldX = 1200,
+            worldY = 0,
+            worldZ = 2400,
+            radius = 1000,
+            message = "Found the hidden ledger",
+        })
+        local discSaved = repo:SaveDraft()
+        AssertTrue(discSaved ~= nil and #discSaved.discoveries == 1 and #discSaved.targets == 0, "Discovery-only quest saved with 0 NPC targets")
+
+        local discActOk = repo:ResetQuest(discSaved.id)
+        AssertEqual(discActOk, true, "Discovery-only quest can be activated for testing")
+        local discCode, discExportErr = repo:ExportQuestToCode(discSaved.id)
+        AssertTrue(type(discCode) == "string" and string.sub(discCode, 1, 5) == "RPQ3:", "Discovery-only quest exports cleanly: " .. tostring(discExportErr))
+
+        local imported = repo:ImportQuestFromCode(discCode)
+        AssertTrue(imported ~= nil and #imported.discoveries == 1 and #imported.targets == 0, "Discovery-only quest imports cleanly")
+        repo:AcceptOfferedQuest(imported.id)
+        local found = repo:MarkDiscoveryTriggered(imported.id, 1)
+        AssertEqual(found, true, "Discovery point recorded")
+        AssertEqual(imported.completed, true, "Discovery-only quest completes without any NPC target")
     end)
 
 end

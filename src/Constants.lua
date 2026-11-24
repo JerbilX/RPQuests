@@ -10,11 +10,16 @@ Addon.Constants = {
     METADATA = {
         NAME = "RPQuest",
         TITLE = "RPQuest",
-        VERSION = "1.8.1",
+        VERSION = "1.9.0",
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 1,
+        CURRENT_VERSION = 2,
+    },
+    STEALTH_MODE = {
+        DISABLED = "disabled",
+        OPTIONAL = "optional",
+        REQUIRED = "required",
     },
     SAVED_VARS = {
         NAME = "RPQuest_SavedVariables",
@@ -37,10 +42,11 @@ Addon.Constants = {
         ACTIVE = "active",
     },
     AREA_RADIUS = {
-        SMALL = 0.045,
-        MEDIUM = 0.075,
-        LARGE = 0.115,
+        SMALL = 0.070,
+        MEDIUM = 0.125,
+        LARGE = 0.195,
     },
+    AREA_SUBZONE_MULTIPLIER = 1.6,
     AREA_OFFSET = {
         MIN_RATIO = 0.25,
         MAX_RATIO = 0.65,
@@ -55,6 +61,7 @@ Addon.Constants = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",
         TAB_DESCRIPTOR = "rpquest_custom_quests",
         PIN_TYPE_STRING = "RPQUEST_SEARCH_AREA_PIN",
+        ZOOM_OUT_PIN_TYPE_STRING = "RPQUEST_ZOOM_OUT_PIN",
         ICON_TAB_UP = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_up.dds",
         ICON_TAB_DOWN = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_down.dds",
         ICON_TAB_OVER = "EsoUI/Art/Journal/journal_tabIcon_loreLibrary_over.dds",

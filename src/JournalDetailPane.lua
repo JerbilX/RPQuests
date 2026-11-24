@@ -147,8 +147,27 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
     tab.btnRejectOffered:SetHidden(true)
 end
 
-local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
+local function ResolveShowOnMapTarget(tab, detailMode, editorMode)
+    if tab.viewMode == editorMode then
+        local draft = Addon.QuestRepository:GetDraft()
+        if Addon.WorldMapArea:HasMapLocation(draft) then
+            return draft
+        end
+        return nil
+    end
+    if tab.viewMode == detailMode and tab.selectedQuestId ~= nil then
+        local q = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
+        if Addon.WorldMapArea:HasMapLocation(q) then
+            return q
+        end
+        return nil
+    end
+    return nil
+end
+
+local function RegisterAbandonDialogAndKeybinds(tab, pane, parent, panelName)
     local DETAIL_MODE = tab.VIEW_MODE.DETAIL
+    local EDITOR_MODE = tab.VIEW_MODE.EDITOR
 
     if not ESO_Dialogs["RPQUEST_ABANDON_QUEST"] then
         ESO_Dialogs["RPQUEST_ABANDON_QUEST"] = {
@@ -170,7 +189,7 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
     end
 
     local function CanAbandonSelectedQuest()
-        if tab.viewMode ~= DETAIL_MODE or not tab.selectedQuestId then
+        if (tab.viewMode ~= DETAIL_MODE and tab.viewMode ~= EDITOR_MODE) or not tab.selectedQuestId then
             return false
         end
         local quest = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
@@ -194,15 +213,13 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
         keybind = "UI_SHORTCUT_SHOW_QUEST_ON_MAP",
         ethereal = true,
         callback = function()
-            local q = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
-            if q then
-                Addon.WorldMapArea:ShowQuestOnMap(q)
+            local target = ResolveShowOnMapTarget(tab, DETAIL_MODE, EDITOR_MODE)
+            if target then
+                Addon.WorldMapArea:ShowQuestOnMap(target)
             end
         end,
         visible = function()
-            return tab.viewMode == DETAIL_MODE
-                and tab.selectedQuestId ~= nil
-                and Addon.QuestRepository:GetQuestById(tab.selectedQuestId) ~= nil
+            return ResolveShowOnMapTarget(tab, DETAIL_MODE, EDITOR_MODE) ~= nil
         end,
     }
     tab.keybindStripDescriptor = {
@@ -211,14 +228,15 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
         tab.showOnMapDescriptor,
     }
 
+    local showOnMapParent = parent or pane
     local showOnMapBtn = WINDOW_MANAGER.CreateControlFromVirtual
-        and WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_ShowOnMap", pane, "ZO_KeybindButton")
-        or WINDOW_MANAGER:CreateControl(panelName .. "_ShowOnMap", pane, CT_CONTROL)
+        and WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_ShowOnMap", showOnMapParent, "ZO_KeybindButton")
+        or WINDOW_MANAGER:CreateControl(panelName .. "_ShowOnMap", showOnMapParent, CT_CONTROL)
     ApplyTemplateToControl(showOnMapBtn, "ZO_KeybindButton_Keyboard_Template")
     if showOnMapBtn.SetKeybindButtonDescriptor then
         showOnMapBtn:SetKeybindButtonDescriptor(tab.showOnMapDescriptor)
     end
-    showOnMapBtn:SetAnchor(TOPLEFT, pane, BOTTOMLEFT, 0, 0)
+    showOnMapBtn:SetAnchor(TOPLEFT, showOnMapParent, BOTTOMLEFT, 0, 0)
     tab.showOnMapKeybindButton = showOnMapBtn
 end
 
@@ -232,7 +250,7 @@ function DetailPane.Build(tab, parent)
 
     local contentParent = BuildDetailHeaderAndBody(tab, pane, panelName)
     BuildDetailActionButtons(tab, contentParent, panelName)
-    RegisterAbandonDialogAndKeybinds(tab, pane, panelName)
+    RegisterAbandonDialogAndKeybinds(tab, pane, parent, panelName)
 end
 
 local function FormatPreparedStatusText(quest)
@@ -381,12 +399,25 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pI
         end
     end
 
-    if selectedQuest.requireUndetected then
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(selectedQuest.stealthMode, selectedQuest.requireUndetected)
+    if stealthMode ~= modes.DISABLED then
         local wasDetected = selectedQuest.wasDetected
         if isSentCompleted and pInfo.wasDetected ~= nil then
             wasDetected = pInfo.wasDetected
         end
-        local stealthKey = wasDetected and "STEALTH_STATUS_DETECTED" or "STEALTH_STATUS_UNDETECTED"
+        local stealthKey
+        if stealthMode == modes.REQUIRED then
+            if selectedQuest.failed and wasDetected then
+                stealthKey = "STEALTH_STATUS_REQUIRED_FAILED"
+            elseif wasDetected then
+                stealthKey = "STEALTH_STATUS_REQUIRED_DETECTED"
+            else
+                stealthKey = "STEALTH_STATUS_REQUIRED_UNDETECTED"
+            end
+        else
+            stealthKey = wasDetected and "STEALTH_STATUS_OPTIONAL_DETECTED" or "STEALTH_STATUS_OPTIONAL_UNDETECTED"
+        end
         table.insert(objLines, bullet .. Addon.Locale:Get(stealthKey))
     end
 

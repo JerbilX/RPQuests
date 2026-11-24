@@ -204,9 +204,72 @@ function CreateControl(name, parent, controlType)
     return CreateControlMock(name, parent or GuiRoot, controlType)
 end
 
+local function AttachComboBoxMock(container)
+    local combo = {
+        m_container = container,
+        m_sortedItems = {},
+        m_selectedItemData = nil,
+        m_selectedText = "",
+        m_sortsItems = true,
+    }
+    function combo:GetContainer() return self.m_container end
+    function combo:SetSortsItems(sorts) self.m_sortsItems = not not sorts end
+    function combo:ClearItems()
+        self.m_sortedItems = {}
+        self.m_selectedItemData = nil
+        self.m_selectedText = ""
+    end
+    function combo:CreateItemEntry(name, callback, enabled)
+        return {
+            name = name,
+            callback = callback,
+            enabled = (enabled == nil) and true or enabled,
+        }
+    end
+    function combo:AddItem(itemEntry)
+        table.insert(self.m_sortedItems, itemEntry)
+    end
+    function combo:GetItems() return self.m_sortedItems end
+    function combo:GetNumItems() return #self.m_sortedItems end
+    function combo:SetSelectedItemText(text) self.m_selectedText = tostring(text or "") end
+    function combo:GetSelectedItem() return self.m_selectedText end
+    function combo:GetSelectedItemData() return self.m_selectedItemData end
+    function combo:SelectItem(item, ignoreCallback)
+        if not item or item.enabled == false then return false end
+        local oldItem = self.m_selectedItemData
+        self:SetSelectedItemText(item.name)
+        self.m_selectedItemData = item
+        if not ignoreCallback and item.callback then
+            local changed = (oldItem ~= item)
+            item.callback(self, item.name, item, changed, oldItem)
+        end
+        return true
+    end
+    function combo:SelectItemByIndex(index, ignoreCallback)
+        return self:SelectItem(self.m_sortedItems[index], ignoreCallback)
+    end
+    function combo:SetSelectedItemByEval(eval, ignoreCallback)
+        for i, item in ipairs(self.m_sortedItems) do
+            if eval(item) then
+                return self:SelectItemByIndex(i, ignoreCallback)
+            end
+        end
+        return false
+    end
+    container.m_comboBox = combo
+    return combo
+end
+
+ZO_ComboBox_ObjectFromContainer = ZO_ComboBox_ObjectFromContainer or function(container)
+    return container and container.m_comboBox
+end
+
 function CreateControlFromVirtual(name, parent, templateName, optionalId)
     local ctrl = CreateControlMock(name, parent or GuiRoot, CT_CONTROL)
     ctrl._template = templateName
+    if templateName == "ZO_ComboBox" then
+        AttachComboBoxMock(ctrl)
+    end
     return ctrl
 end
 

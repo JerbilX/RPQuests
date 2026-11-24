@@ -56,6 +56,13 @@ function JournalTab:RegisterRepositoryListener()
                 self.selectedQuestId = quest.id
             end
             self.viewMode = VIEW_MODE.DETAIL
+        elseif eventType == "QUEST_DRAFT_CREATED" then
+            if quest and quest.id then
+                ExpandOnlySection(self, GetQuestSectionKey(quest))
+                self.listOffset = 0
+                self.selectedQuestId = quest.id
+            end
+            self.viewMode = VIEW_MODE.EDITOR
         elseif eventType == "QUEST_IMPORTED" or eventType == "QUEST_ACCEPTED" then
             if quest and quest.id then
                 ExpandOnlySection(self, "missions")
@@ -74,6 +81,12 @@ function JournalTab:RegisterRepositoryListener()
         elseif eventType == "QUEST_DELETED" or eventType == "QUEST_REJECTED" then
             if quest and self.selectedQuestId == quest.id then
                 self.selectedQuestId = nil
+            end
+            local draft = Addon.QuestRepository:GetDraft()
+            if quest and (self.viewMode == VIEW_MODE.EDITOR or draft.editingQuestId == quest.id) then
+                Addon.QuestRepository:ResetDraft()
+                self:ClearEditorInputs()
+                self.viewMode = VIEW_MODE.DETAIL
             end
         elseif eventType == "DRAFT_TARGET_CAPTURED" then
             if self.viewMode ~= VIEW_MODE.EDITOR then
@@ -109,6 +122,7 @@ function JournalTab:Initialize()
         sent = true,
     }
     self.editorSectionsCollapsed = {
+        header = false,
         target = true,
         discovery = true,
         dialogue = true,
@@ -122,6 +136,9 @@ function JournalTab:Initialize()
     panel:SetAnchor(TOPLEFT, ZO_QuestJournal, TOPLEFT, 0, 0)
     panel:SetAnchor(BOTTOMRIGHT, ZO_QuestJournal, BOTTOMRIGHT, 0, 0)
     panel:SetHidden(true)
+    panel:SetHandler("OnHide", function()
+        self:AutoPreserveDraft()
+    end)
     self.panel = panel
 
     local versionLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_VersionLabel", panel, CT_LABEL)
@@ -415,7 +432,48 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
     end)
 end
 
+function JournalTab:SyncEditorInputsToDraft()
+    local draft = Addon.QuestRepository:GetDraft()
+    local fields = {}
+    if self.titleEdit then fields.title = self.titleEdit:GetText() end
+    if self.descEdit then fields.description = self.descEdit:GetText() end
+    if self.recipientEdit then fields.recipientAccount = self.recipientEdit:GetText() end
+    if self.recipientCharEdit then fields.recipientCharacterName = self.recipientCharEdit:GetText() end
+    if self.completionEdit then fields.completionMessage = self.completionEdit:GetText() end
+    if next(fields) ~= nil then
+        Addon.QuestRepository:UpdateDraftFields(fields, true)
+    end
+    local dlgIdx = self.selectedDialogueIndex
+    if dlgIdx and draft.dialogues and draft.dialogues[dlgIdx] then
+        local dlgFields = {}
+        if self.clueEdit then dlgFields.clue = self.clueEdit:GetText() end
+        if self.dlgResponseEdit then dlgFields.response = self.dlgResponseEdit:GetText() end
+        Addon.QuestRepository:UpdateDraftDialogue(dlgIdx, dlgFields, true)
+    end
+    local discIdx = self.selectedDiscoveryIndex
+    if discIdx and draft.discoveries and draft.discoveries[discIdx] and self.discoveryMsgEdit then
+        Addon.QuestRepository:UpdateDraftDiscoveryPoint(discIdx, { message = self.discoveryMsgEdit:GetText() }, true)
+    end
+    local targetIdx = self.selectedTargetIndex
+    if targetIdx and draft.targets and draft.targets[targetIdx] and self.targetCustomEdit then
+        Addon.QuestRepository:UpdateDraftTarget(targetIdx, { customMessage = self.targetCustomEdit:GetText() }, true)
+    end
+end
+
+function JournalTab:AutoPreserveDraft()
+    if self.viewMode ~= VIEW_MODE.EDITOR then
+        return nil
+    end
+    local draft = Addon.QuestRepository:GetDraft()
+    if not draft or not draft.editingQuestId then
+        return nil
+    end
+    self:SyncEditorInputsToDraft()
+    return Addon.QuestRepository:CommitDraftChanges()
+end
+
 function JournalTab:SelectQuest(questId)
+    self:AutoPreserveDraft()
     if Addon.QuestRepository:GetDraft().editingQuestId then
         Addon.QuestRepository:ResetDraft()
     end
@@ -437,6 +495,7 @@ local function ApplyDraftToEditor(self, draft)
     self.completionEdit:SetText(draft.completionMessage or "")
     self.selectedDialogueIndex = (#(draft.dialogues or {}) > 0) and 1 or nil
     self.editorSectionsCollapsed = {
+        header = false,
         target = true,
         discovery = true,
         dialogue = true,
@@ -447,7 +506,14 @@ local function ApplyDraftToEditor(self, draft)
 end
 
 function JournalTab:OpenCreateEditor()
-    local draft = Addon.QuestRepository:ResetDraft()
+    self:AutoPreserveDraft()
+    local newQuest = Addon.QuestRepository:CreateNewPreparedDraft()
+    if newQuest then
+        ExpandOnlySection(self, GetQuestSectionKey(newQuest))
+        self.listOffset = 0
+        self.selectedQuestId = newQuest.id
+    end
+    local draft = Addon.QuestRepository:GetDraft()
     ApplyDraftToEditor(self, draft)
 end
 
@@ -481,12 +547,18 @@ function JournalTab:ToggleSection(sectionKey)
 end
 
 function JournalTab:OpenEditEditor(questId)
+    local quest = Addon.QuestRepository:GetQuestById(questId)
     local draft, err = Addon.QuestRepository:LoadQuestIntoDraft(questId)
     if not draft then
         if err then
             Addon.Announcements:ShowAlert(err, true)
         end
         return
+    end
+    if quest then
+        ExpandOnlySection(self, GetQuestSectionKey(quest))
+        self.listOffset = 0
+        self.selectedQuestId = quest.id
     end
     ApplyDraftToEditor(self, draft)
 end
@@ -521,7 +593,9 @@ function JournalTab:OnSaveDraftClicked()
 
     local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText, nil, recipientText, recipientCharText)
     if not savedQuest then
-        Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
+        if err then
+            Addon.Announcements:ShowAlert(err, true)
+        end
         return
     end
 
@@ -543,13 +617,19 @@ function JournalTab:OnToggleActiveClicked()
             Addon.QuestRepository:SetActiveQuest(nil)
         end
     else
-        local activated
+        local activated, errKey
         if q.completed or q.failed or isPrepared then
-            activated = Addon.QuestRepository:ResetQuest(q.id)
+            activated, errKey = Addon.QuestRepository:ResetQuest(q.id)
         else
-            activated = Addon.QuestRepository:SetActiveQuest(q.id)
+            activated, errKey = Addon.QuestRepository:SetActiveQuest(q.id)
         end
-        if activated and isPrepared then
+        if not activated then
+            if errKey then
+                Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
+            end
+            return
+        end
+        if isPrepared then
             Addon.Announcements:AnnounceQuestAccepted(q)
         end
     end
@@ -613,6 +693,7 @@ function JournalTab:ToggleTab()
     local sceneShowing = SCENE_MANAGER:IsShowing("questJournal")
 
     if sceneShowing and qj and qj.mode == (self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR) then
+        self:AutoPreserveDraft()
         SCENE_MANAGER:Hide("questJournal")
         if self.panel then
             self.panel:SetHidden(true)
@@ -989,10 +1070,6 @@ function JournalTab:Refresh()
     if self.viewMode == VIEW_MODE.EDITOR then
         self.editorPane:SetHidden(false)
         self:RefreshEditorPane()
-        self:UpdateShowOnMapVisibility()
-        if self.keybindStripDescriptor then
-            KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
-        end
     elseif self.viewMode == VIEW_MODE.MAIL_SEND and self.mailSendPane then
         self.mailSendPane:SetHidden(false)
         self:RefreshMailSendCounter()
@@ -1020,4 +1097,8 @@ end
 
 function JournalTab:RefreshEditorPane()
     Addon.JournalEditorPane.Refresh(self)
+    self:UpdateShowOnMapVisibility()
+    if self.keybindStripDescriptor then
+        KEYBIND_STRIP:UpdateKeybindButtonGroup(self.keybindStripDescriptor)
+    end
 end

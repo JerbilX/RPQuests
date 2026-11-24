@@ -199,11 +199,14 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         mapName = data.mapName or "",
         targetX = data.targetX,
         targetY = data.targetY,
+        worldX = data.worldX,
+        worldY = data.worldY,
+        worldZ = data.worldZ,
         areaCenterX = data.areaCenterX,
         areaCenterY = data.areaCenterY,
         areaRadius = data.areaRadius,
         hideMapArea = data.hideMapArea and true or false,
-        requireUndetected = data.requireUndetected and true or false,
+        stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(data.stealthMode, data.requireUndetected),
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
@@ -307,6 +310,7 @@ local DRAFT_DELEGATES = {
     "AddDraftDialogue", "AddDraftDialogueFromLastNpc", "UpdateDraftDialogue",
     "RemoveDraftDialogue", "ClearDraftDialogues", "LoadQuestIntoDraft",
     "UpdateDraftFields", "SetDraftCapturedTarget", "SaveDraft",
+    "CreateNewPreparedDraft", "CommitDraftChanges",
     "UpdateDraftTarget", "CaptureDraftTargetLocation", "ClearDraftTargetLocation",
 }
 
@@ -725,6 +729,15 @@ function QuestRepository:GetActiveQuest()
     return nil
 end
 
+function QuestRepository:HasPlayableObjectives(quest)
+    if type(quest) ~= "table" then
+        return false
+    end
+    local hasTargets = type(quest.targets) == "table" and #quest.targets > 0
+    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
+    return hasTargets or hasDiscoveries
+end
+
 function QuestRepository:SetActiveQuest(questId)
     if questId == nil then
         self.savedVars.activeQuestId = nil
@@ -737,6 +750,9 @@ function QuestRepository:SetActiveQuest(questId)
     if not q or q.completed or q.failed or q.needsMigration or self:IsOfferedQuest(q) then
         return false
     end
+    if not self:HasPlayableObjectives(q) then
+        return false, "ERR_MISSING_TARGET"
+    end
 
     self.savedVars.activeQuestId = q.id
     self:InvalidateActiveTargetCache()
@@ -747,6 +763,11 @@ end
 function QuestRepository:ResetQuest(questId, options)
     local q = self:GetQuestById(questId)
     if not q then return false end
+
+    local shouldActivate = not (type(options) == "table" and options.activate == false)
+    if shouldActivate and not self:HasPlayableObjectives(q) then
+        return false, "ERR_MISSING_TARGET"
+    end
 
     for _, t in ipairs(q.targets or {}) do
         t.currentCount = 0
@@ -762,7 +783,6 @@ function QuestRepository:ResetQuest(questId, options)
         self._completionCodeCache[questId] = nil
     end
 
-    local shouldActivate = not (type(options) == "table" and options.activate == false)
     local wasActive = (self.savedVars.activeQuestId == q.id)
     if shouldActivate then
         self.savedVars.activeQuestId = q.id
@@ -809,7 +829,7 @@ local function ClonePreparedQuestRecord(repo, source)
         areaCenterY = source.areaCenterY,
         areaRadius = source.areaRadius,
         hideMapArea = source.hideMapArea,
-        requireUndetected = source.requireUndetected,
+        stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(source.stealthMode, source.requireUndetected),
     }
 
     local newQuest = repo:BuildQuestRecord(
@@ -1026,8 +1046,13 @@ end
 
 function QuestRepository:RecordPlayerDetected(playerContext)
     local activeQuest = self:GetActiveQuest()
-    if not activeQuest or activeQuest.completed or activeQuest.failed or not activeQuest.requireUndetected or activeQuest.wasDetected then
-        return false, nil
+    local modes = Addon.Constants.STEALTH_MODE
+    local stealthMode = activeQuest and activeQuest.stealthMode
+    if not activeQuest or activeQuest.completed or activeQuest.failed or activeQuest.wasDetected then
+        return false, nil, false
+    end
+    if stealthMode ~= modes.OPTIONAL and stealthMode ~= modes.REQUIRED then
+        return false, nil, false
     end
 
     if type(playerContext) == "table" then
@@ -1039,13 +1064,23 @@ function QuestRepository:RecordPlayerDetected(playerContext)
             playerContext.y
         )
         if not inArea then
-            return false, nil
+            return false, nil, false
         end
     end
 
     activeQuest.wasDetected = true
+    if stealthMode == modes.REQUIRED then
+        activeQuest.failed = true
+        if self.savedVars and self.savedVars.activeQuestId == activeQuest.id then
+            self.savedVars.activeQuestId = nil
+        end
+        self:InvalidateActiveTargetCache()
+        self:NotifyListeners("QUEST_FAILED", activeQuest)
+        return true, activeQuest, true
+    end
+
     self:NotifyListeners("QUEST_DETECTED", activeQuest)
-    return true, activeQuest
+    return true, activeQuest, false
 end
 
 function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)

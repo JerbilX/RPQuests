@@ -36,9 +36,14 @@ function EditorSections.CreateAccordionSection(tab, formParent, panelName, key, 
         tab:ToggleEditorSection(key)
     end)
 
-    local body = WINDOW_MANAGER:CreateControl(panelName .. "_EdBody_" .. key, formParent, CT_CONTROL)
+    local body = WINDOW_MANAGER:CreateControl(panelName .. "_EdBody_" .. key, formParent, CT_SCROLL)
     body:SetDimensions(510, bodyHeight)
     body:SetAnchor(TOPLEFT, headerBtn, BOTTOMLEFT, 0, 10)
+
+    local isCollapsed = tab.editorSectionsCollapsed and tab.editorSectionsCollapsed[key] and true or false
+    local isOpen = not isCollapsed
+    local timeline = ANIMATION_MANAGER:CreateTimelineFromVirtual("ZO_TreeOpenAnimation", body)
+    body:SetAlpha(isOpen and 1 or 0)
 
     local sec = {
         key = key,
@@ -47,6 +52,9 @@ function EditorSections.CreateAccordionSection(tab, formParent, panelName, key, 
         headerBtn = headerBtn,
         body = body,
         bodyHeight = bodyHeight,
+        timeline = timeline,
+        isOpen = isOpen,
+        openPercentage = isOpen and 1 or 0,
     }
     table.insert(tab.editorSections, sec)
     tab.editorSectionsByKey[key] = sec
@@ -514,7 +522,6 @@ function EditorSections.BuildDialogueInputs(tab, dlgBody, panelName)
 end
 
 function EditorSections.BuildOptionsSection(tab, optBody, panelName)
-    local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
     local CreateEditBox = Addon.JournalWidgets.CreateEditBoxWithBackdrop
 
     local lblCompletionMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblInputCompletionMsg", optBody, CT_LABEL)
@@ -531,11 +538,35 @@ function EditorSections.BuildOptionsSection(tab, optBody, panelName)
     tab.completionBg = compBg
     tab.completionEdit = compEdit
 
-    tab.btnRequireUndetected = CreateStyledButton(panelName .. "_BtnRequireUndetected", optBody, 280, 26, Addon.Locale:Get("OPT_REQUIRE_UNDETECTED"), function()
-        local d = Addon.QuestRepository:GetDraft()
-        Addon.QuestRepository:UpdateDraftFields({ requireUndetected = not (d and d.requireUndetected) })
-    end)
-    tab.btnRequireUndetected:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 62)
+    local lblStealth = WINDOW_MANAGER:CreateControl(panelName .. "_LblStealthMode", optBody, CT_LABEL)
+    lblStealth:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 62)
+    if lblStealth.SetFont then lblStealth:SetFont("ZoFontGameBold") end
+    lblStealth:SetText(Addon.Locale:Get("LABEL_STEALTH_MODE"))
+    tab.lblStealthMode = lblStealth
+
+    local stealthDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_StealthDropdown", optBody, "ZO_ComboBox")
+    stealthDropdown:SetDimensions(280, 28)
+    stealthDropdown:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 84)
+    tab.stealthDropdown = stealthDropdown
+
+    local combo = ZO_ComboBox_ObjectFromContainer(stealthDropdown)
+    if combo then
+        combo:SetSortsItems(false)
+        local modes = Addon.Constants.STEALTH_MODE
+        local options = {
+            { mode = modes.DISABLED, label = Addon.Locale:Get("OPT_STEALTH_DISABLED") },
+            { mode = modes.OPTIONAL, label = Addon.Locale:Get("OPT_STEALTH_OPTIONAL") },
+            { mode = modes.REQUIRED, label = Addon.Locale:Get("OPT_STEALTH_REQUIRED") },
+        }
+        for _, opt in ipairs(options) do
+            local entry = combo:CreateItemEntry(opt.label, function()
+                Addon.QuestRepository:UpdateDraftFields({ stealthMode = opt.mode })
+            end)
+            entry.stealthMode = opt.mode
+            combo:AddItem(entry)
+        end
+        tab.stealthComboBox = combo
+    end
 end
 
 function EditorSections.BuildFooterButtons(tab, pane, panelName)
@@ -545,21 +576,4 @@ function EditorSections.BuildFooterButtons(tab, pane, panelName)
         tab:OnSaveDraftClicked()
     end)
     tab.btnSaveEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 514)
-
-    tab.btnCancelEditor = CreateStyledButton(panelName .. "_BtnCancelEditor", pane, 150, 34, Addon.Locale:Get("BTN_CANCEL"), function()
-        tab.viewMode = tab.VIEW_MODE.DETAIL
-        Addon.QuestRepository:ResetDraft()
-        tab:ClearEditorInputs()
-        tab:Refresh()
-    end)
-    tab.btnCancelEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 195, 514)
-
-    tab.btnShowMapEditor = CreateStyledButton(panelName .. "_BtnShowMapEditor", pane, 155, 34, Addon.Locale:Get("BTN_SHOW_ON_MAP"), function()
-        local draft = Addon.QuestRepository:GetDraft()
-        if draft and draft.mapId and draft.mapId > 0 then
-            Addon.WorldMapArea:ShowQuestOnMap(draft)
-        end
-    end)
-    tab.btnShowMapEditor:SetAnchor(TOPLEFT, pane, TOPLEFT, 360, 514)
-    tab.btnShowMapEditor:SetHidden(true)
 end

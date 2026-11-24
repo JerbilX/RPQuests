@@ -1,10 +1,10 @@
 # RPQuest
 
 [![Build](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml/badge.svg)](https://github.com/JerbilX/RPQuests/actions/workflows/ci.yml)
-![Version](https://img.shields.io/badge/version-1.8.1-blue)
+![Version](https://img.shields.io/badge/version-1.9.0-blue)
 ![ESO API](https://img.shields.io/badge/ESO%20API-101051-orange)
 ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
-![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20ES-informational)
+![Languages](https://img.shields.io/badge/i18n-EN%20%7C%20DE%20%7C%20ES%20%7C%20FR%20%7C%20JP%20%7C%20RU%20%7C%20ZH-informational)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)](LICENSE)
 
 [English](README.md) | **Español**
@@ -18,8 +18,8 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 - **Integración Nativa en el Diario (`J`):** Agrega la pestaña **RPQuests** dentro del Diario de Misiones (`QUEST_JOURNAL_KEYBOARD`) con secciones en acordeón exclusivo para ofertas **Pendientes**, **Misiones** activas, **Completadas**, **Preparando** (borradores sin enviar) y **Enviadas** (contratos enviados con estado en vivo y resultados al completar), además de los atajos nativos del Diario para **Mostrar en mapa** y **Abandonar**.
 - **Captura de NPCs bajo Retícula:** Apunta a cualquier NPC vivo y presiona tu atajo **Seleccionar Objetivo bajo Retícula (NPC)**. Capturar varias veces un mismo tipo de NPC se acumula automáticamente (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos individuales, con condiciones de ubicación por objetivo (`Requerida` dentro de `8m` / `15m` / `30m` o `No requerida` —eliminar un objetivo con ubicación `Requerida` fuera de su radio marca la misión como `Fallida`), selector de objetivo `Opcional` (habilita completar manualmente la misión al cumplir los obligatorios) y mensajes personalizados al eliminarlos.
 - **Puntos de Descubrimiento Ocultos:** Registra coordenadas de exploración en el mundo mediante tu atajo **Capturar Punto de Descubrimiento Oculto Aquí** con radio configurable (`8m`, `15m`, `30m`) sin mostrar spoilers en el mapa ni en la brújula.
-- **Condición Opcional de Sigilo y Mensaje al Completar:** Permite exigir que los objetivos se completen sin ser detectado en combate (**No ser detectado (Opcional)**) y configurar un **Mensaje al completar (Opcional)** mostrado al finalizar la misión.
-- **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_WorldMap_GetPinManager():AddCustomPin`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto (o activa **Ocultar área en el mapa** para ocultarlo por completo). Desaparece automáticamente al completar o desactivar la misión.
+- **Condición de Sigilo (Desactivado / Opcional / Obligatorio) y Mensaje al Completar:** Elige mediante un menú desplegable si no ser detectado en combate está **Desactivado**, es **Opcional** (registra la detección sin fallar) u **Obligatorio** (falla la misión inmediatamente si te detectan), y configura opcionalmente un **Mensaje al completar (Opcional)** mostrado al finalizar.
+- **Área de Búsqueda en el Mapa Mundial (`M`):** Dibuja un círculo aproximado (`ZO_WorldMap_GetPinManager():AddCustomPin`) usando un offset aleatorio determinista y fijo: el objetivo siempre está dentro del círculo, pero nunca en el centro exacto, con escalado automático del radio en mapas de ciudad o subzona (o activa **Ocultar área en el mapa** para ocultarlo por completo). Al alejar el zoom hacia una zona padre o el mapa del mundo, muestra una marca de referencia pulsante para mantener la orientación y se oculta automáticamente al volver al mapa del objetivo o al completar/desactivar la misión.
 - **Inyección de Diálogos en NPCs Nativos:** Abre diálogo (`E`) con hasta 3 NPCs nativos de ESO y pulsa **+ Último NPC** en el editor para asociar líneas de diálogo personalizadas y opciones de respuesta del jugador por NPC, inyectadas en la ventana de interacción nativa sin alterar las opciones originales del NPC.
 - **Seguimiento en Combate, Exploración y Avisos Nativos:** Detecta bajas (`EVENT_COMBAT_EVENT`) y proximidad a puntos de descubrimiento, mostrando avisos `CENTER_SCREEN_ANNOUNCE` y sonidos oficiales (`SOUNDS.QUEST_COMPLETED`).
 - **Pruebas Locales para Quest Master, Reinicio y Migración:** Prueba cualquier misión en **Preparando** o **Enviadas** localmente con **Probar** / **Dejar de probar**, reinicia una misión preparada o `Fallida` con **Reiniciar**, o actualiza esquemas antiguos con **Migrar**.
@@ -27,7 +27,7 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
   - Asigna un único destinatario (`@Cuenta`) (y opcionalmente **Para (Personaje)**) en el editor de la misión preparada y pulsa **Enviar Misión** desde el detalle de la misión (abriendo el panel de envío por correo con un **Mensaje de Roleplay opcional** y contador en vivo de 1–6 partes mediante `RPQP` sobre `ShareCodec`; funciona dentro del mismo megaserver, p. ej. PC-NA con PC-NA, y ESO impide enviarse correos a la propia cuenta). Los nombres de personaje `De:` y `Para:` se muestran debajo de `Estado:` en el detalle de la misión.
   - **Ingesta Automática en Pendientes:** Los correos de misión entrantes se importan automáticamente en la sección **Pendientes** del jugador con una alerta visible y botones de **Aceptar** / **Rechazar** directamente en el Diario (los correos en idioma incompatible se rechazan automáticamente con una alerta de error).
   - **Reportes Automáticos de Aceptación, Completado y Rechazo:** Al aceptar, completar o rechazar una misión recibida, RPQuest envía automáticamente el resultado (`RPQC1`) al Quest Master y actualiza el estado de la misión preparada (`Borrador` / `Enviada` / `Aceptada` / `Completada` / `Rechazada`).
-- **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente el idioma del cliente (`es` / `en`).
+- **Persistencia Account-Wide y Auto-Localización:** Guarda misiones y progreso a nivel de cuenta con `ZO_SavedVars:NewAccountWide` (alineado con el correo account-wide de ESO, con migración automática no destructiva desde datos por personaje) y detecta automáticamente los 7 idiomas oficiales del cliente de ESO (`en`, `de`, `es`, `fr`, `jp`, `ru`, `zh`).
 
 ---
 
@@ -47,8 +47,8 @@ Addon nativo y **sin dependencias externas** (`Zero-Dependency`) para **The Elde
 
 1. **Crear una Misión (Quest Master):**
    - Abre el Diario de Misiones (`J`) y entra en la pestaña **RPQuests** (o pulsa tu atajo **Abrir / Cerrar Pestaña de Misiones Custom**).
-   - Pulsa **+ Nueva**, usa las secciones colapsables del formulario para definir **Título**, **Descripción / Trasfondo:**, tamaño del **Área de búsqueda** (o **Ocultar área en el mapa**), opcionalmente activar **No ser detectado (Opcional)**, **Mensaje al completar (Opcional)** y líneas de **Diálogos de NPC**.
-   - En el mundo, apunta a NPCs y usa el atajo **Seleccionar Objetivo bajo Retícula (NPC)**, o párate en un lugar y usa **Capturar Punto de Descubrimiento Oculto Aquí**, y pulsa **Crear Misión** para guardar.
+   - Pulsa **+ Nueva** (lo que crea inmediatamente un borrador **Nueva Misión** en **Preparando** y lo abre en el editor), usa las secciones en acordeón animado exclusivo del formulario para definir **Título**, **Descripción / Trasfondo:**, tamaño del **Área de búsqueda** (o **Ocultar área en el mapa**), **Condición de Sigilo** (`Desactivado`, `Opcional` u `Obligatorio`), **Mensaje al completar (Opcional)** y líneas de **Diálogos de NPC**.
+   - En el mundo, apunta a NPCs y usa el atajo **Seleccionar Objetivo bajo Retícula (NPC)**, o párate en un lugar y usa **Capturar Punto de Descubrimiento Oculto Aquí**. Los cambios en curso se conservan automáticamente al cambiar de misión o cerrar el diario, o pulsa **Guardar Borrador** para guardar y finalizar la edición (se requiere al menos un punto de descubrimiento o un objetivo NPC antes de probar o enviar la misión; usa **Abandonar** en la barra inferior de atajos para eliminar un borrador).
 2. **Enviar al Jugador (Correo 1-a-1):**
    - Define el destinatario `@Cuenta` (y opcionalmente **Para (Personaje)**) en el editor, guarda la misión y pulsa **Enviar Misión** desde el detalle de la misión preparada.
    - El jugador recibe una alerta y ve la misión en **Pendientes** dentro de su pestaña **RPQuests** para **Aceptar** o **Rechazar**.
@@ -76,8 +76,8 @@ La pestaña **RPQuests** dentro del Diario de Misiones (`J`) usa un acordeón ex
 ### 3. Bloques de Construcción de Misiones
 - **Objetivos (Eliminación de NPCs):** Apunta a cualquier NPC vivo y pulsa tu atajo **Seleccionar Objetivo bajo Retícula (NPC)**. Capturar varias veces un mismo nombre de NPC se acumula (ej. `Imp x3`); distintos NPCs con nombre se registran como objetivos separados. Para cada objetivo puedes alternar una condición de **Ubicación** (`Requerida` dentro de `8m` / `15m` / `30m` del punto capturado, o `No requerida` —matar un objetivo `Requerida` fuera de su radio hace fallar la misión), añadir un mensaje personalizado al eliminarlo o marcarlo como **Opcional** (permitiendo completar la misión cuando todos los obligatorios estén listos).
 - **Puntos de Descubrimiento Ocultos:** Párate en un punto de exploración y pulsa tu atajo **Capturar Punto de Descubrimiento Oculto Aquí**. Puedes configurar el radio de detección (`8m`, `15m` o `30m`). Los puntos permanecen ocultos en el mapa y la brújula para evitar spoilers.
-- **Sigilo (`No detectado`) y Mensaje al Completar:** Activa **No ser detectado (Opcional)** en el editor para desafiar al jugador a completar la misión sin ser detectado en combate, y añade opcionalmente un **Mensaje al completar (Opcional)**.
-- **Área de Búsqueda en el Mapa Mundial (`M`):** Muestra un círculo aproximado en el Mapa Mundial usando un desplazamiento aleatorio fijo para que el objetivo quede dentro del círculo sin revelar su centro exacto (o usa **Mostrar en mapa** desde el editor/detalle, o marca **Ocultar área en el mapa** para desactivarlo). El círculo desaparece automáticamente al completar o desactivar la misión.
+- **Sigilo (`No detectado`) y Mensaje al Completar:** Usa el selector **Condición de Sigilo** en el editor (`Desactivado`, `Opcional` u `Obligatorio`) para registrar el sigilo como objetivo secundario o hacer que la misión falle inmediatamente al ser detectado, y añade opcionalmente un **Mensaje al completar (Opcional)**.
+- **Área de Búsqueda en el Mapa Mundial (`M`):** Muestra un círculo aproximado en el Mapa Mundial usando un desplazamiento aleatorio fijo (con escalado automático del radio en mapas de ciudad o subzona) para que el objetivo quede dentro del círculo sin revelar su centro exacto (o pulsa **M** / haz clic en **Mostrar en mapa** en el Diario, o marca **Ocultar área en el mapa** para desactivarlo). El círculo desaparece automáticamente al completar o desactivar la misión.
 - **Diálogos de NPC:** Abre diálogo (`E`) con hasta 3 NPCs nativos de ESO y pulsa **+ Último NPC** para capturarlos en la sección **Diálogos de NPC** de la misión y redacta una opción de respuesta del jugador y la réplica del NPC para cada uno. Cuando el jugador hable con esos NPCs, tu línea personalizada se inyectará de forma nativa sin modificar las opciones originales del juego.
 
 ### 4. Flujo por Correo In-Game (Automático)
@@ -103,7 +103,7 @@ La pestaña **RPQuests** dentro del Diario de Misiones (`J`) usa un acordeón ex
 - **Versión del Juego:** The Elder Scrolls Online (`APIVersion: 101051`)
 - **Librerías Externas:** Ninguna (`Zero-Dependency`)
 - **SavedVariables:** `RPQuest_SavedVariables` (por cuenta / account-wide)
-- **Idiomas Soportados:** Español (`es`), Inglés (`en`)
+- **Idiomas Soportados:** Inglés (`en`), Alemán (`de`), Español (`es`), Francés (`fr`), Japonés (`jp`), Ruso (`ru`), Chino Simplificado (`zh`)
 
 ---
 
@@ -118,7 +118,12 @@ RPQuest/
 ├── LICENSE                      # Licencia GNU General Public License v3.0
 ├── lang/
 │   ├── en.lua                   # Diccionario en Inglés (Base / Fallback)
-│   └── es.lua                   # Diccionario en Castellano
+│   ├── de.lua                   # Diccionario en Alemán
+│   ├── es.lua                   # Diccionario en Castellano
+│   ├── fr.lua                   # Diccionario en Francés
+│   ├── jp.lua                   # Diccionario en Japonés
+│   ├── ru.lua                   # Diccionario en Ruso
+│   └── zh.lua                   # Diccionario en Chino Simplificado
 ├── src/
 │   ├── Constants.lua            # Constantes, radios y metadatos
 │   ├── Locale.lua               # Selector de idioma del cliente e i18n

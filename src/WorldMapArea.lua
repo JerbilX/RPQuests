@@ -9,6 +9,7 @@ Addon.WorldMapArea = {}
 local WorldMapArea = Addon.WorldMapArea
 
 local PIN_TYPE_STRING = Addon.Constants.UI.PIN_TYPE_STRING
+local ZOOM_OUT_PIN_TYPE_STRING = Addon.Constants.UI.ZOOM_OUT_PIN_TYPE_STRING
 local MAP_LISTENER_NAME = "RPQuest_WorldMapArea"
 local DRAFT_PIN_TAG = "__RPQUEST_DRAFT__"
 
@@ -129,6 +130,25 @@ function WorldMapArea:Initialize()
         ZO_MapPin.ASSISTED_PIN_TYPES[self.pinTypeId] = true
     end
 
+    local zoomOutPinLayoutData = {
+        level = 115,
+        size = 32,
+        texture = Addon.Constants.UI.ICON_QUEST,
+        showsPinAndArea = false,
+    }
+
+    local zoomOutLayoutCallback = function(pManager)
+        self:OnLayoutZoomOutPins(pManager)
+    end
+
+    pinManager:AddCustomPin(ZOOM_OUT_PIN_TYPE_STRING, zoomOutLayoutCallback, nil, zoomOutPinLayoutData, pinTooltipCreator)
+    self.zoomOutPinTypeId = _G[ZOOM_OUT_PIN_TYPE_STRING]
+
+    if self.zoomOutPinTypeId then
+        pinManager:SetCustomPinEnabled(self.zoomOutPinTypeId, true)
+        ZO_MapPin.ASSISTED_PIN_TYPES[self.zoomOutPinTypeId] = true
+    end
+
     CALLBACK_MANAGER:RegisterCallback("OnWorldMapChanged", function()
         self:RequestRefreshPins()
     end)
@@ -191,6 +211,76 @@ function WorldMapArea:ShouldRenderOnCurrentMap(quest)
     return true
 end
 
+local function ResolveQuestWorldPosition(quest)
+    if type(quest) ~= "table" then
+        return nil
+    end
+
+    local questZoneId = tonumber(quest.zoneId) or 0
+    if questZoneId > 0 and quest.worldX ~= nil and quest.worldZ ~= nil then
+        return questZoneId, quest.worldX, quest.worldY or 0, quest.worldZ
+    end
+
+    if type(quest.targets) == "table" then
+        for _, t in ipairs(quest.targets) do
+            if type(t) == "table" and t.worldX ~= nil and t.worldZ ~= nil then
+                local tz = tonumber(t.zoneId) or questZoneId
+                if tz > 0 then
+                    return tz, t.worldX, t.worldY or 0, t.worldZ
+                end
+            end
+        end
+    end
+
+    if type(quest.discoveries) == "table" then
+        for _, d in ipairs(quest.discoveries) do
+            if type(d) == "table" and d.worldX ~= nil and d.worldZ ~= nil then
+                local dz = tonumber(d.zoneId) or questZoneId
+                if dz > 0 then
+                    return dz, d.worldX, d.worldY or 0, d.worldZ
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+function WorldMapArea:ShouldRenderZoomOutOnCurrentMap(quest)
+    if not quest or quest.completed or quest.failed or quest.hideMapArea then
+        return false
+    end
+
+    if not quest.mapId or quest.mapId <= 0 then
+        return false
+    end
+
+    if GetMapType() == MAPTYPE_COSMIC then
+        return false
+    end
+
+    local currentMapId = GetCurrentMapId()
+    if not currentMapId or currentMapId == quest.mapId then
+        return false
+    end
+
+    return true
+end
+
+function WorldMapArea:ProjectQuestToCurrentMap(quest)
+    local zoneId, worldX, worldY, worldZ = ResolveQuestWorldPosition(quest)
+    if not zoneId or not worldX or not worldZ then
+        return nil, nil
+    end
+
+    local projX, projY = GetNormalizedWorldPosition(zoneId, worldX, worldY, worldZ)
+    if not projX or not projY or projX <= 0 or projX >= 1 or projY <= 0 or projY >= 1 then
+        return nil, nil
+    end
+
+    return projX, projY
+end
+
 function WorldMapArea:ResolveTargetQuest()
     local draft = Addon.QuestRepository:GetDraft()
     local draftReady = draft and draft.targets and #draft.targets > 0 and self:ShouldRenderOnCurrentMap(draft)
@@ -216,6 +306,25 @@ function WorldMapArea:ResolveTargetQuest()
     return nil, nil
 end
 
+function WorldMapArea:IsSubzoneMap(mapType)
+    local resolvedType = mapType
+    if resolvedType == nil then
+        resolvedType = GetMapType()
+    end
+    return resolvedType == MAPTYPE_SUBZONE
+end
+
+function WorldMapArea:GetEffectiveAreaRadius(baseRadius, mapType)
+    local radius = tonumber(baseRadius) or Addon.Constants.AREA_RADIUS.MEDIUM
+    if radius <= 0 then
+        radius = Addon.Constants.AREA_RADIUS.MEDIUM
+    end
+    if self:IsSubzoneMap(mapType) then
+        return radius * Addon.Constants.AREA_SUBZONE_MULTIPLIER
+    end
+    return radius
+end
+
 function WorldMapArea:OnLayoutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.pinTypeId then return end
@@ -225,13 +334,34 @@ function WorldMapArea:OnLayoutPins(pinManager)
         return
     end
 
+    local effectiveRadius = self:GetEffectiveAreaRadius(targetQuest.areaRadius)
     pManager:CreatePin(
         self.pinTypeId,
         pinTag,
         targetQuest.areaCenterX,
         targetQuest.areaCenterY,
-        targetQuest.areaRadius
+        effectiveRadius
     )
+end
+
+function WorldMapArea:OnLayoutZoomOutPins(pinManager)
+    local pManager = pinManager or GetWorldMapPinManager()
+    if not pManager or not self.zoomOutPinTypeId then return end
+
+    local targetQuest, pinTag = self:ResolveTargetQuest()
+    if not self:ShouldRenderZoomOutOnCurrentMap(targetQuest) then
+        return
+    end
+
+    local projX, projY = self:ProjectQuestToCurrentMap(targetQuest)
+    if not projX or not projY then
+        return
+    end
+
+    local pin = pManager:CreatePin(self.zoomOutPinTypeId, pinTag, projX, projY)
+    if pin then
+        pin:PingMapPin(ZO_MapPin.PulseAnimation)
+    end
 end
 
 function WorldMapArea:RequestRefreshPins()
@@ -248,8 +378,13 @@ function WorldMapArea:RefreshPins()
         return
     end
     self._pinsDirty = false
-    if self.pinTypeId then
-        pinManager:RefreshCustomPins(self.pinTypeId)
+    if self.pinTypeId or self.zoomOutPinTypeId then
+        if self.pinTypeId then
+            pinManager:RefreshCustomPins(self.pinTypeId)
+        end
+        if self.zoomOutPinTypeId then
+            pinManager:RefreshCustomPins(self.zoomOutPinTypeId)
+        end
     else
         pinManager:RefreshCustomPins()
     end
@@ -262,24 +397,86 @@ local function PanWorldMapToNormalizedPosition(x, y)
     end
 end
 
+local function ResolveQuestMapTarget(quest)
+    if type(quest) ~= "table" then
+        return 0, nil, nil
+    end
+
+    local mapId = tonumber(quest.mapId) or 0
+    local panX = quest.areaCenterX or quest.targetX
+    local panY = quest.areaCenterY or quest.targetY
+
+    if (mapId <= 0 or not panX or not panY) and type(quest.targets) == "table" then
+        for _, t in ipairs(quest.targets) do
+            if type(t) == "table" then
+                if mapId <= 0 and (tonumber(t.mapId) or 0) > 0 then
+                    mapId = tonumber(t.mapId)
+                end
+                if (not panX or not panY) and t.targetX and t.targetY then
+                    panX, panY = t.targetX, t.targetY
+                end
+            end
+        end
+    end
+
+    if (mapId <= 0 or not panX or not panY) and type(quest.discoveries) == "table" then
+        for _, d in ipairs(quest.discoveries) do
+            if type(d) == "table" then
+                if mapId <= 0 and (tonumber(d.mapId) or 0) > 0 then
+                    mapId = tonumber(d.mapId)
+                end
+                if (not panX or not panY) and d.x and d.y then
+                    panX, panY = d.x, d.y
+                end
+            end
+        end
+    end
+
+    return mapId, panX, panY
+end
+
+function WorldMapArea:HasMapLocation(quest)
+    if type(quest) ~= "table" then
+        return false
+    end
+
+    local mapId, panX, panY = ResolveQuestMapTarget(quest)
+    if mapId > 0 and panX and panY then
+        return true
+    end
+
+    if mapId > 0 and type(quest.discoveries) == "table" then
+        for _, d in ipairs(quest.discoveries) do
+            if type(d) == "table" and ((d.x and d.y) or (d.worldX and d.worldZ)) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 function WorldMapArea:ShowQuestOnMap(quest)
     local targetQuest = quest or Addon.QuestRepository:GetActiveQuest()
     if not targetQuest then return false end
 
+    local mapId, panX, panY = ResolveQuestMapTarget(targetQuest)
+    if mapId <= 0 then return false end
+
     self.previewQuestId = targetQuest.id or targetQuest.editingQuestId or DRAFT_PIN_TAG
     self._pinsDirty = true
 
-    SetWorldMapToId(targetQuest.mapId)
+    SetWorldMapToId(mapId)
     OpenWorldMapScene()
     if self._pinsDirty then
         self:RefreshPins()
     end
 
-    if targetQuest.areaCenterX and targetQuest.areaCenterY then
-        PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+    if panX and panY then
+        PanWorldMapToNormalizedPosition(panX, panY)
         zo_callLater(function()
             if IsMapSceneShowing() then
-                PanWorldMapToNormalizedPosition(targetQuest.areaCenterX, targetQuest.areaCenterY)
+                PanWorldMapToNormalizedPosition(panX, panY)
             end
         end, 50)
     end
@@ -296,8 +493,8 @@ end
 -- Calcula un centro desplazado aleatorio para que (targetX, targetY) quede
 -- garantizadamente dentro del círculo de radio `radius`, pero no en su centro exacto.
 function WorldMapArea:ComputeOffsetCenter(targetX, targetY, radius, randomAngle01, randomDist01)
-    local r = tonumber(radius) or 0.075
-    if r <= 0 then r = 0.075 end
+    local r = tonumber(radius) or Addon.Constants.AREA_RADIUS.MEDIUM
+    if r <= 0 then r = Addon.Constants.AREA_RADIUS.MEDIUM end
 
     local tx = Clamp(tonumber(targetX) or 0.5, 0.01, 0.99)
     local ty = Clamp(tonumber(targetY) or 0.5, 0.01, 0.99)
@@ -316,6 +513,10 @@ function WorldMapArea:ComputeOffsetCenter(targetX, targetY, radius, randomAngle0
 
     local minBound = math.max(0.02, r * 0.5)
     local maxBound = math.min(0.98, 1.0 - (r * 0.5))
+    if minBound > maxBound then
+        minBound = 0.5
+        maxBound = 0.5
+    end
 
     cx = Clamp(cx, minBound, maxBound)
     cy = Clamp(cy, minBound, maxBound)
@@ -375,7 +576,7 @@ function WorldMapArea:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneId, 
         local dx = playerX - quest.areaCenterX
         local dy = playerY - quest.areaCenterY
         local dist = math.sqrt((dx * dx) + (dy * dy))
-        local toleranceRadius = (quest.areaRadius or 0.075) * 1.35
+        local toleranceRadius = self:GetEffectiveAreaRadius(quest.areaRadius) * 1.35
         return dist <= toleranceRadius
     end
 
