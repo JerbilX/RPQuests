@@ -87,6 +87,14 @@ MOUSE_BUTTON_INDEX_LEFT = 1
 MOUSE_BUTTON_INDEX_RIGHT = 2
 TEXT_ALIGN_RIGHT = 2
 
+ZO_PreHook = function(tbl, fnName, hookFn)
+    local orig = tbl[fnName]
+    tbl[fnName] = function(...)
+        if hookFn(...) then return end
+        if orig then return orig(...) end
+    end
+end
+
 ZO_PostHook = function(tbl, fnName, hookFn)
     local orig = tbl[fnName]
     tbl[fnName] = function(...)

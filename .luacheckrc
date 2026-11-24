@@ -99,6 +99,7 @@ read_globals = {
     "ZO_EaseInQuadratic",
     "ZO_EaseOutQuadratic",
     "ZO_PostHook",
+    "ZO_PreHook",
     "ZO_Tooltips_HideTextTooltip",
     "ZO_Tooltips_ShowTextTooltip",
     "ZO_WorldMap_GetPinManager",

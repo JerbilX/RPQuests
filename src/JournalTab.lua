@@ -495,8 +495,23 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
         EnsureTabAdded()
     end
 
+    local pendingRPQuestMode = false
+
+    ZO_PreHook(qj, "OnShowing", function(qjSelf)
+        EnsureTabAdded()
+        pendingRPQuestMode = (qjSelf.mode == tabDescriptor)
+    end)
+
     ZO_PostHook(qj, "OnShowing", function(qjSelf)
         EnsureTabAdded()
+        if pendingRPQuestMode then
+            pendingRPQuestMode = false
+            if qjSelf.SetMode then
+                qjSelf:SetMode(tabDescriptor)
+            else
+                qjSelf.mode = tabDescriptor
+            end
+        end
         if qjSelf.mode == tabDescriptor and qjSelf.tabs and qjSelf.tabs.SelectFragment then
             qjSelf.tabs:SelectFragment(self.tabCategoryName)
             if self._dirty then

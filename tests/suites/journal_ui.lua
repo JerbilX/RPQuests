@@ -2039,4 +2039,81 @@ return function(T)
         RPQuest.WorldMapArea.RefreshPins = origRefreshPins
     end)
 
+    RunTest("Issue #309: asynchronous questJournal reopen from map preserves RPQuest tab over Rumors fallback", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        local qj = QUEST_JOURNAL_KEYBOARD
+        local origOnShowing = qj.OnShowing
+        local origSelectFragment = qj.tabs.SelectFragment
+        local origSceneShow = SCENE_MANAGER.Show
+        local origIsShowing = SCENE_MANAGER.IsShowing
+
+        local selectedFragments = {}
+        local isJournalShowing = false
+
+        -- Simulate native ZO_QuestJournal_Keyboard:OnShowing() selecting Rumors when mode ~= QUESTS (1)
+        -- and overwriting qj.mode = 2 (RUMORS) before RPQuest's ZO_PostHook runs.
+        qj.OnShowing = function(self)
+            if self.mode == 1 then
+                self.tabs:SelectFragment("Quests")
+            else
+                self.mode = 2
+                self.tabs:SelectFragment("Rumors")
+            end
+        end
+        tab.isInitialized = false
+        tab.isTabAdded = false
+        tab:Initialize()
+
+        qj.tabs.SelectFragment = function(self, name)
+            table.insert(selectedFragments, name)
+            return origSelectFragment(self, name)
+        end
+
+        SCENE_MANAGER.IsShowing = function(_, name)
+            if name == "questJournal" then
+                return isJournalShowing
+            end
+            return origIsShowing(SCENE_MANAGER, name)
+        end
+        -- Simulate async transition from worldMap: questJournal is not showing yet when Show() returns
+        SCENE_MANAGER.Show = function(_, name)
+            if name == "questJournal" then
+                isJournalShowing = false
+            else
+                return origSceneShow(SCENE_MANAGER, name)
+            end
+        end
+
+        -- 1. Open RPQuest tab asynchronously (e.g. from worldMap): OnShowing runs later
+        tab:OpenTab()
+        AssertEqual(#selectedFragments, 0, "SelectFragment deferred during async transition")
+
+        isJournalShowing = true
+        qj:OnShowing()
+        AssertEqual(qj.mode, RPQuest.Constants.UI.TAB_DESCRIPTOR, "qj.mode restored to RPQuest tab descriptor after OnShowing")
+        AssertEqual(selectedFragments[#selectedFragments], tab.tabCategoryName, "RPQuest tab selected on first try instead of Rumors")
+
+        -- 2. Native Quests and Rumors tabs remain unaffected when opening outside RPQuest
+        selectedFragments = {}
+        qj:SetMode(1)
+        qj:OnShowing()
+        AssertEqual(qj.mode, 1, "Native Quests mode preserved")
+        AssertEqual(selectedFragments[#selectedFragments], "Quests", "Native Quests fragment selected")
+
+        selectedFragments = {}
+        qj:SetMode(2)
+        qj:OnShowing()
+        AssertEqual(qj.mode, 2, "Native Rumors mode preserved")
+        AssertEqual(selectedFragments[#selectedFragments], "Rumors", "Native Rumors fragment selected")
+
+        qj.OnShowing = origOnShowing
+        qj.tabs.SelectFragment = origSelectFragment
+        SCENE_MANAGER.Show = origSceneShow
+        SCENE_MANAGER.IsShowing = origIsShowing
+    end)
+
 end
