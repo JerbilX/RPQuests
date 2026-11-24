@@ -185,19 +185,17 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.btnEdit:IsHidden(), false, "Edit button visible for prepared quest")
         AssertEqual(RPQuest.JournalTab.btnActivate:GetText(), "Probar", "Activate button says Probar for prepared quest")
 
-        -- 2b. Sección con item seleccionado no se colapsa; sin item seleccionado/activo sí colapsa y expande
+        -- 2b. Acordeón excluyente: la sección abierta nunca se colapsa al hacer clic de nuevo (con o sin ítem seleccionado)
         RPQuest.JournalTab:ToggleSection("preparing")
         AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "Section with selected quest stays expanded")
         RPQuest.JournalTab:SelectQuest(nil)
         RPQuest.JournalTab:ToggleSection("preparing")
-        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, true, "ToggleSection collapses preparing when no item is selected/active")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection keeps preparing expanded even when no item is selected/active")
         local prepRowVisible = false
         for _, b in pairs(RPQuest.JournalTab.rowBindings) do
             if b.questId == prep.id then prepRowVisible = true end
         end
-        AssertEqual(prepRowVisible, false, "Collapsed section hides its quest rows")
-        RPQuest.JournalTab:ToggleSection("preparing")
-        AssertEqual(RPQuest.JournalTab.collapsedSections.preparing, false, "ToggleSection expands preparing again")
+        AssertEqual(prepRowVisible, true, "Expanded section keeps its quest rows visible")
         RPQuest.JournalTab:SelectQuest(prep.id)
 
         -- 2c. Mostrar en mapa una misión en preparación (aunque no esté activa)
@@ -691,6 +689,11 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.collapsedSections.completed, true, "Completed collapses when Missions expands")
         AssertEqual(hasRowForQuest(1), true, "Active mission row is visible again")
         AssertEqual(hasRowForQuest(3), false, "Completed quest row is hidden")
+
+        -- Clicking an already-expanded section keeps it open (never leaves all sections collapsed)
+        RPQuest.JournalTab:ToggleSection("missions")
+        AssertEqual(RPQuest.JournalTab.collapsedSections.missions, false, "Clicking already-open Missions keeps it expanded")
+        AssertEqual(hasRowForQuest(1), true, "Active mission row remains visible")
     end)
 
     RunTest("QuestRepository:DuplicateQuest copies Preparing and Sent into Preparing and rejects Received", function()

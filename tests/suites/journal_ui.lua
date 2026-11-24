@@ -1294,4 +1294,54 @@ return function(T)
         AssertTrue(#(mockState.alerts or {}) > 0, "Send shows localized alert for missing objective")
     end)
 
+    RunTest("Issue #275: JournalTab always keeps one visible accordion section with quests expanded", function()
+        local roles = RPQuest.Constants.QUEST_ROLE
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({
+            quests = {
+                { id = 101, title = "Draft Only", description = "Desc", role = roles.PREPARED, completed = false },
+                { id = 102, title = "Sent Only", description = "Desc", role = roles.PREPARED, sentTo = "@Dest", completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        local tab = RPQuest.JournalTab
+        -- Default state has missions = false, preparing/sent = true, but missions is empty
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+        tab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true }
+        tab.selectedQuestId = nil
+        tab.panel:SetHidden(false)
+        tab:Refresh()
+
+        -- Right pane falls back to allQuests[1] (preparing), so preparing must auto-expand
+        AssertEqual(tab.selectedQuestId, 101, "Detail view selects fallback quest 101")
+        AssertEqual(tab.collapsedSections.preparing, false, "Preparing auto-expands when missions is empty")
+        AssertEqual(tab.collapsedSections.missions, true, "Empty missions section collapses when preparing auto-expands")
+        AssertEqual(tab.accordionSections.preparing.isOpen, true, "Preparing accordion UI is open")
+        AssertEqual(tab.accordionSections.sent.isOpen, false, "Sent accordion UI starts closed")
+
+        -- Clicking already-open Preparing does NOT collapse it
+        tab:ToggleSection("preparing")
+        AssertEqual(tab.collapsedSections.preparing, false, "ToggleSection on open preparing keeps it expanded")
+        AssertEqual(tab.accordionSections.preparing.isOpen, true, "Preparing accordion UI remains open")
+
+        -- Switching to Sent expands Sent and collapses Preparing; clicking Sent again does NOT collapse it
+        tab:ToggleSection("sent")
+        AssertEqual(tab.collapsedSections.sent, false, "Sent expands on toggle")
+        AssertEqual(tab.collapsedSections.preparing, true, "Preparing collapses when Sent expands")
+        tab:SelectQuest(nil)
+        tab:ToggleSection("sent")
+        AssertEqual(tab.collapsedSections.sent, false, "Sent stays expanded even without selected quest")
+
+        -- RefreshQuestList with nil selectedQuestId and activeQuest in sent expands sent
+        tab.collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true }
+        tab.selectedQuestId = nil
+        tab:RefreshQuestList(repo:GetAllQuests(), repo:GetQuestById(102))
+        AssertEqual(tab.collapsedSections.sent, false, "RefreshQuestList expands activeQuest section when no section with quests is open")
+
+        -- Deleting the last quest in the currently expanded section (sent) auto-expands remaining section (preparing)
+        repo:DeleteQuest(102)
+        AssertEqual(tab.collapsedSections.preparing, false, "Deleting last quest in sent auto-expands preparing")
+        AssertEqual(tab.accordionSections.preparing.isOpen, true, "Preparing accordion UI opens after sent becomes empty")
+    end)
+
 end
