@@ -772,6 +772,31 @@ function QuestRepository:HasTargetLocation(target)
     return type(target) == "table" and target.worldX ~= nil and target.worldZ ~= nil
 end
 
+function QuestRepository:HasQuestTargetLocation(quest)
+    if type(quest) ~= "table" or type(quest.targets) ~= "table" then
+        return false
+    end
+    for _, target in ipairs(quest.targets) do
+        if self:HasTargetLocation(target) then
+            return true
+        end
+    end
+    return false
+end
+
+function QuestRepository:SetQuestMapVisibility(questId, key, enabled)
+    if key ~= "showSearchAreas" and key ~= "showLocationAreas" then
+        return false
+    end
+    local quest = self:GetQuestById(questId)
+    if not quest then
+        return false
+    end
+    quest[key] = (enabled == true)
+    self:NotifyListeners("QUEST_MAP_VISIBILITY_CHANGED", quest)
+    return true
+end
+
 function QuestRepository:IsPlayerInsideTargetLocation(target, playerZoneId, playerWorldX, playerWorldZ)
     return Addon.WorldMapArea:IsPlayerInsideTargetLocation(target, playerZoneId, playerWorldX, playerWorldZ)
 end

@@ -1408,4 +1408,131 @@ return function(T)
         AssertEqual(repo:GetJournalUiState().lastSectionKey, "missions", "Fallback updates persisted lastSectionKey")
     end)
 
+    RunTest("JournalDetailPane: Master recommendation notice, independent per-quest map toggles, and Show on Map", function()
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        local savedVars = repo:GetDefaults()
+        repo:Initialize(savedVars)
+        tab.Initialize = tab.Initialize or function() end
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+
+        -- Prepare Quest A (recommendHideMapAreas = true, NO target location)
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({
+            targetName = "Bandit Scout",
+            mapId = 45,
+            zoneId = 104,
+            mapName = "Glenumbra",
+            targetX = 0.35,
+            targetY = 0.45,
+        })
+        repo:UpdateDraftFields({ recommendHideMapAreas = true })
+        local prepA = repo:SaveDraft("Quest A", "No target location.")
+        local codeA = repo:ExportQuestToCode(prepA.id)
+
+        -- Prepare Quest B (recommendHideMapAreas = false, WITH target location)
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({
+            targetName = "Necromancer",
+            mapId = 45,
+            zoneId = 104,
+            mapName = "Glenumbra",
+            targetX = 0.65,
+            targetY = 0.55,
+        })
+        repo:CaptureDraftTargetLocation(1, 104, 65000, 55000, 1500)
+        repo:UpdateDraftFields({ recommendHideMapAreas = false })
+        local prepB = repo:SaveDraft("Quest B", "With target location.")
+        local codeB = repo:ExportQuestToCode(prepB.id)
+
+        -- 1. Inactive prepared quest: toggles hidden, recommendation notice shown if recommendHideMapAreas=true
+        tab:SelectQuest(prepA.id)
+        tab:Refresh()
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Recommendation notice shown when recommendHideMapAreas=true")
+        AssertEqual(tab.btnShowSearchAreas:IsHidden(), true, "Toggles hidden on inactive prepared quest")
+        AssertEqual(tab.btnShowLocationAreas:IsHidden(), true, "Location toggle hidden on inactive prepared quest")
+
+        -- 2. Testing prepared quest (active): toggles become visible
+        repo:SetActiveQuest(prepA.id)
+        tab:SelectQuest(prepA.id)
+        tab:Refresh()
+        AssertEqual(tab.btnShowSearchAreas:IsHidden(), false, "Search toggle visible when testing prepared quest")
+        AssertEqual(tab.btnShowLocationAreas:IsHidden(), false, "Location toggle visible when testing prepared quest")
+        AssertEqual(tab.btnShowLocationAreas:IsEnabled(), false, "Location toggle disabled when no target has captured location")
+
+        -- Verify vertical anchoring avoids overlap
+        local _, _, searchRelTo = tab.btnShowSearchAreas:GetAnchor(1)
+        AssertEqual(searchRelTo, tab.detailMapRecommendNotice, "Search toggle anchored below recommendation notice")
+        local _, _, actRelTo = tab.btnActivate:GetAnchor(1)
+        AssertEqual(actRelTo, tab.btnShowLocationAreas, "Action buttons anchored below location toggle")
+
+        -- Stop testing prepared quest
+        repo:SetActiveQuest(nil)
+
+        -- 3. Offered quest: toggles hidden, recommendation notice shown
+        local offeredA = repo:ImportQuestFromCode(codeA, "@Master", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            sourceMailId = "mail_279_a",
+        })
+        tab:SelectQuest(offeredA.id)
+        tab:Refresh()
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Recommendation notice shown on offered quest with recommendHideMapAreas=true")
+        AssertEqual(tab.btnShowSearchAreas:IsHidden(), true, "Toggles hidden on offered quest")
+
+        -- 4. Accepted (received) Quest A: notice shown, toggles visible, both off by default, Show on Map always visible/enabled
+        repo:AcceptOfferedQuest(offeredA.id)
+        tab:SelectQuest(offeredA.id)
+        tab:Refresh()
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Recommendation notice shown on received Quest A")
+        AssertEqual(tab.btnShowSearchAreas:IsHidden(), false, "Search toggle visible on received Quest A")
+        AssertEqual(tab.btnShowLocationAreas:IsHidden(), false, "Location toggle visible on received Quest A")
+        AssertEqual(tab.btnShowLocationAreas:IsEnabled(), false, "Location toggle disabled on Quest A (no captured location)")
+        AssertEqual(tab.btnShowSearchAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_SEARCH_AREAS"), "Search toggle off by default")
+        AssertEqual(tab.btnShowLocationAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_LOCATION_AREAS_DISABLED"), "Location toggle shows disabled label")
+        AssertEqual(tab.showOnMapKeybindButton:IsHidden(), false, "Show on Map visible even with both toggles off")
+        AssertEqual(tab.showOnMapDescriptor.enabled(), true, "Show on Map enabled even with both toggles off")
+
+        -- Clicking disabled location toggle does nothing
+        tab.btnShowLocationAreas:FireHandler("OnClicked")
+        AssertEqual(offeredA.showLocationAreas, nil, "Disabled location toggle does not mutate quest.showLocationAreas")
+
+        -- 5. Received Quest B (recommendHideMapAreas=false, WITH captured location)
+        local recB = repo:ImportQuestFromCode(codeB, "@Master")
+        tab:SelectQuest(recB.id)
+        tab:Refresh()
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Recommendation notice hidden when recommendHideMapAreas=false")
+        AssertEqual(tab.btnShowLocationAreas:IsEnabled(), true, "Location toggle enabled when target has captured location")
+        AssertEqual(tab.btnShowLocationAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_LOCATION_AREAS"), "Location toggle off by default")
+
+        -- Toggle showSearchAreas -> persists on recB, refreshes WorldMapArea pins, leaves showLocationAreas off
+        local origRefreshPins = RPQuest.WorldMapArea.RefreshPins
+        local refreshCount = 0
+        RPQuest.WorldMapArea.RefreshPins = function()
+            refreshCount = refreshCount + 1
+        end
+
+        tab.btnShowSearchAreas:FireHandler("OnClicked")
+        AssertEqual(recB.showSearchAreas, true, "showSearchAreas persisted on Quest B")
+        AssertEqual(recB.showLocationAreas, nil, "showLocationAreas remains off when showSearchAreas toggled")
+        AssertEqual(tab.btnShowSearchAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_SEARCH_AREAS_ACTIVE"), "Search toggle label updated to active")
+        AssertEqual(refreshCount >= 1, true, "WorldMapArea:RefreshPins called immediately on showSearchAreas toggle")
+        AssertEqual(offeredA.showSearchAreas, nil, "Per-quest toggle on Quest B does not affect Quest A")
+
+        -- Toggle showLocationAreas -> persists on recB, refreshes WorldMapArea pins
+        local prevCount = refreshCount
+        tab.btnShowLocationAreas:FireHandler("OnClicked")
+        AssertEqual(recB.showLocationAreas, true, "showLocationAreas persisted on Quest B")
+        AssertEqual(tab.btnShowLocationAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_LOCATION_AREAS_ACTIVE"), "Location toggle label updated to active")
+        AssertEqual(refreshCount > prevCount, true, "WorldMapArea:RefreshPins called immediately on showLocationAreas toggle")
+
+        -- Reload from SavedVars -> toggles remain persisted per quest
+        repo:Initialize(savedVars)
+        local reloadedB = repo:GetQuestById(recB.id)
+        AssertEqual(reloadedB.showSearchAreas, true, "showSearchAreas survives SavedVars reload")
+        AssertEqual(reloadedB.showLocationAreas, true, "showLocationAreas survives SavedVars reload")
+
+        RPQuest.WorldMapArea.RefreshPins = origRefreshPins
+    end)
+
 end

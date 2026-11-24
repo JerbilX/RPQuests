@@ -232,8 +232,8 @@ local function ShouldShowSearchAreas(quest)
     if IsEditModeQuest(quest) then
         return true
     end
-    if quest.showSearchAreas == true then
-        return true
+    if quest.showSearchAreas ~= nil then
+        return quest.showSearchAreas == true
     end
     return Addon.QuestRepository and Addon.QuestRepository:GetSetting("showSearchAreas") == true
 end
@@ -242,8 +242,8 @@ local function ShouldShowLocationAreas(quest)
     if IsEditModeQuest(quest) then
         return true
     end
-    if quest.showLocationAreas == true then
-        return true
+    if quest.showLocationAreas ~= nil then
+        return quest.showLocationAreas == true
     end
     return Addon.QuestRepository and Addon.QuestRepository:GetSetting("showLocationAreas") == true
 end
