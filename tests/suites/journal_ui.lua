@@ -1256,4 +1256,42 @@ return function(T)
         AssertEqual(qEs.title, "Nueva Misión", "ES default title is 'Nueva Misión' without numeric suffix")
     end)
 
+    RunTest("Issue #270: JournalTab allows OnSaveDraftClicked without objectives and alerts on Test/Send", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({})
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        local tab = RPQuest.JournalTab
+        tab:OpenCreateEditor()
+        tab.titleEdit:SetText("Empty Objective Draft")
+        tab.descEdit:SetText("Story only so far.")
+        tab.completionEdit:SetText("All done.")
+        tab.recipientEdit:SetText("@Friend")
+
+        mockState.csaMessages = {}
+        tab:OnSaveDraftClicked()
+
+        local prepared = repo:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)
+        AssertEqual(#prepared, 1, "Objective-less draft saved via OnSaveDraftClicked")
+        local q = prepared[1]
+        AssertEqual(q.title, "Empty Objective Draft", "Saved draft title matches")
+        AssertEqual(q.description, "Story only so far.", "Saved draft description matches")
+        AssertEqual(q.completionMessage, "All done.", "Saved draft completionMessage matches")
+        AssertEqual(q.recipientAccount, "@Friend", "Saved draft recipient matches")
+
+        tab:SelectQuest(q.id)
+        mockState.alerts = {}
+        tab:OnToggleActiveClicked()
+        AssertEqual(repo:GetActiveQuest(), nil, "Test Quest does not activate objective-less draft")
+        AssertTrue(#(mockState.alerts or {}) > 0, "Test Quest shows localized alert for missing objective")
+
+        mockState.alerts = {}
+        local sent = tab:SendSelectedPreparedQuest()
+        AssertEqual(sent, false, "SendSelectedPreparedQuest rejects objective-less draft")
+        AssertTrue(#(mockState.alerts or {}) > 0, "Send shows localized alert for missing objective")
+    end)
+
 end

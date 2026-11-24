@@ -729,6 +729,15 @@ function QuestRepository:GetActiveQuest()
     return nil
 end
 
+function QuestRepository:HasPlayableObjectives(quest)
+    if type(quest) ~= "table" then
+        return false
+    end
+    local hasTargets = type(quest.targets) == "table" and #quest.targets > 0
+    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
+    return hasTargets or hasDiscoveries
+end
+
 function QuestRepository:SetActiveQuest(questId)
     if questId == nil then
         self.savedVars.activeQuestId = nil
@@ -741,6 +750,9 @@ function QuestRepository:SetActiveQuest(questId)
     if not q or q.completed or q.failed or q.needsMigration or self:IsOfferedQuest(q) then
         return false
     end
+    if not self:HasPlayableObjectives(q) then
+        return false, "ERR_MISSING_TARGET"
+    end
 
     self.savedVars.activeQuestId = q.id
     self:InvalidateActiveTargetCache()
@@ -751,6 +763,11 @@ end
 function QuestRepository:ResetQuest(questId, options)
     local q = self:GetQuestById(questId)
     if not q then return false end
+
+    local shouldActivate = not (type(options) == "table" and options.activate == false)
+    if shouldActivate and not self:HasPlayableObjectives(q) then
+        return false, "ERR_MISSING_TARGET"
+    end
 
     for _, t in ipairs(q.targets or {}) do
         t.currentCount = 0
@@ -766,7 +783,6 @@ function QuestRepository:ResetQuest(questId, options)
         self._completionCodeCache[questId] = nil
     end
 
-    local shouldActivate = not (type(options) == "table" and options.activate == false)
     local wasActive = (self.savedVars.activeQuestId == q.id)
     if shouldActivate then
         self.savedVars.activeQuestId = q.id
