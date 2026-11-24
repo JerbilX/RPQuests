@@ -354,7 +354,7 @@ end
 
 function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
     local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
-    local CycleIndex = Addon.JournalWidgets.CycleIndex
+    local CreateIconButton = Addon.JournalWidgets.CreateIconButton
 
     tab.btnCaptureDiscovery = CreateStyledButton(panelName .. "_BtnCaptureDiscovery", discBody, 128, 26, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
         local draft = Addon.QuestRepository:GetDraft()
@@ -369,47 +369,48 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
     end)
     tab.btnCaptureDiscovery:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 0)
 
-    tab.btnClearDiscoveries = CreateStyledButton(panelName .. "_BtnClearDiscoveries", discBody, 124, 26, Addon.Locale:Get("BTN_CLEAR_DISCOVERIES"), function()
-        tab.selectedDiscoveryIndex = nil
-        Addon.QuestRepository:ClearDraftDiscoveries()
-    end)
-    tab.btnClearDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 134, 0)
-    tab.btnClearDiscoveries:SetHidden(true)
+    local discoveryDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_DiscoveryDropdown", discBody, "ZO_ComboBox")
+    discoveryDropdown:SetDimensions(304, 28)
+    discoveryDropdown:SetAnchor(TOPLEFT, discBody, TOPLEFT, 134, 0)
+    tab.discoveryDropdown = discoveryDropdown
 
-    tab.btnDiscPrev = CreateStyledButton(panelName .. "_BtnDiscPrev", discBody, 28, 26, "<", function()
-        local total = #(Addon.QuestRepository:GetDraft().discoveries or {})
-        local nextIdx = CycleIndex(tab.selectedDiscoveryIndex, total, -1)
-        if nextIdx then tab.selectedDiscoveryIndex = nextIdx; tab:RefreshEditorPane() end
-    end)
-    tab.btnDiscPrev:SetAnchor(TOPLEFT, discBody, TOPLEFT, 264, 0)
-    tab.btnDiscPrev:SetHidden(true)
+    local discCombo = ZO_ComboBox_ObjectFromContainer(discoveryDropdown)
+    if discCombo then
+        discCombo:SetSortsItems(false)
+        tab.discoveryComboBox = discCombo
+    end
 
-    local lblDiscIndex = WINDOW_MANAGER:CreateControl(panelName .. "_LblDiscIndex", discBody, CT_LABEL)
-    lblDiscIndex:SetDimensions(54, 26)
-    lblDiscIndex:SetAnchor(TOPLEFT, discBody, TOPLEFT, 294, 3)
-    if lblDiscIndex.SetFont then lblDiscIndex:SetFont("ZoFontGameBold") end
-    if lblDiscIndex.SetHorizontalAlignment then lblDiscIndex:SetHorizontalAlignment(TEXT_ALIGN_CENTER) end
-    lblDiscIndex:SetHidden(true)
-    tab.lblDiscIndex = lblDiscIndex
+    tab.btnRemoveDiscovery = CreateIconButton(
+        panelName .. "_BtnRemoveDiscovery", discBody, 28,
+        "/esoui/art/buttons/decline_up.dds",
+        "/esoui/art/buttons/decline_down.dds",
+        "/esoui/art/buttons/decline_over.dds",
+        "/esoui/art/buttons/decline_disabled.dds",
+        Addon.Locale:Get("TOOLTIP_REMOVE_DISCOVERY"),
+        function()
+            local idx = tab.selectedDiscoveryIndex
+            if not idx then return end
+            local draft = Addon.QuestRepository:RemoveDraftDiscoveryPoint(idx)
+            local total = draft and #(draft.discoveries or {}) or 0
+            tab.selectedDiscoveryIndex = (total == 0) and nil or math.min(idx, total)
+            tab:RefreshEditorPane()
+        end
+    )
+    tab.btnRemoveDiscovery:SetAnchor(TOPLEFT, discBody, TOPLEFT, 444, 0)
 
-    tab.btnDiscNext = CreateStyledButton(panelName .. "_BtnDiscNext", discBody, 28, 26, ">", function()
-        local total = #(Addon.QuestRepository:GetDraft().discoveries or {})
-        local nextIdx = CycleIndex(tab.selectedDiscoveryIndex, total, 1)
-        if nextIdx then tab.selectedDiscoveryIndex = nextIdx; tab:RefreshEditorPane() end
-    end)
-    tab.btnDiscNext:SetAnchor(TOPLEFT, discBody, TOPLEFT, 350, 0)
-    tab.btnDiscNext:SetHidden(true)
-
-    tab.btnDiscRemove = CreateStyledButton(panelName .. "_BtnDiscRemove", discBody, 126, 26, Addon.Locale:Get("BTN_REMOVE_DISCOVERY"), function()
-        local idx = tab.selectedDiscoveryIndex
-        if not idx then return end
-        local draft = Addon.QuestRepository:RemoveDraftDiscoveryPoint(idx)
-        local total = draft and #(draft.discoveries or {}) or 0
-        tab.selectedDiscoveryIndex = (total == 0) and nil or math.min(idx, total)
-        tab:RefreshEditorPane()
-    end)
-    tab.btnDiscRemove:SetAnchor(TOPLEFT, discBody, TOPLEFT, 384, 0)
-    tab.btnDiscRemove:SetHidden(true)
+    tab.btnClearDiscoveries = CreateIconButton(
+        panelName .. "_BtnClearDiscoveries", discBody, 28,
+        "/esoui/art/inventory/inventory_tabicon_trash_up.dds",
+        "/esoui/art/inventory/inventory_tabicon_trash_down.dds",
+        "/esoui/art/inventory/inventory_tabicon_trash_over.dds",
+        nil,
+        Addon.Locale:Get("TOOLTIP_CLEAR_DISCOVERIES"),
+        function()
+            tab.selectedDiscoveryIndex = nil
+            Addon.QuestRepository:ClearDraftDiscoveries()
+        end
+    )
+    tab.btnClearDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 478, 0)
 end
 
 function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
@@ -462,6 +463,7 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
             local idx = tab.selectedDiscoveryIndex
             if idx and draft.discoveries and draft.discoveries[idx] then
                 Addon.QuestRepository:UpdateDraftDiscoveryPoint(idx, { message = val }, true)
+                Addon.JournalEditorPane.RefreshDiscoveryDropdown(tab, draft)
                 Addon.JournalEditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
                 Addon.JournalEditorPane.LayoutSections(tab)
             else
@@ -472,12 +474,6 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
     discMsgBg:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 94)
     tab.discoveryMsgBg = discMsgBg
     tab.discoveryMsgEdit = discMsgEdit
-
-    local lblCapturedDiscoveries = WINDOW_MANAGER:CreateControl(panelName .. "_LblCapturedDiscoveries", discBody, CT_LABEL)
-    lblCapturedDiscoveries:SetDimensions(510, 32)
-    lblCapturedDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 4, 132)
-    if lblCapturedDiscoveries.SetFont then lblCapturedDiscoveries:SetFont("ZoFontGame") end
-    tab.lblCapturedDiscoveries = lblCapturedDiscoveries
 end
 
 function EditorSections.BuildDialogueControls(tab, dlgBody, panelName)
