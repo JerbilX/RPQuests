@@ -20,9 +20,9 @@ En `RPQuest`, las misiones actuales se centran en objetivos de combate dentro de
 
 > **Enmienda (2026-11-24, Issue #294):** Se retiró el keybind independiente `RPQUEST_CAPTURE_DISCOVERY` y el comando `/rpquest discovery` para consolidar la captura exclusivamente en el formulario del editor, ya que cada punto requiere redactar su mensaje narrativo en el lugar. Se reemplazaron los botones `8m` / `15m` / `30m` por un `ZO_ComboBox` estandarizado (`Small` / `Medium` / `Large`) y se eliminó el relleno genérico `DEFAULT_DISCOVERY_MSG`, exigiendo mensaje no vacío antes de guardar, probar o enviar la misión.
 >
-> **Enmienda (2026-11-24, Issue #298):** Se matiza el principio de ocultamiento en mapa mediante visibilidad diferenciada por rol (`RPQUEST_DISCOVERY_AREA_PIN` en color púrpura `DISCOVERY_AREA_COLOR` con `pinTypeOnResizeCallback`):
-> * **Creador (modo Edición / Borrador y misiones Preparadas/Enviadas):** visualiza automáticamente todos los puntos configurados con tooltip que incluye radio en metros y resumen del mensaje.
-> * **Jugador receptor (Play mode):** los puntos permanecen ocultos por defecto (`showDiscoveryAreas = false` en `SavedVariables.settings`, nunca serializado en `ShareCodec`), pudiendo activarse localmente desde el detalle de la misión. Al activarse, solo muestra puntos pendientes (`not discovered`), se refresca automáticamente al dispararse `DISCOVERY_TRIGGERED`, y su tooltip sin spoilers muestra únicamente `Discovery Point #<N>`.
+> **Enmienda (2026-11-24, Issue #298 / #308):** Se matiza el principio de ocultamiento en mapa mediante visibilidad diferenciada por rol (`RPQUEST_DISCOVERY_AREA_PIN` en color púrpura `DISCOVERY_AREA_COLOR` con `pinTypeOnResizeCallback`):
+> * **Creador (modo Edición / Borrador y previsualización de misiones Preparadas/Enviadas sin estar en `Test Quest`):** visualiza automáticamente todos los puntos configurados con tooltip que incluye radio en metros y resumen del mensaje.
+> * **Modo Jugador (misiones Recibidas y misiones Preparadas/Enviadas activas en `Test Quest`):** los puntos permanecen ocultos por defecto (`showDiscoveryAreas = false` en `SavedVariables.settings`, nunca serializado en `ShareCodec`), pudiendo activarse localmente desde el detalle de la misión. Al activarse, solo muestra puntos pendientes (`not discovered`), se refresca automáticamente al dispararse `DISCOVERY_TRIGGERED`, y su tooltip sin spoilers muestra únicamente `Discovery Point #<N>`.
 
 ## Decisión Adoptada
 1. **Modelo de Dominio (`Constants.lua` y `QuestRepository.lua`):**

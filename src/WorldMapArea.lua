@@ -71,6 +71,32 @@ local function OpenWorldMapScene()
     end
 end
 
+local function IsEditModeQuest(quest)
+    local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft()
+    return draft ~= nil and quest == draft
+end
+
+local function IsActivelyTestingPreparedQuest(quest)
+    if type(quest) ~= "table" or not Addon.QuestRepository then
+        return false
+    end
+    if not Addon.QuestRepository:IsPreparedQuest(quest) then
+        return false
+    end
+    local activeQuest = Addon.QuestRepository:GetActiveQuest()
+    return activeQuest ~= nil and (activeQuest == quest or (quest.id ~= nil and activeQuest.id == quest.id))
+end
+
+local function IsCreatorDiscoveryQuest(quest)
+    if IsEditModeQuest(quest) then
+        return true
+    end
+    if Addon.QuestRepository ~= nil and Addon.QuestRepository:IsPreparedQuest(quest) then
+        return not IsActivelyTestingPreparedQuest(quest)
+    end
+    return false
+end
+
 function WorldMapArea:Initialize()
     if self.isInitialized then return end
 
@@ -104,14 +130,6 @@ function WorldMapArea:Initialize()
         end
         local target = (targetIndex and targetQuest.targets and targetQuest.targets[targetIndex]) or nil
         return targetQuest, target, tag
-    end
-
-    local function IsCreatorQuestForTooltip(quest)
-        local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft()
-        if draft ~= nil and quest == draft then
-            return true
-        end
-        return Addon.QuestRepository ~= nil and Addon.QuestRepository:IsPreparedQuest(quest)
     end
 
     local function AddTooltipHeader(tooltip, targetQuest)
@@ -181,7 +199,7 @@ function WorldMapArea:Initialize()
             local tooltip = InformationTooltip
             if tooltip and tooltip.AddLine then
                 AddTooltipHeader(tooltip, targetQuest)
-                if IsCreatorQuestForTooltip(targetQuest) then
+                if IsCreatorDiscoveryQuest(targetQuest) then
                     local meters = math.floor(((tonumber(discovery.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM) / 100) + 0.5)
                     local msg = tostring(discovery.message or ""):gsub("[\r\n]+", " ")
                     if #msg > 60 then
@@ -326,16 +344,6 @@ local function ResolveQuestSearchArea(quest)
         return quest.areaCenterX, quest.areaCenterY, quest.areaRadius
     end
     return nil, nil, nil
-end
-
-local function IsEditModeQuest(quest)
-    local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft()
-    return draft ~= nil and quest == draft
-end
-
-local function IsCreatorDiscoveryQuest(quest)
-    return IsEditModeQuest(quest)
-        or (Addon.QuestRepository ~= nil and Addon.QuestRepository:IsPreparedQuest(quest))
 end
 
 local function ShouldShowSearchAreas(quest)
