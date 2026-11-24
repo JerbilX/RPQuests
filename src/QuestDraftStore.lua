@@ -741,11 +741,6 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
     draft.discoveries = draft.discoveries or {}
 
     local hasTargets = #draft.targets > 0 and draft.targetX and draft.targetY
-    local hasDiscoveries = #draft.discoveries > 0
-
-    if not hasTargets and not hasDiscoveries then
-        return nil, Addon.Locale:Get("ERR_MISSING_TARGET")
-    end
 
     if hasTargets and (not draft.areaCenterX or not draft.areaCenterY) then
         local effectiveRadius = Addon.WorldMapArea:GetEffectiveAreaRadius(draft.areaRadius, draft.mapType)

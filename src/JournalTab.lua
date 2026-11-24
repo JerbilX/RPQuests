@@ -593,7 +593,9 @@ function JournalTab:OnSaveDraftClicked()
 
     local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText, nil, recipientText, recipientCharText)
     if not savedQuest then
-        Addon.Announcements:ShowAlert(err or Addon.Locale:Get("ERR_MISSING_TARGET"), true)
+        if err then
+            Addon.Announcements:ShowAlert(err, true)
+        end
         return
     end
 
@@ -615,13 +617,19 @@ function JournalTab:OnToggleActiveClicked()
             Addon.QuestRepository:SetActiveQuest(nil)
         end
     else
-        local activated
+        local activated, errKey
         if q.completed or q.failed or isPrepared then
-            activated = Addon.QuestRepository:ResetQuest(q.id)
+            activated, errKey = Addon.QuestRepository:ResetQuest(q.id)
         else
-            activated = Addon.QuestRepository:SetActiveQuest(q.id)
+            activated, errKey = Addon.QuestRepository:SetActiveQuest(q.id)
         end
-        if activated and isPrepared then
+        if not activated then
+            if errKey then
+                Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
+            end
+            return
+        end
+        if isPrepared then
             Addon.Announcements:AnnounceQuestAccepted(q)
         end
     end

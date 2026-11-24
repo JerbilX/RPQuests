@@ -946,4 +946,74 @@ return function(T)
         AssertEqual(draft.requireUndetected, nil, "Legacy draft requireUndetected cleared")
     end)
 
+    RunTest("Issue #270: SaveDraft allows objective-less drafts; send/export/activate reject with ERR_MISSING_TARGET; discovery-only works end-to-end", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({})
+        RPQuest.MailTransport:Initialize()
+
+        -- 1. SaveDraft with 0 targets and 0 discoveries preserves all fields
+        repo:AddDraftDialogue("Informant", 381, "Bring the seal.", "Meet at the pier")
+        local saved, saveErr = repo:SaveDraft(
+            "Investigation Draft",
+            "Follow the clues at the harbor.",
+            nil,
+            "Case closed!",
+            nil,
+            "@Investigator",
+            "Detective"
+        )
+        AssertTrue(saved ~= nil, "SaveDraft succeeds without targets or discoveries: " .. tostring(saveErr))
+        AssertEqual(saved.title, "Investigation Draft", "Title preserved")
+        AssertEqual(saved.description, "Follow the clues at the harbor.", "Description preserved")
+        AssertEqual(saved.completionMessage, "Case closed!", "Completion message preserved")
+        AssertEqual(saved.recipientAccount, "@Investigator", "Recipient account preserved")
+        AssertEqual(saved.recipientCharacterName, "Detective", "Recipient character preserved")
+        AssertEqual(#saved.dialogues, 1, "Dialogues preserved")
+        AssertEqual(saved.completed, false, "Objective-less draft stays completed=false")
+
+        -- 2. Export, activate/reset, and mail send reject objective-less draft with ERR_MISSING_TARGET
+        local code, exportErr = repo:ExportQuestToCode(saved.id)
+        AssertEqual(code, nil, "ExportQuestToCode rejects objective-less draft")
+        AssertEqual(exportErr, "ERR_MISSING_TARGET", "Export returns ERR_MISSING_TARGET")
+
+        local actOk, actErr = repo:SetActiveQuest(saved.id)
+        AssertEqual(actOk, false, "SetActiveQuest rejects objective-less draft")
+        AssertEqual(actErr, "ERR_MISSING_TARGET", "SetActiveQuest returns ERR_MISSING_TARGET")
+
+        local resetOk, resetErr = repo:ResetQuest(saved.id)
+        AssertEqual(resetOk, false, "ResetQuest(activate=true) rejects objective-less draft")
+        AssertEqual(resetErr, "ERR_MISSING_TARGET", "ResetQuest returns ERR_MISSING_TARGET")
+
+        local sendOk, sendErr = RPQuest.MailTransport:SendQuestToRecipients(saved, "@Investigator", "Roleplay intro")
+        AssertEqual(sendOk, false, "SendQuestToRecipients rejects objective-less draft")
+        AssertEqual(sendErr, "ERR_MISSING_TARGET", "SendQuestToRecipients returns ERR_MISSING_TARGET instead of ERR_INVALID_CODE")
+
+        -- 3. Adding a discovery point (still 0 NPC targets) enables test, export, send, and completion
+        repo:LoadQuestIntoDraft(saved.id)
+        repo:AddDraftDiscoveryPoint({
+            zoneId = 381,
+            worldX = 1200,
+            worldY = 0,
+            worldZ = 2400,
+            radius = 1000,
+            message = "Found the hidden ledger",
+        })
+        local discSaved = repo:SaveDraft()
+        AssertTrue(discSaved ~= nil and #discSaved.discoveries == 1 and #discSaved.targets == 0, "Discovery-only quest saved with 0 NPC targets")
+
+        local discActOk = repo:ResetQuest(discSaved.id)
+        AssertEqual(discActOk, true, "Discovery-only quest can be activated for testing")
+        local discCode, discExportErr = repo:ExportQuestToCode(discSaved.id)
+        AssertTrue(type(discCode) == "string" and string.sub(discCode, 1, 5) == "RPQ3:", "Discovery-only quest exports cleanly: " .. tostring(discExportErr))
+
+        local imported = repo:ImportQuestFromCode(discCode)
+        AssertTrue(imported ~= nil and #imported.discoveries == 1 and #imported.targets == 0, "Discovery-only quest imports cleanly")
+        repo:AcceptOfferedQuest(imported.id)
+        local found = repo:MarkDiscoveryTriggered(imported.id, 1)
+        AssertEqual(found, true, "Discovery point recorded")
+        AssertEqual(imported.completed, true, "Discovery-only quest completes without any NPC target")
+    end)
+
 end

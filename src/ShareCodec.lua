@@ -308,11 +308,11 @@ local function PackDialogueCluesBlock(buf, dialogues, forceWrite)
 end
 
 local function PackQuestBinary(quest)
-    if type(quest) ~= "table" then return nil, "Invalid quest table" end
+    if type(quest) ~= "table" then return nil, "ERR_INVALID_CODE" end
     local targets = quest.targets or {}
     local discoveries = quest.discoveries or {}
     if #targets == 0 and #discoveries == 0 then
-        return nil, "Invalid quest table"
+        return nil, "ERR_MISSING_TARGET"
     end
 
     local dialogues = quest.dialogues or {}
