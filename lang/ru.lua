@@ -9,7 +9,6 @@ RPQuest.Locales["ru"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Пользовательские задания",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Захватить цель под прицелом (НИП)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Захватить скрытую точку исследования здесь",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Открыть / Закрыть вкладку заданий RPQuest",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["ru"] = {
     BTN_CLEAR_DISCOVERIES = "Очистить точки",
     BTN_REMOVE_DISCOVERY = "Удалить точку",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8м",
-    BTN_DISCOVERY_RAD_MEDIUM = "15м",
-    BTN_DISCOVERY_RAD_LARGE = "30м",
 
     -- Detail View
     STATUS_PENDING = "Статус: |c66CCFFПолучено|r — |cFFD155Ожидает (Принять или Отклонить)|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["ru"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33Наведите прицел на живого НИП и нажмите клавишу захвата.|r",
     LABEL_AREA_SIZE = "Размер области поиска на карте:",
     LABEL_DISCOVERY_SECTION = "Скрытые точки исследования (Необяз.)",
+    LABEL_DISCOVERY_MSG = "Сообщение точки исследования:",
+    LABEL_DISCOVERY_MSG_REQUIRED = "Сообщение точки исследования: |cE8D5A0(Обязательно)|r",
+    LABEL_DISCOVERY_MSG_MISSING = "Сообщение точки исследования: |cFF5555(Обязательно)|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAAДобавлено 0 скрытых точек исследования.|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33Точек исследования: %d|r: %s",
-    DEFAULT_DISCOVERY_MSG = "Вы замечаете нечто необычное поблизости (#%d).",
     DISCOVERY_CLUE_FORMAT = "• Подсказка: %s",
     DISCOVERY_PREPARED_SUMMARY = "• Скрытые точки исследования: настроено %d",
     LABEL_STEALTH_MODE = "Условие скрытности (Не быть обнаруженным):",
@@ -164,6 +162,7 @@ RPQuest.Locales["ru"] = {
     ALERT_STEALTH_DETECTED = "RPQuest: Вас обнаружили! (Записано в статус задания)",
     ALERT_QUEST_FAILED_STEALTH = "Вас обнаружили (требуется скрытность).",
     ERR_MISSING_TARGET = "Добавьте хотя бы одну точку исследования/локации или цель-НИП перед отправкой или проверкой задания.",
+    ERR_DISCOVERY_MISSING_MSG = "У каждой скрытой точки исследования должно быть сообщение перед сохранением, тестом или отправкой.",
     ERR_INVALID_CODE = "Неверный или поврежденный код RPQuest.",
     ERR_IMPORT_EMPTY = "Вставьте код задания перед импортом.",
     ERR_IMPORT_INVALID_FORMAT = "Неверный формат кода. Убедитесь, что он вставлен полностью без переносов строк и лишних пробелов.",

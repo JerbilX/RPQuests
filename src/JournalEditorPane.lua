@@ -55,7 +55,7 @@ function EditorPane.Build(tab, parent)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
     EditorSections.BuildTargetConfigControls(tab, targetSec.body, panelName)
 
-    local discoverySec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "discovery", "LABEL_DISCOVERY_SECTION", 142)
+    local discoverySec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "discovery", "LABEL_DISCOVERY_SECTION", 168)
     EditorSections.BuildDiscoveryControls(tab, discoverySec.body, panelName)
     EditorSections.BuildDiscoveryInputs(tab, discoverySec.body, panelName)
 
@@ -73,7 +73,13 @@ local function GetSectionBadge(draft, key)
         return count > 0 and string.format("  |c33FF33[%d]|r", count) or ""
     elseif key == "discovery" then
         local count = #(draft.discoveries or {})
-        return count > 0 and string.format("  |c33FF33[%d]|r", count) or ""
+        if count > 0 then
+            if Addon.QuestRepository:HasMissingDiscoveryMessage(draft) then
+                return string.format("  |cFF5555[%d !]|r", count)
+            end
+            return string.format("  |c33FF33[%d]|r", count)
+        end
+        return ""
     elseif key == "dialogue" then
         local count = #(draft.dialogues or {})
         if count > 0 then
@@ -354,8 +360,39 @@ local function RefreshEditorTargetConfig(tab, draft)
     RefreshTargetMessageControls(tab, selTarget, hasTargets, isLocRequired)
 end
 
+function EditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
+    local discoveries = draft.discoveries or {}
+    local totalDisc = #discoveries
+    local selectedPoint = tab.selectedDiscoveryIndex and discoveries[tab.selectedDiscoveryIndex] or nil
+    local activeMsg = selectedPoint and (selectedPoint.message or "") or ""
+    local trimmed = activeMsg:gsub("^%s+", ""):gsub("%s+$", "")
+    local isPointMissing = (totalDisc > 0) and (trimmed == "")
+
+    if tab.lblDiscoveryMsg then
+        if totalDisc == 0 then
+            tab.lblDiscoveryMsg:SetText(Addon.Locale:Get("LABEL_DISCOVERY_MSG"))
+        elseif isPointMissing then
+            tab.lblDiscoveryMsg:SetText(Addon.Locale:Get("LABEL_DISCOVERY_MSG_MISSING"))
+        else
+            tab.lblDiscoveryMsg:SetText(Addon.Locale:Get("LABEL_DISCOVERY_MSG_REQUIRED"))
+        end
+    end
+
+    if tab.discoveryMsgEdit then
+        tab.discoveryMsgEdit._hasWarning = isPointMissing
+    end
+    if tab.discoveryMsgBg and tab.discoveryMsgBg.SetEdgeColor then
+        if isPointMissing then
+            tab.discoveryMsgBg:SetEdgeColor(0.95, 0.28, 0.28, 1.0)
+        elseif tab.discoveryMsgEdit and tab.discoveryMsgEdit._focused then
+            tab.discoveryMsgBg:SetEdgeColor(0.95, 0.85, 0.50, 1.0)
+        else
+            tab.discoveryMsgBg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
+        end
+    end
+end
+
 local function RefreshEditorDiscoveries(tab, draft)
-    local FormatSelected = Addon.JournalWidgets.FormatSelected
     local discoveries = draft.discoveries or {}
     local totalDisc = #discoveries
     if totalDisc > 0 then
@@ -369,17 +406,14 @@ local function RefreshEditorDiscoveries(tab, draft)
     local selectedPoint = tab.selectedDiscoveryIndex and discoveries[tab.selectedDiscoveryIndex] or nil
     local activeDiscMsg = selectedPoint and (selectedPoint.message or "") or (draft.discoveryMessage or "")
     SyncUnfocusedEdit(tab.discoveryMsgEdit, activeDiscMsg)
+    EditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
 
-    local discRadii = Addon.Constants.DISCOVERY_RADIUS
-    local curDiscRad = (selectedPoint and selectedPoint.radius) or draft.discoveryRadius or discRadii.MEDIUM
-    if tab.btnDiscRadSmall then
-        tab.btnDiscRadSmall:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_SMALL"), curDiscRad == discRadii.SMALL))
-    end
-    if tab.btnDiscRadMedium then
-        tab.btnDiscRadMedium:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_MEDIUM"), curDiscRad == discRadii.MEDIUM))
-    end
-    if tab.btnDiscRadLarge then
-        tab.btnDiscRadLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_DISCOVERY_RAD_LARGE"), curDiscRad == discRadii.LARGE))
+    if tab.discRadComboBox then
+        local discRadii = Addon.Constants.DISCOVERY_RADIUS
+        local curDiscRad = (selectedPoint and selectedPoint.radius) or draft.discoveryRadius or discRadii.MEDIUM
+        tab.discRadComboBox:SetSelectedItemByEval(function(item)
+            return item.discRadius == curDiscRad
+        end, true)
     end
 
     local showSelector = totalDisc > 0

@@ -9,7 +9,6 @@ RPQuest.Locales["de"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Eigene Quests",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Ziel im Fadenkreuz erfassen (NSC)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Versteckten Entdeckungspunkt hier erfassen",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Reiter für eigene Quests öffnen / schließen",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["de"] = {
     BTN_CLEAR_DISCOVERIES = "Punkte leeren",
     BTN_REMOVE_DISCOVERY = "Punkt entfernen",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8m",
-    BTN_DISCOVERY_RAD_MEDIUM = "15m",
-    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_PENDING = "Status: |c66CCFFErhalten|r — |cFFD155Ausstehend (Annehmen oder Ablehnen)|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["de"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33Zielt auf einen lebenden NSC und drückt die Erfassungstaste.|r",
     LABEL_AREA_SIZE = "Größe des Suchgebiets auf der Karte:",
     LABEL_DISCOVERY_SECTION = "Versteckte Entdeckungspunkte (Optional)",
+    LABEL_DISCOVERY_MSG = "Nachricht des Entdeckungspunkts:",
+    LABEL_DISCOVERY_MSG_REQUIRED = "Nachricht des Entdeckungspunkts: |cE8D5A0(Erforderlich)|r",
+    LABEL_DISCOVERY_MSG_MISSING = "Nachricht des Entdeckungspunkts: |cFF5555(Erforderlich)|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAA0 versteckte Entdeckungspunkte hinzugefügt.|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d Entdeckungspunkt(e)|r: %s",
-    DEFAULT_DISCOVERY_MSG = "Ihr bemerkt etwas Ungewöhnliches in der Nähe (#%d).",
     DISCOVERY_CLUE_FORMAT = "• Hinweis: %s",
     DISCOVERY_PREPARED_SUMMARY = "• Versteckte Entdeckungspunkte: %d konfiguriert",
     LABEL_STEALTH_MODE = "Schleich-Bedingung (Unentdeckt):",
@@ -164,6 +162,7 @@ RPQuest.Locales["de"] = {
     ALERT_STEALTH_DETECTED = "RPQuest: Ihr wurdet entdeckt! (Im Quest-Status vermerkt)",
     ALERT_QUEST_FAILED_STEALTH = "Ihr wurdet entdeckt (Schleichen erforderlich).",
     ERR_MISSING_TARGET = "Fügt mindestens einen Entdeckungs- oder Ortspunkt oder ein NSC-Ziel hinzu, bevor ihr die Quest sendet oder testet.",
+    ERR_DISCOVERY_MISSING_MSG = "Jeder versteckte Entdeckungspunkt muss vor dem Speichern, Testen oder Senden eine Nachricht haben.",
     ERR_INVALID_CODE = "Ungültiger oder beschädigter RPQuest-Code.",
     ERR_IMPORT_EMPTY = "Fügt vor dem Importieren einen Quest-Code ein.",
     ERR_IMPORT_INVALID_FORMAT = "Ungültiges Codeformat. Stellt sicher, dass ihr ihn vollständig ohne Zeilenumbrüche oder Leerzeichen einfügt.",

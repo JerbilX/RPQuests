@@ -648,6 +648,10 @@ function JournalTab:OnSaveDraftClicked()
         if self.dlgResponseEdit then dlgFields.response = self.dlgResponseEdit:GetText() end
         Addon.QuestRepository:UpdateDraftDialogue(dlgIdx, dlgFields, true)
     end
+    local discIdx = self.selectedDiscoveryIndex
+    if discIdx and draft.discoveries and draft.discoveries[discIdx] and self.discoveryMsgEdit then
+        Addon.QuestRepository:UpdateDraftDiscoveryPoint(discIdx, { message = self.discoveryMsgEdit:GetText() }, true)
+    end
 
     local savedQuest, err = Addon.QuestRepository:SaveDraft(titleText, descText, nil, compMsgText, nil, recipientText, recipientCharText)
     if not savedQuest then

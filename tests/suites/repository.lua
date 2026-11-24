@@ -380,10 +380,11 @@ return function(T)
     RunTest("Optimizations: completion code cache, discovery-only FindPendingTarget, ShareCodec escape, keybind string", function()
         RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
 
-        -- 1. Keybind string for discovery capture is registered
+        -- 1. Legacy discovery capture keybind is completely removed
         RPQuest.Locale._stringsRegistered = false
         RPQuest.Locale:Initialize("en")
-        AssertTrue(_G["SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"] ~= nil, "SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY is registered")
+        AssertEqual(_G["SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"], nil, "SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY is not registered")
+        AssertEqual(RPQuest.OnCaptureDiscoveryKeybind, nil, "OnCaptureDiscoveryKeybind is removed")
 
         -- 2. ShareCodec escaping roundtrip with special delimiters
         local specialQuest = {

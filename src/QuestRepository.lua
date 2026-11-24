@@ -948,6 +948,21 @@ function QuestRepository:HasPlayableObjectives(quest)
     return hasTargets or hasDiscoveries
 end
 
+function QuestRepository:HasMissingDiscoveryMessage(quest)
+    if type(quest) ~= "table" or type(quest.discoveries) ~= "table" or #quest.discoveries == 0 then
+        return false
+    end
+    for _, d in ipairs(quest.discoveries) do
+        local msg = type(d) == "table" and type(d.message) == "string"
+            and d.message:gsub("^%s+", ""):gsub("%s+$", "")
+            or ""
+        if msg == "" then
+            return true
+        end
+    end
+    return false
+end
+
 function QuestRepository:SetActiveQuest(questId)
     if questId == nil then
         self.savedVars.activeQuestId = nil
@@ -963,6 +978,9 @@ function QuestRepository:SetActiveQuest(questId)
     if not self:HasPlayableObjectives(q) then
         return false, "ERR_MISSING_TARGET"
     end
+    if self:HasMissingDiscoveryMessage(q) then
+        return false, "ERR_DISCOVERY_MISSING_MSG"
+    end
 
     self.savedVars.activeQuestId = q.id
     self:InvalidateActiveTargetCache()
@@ -977,6 +995,9 @@ function QuestRepository:ResetQuest(questId, options)
     local shouldActivate = not (type(options) == "table" and options.activate == false)
     if shouldActivate and not self:HasPlayableObjectives(q) then
         return false, "ERR_MISSING_TARGET"
+    end
+    if shouldActivate and self:HasMissingDiscoveryMessage(q) then
+        return false, "ERR_DISCOVERY_MISSING_MSG"
     end
 
     for _, t in ipairs(q.targets or {}) do

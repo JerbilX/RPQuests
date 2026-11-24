@@ -9,7 +9,6 @@ RPQuest.Locales["en"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Custom Quests",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Capture Target Under Reticle (NPC)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Capture Hidden Discovery Point Here",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Open / Close Custom Quests Tab",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["en"] = {
     BTN_CLEAR_DISCOVERIES = "Clear Points",
     BTN_REMOVE_DISCOVERY = "Remove Point",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8m",
-    BTN_DISCOVERY_RAD_MEDIUM = "15m",
-    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_PENDING = "Status: |c66CCFFReceived|r — |cFFD155Pending (Accept or Reject)|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["en"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33Aim at a living NPC and press the Capture keybind.|r",
     LABEL_AREA_SIZE = "Map Search Area Size:",
     LABEL_DISCOVERY_SECTION = "Hidden Discovery Points (Optional)",
+    LABEL_DISCOVERY_MSG = "Discovery Point Message:",
+    LABEL_DISCOVERY_MSG_REQUIRED = "Discovery Point Message: |cE8D5A0(Required)|r",
+    LABEL_DISCOVERY_MSG_MISSING = "Discovery Point Message: |cFF5555(Required)|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAA0 hidden discovery points added.|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d discovery point(s)|r: %s",
-    DEFAULT_DISCOVERY_MSG = "You notice something unusual nearby (#%d).",
     DISCOVERY_CLUE_FORMAT = "• Clue: %s",
     DISCOVERY_PREPARED_SUMMARY = "• Hidden discovery points: %d configured",
     LABEL_STEALTH_MODE = "Undetected Stealth Condition:",
@@ -164,6 +162,7 @@ RPQuest.Locales["en"] = {
     ALERT_STEALTH_DETECTED = "RPQuest: You were detected! (Recorded on quest status)",
     ALERT_QUEST_FAILED_STEALTH = "You were detected (stealth required).",
     ERR_MISSING_TARGET = "Add at least one discovery/location point or NPC target before sending or testing the quest.",
+    ERR_DISCOVERY_MISSING_MSG = "Each hidden discovery point must have a message before saving, testing, or sending.",
     ERR_INVALID_CODE = "Invalid or corrupted RPQuest code.",
     ERR_IMPORT_EMPTY = "Paste a quest code before importing.",
     ERR_IMPORT_INVALID_FORMAT = "Invalid code format. Make sure to paste it completely without line breaks or extra spaces.",

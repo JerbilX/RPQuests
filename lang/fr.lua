@@ -9,7 +9,6 @@ RPQuest.Locales["fr"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Quêtes personnalisées",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Capturer la cible sous le réticule (PNJ)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Capturer un point de découverte caché ici",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Ouvrir / Fermer l'onglet Quêtes personnalisées",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["fr"] = {
     BTN_CLEAR_DISCOVERIES = "Effacer points",
     BTN_REMOVE_DISCOVERY = "Retirer point",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8m",
-    BTN_DISCOVERY_RAD_MEDIUM = "15m",
-    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_PENDING = "Statut : |c66CCFFReçue|r — |cFFD155En attente (Accepter ou Refuser)|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["fr"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33Visez un PNJ vivant et appuyez sur la touche de capture.|r",
     LABEL_AREA_SIZE = "Taille de la zone sur la carte :",
     LABEL_DISCOVERY_SECTION = "Points de découverte cachés (Optionnel)",
+    LABEL_DISCOVERY_MSG = "Message du point de découverte :",
+    LABEL_DISCOVERY_MSG_REQUIRED = "Message du point de découverte : |cE8D5A0(Requis)|r",
+    LABEL_DISCOVERY_MSG_MISSING = "Message du point de découverte : |cFF5555(Requis)|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAA0 point de découverte caché ajouté.|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d point(s) de découverte|r : %s",
-    DEFAULT_DISCOVERY_MSG = "Vous remarquez quelque chose d'inhabituel à proximité (#%d).",
     DISCOVERY_CLUE_FORMAT = "• Indice : %s",
     DISCOVERY_PREPARED_SUMMARY = "• Points de découverte cachés : %d configuré(s)",
     LABEL_STEALTH_MODE = "Condition de furtivité (Non détecté) :",
@@ -164,6 +162,7 @@ RPQuest.Locales["fr"] = {
     ALERT_STEALTH_DETECTED = "RPQuest : Vous avez été détecté ! (Enregistré dans le statut de la quête)",
     ALERT_QUEST_FAILED_STEALTH = "Vous avez été détecté (furtivité requise).",
     ERR_MISSING_TARGET = "Ajoutez au moins un point de découverte/lieu ou une cible PNJ avant d'envoyer ou de tester la quête.",
+    ERR_DISCOVERY_MISSING_MSG = "Chaque point de découverte caché doit avoir un message avant d'enregistrer, de tester ou d'envoyer.",
     ERR_INVALID_CODE = "Code RPQuest invalide ou corrompu.",
     ERR_IMPORT_EMPTY = "Collez un code de quête avant d'importer.",
     ERR_IMPORT_INVALID_FORMAT = "Format de code invalide. Assurez-vous de le coller entièrement sans saut de ligne ni espace supplémentaire.",

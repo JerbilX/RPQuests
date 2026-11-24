@@ -9,7 +9,6 @@ RPQuest.Locales["jp"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - カスタムクエスト",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "レティクル下のターゲットを登録 (NPC)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "現在地に隠し発見ポイントを登録",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "カスタムクエストタブを開く / 閉じる",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["jp"] = {
     BTN_CLEAR_DISCOVERIES = "地点をクリア",
     BTN_REMOVE_DISCOVERY = "地点を削除",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8m",
-    BTN_DISCOVERY_RAD_MEDIUM = "15m",
-    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_PENDING = "状態: |c66CCFF受信済み|r — |cFFD155保留中（受諾または辞退）|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["jp"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33生存しているNPCに照準を合わせて登録キーを押してください。|r",
     LABEL_AREA_SIZE = "マップ捜索範囲のサイズ:",
     LABEL_DISCOVERY_SECTION = "隠し発見ポイント (任意)",
+    LABEL_DISCOVERY_MSG = "発見ポイントのメッセージ:",
+    LABEL_DISCOVERY_MSG_REQUIRED = "発見ポイントのメッセージ: |cE8D5A0(必須)|r",
+    LABEL_DISCOVERY_MSG_MISSING = "発見ポイントのメッセージ: |cFF5555(必須)|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAA隠し発見ポイントは0件です。|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d 件の発見ポイント|r: %s",
-    DEFAULT_DISCOVERY_MSG = "近くで何か奇妙な気配を感じる (#%d)。",
     DISCOVERY_CLUE_FORMAT = "• 手がかり: %s",
     DISCOVERY_PREPARED_SUMMARY = "• 隠し発見ポイント: %d 件設定済み",
     LABEL_STEALTH_MODE = "隠密条件（未発見）:",
@@ -164,6 +162,7 @@ RPQuest.Locales["jp"] = {
     ALERT_STEALTH_DETECTED = "RPQuest: 発見されました！（クエスト状態に記録）",
     ALERT_QUEST_FAILED_STEALTH = "発見されました（隠密必須）。",
     ERR_MISSING_TARGET = "クエストを送信またはテストする前に、発見/場所ポイントまたはNPCターゲットを少なくとも1つ追加してください。",
+    ERR_DISCOVERY_MISSING_MSG = "保存、テスト、または送信する前に、各隠し発見ポイントにメッセージを入力してください。",
     ERR_INVALID_CODE = "無効または破損したRPQuestコードです。",
     ERR_IMPORT_EMPTY = "インポートする前にクエストコードを貼り付けてください。",
     ERR_IMPORT_INVALID_FORMAT = "コード形式が無効です。改行や余分な空白を入れずに全体を貼り付けてください。",

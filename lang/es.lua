@@ -9,7 +9,6 @@ RPQuest.Locales["es"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - Misiones Personalizadas",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "Seleccionar Objetivo bajo Retícula (NPC)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "Capturar Punto de Descubrimiento Oculto Aquí",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "Abrir / Cerrar Pestaña de Misiones Custom",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["es"] = {
     BTN_CLEAR_DISCOVERIES = "Limpiar Puntos",
     BTN_REMOVE_DISCOVERY = "Quitar Punto",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8m",
-    BTN_DISCOVERY_RAD_MEDIUM = "15m",
-    BTN_DISCOVERY_RAD_LARGE = "30m",
 
     -- Detail View
     STATUS_PENDING = "Estado: |c66CCFFRecibida|r — |cFFD155Pendiente (Aceptar o Rechazar)|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["es"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33Apunta a un NPC vivo y pulsa la tecla de captura.|r",
     LABEL_AREA_SIZE = "Tamaño del área en el mapa:",
     LABEL_DISCOVERY_SECTION = "Puntos de Descubrimiento Ocultos (Opcional)",
+    LABEL_DISCOVERY_MSG = "Mensaje del Punto de Descubrimiento:",
+    LABEL_DISCOVERY_MSG_REQUIRED = "Mensaje del Punto de Descubrimiento: |cE8D5A0(Obligatorio)|r",
+    LABEL_DISCOVERY_MSG_MISSING = "Mensaje del Punto de Descubrimiento: |cFF5555(Obligatorio)|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAA0 puntos de descubrimiento agregados.|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d punto(s) de descubrimiento|r: %s",
-    DEFAULT_DISCOVERY_MSG = "Notas algo inusual en este lugar (#%d).",
     DISCOVERY_CLUE_FORMAT = "• Pista: %s",
     DISCOVERY_PREPARED_SUMMARY = "• Puntos de descubrimiento ocultos: %d configurados",
     LABEL_STEALTH_MODE = "Condición de Sigilo (No ser detectado):",
@@ -164,6 +162,7 @@ RPQuest.Locales["es"] = {
     ALERT_STEALTH_DETECTED = "RPQuest: ¡Has sido detectado! (Registrado en el estado de la misión)",
     ALERT_QUEST_FAILED_STEALTH = "Has sido detectado (sigilo obligatorio).",
     ERR_MISSING_TARGET = "Agrega al menos un punto de descubrimiento/ubicación o un objetivo NPC antes de enviar o probar la misión.",
+    ERR_DISCOVERY_MISSING_MSG = "Cada punto de descubrimiento oculto debe tener un mensaje antes de guardar, probar o enviar.",
     ERR_INVALID_CODE = "El código de misión es inválido o está incompleto.",
     ERR_IMPORT_EMPTY = "Pega un código de misión antes de importar.",
     ERR_IMPORT_INVALID_FORMAT = "Formato de código inválido. Asegúrate de pegarlo completo y sin saltos de línea ni espacios extra.",

@@ -122,10 +122,6 @@ function TargetCapture:CaptureDiscoveryPoint(customMessage, customRadius)
         rawMsg = draft.discoveryMessage or ""
     end
     local cleanMsg = rawMsg:gsub("^%s+", ""):gsub("%s+$", "")
-    if cleanMsg == "" then
-        local nextIdx = #(draft.discoveries or {}) + 1
-        cleanMsg = Addon.Locale:Get("DEFAULT_DISCOVERY_MSG", nextIdx)
-    end
 
     local radius = tonumber(customRadius) or draft.discoveryRadius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
     local updatedDraft, count = Addon.QuestRepository:AddDraftDiscoveryPoint({

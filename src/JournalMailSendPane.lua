@@ -115,6 +115,10 @@ function MailSendPane.SendSelectedPrepared(tab)
         Addon.Announcements:ShowAlert(Addon.Locale:Get("ERR_MISSING_TARGET"), true)
         return false
     end
+    if Addon.QuestRepository:HasMissingDiscoveryMessage(quest) then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ERR_DISCOVERY_MISSING_MSG"), true)
+        return false
+    end
     local recipient = type(quest.recipientAccount) == "string"
         and quest.recipientAccount:gsub("^%s+", ""):gsub("%s+$", "")
         or ""

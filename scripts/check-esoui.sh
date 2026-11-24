@@ -108,6 +108,7 @@ RETIRED_DOC_TERMS=(
   "Create Quest|Crear Misión"
   "ZO_PinBlob|ZO_QuestJournal_Keyboard"
   "Hide area on map|Ocultar área en el mapa"
+  "Capture Hidden Discovery Point Here|Capturar Punto de Descubrimiento Oculto Aquí|RPQUEST_CAPTURE_DISCOVERY"
 )
 RETIRED_HITS=0
 for doc_file in "$BBCODE_FILE" README.md README.es.md readme.txt; do
