@@ -1652,4 +1652,61 @@ return function(T)
         end
     end)
 
+    RunTest("JournalEditorPane: Mission Settings accordion order, dividers, spacing, and section badge", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        local tab = RPQuest.JournalTab
+        local expectedOrder = { "header", "options", "target", "discovery", "dialogue" }
+        AssertEqual(#tab.editorSections, #expectedOrder, "Editor has 5 accordion sections")
+        for i, expectedKey in ipairs(expectedOrder) do
+            AssertEqual(tab.editorSections[i].key, expectedKey, string.format("Accordion section %d is %s", i, expectedKey))
+        end
+
+        AssertEqual(RPQuest.Locale:Get("LABEL_OPTIONS_SECTION"), "Mission Settings", "LABEL_OPTIONS_SECTION reads Mission Settings")
+
+        local optionsSec = tab.editorSectionsByKey["options"]
+        AssertTrue(optionsSec ~= nil and optionsSec.bodyHeight >= 186, "options section bodyHeight accommodates dividers and spacing")
+        AssertTrue(tab.optionsDivider1 ~= nil, "optionsDivider1 created")
+        AssertTrue(tab.optionsDivider2 ~= nil, "optionsDivider2 created")
+
+        local _, _, _, _, _, compY = tab.completionBg:GetAnchor(1)
+        local compBottom = compY + tab.completionBg:GetHeight()
+        local _, _, _, _, _, div1Y = tab.optionsDivider1:GetAnchor(1)
+        local _, _, _, _, _, stealthLblY = tab.lblStealthMode:GetAnchor(1)
+        local _, _, _, _, _, stealthY = tab.stealthDropdown:GetAnchor(1)
+        local stealthBottom = stealthY + tab.stealthDropdown:GetHeight()
+        local _, _, _, _, _, div2Y = tab.optionsDivider2:GetAnchor(1)
+        local _, _, _, _, _, chkHideY = tab.chkHideMapArea:GetAnchor(1)
+
+        AssertTrue(div1Y > compBottom, "optionsDivider1 sits below completionBg without overlap")
+        AssertTrue(stealthLblY > div1Y + tab.optionsDivider1:GetHeight(), "lblStealthMode sits below optionsDivider1")
+        AssertTrue(div2Y > stealthBottom, "optionsDivider2 sits below stealthDropdown without overlap")
+        AssertTrue(chkHideY > div2Y + tab.optionsDivider2:GetHeight(), "chkHideMapArea sits below optionsDivider2")
+        AssertTrue(chkHideY + 24 <= optionsSec.bodyHeight, "chkHideMapArea fits within optionsSec.bodyHeight")
+
+        local function HasBadge()
+            return optionsSec.headerBtn:GetText():find("%[%*%]") ~= nil
+        end
+
+        AssertEqual(HasBadge(), false, "Default Mission Settings draft has no [*] badge")
+
+        RPQuest.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = false })
+        tab:RefreshEditorPane()
+        AssertEqual(HasBadge(), true, "Mission Settings shows [*] badge when recommendHideMapAreas is false")
+
+        RPQuest.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = true, stealthMode = "optional" })
+        tab:RefreshEditorPane()
+        AssertEqual(HasBadge(), true, "Mission Settings shows [*] badge when stealthMode is non-disabled")
+
+        RPQuest.QuestRepository:UpdateDraftFields({ stealthMode = "disabled", completionMessage = "Well done!" })
+        tab:RefreshEditorPane()
+        AssertEqual(HasBadge(), true, "Mission Settings shows [*] badge when completionMessage is non-empty")
+
+        RPQuest.QuestRepository:UpdateDraftFields({ completionMessage = "" })
+        tab:RefreshEditorPane()
+        AssertEqual(HasBadge(), false, "Mission Settings clears [*] badge when restored to defaults")
+    end)
+
 end

@@ -605,15 +605,22 @@ function EditorSections.BuildOptionsSection(tab, optBody, panelName)
     tab.completionBg = compBg
     tab.completionEdit = compEdit
 
+    local optDivider1 = WINDOW_MANAGER:CreateControl(panelName .. "_OptionsDivider1", optBody, CT_TEXTURE)
+    optDivider1:SetDimensions(510, 4)
+    optDivider1:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 64)
+    optDivider1:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
+    if optDivider1.SetAlpha then optDivider1:SetAlpha(0.5) end
+    tab.optionsDivider1 = optDivider1
+
     local lblStealth = WINDOW_MANAGER:CreateControl(panelName .. "_LblStealthMode", optBody, CT_LABEL)
-    lblStealth:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 62)
+    lblStealth:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 78)
     if lblStealth.SetFont then lblStealth:SetFont("ZoFontGameBold") end
     lblStealth:SetText(Addon.Locale:Get("LABEL_STEALTH_MODE"))
     tab.lblStealthMode = lblStealth
 
     local stealthDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_StealthDropdown", optBody, "ZO_ComboBox")
     stealthDropdown:SetDimensions(510, 28)
-    stealthDropdown:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 84)
+    stealthDropdown:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 100)
     tab.stealthDropdown = stealthDropdown
 
     local combo = ZO_ComboBox_ObjectFromContainer(stealthDropdown)
@@ -635,6 +642,13 @@ function EditorSections.BuildOptionsSection(tab, optBody, panelName)
         tab.stealthComboBox = combo
     end
 
+    local optDivider2 = WINDOW_MANAGER:CreateControl(panelName .. "_OptionsDivider2", optBody, CT_TEXTURE)
+    optDivider2:SetDimensions(510, 4)
+    optDivider2:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 140)
+    optDivider2:SetTexture(Addon.Constants.UI.DIVIDER_TEXTURE)
+    if optDivider2.SetAlpha then optDivider2:SetAlpha(0.5) end
+    tab.optionsDivider2 = optDivider2
+
     tab.chkHideMapArea = Addon.JournalWidgets.CreateCheckButton(
         panelName .. "_ChkHideMapArea", optBody,
         Addon.Locale:Get("OPT_HIDE_MAP_AREA"),
@@ -642,7 +656,7 @@ function EditorSections.BuildOptionsSection(tab, optBody, panelName)
             Addon.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = isChecked })
         end
     )
-    tab.chkHideMapArea:SetAnchor(TOPLEFT, optBody, TOPLEFT, 2, 122)
+    tab.chkHideMapArea:SetAnchor(TOPLEFT, optBody, TOPLEFT, 2, 154)
 end
 
 function EditorSections.BuildFooterButtons(tab, pane, panelName)

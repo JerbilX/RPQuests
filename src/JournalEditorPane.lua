@@ -48,6 +48,9 @@ function EditorPane.Build(tab, parent)
     local headerSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "header", "LABEL_HEADER_SECTION", 218)
     EditorSections.BuildBaseFields(tab, headerSec.body, panelName)
 
+    local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 186)
+    EditorSections.BuildOptionsSection(tab, optionsSec.body, panelName)
+
     local targetSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "target", "LABEL_TARGET_SECTION", 342)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
     EditorSections.BuildTargetConfigControls(tab, targetSec.body, panelName)
@@ -59,9 +62,6 @@ function EditorPane.Build(tab, parent)
     local dialogueSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "dialogue", "LABEL_DIALOGUE_SECTION", 264)
     EditorSections.BuildDialogueControls(tab, dialogueSec.body, panelName)
     EditorSections.BuildDialogueInputs(tab, dialogueSec.body, panelName)
-
-    local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 152)
-    EditorSections.BuildOptionsSection(tab, optionsSec.body, panelName)
 
     EditorPane.LayoutSections(tab)
     EditorSections.BuildFooterButtons(tab, pane, panelName)
@@ -85,7 +85,7 @@ local function GetSectionBadge(draft, key)
     elseif key == "options" then
         local modes = Addon.Constants.STEALTH_MODE
         local stealthMode = draft.stealthMode or modes.DISABLED
-        if (draft.completionMessage or "") ~= "" or stealthMode ~= modes.DISABLED then
+        if (draft.completionMessage or "") ~= "" or stealthMode ~= modes.DISABLED or draft.recommendHideMapAreas == false then
             return "  |c33FF33[*]|r"
         end
         return ""
