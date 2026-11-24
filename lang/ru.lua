@@ -56,6 +56,7 @@ RPQuest.Locales["ru"] = {
     LABEL_UNKNOWN_LOCATION = "Неизвестное местоположение",
     LABEL_NO_DESCRIPTION = "Дополнительное описание отсутствует.",
     LABEL_OBJECTIVE_HEADER = "ЗАДАЧИ",
+    LABEL_MISSION_DETAILS_HEADER = "ДЕТАЛИ ЗАДАНИЯ",
     OBJECTIVE_KILL_FORMAT = "• Устранить %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Выполнено)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Необязательно)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["ru"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "Скрытность (Обяз.): |c33FF33Не обнаружен|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "Скрытность (Обяз.): |cFF4444Обнаружен|r",
     STEALTH_STATUS_REQUIRED_FAILED = "Скрытность (Обяз.): |cFF4444Провалено (Обнаружен)|r",
+    MASTER_STEALTH_DISABLED = "Скрытность: Отключено",
+    MASTER_STEALTH_OPTIONAL = "Скрытность: Необязательно (Фиксировать обнаружение)",
+    MASTER_STEALTH_REQUIRED = "Скрытность: Обязательно (Провал при обнаружении)",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "СОЗДАТЬ НОВОЕ ЗАДАНИЕ",
@@ -125,7 +129,8 @@ RPQuest.Locales["ru"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "Ответ %s:",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• Подсказка: %s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• НИП в диалогах: %d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• Область поиска на карте: Скрыта",
+    MASTER_MAP_MARKERS_HIDE = "• Метки на карте: Рекомендуется скрыть",
+    MASTER_MAP_MARKERS_SHOW = "• Метки на карте: Рекомендуется показать",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest: Сначала поговорите с НИП ([E]), чтобы захватить его.",
     ALERT_DIALOGUE_LIMIT = "RPQuest: Достигнут максимум (%d) НИП для диалогов.",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest: Этот НИП уже есть в списке диалогов.",

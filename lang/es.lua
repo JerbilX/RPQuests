@@ -56,6 +56,7 @@ RPQuest.Locales["es"] = {
     LABEL_UNKNOWN_LOCATION = "Ubicación desconocida",
     LABEL_NO_DESCRIPTION = "Sin descripción adicional.",
     LABEL_OBJECTIVE_HEADER = "OBJETIVOS",
+    LABEL_MISSION_DETAILS_HEADER = "DETALLES DE LA MISIÓN",
     OBJECTIVE_KILL_FORMAT = "• Eliminar a %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completado)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Opcional)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["es"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "Sigilo (Obligatorio): |c33FF33No detectado|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "Sigilo (Obligatorio): |cFF4444Detectado|r",
     STEALTH_STATUS_REQUIRED_FAILED = "Sigilo (Obligatorio): |cFF4444Fallida (Detectado)|r",
+    MASTER_STEALTH_DISABLED = "Sigilo: Desactivado",
+    MASTER_STEALTH_OPTIONAL = "Sigilo: Opcional (Registrar detección)",
+    MASTER_STEALTH_REQUIRED = "Sigilo: Obligatorio (Falla si te detectan)",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "CREAR NUEVA MISIÓN CUSTOM",
@@ -125,7 +129,8 @@ RPQuest.Locales["es"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "Respuesta de %s:",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• Pista: %s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• NPCs de diálogo: %d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• Área de búsqueda en mapa: Oculta",
+    MASTER_MAP_MARKERS_HIDE = "• Marcas en mapa: Recomendar ocultar",
+    MASTER_MAP_MARKERS_SHOW = "• Marcas en mapa: Mostrar recomendado",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest: Habla con un NPC ([E]) primero para poder capturarlo.",
     ALERT_DIALOGUE_LIMIT = "RPQuest: Se alcanzó el máximo de %d NPCs de diálogo.",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest: Ese NPC ya está en la lista de diálogo.",

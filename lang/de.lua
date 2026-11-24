@@ -56,6 +56,7 @@ RPQuest.Locales["de"] = {
     LABEL_UNKNOWN_LOCATION = "Unbekannter Ort",
     LABEL_NO_DESCRIPTION = "Keine weitere Beschreibung angegeben.",
     LABEL_OBJECTIVE_HEADER = "AUFGABEN",
+    LABEL_MISSION_DETAILS_HEADER = "MISSIONSDETAILS",
     OBJECTIVE_KILL_FORMAT = "• Eliminiert %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Abgeschlossen)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optional)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["de"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "Schleichen (Erforderlich): |c33FF33Unentdeckt|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "Schleichen (Erforderlich): |cFF4444Entdeckt|r",
     STEALTH_STATUS_REQUIRED_FAILED = "Schleichen (Erforderlich): |cFF4444Fehlgeschlagen (Entdeckt)|r",
+    MASTER_STEALTH_DISABLED = "Schleichen: Deaktiviert",
+    MASTER_STEALTH_OPTIONAL = "Schleichen: Optional (Entdeckung erfassen)",
+    MASTER_STEALTH_REQUIRED = "Schleichen: Erforderlich (Schlägt bei Entdeckung fehl)",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "NEUE EIGENE QUEST ERSTELLEN",
@@ -125,7 +129,8 @@ RPQuest.Locales["de"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "Antwort von %s:",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• Hinweis: %s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• Dialog-NSCs: %d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• Kartensuchgebiet: Ausgeblendet",
+    MASTER_MAP_MARKERS_HIDE = "• Kartenmarkierungen: Ausblenden empfohlen",
+    MASTER_MAP_MARKERS_SHOW = "• Kartenmarkierungen: Anzeigen empfohlen",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest: Sprecht zuerst mit einem NSC ([E]), um ihn zu erfassen.",
     ALERT_DIALOGUE_LIMIT = "RPQuest: Maximum von %d Dialog-NSCs erreicht.",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest: Dieser NSC befindet sich bereits in der Dialogliste.",

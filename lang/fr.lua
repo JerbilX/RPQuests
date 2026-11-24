@@ -56,6 +56,7 @@ RPQuest.Locales["fr"] = {
     LABEL_UNKNOWN_LOCATION = "Lieu inconnu",
     LABEL_NO_DESCRIPTION = "Aucune description supplémentaire fournie.",
     LABEL_OBJECTIVE_HEADER = "OBJECTIFS",
+    LABEL_MISSION_DETAILS_HEADER = "DÉTAILS DE LA MISSION",
     OBJECTIVE_KILL_FORMAT = "• Éliminer %s : %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Terminé)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optionnel)|r",
@@ -66,6 +67,9 @@ RPQuest.Locales["fr"] = {
     STEALTH_STATUS_REQUIRED_UNDETECTED = "Furtivité (Requise) : |c33FF33Non détecté|r",
     STEALTH_STATUS_REQUIRED_DETECTED = "Furtivité (Requise) : |cFF4444Détecté|r",
     STEALTH_STATUS_REQUIRED_FAILED = "Furtivité (Requise) : |cFF4444Échouée (Détecté)|r",
+    MASTER_STEALTH_DISABLED = "Furtivité : Désactivée",
+    MASTER_STEALTH_OPTIONAL = "Furtivité : Optionnelle (Enregistrer détection)",
+    MASTER_STEALTH_REQUIRED = "Furtivité : Requise (Échec si détecté)",
 
     -- Editor View (Create / Edit)
     EDITOR_CREATE_TITLE = "CRÉER UNE QUÊTE PERSONNALISÉE",
@@ -125,7 +129,8 @@ RPQuest.Locales["fr"] = {
     DIALOGUE_RESPONSE_FOR_NPC_FORMAT = "Réponse de %s :",
     DIALOGUE_DETAIL_CLUE_FORMAT = "• Indice : %s",
     DIALOGUE_DETAIL_NPCS_FORMAT = "• PNJ de dialogue : %d / %d",
-    DIALOGUE_DETAIL_MAP_HIDDEN = "• Zone de recherche sur la carte : Masquée",
+    MASTER_MAP_MARKERS_HIDE = "• Marqueurs sur la carte : Masquage recommandé",
+    MASTER_MAP_MARKERS_SHOW = "• Marqueurs sur la carte : Affichage recommandé",
     ALERT_DIALOGUE_NO_LAST_NPC = "RPQuest : Parlez d'abord à un PNJ ([E]) pour le capturer.",
     ALERT_DIALOGUE_LIMIT = "RPQuest : Maximum de %d PNJ de dialogue atteint.",
     ALERT_DIALOGUE_DUPLICATE = "RPQuest : Ce PNJ est déjà dans la liste de dialogue.",

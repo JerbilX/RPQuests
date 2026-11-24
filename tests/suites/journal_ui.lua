@@ -1443,24 +1443,25 @@ return function(T)
         local prepB = repo:SaveDraft("Quest B", "With target location.")
         local codeB = repo:ExportQuestToCode(prepB.id)
 
-        -- 1. Inactive prepared quest: toggles hidden, recommendation notice shown if recommendHideMapAreas=true
+        -- 1. Inactive prepared quest: toggles hidden, yellow recommendation banner hidden in Master view
         tab:SelectQuest(prepA.id)
         tab:Refresh()
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Recommendation notice shown when recommendHideMapAreas=true")
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Player-facing recommendation banner hidden in Master view")
         AssertEqual(tab.btnShowSearchAreas:IsHidden(), true, "Toggles hidden on inactive prepared quest")
         AssertEqual(tab.btnShowLocationAreas:IsHidden(), true, "Location toggle hidden on inactive prepared quest")
 
-        -- 2. Testing prepared quest (active): toggles become visible
+        -- 2. Testing prepared quest (active): toggles become visible, yellow banner stays hidden
         repo:SetActiveQuest(prepA.id)
         tab:SelectQuest(prepA.id)
         tab:Refresh()
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Player-facing recommendation banner stays hidden when testing prepared quest")
         AssertEqual(tab.btnShowSearchAreas:IsHidden(), false, "Search toggle visible when testing prepared quest")
         AssertEqual(tab.btnShowLocationAreas:IsHidden(), false, "Location toggle visible when testing prepared quest")
         AssertEqual(tab.btnShowLocationAreas:IsEnabled(), false, "Location toggle disabled when no target has captured location")
 
         -- Verify vertical anchoring avoids overlap
         local _, _, searchRelTo = tab.btnShowSearchAreas:GetAnchor(1)
-        AssertEqual(searchRelTo, tab.detailMapRecommendNotice, "Search toggle anchored below recommendation notice")
+        AssertEqual(searchRelTo, tab.detailObjText, "Search toggle anchored below detailObjText when banner is hidden")
         local _, _, actRelTo = tab.btnActivate:GetAnchor(1)
         AssertEqual(actRelTo, tab.btnShowLocationAreas, "Action buttons anchored below location toggle")
 
@@ -1707,6 +1708,117 @@ return function(T)
         RPQuest.QuestRepository:UpdateDraftFields({ completionMessage = "" })
         tab:RefreshEditorPane()
         AssertEqual(HasBadge(), false, "Mission Settings clears [*] badge when restored to defaults")
+    end)
+
+    RunTest("Issue #293: Detail header padding, MISSION DETAILS vs TASKS, stealth & map markers in Master view", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        -- 1. Header vertical spacing/padding & multi-line status scroll height
+        local _, _, _, _, _, statusY = tab.detailStatus:GetAnchor(1)
+        local _, _, _, _, _, fromY = tab.detailFrom:GetAnchor(1)
+        local _, _, _, _, _, toY = tab.detailTo:GetAnchor(1)
+        local _, _, _, _, _, locY = tab.detailLocation:GetAnchor(1)
+        local _, _, _, _, _, descY = tab.detailDescBody:GetAnchor(1)
+        AssertTrue(statusY >= 8, "detailStatus has >= 8px top padding")
+        AssertTrue(fromY >= 6, "detailFrom has >= 6px top padding")
+        AssertTrue(toY >= 6, "detailTo has >= 6px top padding")
+        AssertTrue(locY >= 10, "detailLocation has >= 10px top padding")
+        AssertTrue(descY >= 12, "detailDescBody has >= 12px top padding")
+
+        local prevScrollChild = tab.detailScrollChild
+        local scrollH = 0
+        tab.detailScrollChild = {
+            SetDimensions = function(_, _, h) scrollH = h end,
+            GetHeight = function() return scrollH end,
+        }
+
+        local qSingle = repo:BuildQuestRecord(101, "Single Status", "Desc", {
+            { name = "Bandit", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "disabled", recommendHideMapAreas = true }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        table.insert(repo.savedVars.quests, qSingle)
+        repo._questById[101] = qSingle
+        tab:SelectQuest(101)
+        tab:Refresh()
+        local singleScrollH = tab.detailScrollChild:GetHeight()
+
+        local qMulti = repo:BuildQuestRecord(102, "Multi Status", "Desc", {
+            { name = "Bandit", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "disabled", recommendHideMapAreas = false }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        qMulti.needsMigration = true
+        qMulti.migrationReason = "Line 2 reason\nLine 3 reason"
+        table.insert(repo.savedVars.quests, qMulti)
+        repo._questById[102] = qMulti
+        tab:SelectQuest(102)
+        tab:Refresh()
+        local multiScrollH = tab.detailScrollChild:GetHeight()
+        AssertTrue(multiScrollH > singleScrollH, "detailScrollChild height expands for multi-line status")
+        tab.detailScrollChild = prevScrollChild
+
+        -- 2. Master MISSION DETAILS vs Player TASKS + Stealth & Map marker lines
+        tab:SelectQuest(101)
+        tab:Refresh()
+        AssertEqual(tab.detailObjHeader:GetText(), RPQuest.Locale:Get("LABEL_MISSION_DETAILS_HEADER"), "Master quest uses MISSION DETAILS header")
+        local masterText101 = tab.detailObjText:GetText()
+        AssertTrue(masterText101:find(RPQuest.Locale:Get("MASTER_STEALTH_DISABLED"), 1, true) ~= nil, "Master draft with disabled stealth shows Stealth: Disabled")
+        AssertTrue(masterText101:find("Recommend hiding", 1, true) ~= nil, "Master quest with recommendHideMapAreas=true shows Recommend hiding")
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Yellow banner hidden on Master quest")
+
+        -- Draft with Optional & Required stealth + recommendHideMapAreas=false
+        local qOptDraft = repo:BuildQuestRecord(103, "Opt Draft", "Desc", {
+            { name = "Guard", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "optional", recommendHideMapAreas = false }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        table.insert(repo.savedVars.quests, qOptDraft)
+        repo._questById[103] = qOptDraft
+        tab:SelectQuest(103)
+        tab:Refresh()
+        local optDraftText = tab.detailObjText:GetText()
+        AssertTrue(optDraftText:find(RPQuest.Locale:Get("MASTER_STEALTH_OPTIONAL"), 1, true) ~= nil, "Master draft with optional stealth shows configured Optional wording")
+        AssertTrue(optDraftText:find("Show recommended", 1, true) ~= nil, "Master quest with recommendHideMapAreas=false shows Show recommended")
+
+        local qReqDraft = repo:BuildQuestRecord(104, "Req Draft", "Desc", {
+            { name = "Guard", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "required", recommendHideMapAreas = true }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        table.insert(repo.savedVars.quests, qReqDraft)
+        repo._questById[104] = qReqDraft
+        tab:SelectQuest(104)
+        tab:Refresh()
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("MASTER_STEALTH_REQUIRED"), 1, true) ~= nil, "Master draft with required stealth shows configured Required wording")
+
+        -- 3. Testing a Master quest preserves live detection status
+        repo:SetActiveQuest(103)
+        qOptDraft.wasDetected = true
+        tab:SelectQuest(103)
+        tab:Refresh()
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_DETECTED"), 1, true) ~= nil, "Testing Master quest preserves live detection status")
+        repo:SetActiveQuest(nil)
+
+        -- Sent + Failed Master quest preserves reported detection status
+        qReqDraft.lifecycle = RPQuest.Constants.QUEST_LIFECYCLE.SENT
+        qReqDraft.resolution = "failed"
+        qReqDraft.lastResult = {
+            senderDisplayName = "@Player",
+            wasDetected = true,
+        }
+        tab:SelectQuest(104)
+        tab:Refresh()
+        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Sent+Failed Master quest preserves reported detection status")
+
+        -- 4. Player (received) quest keeps TASKS header and shows yellow banner when recommendHideMapAreas=true
+        local qRec = repo:BuildQuestRecord(105, "Received Quest", "Desc", {
+            { name = "Guard", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "disabled", recommendHideMapAreas = true }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, qRec)
+        repo._questById[105] = qRec
+        tab:SelectQuest(105)
+        tab:Refresh()
+        AssertEqual(tab.detailObjHeader:GetText(), RPQuest.Locale:Get("LABEL_OBJECTIVE_HEADER"), "Received quest keeps TASKS header")
+        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Received quest shows yellow recommendation banner")
+        AssertEqual(tab.detailObjText:GetText():find("Recommend hiding", 1, true), nil, "Received quest does not show Master map recommendation line")
     end)
 
 end

@@ -358,10 +358,10 @@ return function(T)
         local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
         AssertTrue(type(code) == "string" and #code > 100 and code:sub(1, 5) == "RPQ3:", "Exported RPQ3 code generated cleanly")
 
-        -- Verificar que detailObjText tiene altura acotada (<= 96px)
+        -- Verificar que detailObjText tiene altura acotada (4 líneas de objetivos + líneas de config Master <= 144px)
         RPQuest.JournalTab:SelectQuest(q.id)
         local _, objHeight = RPQuest.JournalTab.detailObjText:GetDimensions()
-        AssertTrue(objHeight <= 96, "detailObjText height capped at <= 96px to prevent vertical overflow")
+        AssertTrue(objHeight <= 144, "detailObjText height capped at <= 144px to prevent vertical overflow")
 
         -- Verificar invalidación de caché de ExportQuestToCode al editar
         RPQuest.QuestRepository:LoadQuestIntoDraft(q.id)
