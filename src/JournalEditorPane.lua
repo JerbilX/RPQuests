@@ -55,7 +55,7 @@ function EditorPane.Build(tab, parent)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
     EditorSections.BuildTargetConfigControls(tab, targetSec.body, panelName)
 
-    local discoverySec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "discovery", "LABEL_DISCOVERY_SECTION", 168)
+    local discoverySec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "discovery", "LABEL_DISCOVERY_SECTION", 134)
     EditorSections.BuildDiscoveryControls(tab, discoverySec.body, panelName)
     EditorSections.BuildDiscoveryInputs(tab, discoverySec.body, panelName)
 
@@ -392,6 +392,58 @@ function EditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
     end
 end
 
+local MAX_DISCOVERY_PREVIEW_CHARS = 28
+
+local function TruncateDiscoveryText(text, maxChars)
+    local trimmed = (text or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed == "" then return "" end
+    local count = 0
+    for i = 1, #trimmed do
+        local b = string.byte(trimmed, i)
+        if b < 128 or b >= 192 then
+            count = count + 1
+            if count > maxChars then
+                return string.sub(trimmed, 1, i - 1) .. "..."
+            end
+        end
+    end
+    return trimmed
+end
+
+local function FormatDiscoveryDropdownEntry(index, point)
+    local preview = TruncateDiscoveryText(point and point.message or "", MAX_DISCOVERY_PREVIEW_CHARS)
+    if preview == "" then
+        return string.format("#%d — ...", index)
+    end
+    return string.format("#%d — %s", index, preview)
+end
+
+function EditorPane.RefreshDiscoveryDropdown(tab, draft)
+    local combo = tab.discoveryComboBox
+    if not combo then return end
+    local discoveries = (draft and draft.discoveries) or {}
+    local hasDiscoveries = #discoveries > 0
+    combo:ClearItems()
+    if hasDiscoveries then
+        for i, point in ipairs(discoveries) do
+            local label = FormatDiscoveryDropdownEntry(i, point)
+            local entry = combo:CreateItemEntry(label, function()
+                tab.selectedDiscoveryIndex = i
+                tab:RefreshEditorPane()
+            end)
+            entry.discoveryIndex = i
+            combo:AddItem(entry)
+        end
+        combo:SetEnabled(true)
+        combo:SetSelectedItemByEval(function(item)
+            return item.discoveryIndex == tab.selectedDiscoveryIndex
+        end, true)
+    else
+        combo:SetEnabled(false)
+        combo:SetSelectedItemText(Addon.Locale:Get("DISCOVERY_NOT_CAPTURED"))
+    end
+end
+
 local function RefreshEditorDiscoveries(tab, draft)
     local discoveries = draft.discoveries or {}
     local totalDisc = #discoveries
@@ -403,40 +455,25 @@ local function RefreshEditorDiscoveries(tab, draft)
         tab.selectedDiscoveryIndex = nil
     end
 
+    local hasDiscoveries = totalDisc > 0
     local selectedPoint = tab.selectedDiscoveryIndex and discoveries[tab.selectedDiscoveryIndex] or nil
-    local activeDiscMsg = selectedPoint and (selectedPoint.message or "") or (draft.discoveryMessage or "")
+    local activeDiscMsg = selectedPoint and (selectedPoint.message or "") or ""
+    Addon.JournalWidgets.SetEditBoxEnabled(tab.discoveryMsgBg, tab.discoveryMsgEdit, hasDiscoveries)
     SyncUnfocusedEdit(tab.discoveryMsgEdit, activeDiscMsg)
     EditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
 
     if tab.discRadComboBox then
         local discRadii = Addon.Constants.DISCOVERY_RADIUS
         local curDiscRad = (selectedPoint and selectedPoint.radius) or draft.discoveryRadius or discRadii.MEDIUM
+        tab.discRadComboBox:SetEnabled(hasDiscoveries)
         tab.discRadComboBox:SetSelectedItemByEval(function(item)
             return item.discRadius == curDiscRad
         end, true)
     end
 
-    local showSelector = totalDisc > 0
-    if tab.btnDiscPrev then tab.btnDiscPrev:SetHidden(not showSelector) end
-    if tab.btnDiscNext then tab.btnDiscNext:SetHidden(not showSelector) end
-    if tab.btnDiscRemove then tab.btnDiscRemove:SetHidden(not showSelector) end
-    if tab.lblDiscIndex then
-        tab.lblDiscIndex:SetHidden(not showSelector)
-        if showSelector then
-            tab.lblDiscIndex:SetText(Addon.Locale:Get("DISCOVERY_INDEX_FORMAT", tab.selectedDiscoveryIndex, totalDisc))
-        end
-    end
-    if tab.lblCapturedDiscoveries then
-        if totalDisc > 0 then
-            local msgs = {}
-            for i = 1, math.min(2, totalDisc) do table.insert(msgs, discoveries[i].message or "") end
-            local preview = table.concat(msgs, " | ") .. (totalDisc > 2 and string.format(" (+%d)", totalDisc - 2) or "")
-            tab.lblCapturedDiscoveries:SetText(Addon.Locale:Get("DISCOVERY_CAPTURED_FORMAT", totalDisc, preview))
-        else
-            tab.lblCapturedDiscoveries:SetText(Addon.Locale:Get("DISCOVERY_NONE_CAPTURED"))
-        end
-    end
-    if tab.btnClearDiscoveries then tab.btnClearDiscoveries:SetHidden(totalDisc == 0) end
+    EditorPane.RefreshDiscoveryDropdown(tab, draft)
+    SetButtonEnabled(tab.btnRemoveDiscovery, hasDiscoveries)
+    SetButtonEnabled(tab.btnClearDiscoveries, hasDiscoveries)
 end
 
 local function RefreshEditorDialoguesAndOptions(tab, draft)

@@ -1636,13 +1636,20 @@ return function(T)
 
         local discRow = {
             tab.btnCaptureDiscovery,
+            tab.discoveryDropdown,
+            tab.btnRemoveDiscovery,
             tab.btnClearDiscoveries,
-            tab.btnDiscPrev,
-            tab.lblDiscIndex,
-            tab.btnDiscNext,
-            tab.btnDiscRemove,
         }
-        AssertTrue(tab.btnClearDiscoveries:GetWidth() >= 120, "btnClearDiscoveries widened to fit all locales")
+        AssertEqual(tab.btnDiscPrev, nil, "Legacy btnDiscPrev removed")
+        AssertEqual(tab.btnDiscNext, nil, "Legacy btnDiscNext removed")
+        AssertEqual(tab.lblDiscIndex, nil, "Legacy lblDiscIndex removed")
+        AssertEqual(tab.btnDiscRemove, nil, "Legacy btnDiscRemove removed")
+        AssertEqual(tab.lblCapturedDiscoveries, nil, "Redundant lblCapturedDiscoveries removed")
+        AssertEqual(tab.btnRemoveDiscovery:GetWidth(), 28, "btnRemoveDiscovery is 28x28 icon")
+        AssertEqual(tab.btnClearDiscoveries:GetWidth(), 28, "btnClearDiscoveries is 28x28 icon")
+        AssertTrue(tab.discoveryDropdown:GetWidth() >= 300, "discoveryDropdown is ~300px")
+        local discSec = tab.editorSectionsByKey and tab.editorSectionsByKey["discovery"]
+        AssertTrue(discSec ~= nil and discSec.bodyHeight <= 140, "discovery section bodyHeight adjusted after removing summary line")
         local prevRight = -1
         for i, ctrl in ipairs(discRow) do
             local _, _, _, _, x = ctrl:GetAnchor(1)
@@ -1834,13 +1841,17 @@ return function(T)
         AssertTrue(tab.lblDiscoveryMsg ~= nil, "lblDiscoveryMsg exists")
         AssertEqual(tab.lblDiscoveryMsg:GetText(), RPQuest.Locale:Get("LABEL_DISCOVERY_MSG"), "Default discovery label shown when 0 points")
 
-        -- 1. Selecting Small / Large in discRadComboBox before capturing updates draft.discoveryRadius
-        tab.discRadComboBox:SelectItemByIndex(1)
-        AssertEqual(repo:GetDraft().discoveryRadius, RPQuest.Constants.DISCOVERY_RADIUS.SMALL, "discRadComboBox Small updates draft.discoveryRadius")
-        tab.discRadComboBox:SelectItemByIndex(3)
-        AssertEqual(repo:GetDraft().discoveryRadius, RPQuest.Constants.DISCOVERY_RADIUS.LARGE, "discRadComboBox Large updates draft.discoveryRadius")
+        -- 1. Empty state: discovery inputs, dropdown, and icons are disabled (0.45 alpha for icons)
+        AssertEqual(tab.discoveryMsgEdit._disabled, true, "discoveryMsgEdit is disabled when 0 discovery points exist")
+        AssertEqual(tab.discRadComboBox:IsEnabled(), false, "discRadComboBox is disabled when 0 discovery points exist")
+        AssertEqual(tab.discoveryComboBox:IsEnabled(), false, "discoveryComboBox is disabled when 0 discovery points exist")
+        AssertEqual(tab.discoveryComboBox:GetSelectedItem(), RPQuest.Locale:Get("DISCOVERY_NOT_CAPTURED"), "discoveryComboBox shows empty placeholder")
+        AssertEqual(tab.btnRemoveDiscovery:IsHidden(), false, "btnRemoveDiscovery stays visible when 0 points exist")
+        AssertEqual(tab.btnClearDiscoveries:IsHidden(), false, "btnClearDiscoveries stays visible when 0 points exist")
+        AssertEqual(tab.btnRemoveDiscovery:GetAlpha(), 0.45, "btnRemoveDiscovery is dimmed (0.45 alpha) when 0 points exist")
+        AssertEqual(tab.btnClearDiscoveries:GetAlpha(), 0.45, "btnClearDiscoveries is dimmed (0.45 alpha) when 0 points exist")
 
-        -- 2. Capture discovery point without message -> no DEFAULT_DISCOVERY_MSG, warning state active
+        -- 2. Capture discovery point without message -> no DEFAULT_DISCOVERY_MSG, warning state active, controls enabled
         mockState.zoneId = 381
         mockState.worldX = 1000
         mockState.worldZ = 2000
@@ -1848,6 +1859,12 @@ return function(T)
         AssertEqual(count, 1, "Discovery point captured without auto-fill")
         tab.selectedDiscoveryIndex = 1
         tab:RefreshEditorPane()
+
+        AssertEqual(tab.discoveryMsgEdit._disabled, false, "discoveryMsgEdit is enabled once >= 1 discovery point exists")
+        AssertEqual(tab.discRadComboBox:IsEnabled(), true, "discRadComboBox is enabled once >= 1 discovery point exists")
+        AssertEqual(tab.discoveryComboBox:IsEnabled(), true, "discoveryComboBox is enabled once >= 1 discovery point exists")
+        AssertEqual(tab.btnRemoveDiscovery:GetAlpha(), 1, "btnRemoveDiscovery is full alpha when >= 1 point exists")
+        AssertEqual(tab.btnClearDiscoveries:GetAlpha(), 1, "btnClearDiscoveries is full alpha when >= 1 point exists")
 
         local draft = repo:GetDraft()
         AssertEqual(draft.discoveries[1].message, "", "Discovery point message stays empty without generic fallback")
@@ -1857,8 +1874,12 @@ return function(T)
         AssertTrue(discHeaderText:find("[1 !]", 1, true) ~= nil, "Discovery accordion badge shows [1 !] alert")
 
         -- Changing discRadComboBox with selected point updates point radius
+        tab.discRadComboBox:SelectItemByIndex(1)
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.SMALL, "discRadComboBox updates selected discovery point radius to Small")
+        tab.discRadComboBox:SelectItemByIndex(3)
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.LARGE, "discRadComboBox updates selected discovery point radius to Large")
         tab.discRadComboBox:SelectItemByIndex(2)
-        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.MEDIUM, "discRadComboBox updates selected discovery point radius")
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.MEDIUM, "discRadComboBox updates selected discovery point radius to Medium")
 
         -- 3. Save Draft, Test Quest, and Send Quest are blocked while discovery message is empty/whitespace
         tab.discoveryMsgEdit:SetText("   ")
@@ -1903,6 +1924,47 @@ return function(T)
         local testOk = repo:ResetQuest(savedOk.id)
         AssertEqual(testOk, true, "ResetQuest/Test Quest succeeds with valid discovery message")
         repo:SetActiveQuest(nil)
+    end)
+
+    RunTest("Discovery dropdown formatting, selection, 1-click remove and clear (#296)", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenCreateEditor()
+
+        mockState.zoneId = 381
+        mockState.worldX = 1000
+        mockState.worldZ = 2000
+        RPQuest.TargetCapture:CaptureDiscoveryPoint("Welcome to RPQuest! This is a very long discovery message.")
+        mockState.worldX = 1500
+        RPQuest.TargetCapture:CaptureDiscoveryPoint("Short clue")
+        tab:RefreshEditorPane()
+
+        local items = tab.discoveryComboBox:GetItems()
+        AssertEqual(#items, 2, "discoveryComboBox lists both discovery points")
+        AssertTrue(items[1].name:find("^#1 — Welcome to RPQuest!") ~= nil, "First item uses #<index> — <truncated> format")
+        AssertTrue(items[1].name:find("%.%.%.$") ~= nil, "Long discovery message is truncated with ellipsis")
+        AssertEqual(items[2].name, "#2 — Short clue", "Second item shows full short message")
+
+        -- Select #1 via dropdown
+        tab.discoveryComboBox:SelectItemByIndex(1)
+        AssertEqual(tab.selectedDiscoveryIndex, 1, "Selecting dropdown item 1 updates selectedDiscoveryIndex")
+        AssertEqual(tab.discoveryMsgEdit:GetText(), "Welcome to RPQuest! This is a very long discovery message.", "Selecting #1 syncs discoveryMsgEdit")
+
+        -- 1-click remove selected (#1)
+        tab.btnRemoveDiscovery:FireHandler("OnClicked")
+        local draft = repo:GetDraft()
+        AssertEqual(#(draft.discoveries or {}), 1, "btnRemoveDiscovery removes selected point on 1 click")
+        AssertEqual(draft.discoveries[1].message, "Short clue", "Remaining discovery point is the second one")
+
+        -- 1-click clear all
+        tab.btnClearDiscoveries:FireHandler("OnClicked")
+        AssertEqual(#(repo:GetDraft().discoveries or {}), 0, "btnClearDiscoveries clears all points on 1 click")
+        AssertEqual(tab.discoveryMsgEdit._disabled, true, "discoveryMsgEdit returns to disabled empty state after clear")
+        AssertEqual(tab.discRadComboBox:IsEnabled(), false, "discRadComboBox returns to disabled empty state after clear")
+        AssertEqual(tab.btnRemoveDiscovery:GetAlpha(), 0.45, "btnRemoveDiscovery returns to 0.45 alpha after clear")
+        AssertEqual(tab.btnClearDiscoveries:GetAlpha(), 0.45, "btnClearDiscoveries returns to 0.45 alpha after clear")
     end)
 
 end
