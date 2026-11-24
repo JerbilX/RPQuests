@@ -441,7 +441,7 @@ return function(T)
         _G.GetUnitName = origUnitName
     end)
 
-    RunTest("Issue #295: worst-case uncompressible 4/4/4 quest + max MAIL_ROLE_MESSAGE fits within 6 mails (<= 4104 chars)", function()
+    RunTest("Issue #295 & #311: worst-case uncompressible 4/10/4 quest + max MAIL_ROLE_MESSAGE fits within 6 mails (<= 4104 chars)", function()
         local limits = RPQuest.Constants.TEXT_LIMITS
         local seed = 13579
         local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{}"

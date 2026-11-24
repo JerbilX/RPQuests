@@ -22,12 +22,12 @@ Sin embargo:
 
 ## Impulsores de la Decisión (Decision Drivers)
 * **Garantía de Envío en Peor Caso:** Una misión al 100% de sus límites de texto y entidades con cadenas incompresibles (entropía máxima) más el mensaje de rol máximo debe caber en `<= 6` correos (`<= 4,104` caracteres).
-* **Consistencia de UI y Dominio:** Unificar los topes de entidades (`4 / 4 / 4`) y centralizar `TEXT_LIMITS` en `src/Constants.lua`, eliminando literales `3` en `JournalEditorPane` y `lang/*.lua`.
+* **Consistencia de UI y Dominio:** Unificar los topes de entidades (`4 / 10 / 4`, originalmente `4 / 4 / 4` y ampliado a `10` puntos de descubrimiento en la enmienda de Issue #311) y centralizar `TEXT_LIMITS` en `src/Constants.lua`, eliminando literales `3` en `JournalEditorPane` y `lang/*.lua`.
 * **Retrocompatibilidad Total:** Misiones guardadas o recibidas previamente que superen los nuevos topes deben seguir cargando, decodificándose y ejecutándose sin pérdida ni corrupción silenciosa de datos.
 
 ## Decisión Adoptada
 1. **Topes Unificados en `src/Constants.lua`:**
-   * Entidades: `TARGET.MAX_TARGETS = 4`, `DISCOVERY.MAX_POINTS = 4`, `DIALOGUE.MAX_NPCS = 4` (enmienda `ADR-0007` elevando de `3` a `4` NPCs de diálogo).
+   * Entidades: `TARGET.MAX_TARGETS = 4`, `DISCOVERY.MAX_POINTS = 10` (enmendado desde `4` en Issue #311), `DIALOGUE.MAX_NPCS = 4` (enmienda `ADR-0007` elevando de `3` a `4` NPCs de diálogo).
    * Longitudes de texto (`Addon.Constants.TEXT_LIMITS`):
      * `TITLE = 80`
      * `DESCRIPTION = 250`
@@ -47,7 +47,7 @@ Sin embargo:
 
 ## Consecuencias
 * **Positivas:**
-  * Garantía matemática verificada por test automatizado: peor caso ASCII incompresible (`4/4/4` con `locationRequired = true` y todos los campos al 100% + `MAIL_ROLE_MESSAGE = 300`) cabe en `6/6` correos (`<= 4,104` caracteres).
+  * Garantía matemática verificada por test automatizado: peor caso ASCII incompresible (`4/10/4` con `locationRequired = true` y todos los campos al 100% + `MAIL_ROLE_MESSAGE = 300`) cabe en `6/6` correos (`<= 4,104` caracteres).
   * Cero valores mágicos de longitud o capacidad repartidos en UI y localización.
 * **Negativas / Trade-offs:**
   * Se reducen algunas longitudes máximas de texto respecto a los antiguos topes arbitrarios (ej. descripción de `400` a `250`, mensaje de rol de `700` a `300`), mitigado por la claridad narrativa y la garantía de entrega por correo.

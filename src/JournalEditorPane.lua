@@ -75,7 +75,7 @@ local function GetSectionBadge(draft, key)
         return count > 0 and string.format("  |c33FF33[%d/%d]|r", count, maxTargets) or ""
     elseif key == "discovery" then
         local count = #(draft.discoveries or {})
-        local maxPoints = (Addon.Constants and Addon.Constants.DISCOVERY and Addon.Constants.DISCOVERY.MAX_POINTS) or 4
+        local maxPoints = (Addon.Constants and Addon.Constants.DISCOVERY and Addon.Constants.DISCOVERY.MAX_POINTS) or 10
         if count > 0 then
             if Addon.QuestRepository:HasMissingDiscoveryMessage(draft) then
                 return string.format("  |cFF5555[%d/%d !]|r", count, maxPoints)
