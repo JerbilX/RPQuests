@@ -3,6 +3,7 @@
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
+-- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -15,7 +16,7 @@ Addon.Constants = {
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 3,
+        CURRENT_VERSION = 4,
     },
     STEALTH_MODE = {
         DISABLED = "disabled",
@@ -41,6 +42,17 @@ Addon.Constants = {
     QUEST_STATUS = {
         OFFERED = "offered",
         ACTIVE = "active",
+    },
+    QUEST_LIFECYCLE = {
+        DRAFT = "draft",
+        SENT = "sent",
+        RECEIVED = "received",
+    },
+    QUEST_RESOLUTION = {
+        ACCEPTED = "accepted",
+        REJECTED = "rejected",
+        COMPLETED = "completed",
+        FAILED = "failed",
     },
     AREA_RADIUS = {
         SMALL = 0.070,

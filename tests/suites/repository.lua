@@ -727,7 +727,8 @@ return function(T)
         AssertTrue(copyFromPrep ~= nil, "Copy from PREPARING succeeds")
         AssertEqual(copyFromPrep.id ~= prepQuest.id, true, "Copy has a new unique quest ID")
         AssertEqual(copyFromPrep.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Copy has PREPARED role")
-        AssertEqual(repo:GetPreparedQuestStatus(copyFromPrep), "draft", "Copy from PREPARING is in draft/Preparing")
+        AssertEqual(repo:GetQuestLifecycle(copyFromPrep), "draft", "Copy from PREPARING is in draft/Preparing")
+        AssertEqual(repo:GetQuestResolution(copyFromPrep), nil, "Copy from PREPARING has nil resolution")
         AssertEqual(copyFromPrep.title, "Contract One", "Title preserved")
         AssertEqual(copyFromPrep.description, "Desc One", "Description preserved")
         AssertEqual(copyFromPrep.completionMessage, "Well done", "Completion message preserved")
@@ -750,12 +751,14 @@ return function(T)
         -- Mark original as SENT with delivery history and copy it
         repo:MarkPreparedQuestSent(prepQuest.id, "@TargetUser")
         repo:RecordMailDelivery(prepQuest.id, "@TargetUser", { status = "completed", characterName = "HeroChar" })
-        AssertEqual(repo:GetPreparedQuestStatus(prepQuest), "completed", "Original is in SENT/completed")
+        AssertEqual(repo:GetQuestLifecycle(prepQuest), "sent", "Original is in SENT lifecycle")
+        AssertEqual(repo:GetQuestResolution(prepQuest), "completed", "Original has completed resolution")
 
         local copyFromSent = repo:DuplicateQuest(prepQuest.id)
         AssertTrue(copyFromSent ~= nil, "Copy from SENT succeeds")
         AssertEqual(copyFromSent.id ~= prepQuest.id, true, "Sent copy has new ID")
-        AssertEqual(repo:GetPreparedQuestStatus(copyFromSent), "draft", "Copy from SENT starts in Preparing")
+        AssertEqual(repo:GetQuestLifecycle(copyFromSent), "draft", "Copy from SENT starts in Preparing")
+        AssertEqual(repo:GetQuestResolution(copyFromSent), nil, "Copy from SENT has nil resolution")
         AssertTrue(copyFromSent.sentTo == nil, "sentTo cleared")
         AssertTrue(copyFromSent.sentAt == nil, "sentAt cleared")
         AssertTrue(copyFromSent.lastResult == nil, "lastResult cleared")
@@ -929,10 +932,10 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 3, "Quest 1 upgraded to current schema v3")
+        AssertEqual(q1.schemaVersion, 4, "Quest 1 upgraded to current schema v4")
         AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
         AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
-        AssertEqual(q2.schemaVersion, 3, "Quest 2 upgraded to current schema v3")
+        AssertEqual(q2.schemaVersion, 4, "Quest 2 upgraded to current schema v4")
         AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
         AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
 
@@ -1060,7 +1063,7 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 3, "v2 quest 1 migrated to schema v3")
+        AssertEqual(q1.schemaVersion, 4, "v2 quest 1 migrated to schema v4")
         AssertEqual(q1.recommendHideMapAreas, true, "v2 hideMapArea=true preserved in recommendHideMapAreas")
         AssertEqual(q1.hideMapArea, nil, "Legacy hideMapArea cleared on q1")
         AssertEqual(q1.areaCenterX, nil, "Legacy quest-level areaCenterX cleared on q1")
@@ -1072,7 +1075,7 @@ return function(T)
         AssertEqual(q1.targets[1].customMessageInLocation, "", "Target 1 initializes customMessageInLocation")
         AssertEqual(q1.targets[1].customMessageOutsideLocation, "", "Target 1 initializes customMessageOutsideLocation")
 
-        AssertEqual(q2.schemaVersion, 3, "v2 quest 2 migrated to schema v3")
+        AssertEqual(q2.schemaVersion, 4, "v2 quest 2 migrated to schema v4")
         AssertEqual(q2.recommendHideMapAreas, false, "v2 hideMapArea=false preserved in recommendHideMapAreas")
         AssertEqual(q2.targets[1].areaRadius, 0.070, "q2 target inherits 0.070 areaRadius")
 
@@ -1106,6 +1109,77 @@ return function(T)
         AssertEqual(#dAfter2.targets, 0, "0 targets remain after removing last target")
         AssertEqual(dAfter2.lastCapturedDisplay, nil, "lastCapturedDisplay cleared when empty")
         AssertEqual(dAfter2.mapId, 0, "mapId cleared when targets and discoveries are empty")
+    end)
+
+    RunTest("Issue #255: v3 -> v4 migration, lifecycle/resolution orthogonality, GM testing isolation, and recipient reset", function()
+        local repo = RPQuest.QuestRepository
+        local sv = repo:GetDefaults()
+        sv.nextId = 10
+        sv.quests = {
+            { id = 1, schemaVersion = 3, role = "prepared", title = "V3 Draft", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 2, schemaVersion = 3, role = "prepared", title = "V3 Sent Unanswered", sentTo = "@P1", sentAt = 100, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 3, schemaVersion = 3, role = "prepared", title = "V3 Sent Accepted", sentTo = "@P2", lastResult = { status = "accepted", characterName = "C2" }, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 4, schemaVersion = 3, role = "prepared", title = "V3 Sent Rejected", sentTo = "@P3", deliveries = { { status = "rejected", characterName = "C3" } }, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 5, schemaVersion = 3, role = "prepared", title = "V3 Sent Completed", sentTo = "@P4", lastResult = { status = "completed", characterName = "C4" }, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 6, schemaVersion = 3, role = "received", status = "offered", title = "V3 Offered", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 7, schemaVersion = 3, role = "received", status = "active", title = "V3 Active", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 8, schemaVersion = 3, role = "received", status = "active", completed = true, title = "V3 Completed", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 9, schemaVersion = 3, role = "received", status = "active", failed = true, title = "V3 Failed", targets = { { name = "A", requiredCount = 1 } } },
+        }
+        repo:Initialize(sv)
+
+        local q1 = repo:GetQuestById(1)
+        local q2 = repo:GetQuestById(2)
+        local q3 = repo:GetQuestById(3)
+        local q4 = repo:GetQuestById(4)
+        local q5 = repo:GetQuestById(5)
+        local q6 = repo:GetQuestById(6)
+        local q7 = repo:GetQuestById(7)
+        local q8 = repo:GetQuestById(8)
+        local q9 = repo:GetQuestById(9)
+
+        AssertEqual(q1.schemaVersion, 4, "v3 quests migrated to v4")
+        AssertEqual(repo:GetQuestLifecycle(q1), "draft", "q1 lifecycle=draft")
+        AssertEqual(repo:GetQuestResolution(q1), nil, "q1 resolution=nil")
+        AssertEqual(repo:GetQuestLifecycle(q2), "sent", "q2 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q2), nil, "q2 resolution=nil")
+        AssertEqual(repo:GetQuestLifecycle(q3), "sent", "q3 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q3), "accepted", "q3 resolution=accepted")
+        AssertEqual(repo:GetQuestLifecycle(q4), "sent", "q4 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q4), "rejected", "q4 resolution=rejected")
+        AssertEqual(repo:GetQuestLifecycle(q5), "sent", "q5 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q5), "completed", "q5 resolution=completed")
+        AssertEqual(repo:GetQuestLifecycle(q6), "received", "q6 lifecycle=received")
+        AssertEqual(repo:GetQuestResolution(q6), nil, "q6 offered resolution=nil")
+        AssertEqual(repo:GetQuestLifecycle(q7), "received", "q7 lifecycle=received")
+        AssertEqual(repo:GetQuestResolution(q7), "accepted", "q7 active resolution=accepted")
+        AssertEqual(repo:GetQuestResolution(q8), "completed", "q8 completed resolution=completed")
+        AssertEqual(repo:GetQuestResolution(q9), "failed", "q9 failed resolution=failed")
+        AssertEqual(q9.failureReported, false, "q9 failureReported initialized to false")
+
+        -- Local GM testing on Draft and Sent does not corrupt lifecycle or remote resolution
+        repo:SetActiveQuest(q1.id)
+        repo:RecordTargetEliminated("A", { mapId = 0, zoneId = 0, x = 0.5, y = 0.5 })
+        AssertEqual(q1.completed, true, "Local GM test completes draft locally")
+        AssertEqual(repo:GetQuestLifecycle(q1), "draft", "Draft lifecycle unchanged by GM test")
+        AssertEqual(repo:GetQuestResolution(q1), nil, "Draft resolution stays nil even after GM test")
+        repo:ResetQuest(q1.id, { activate = false })
+        AssertEqual(repo:GetQuestResolution(q1), nil, "Draft resolution stays nil after Reset")
+
+        repo:SetActiveQuest(q3.id)
+        repo:RecordTargetEliminated("A", { mapId = 0, zoneId = 0, x = 0.5, y = 0.5 })
+        AssertEqual(q3.completed, true, "Local GM test completes sent quest locally")
+        AssertEqual(repo:GetQuestLifecycle(q3), "sent", "Sent lifecycle unchanged by GM test")
+        AssertEqual(repo:GetQuestResolution(q3), "accepted", "Remote resolution on Sent quest untouched by GM test")
+        repo:ResetQuest(q3.id, { activate = false })
+        AssertEqual(repo:GetQuestResolution(q3), "accepted", "Remote resolution on Sent quest untouched by Reset")
+
+        -- Editing recipientAccount on a Sent quest resets lifecycle to draft and clears resolution
+        RPQuest.QuestDraftStore:LoadQuestIntoDraft(repo, q3.id)
+        RPQuest.QuestDraftStore:SaveDraft(repo, q3.title, "New Desc", nil, "", "disabled", "@NewPlayer")
+        AssertEqual(repo:GetQuestLifecycle(q3), "draft", "Changing recipient resets lifecycle to draft")
+        AssertEqual(repo:GetQuestResolution(q3), nil, "Changing recipient clears resolution")
+        AssertEqual(q3.sentTo, nil, "Changing recipient clears sentTo")
     end)
 
 end

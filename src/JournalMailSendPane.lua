@@ -96,6 +96,11 @@ function MailSendPane.OnTransportEvent(tab, evType, payload)
         if tab.viewMode == tab.VIEW_MODE.DETAIL then
             tab:RefreshDetailPane()
         end
+    elseif evType == "MAIL_FAILURE_SENT" and type(payload) == "table" then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_FAILURE_SENT", payload.to or ""), false)
+        if tab.viewMode == tab.VIEW_MODE.DETAIL then
+            tab:RefreshDetailPane()
+        end
     end
 end
 

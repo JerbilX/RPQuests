@@ -698,6 +698,8 @@ local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
         existing.sentAt = nil
         existing.lastResult = nil
         existing.deliveries = {}
+        existing.lifecycle = Addon.Constants.QUEST_LIFECYCLE.DRAFT
+        existing.resolution = nil
     end
     existing.clue = fields.clue
     existing.completionMessage = fields.completionMessage

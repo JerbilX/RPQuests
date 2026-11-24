@@ -474,7 +474,7 @@ return function(T)
 
         local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
         AssertTrue(decoded ~= nil, "v3 quest decoded cleanly: " .. tostring(decErr))
-        AssertEqual(decoded.schemaVersion, 3, "Decoded quest has schemaVersion = 3")
+        AssertEqual(decoded.schemaVersion, 4, "Decoded quest has schemaVersion = 4")
         AssertEqual(decoded.recommendHideMapAreas, false, "recommendHideMapAreas = false preserved")
         AssertEqual(decoded.showSearchAreas, nil, "Local preference showSearchAreas never serialized")
         AssertEqual(decoded.showLocationAreas, nil, "Local preference showLocationAreas never serialized")
@@ -517,11 +517,60 @@ return function(T)
         local legacyCode = RPQuest.ShareCodec:EncodeQuest(legacyV2Payload)
         local legacyDecoded = RPQuest.ShareCodec:DecodeQuest(legacyCode)
         AssertTrue(legacyDecoded ~= nil, "Older RPQ3-style payload decodes cleanly")
-        AssertEqual(legacyDecoded.schemaVersion, 3, "Decoded older RPQ3 payload upgraded to schema v3")
+        AssertEqual(legacyDecoded.schemaVersion, 4, "Decoded older RPQ3 payload upgraded to schema v4")
         AssertEqual(legacyDecoded.recommendHideMapAreas, true, "Older hideMapArea bit mapped to recommendHideMapAreas")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterX - 0.42) < 0.001, "Target inherits header areaCenterX")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterY - 0.58) < 0.001, "Target inherits header areaCenterY")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaRadius - 0.125) < 0.001, "Target inherits header areaRadius")
+    end)
+
+    RunTest("Issue #255: ShareCodec EncodeFailure / DecodeCompletion / ValidateResultForQuest round-trip", function()
+        local quest = {
+            id = 55,
+            title = "Stealth Contract",
+            description = "Do not get caught",
+            stealthMode = "required",
+            wasDetected = true,
+            failed = true,
+            targets = { { name = "Guard", requiredCount = 1 } },
+            discoveries = {},
+            dialogues = {},
+        }
+        local failCode, err = RPQuest.ShareCodec:EncodeFailure(quest, "ShadowPlayer", 1700001234)
+        AssertTrue(failCode ~= nil and failCode:sub(1, 6) == "RPQC1:", "EncodeFailure returns RPQC1 code: " .. tostring(err))
+
+        local decoded, decErr = RPQuest.ShareCodec:DecodeCompletion(failCode)
+        AssertTrue(decoded ~= nil, "DecodeCompletion decodes failure code: " .. tostring(decErr))
+        AssertEqual(decoded.resultType, "failed", "resultType is 'failed'")
+        AssertEqual(decoded.failed, true, "failed boolean is true")
+        AssertEqual(decoded.completed, false, "completed boolean is false")
+        AssertEqual(decoded.rejected, false, "rejected boolean is false")
+        AssertEqual(decoded.accepted, false, "accepted boolean is false")
+        AssertEqual(decoded.wasDetected, true, "wasDetected=true preserved for stealth failure")
+        AssertEqual(decoded.characterName, "ShadowPlayer", "characterName preserved")
+
+        local okRes, valRes = RPQuest.ShareCodec:ValidateResultForQuest(quest, failCode)
+        AssertEqual(okRes, true, "ValidateResultForQuest accepts failure code")
+        AssertEqual(valRes.resultType, "failed", "Validated resultType is 'failed'")
+
+        local okComp, compErr = RPQuest.ShareCodec:ValidateCompletionForQuest(quest, failCode)
+        AssertEqual(okComp, false, "ValidateCompletionForQuest rejects failure code")
+        AssertEqual(compErr, "VALIDATE_ERR_NOT_COMPLETED", "ValidateCompletionForQuest returns VALIDATE_ERR_NOT_COMPLETED")
+
+        -- Non-stealth failure omits wasDetected
+        local locFailQuest = {
+            id = 56,
+            title = "Location Contract",
+            stealthMode = "disabled",
+            failed = true,
+            targets = { { name = "Scout", requiredCount = 1 } },
+            discoveries = {},
+            dialogues = {},
+        }
+        local locCode = RPQuest.ShareCodec:EncodeFailure(locFailQuest, "RogueTwo", 1700002000)
+        local locDecoded = RPQuest.ShareCodec:DecodeCompletion(locCode)
+        AssertEqual(locDecoded.resultType, "failed", "Location failure resultType is 'failed'")
+        AssertEqual(locDecoded.wasDetected, nil, "wasDetected is nil when stealthMode is disabled")
     end)
 
 end
