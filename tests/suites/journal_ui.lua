@@ -1344,4 +1344,67 @@ return function(T)
         AssertEqual(tab.accordionSections.preparing.isOpen, true, "Preparing accordion UI opens after sent becomes empty")
     end)
 
+    RunTest("Issue #276: JournalTab persists lastSectionKey and lastSelectedQuestId across sessions with safe fallbacks", function()
+        local roles = RPQuest.Constants.QUEST_ROLE
+        local repo = RPQuest.QuestRepository
+        local savedVars = {
+            quests = {
+                { id = 201, title = "Active Mission", description = "D1", role = roles.RECEIVED, completed = false },
+                { id = 202, title = "Completed A", description = "D2", role = roles.RECEIVED, completed = true },
+                { id = 203, title = "Completed B", description = "D3", role = roles.RECEIVED, completed = true },
+                { id = 204, title = "Prepared Draft", description = "D4", role = roles.PREPARED, completed = false },
+            },
+        }
+        repo:Initialize(savedVars)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+
+        -- Switch to "completed" and select quest 203
+        tab:ToggleSection("completed")
+        tab:SelectQuest(203)
+
+        local uiState = repo:GetJournalUiState()
+        AssertEqual(uiState.lastSectionKey, "completed", "ToggleSection persists lastSectionKey in SavedVars")
+        AssertEqual(uiState.lastSelectedQuestId, 203, "SelectQuest persists lastSelectedQuestId in SavedVars")
+
+        -- 1. Simulate /reloadui / new session with the same SavedVars
+        tab.collapsedSections = nil
+        tab.selectedQuestId = nil
+        repo:Initialize(savedVars)
+        tab:RestoreUiState()
+        tab:Refresh()
+
+        AssertEqual(tab.collapsedSections.completed, false, "Completed section restored as expanded after reinit")
+        AssertEqual(tab.collapsedSections.missions, true, "Missions section restored as collapsed after reinit")
+        AssertEqual(tab.selectedQuestId, 203, "Selected quest 203 restored after reinit")
+
+        -- 2. Simulate previous selected quest 203 removed while "completed" still has 202 (and no activeQuest)
+        table.remove(savedVars.quests, 3) -- remove id 203
+        tab.collapsedSections = nil
+        tab.selectedQuestId = nil
+        repo:Initialize(savedVars)
+        AssertEqual(repo:GetJournalUiState().lastSelectedQuestId, nil, "Missing lastSelectedQuestId cleared on repo init")
+        tab:RestoreUiState()
+        tab:Refresh()
+
+        AssertEqual(tab.collapsedSections.completed, false, "Completed section remains expanded when it still has quests")
+        AssertEqual(tab.selectedQuestId, 202, "Fallback selects remaining quest 202 in open section")
+
+        -- 3. Simulate all quests in "completed" removed -> fallback honors #275 invariant
+        table.remove(savedVars.quests, 2) -- remove id 202
+        savedVars.activeQuestId = 201
+        tab.collapsedSections = nil
+        tab.selectedQuestId = nil
+        repo:Initialize(savedVars)
+        tab:RestoreUiState()
+        tab:Refresh()
+
+        AssertEqual(tab.selectedQuestId, 201, "Fallback selects activeQuest 201 when previous quest is gone")
+        AssertEqual(tab.collapsedSections.missions, false, "Fallback expands section of activeQuest when previous section is empty")
+        AssertEqual(tab.collapsedSections.completed, true, "Empty completed section collapses on fallback")
+        AssertEqual(repo:GetJournalUiState().lastSectionKey, "missions", "Fallback updates persisted lastSectionKey")
+    end)
+
 end
