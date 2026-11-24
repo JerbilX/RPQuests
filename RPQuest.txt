@@ -1,9 +1,9 @@
 ## Title: RPQuest
 ## APIVersion: 101051
-## Version: 1.8.1
+## Version: 1.9.0
 ## AddOnVersion: 1
 ## Author: JerbilX
-## Description: Custom Roleplay Quests with reticle NPC target capture, map search area, native Journal tab, and in-game mail sharing. (v1.8.1)
+## Description: Custom Roleplay Quests with reticle NPC target capture, map search area, native Journal tab, and in-game mail sharing. (v1.9.0)
 ## SavedVariables: RPQuest_SavedVariables
 
 src/Constants.lua
