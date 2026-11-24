@@ -1463,7 +1463,7 @@ return function(T)
         local _, _, searchRelTo = tab.btnShowSearchAreas:GetAnchor(1)
         AssertEqual(searchRelTo, tab.detailObjText, "Search toggle anchored below detailObjText when banner is hidden")
         local _, _, actRelTo = tab.btnActivate:GetAnchor(1)
-        AssertEqual(actRelTo, tab.btnShowLocationAreas, "Action buttons anchored below location toggle")
+        AssertEqual(actRelTo, tab.btnShowDiscoveryAreas, "Action buttons anchored below discovery toggle")
 
         -- Stop testing prepared quest
         repo:SetActiveQuest(nil)
@@ -1965,6 +1965,78 @@ return function(T)
         AssertEqual(tab.discRadComboBox:IsEnabled(), false, "discRadComboBox returns to disabled empty state after clear")
         AssertEqual(tab.btnRemoveDiscovery:GetAlpha(), 0.45, "btnRemoveDiscovery returns to 0.45 alpha after clear")
         AssertEqual(tab.btnClearDiscoveries:GetAlpha(), 0.45, "btnClearDiscoveries returns to 0.45 alpha after clear")
+    end)
+
+    RunTest("Issue #298: JournalDetailPane btnShowDiscoveryAreas toggle state, disabled state, and persistence", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local savedVars = RPQuest.QuestRepository:GetDefaults()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(savedVars)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        -- 1. Received quest WITHOUT discovery points -> button visible, disabled with "(no discovery points)"
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({
+            targetName = "Bandit",
+            mapId = 45,
+            zoneId = 104,
+            targetX = 0.4,
+            targetY = 0.4,
+            areaRadius = 0.07,
+        })
+        local prepNoDisc = repo:SaveDraft("No Discovery", "Fight only.")
+        local codeNoDisc = RPQuest.ShareCodec:EncodeQuest(prepNoDisc)
+        local recNoDisc = repo:ImportQuestFromCode(codeNoDisc)
+        tab:SelectQuest(recNoDisc.id)
+        tab:Refresh()
+
+        AssertEqual(tab.btnShowDiscoveryAreas:IsHidden(), false, "Discovery toggle visible on received quest without discoveries")
+        AssertEqual(tab.btnShowDiscoveryAreas:IsEnabled(), false, "Discovery toggle disabled when quest has no discoveries")
+        AssertEqual(tab.btnShowDiscoveryAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_DISCOVERY_AREAS_DISABLED"), "Disabled label shown when no discoveries")
+        tab.btnShowDiscoveryAreas:FireHandler("OnClicked")
+        AssertEqual(recNoDisc.showDiscoveryAreas, nil, "Clicking disabled discovery toggle does not mutate quest")
+
+        -- 2. Received quest WITH discovery points -> enabled, off by default, toggles & persists
+        repo:ResetDraft()
+        repo:UpdateDraftFields({ mapId = 45, zoneId = 104 })
+        repo:AddDraftDiscoveryPoint({
+            zoneId = 104,
+            worldX = 25000,
+            worldY = 0,
+            worldZ = 25000,
+            mapId = 45,
+            x = 0.25,
+            y = 0.25,
+            radius = 1500,
+            message = "Hidden note.",
+        })
+        local prepWithDisc = repo:SaveDraft("With Discovery", "Explore.")
+        local codeWithDisc = RPQuest.ShareCodec:EncodeQuest(prepWithDisc)
+        local recWithDisc = repo:ImportQuestFromCode(codeWithDisc)
+        tab:SelectQuest(recWithDisc.id)
+        tab:Refresh()
+
+        AssertEqual(tab.btnShowDiscoveryAreas:IsEnabled(), true, "Discovery toggle enabled when quest has discoveries")
+        AssertEqual(tab.btnShowDiscoveryAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_DISCOVERY_AREAS"), "Discovery toggle off by default")
+
+        local origRefreshPins = RPQuest.WorldMapArea.RefreshPins
+        local refreshCount = 0
+        RPQuest.WorldMapArea.RefreshPins = function()
+            refreshCount = refreshCount + 1
+        end
+
+        tab.btnShowDiscoveryAreas:FireHandler("OnClicked")
+        AssertEqual(recWithDisc.showDiscoveryAreas, true, "showDiscoveryAreas persisted on quest")
+        AssertEqual(tab.btnShowDiscoveryAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_DISCOVERY_AREAS_ACTIVE"), "Discovery toggle label updated to active")
+        AssertEqual(refreshCount >= 1, true, "WorldMapArea:RefreshPins called on discovery toggle")
+
+        repo:Initialize(savedVars)
+        local reloaded = repo:GetQuestById(recWithDisc.id)
+        AssertEqual(reloaded.showDiscoveryAreas, true, "showDiscoveryAreas survives SavedVars reload")
+
+        RPQuest.WorldMapArea.RefreshPins = origRefreshPins
     end)
 
 end

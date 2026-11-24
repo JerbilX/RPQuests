@@ -107,6 +107,9 @@ RPQuest.Locales["fr"] = {
     OPT_SHOW_LOCATION_AREAS = "[ ] Afficher les zones de lieu sur la carte",
     OPT_SHOW_LOCATION_AREAS_ACTIVE = "|c33FF33[X] Afficher les zones de lieu sur la carte|r",
     OPT_SHOW_LOCATION_AREAS_DISABLED = "[ ] Afficher les zones de lieu sur la carte (aucun lieu)",
+    OPT_SHOW_DISCOVERY_AREAS = "[ ] Afficher les zones de découverte sur la carte",
+    OPT_SHOW_DISCOVERY_AREAS_ACTIVE = "|c33FF33[X] Afficher les zones de découverte sur la carte|r",
+    OPT_SHOW_DISCOVERY_AREAS_DISABLED = "[ ] Afficher les zones de découverte sur la carte (aucun point)",
     LABEL_INPUT_CLUE = "Option de dialogue du joueur :",
     LABEL_DIALOGUE_SECTION = "Dialogues de PNJ (Optionnel, 0-3)",
     LABEL_OPTIONS_SECTION = "Paramètres de mission",
@@ -219,6 +222,8 @@ RPQuest.Locales["fr"] = {
     MAP_TOOLTIP_LOCATION = "Emplacement de la cible : %s (%s, %dm)",
     MAP_TOOLTIP_LOC_REQUIRED = "Requis",
     MAP_TOOLTIP_LOC_OPTIONAL = "Optionnel",
+    MAP_TOOLTIP_DISCOVERY_CREATOR = "Point de découverte #%d (%dm) : %s",
+    MAP_TOOLTIP_DISCOVERY_PLAYER = "Point de découverte #%d",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "Envoyer courrier",

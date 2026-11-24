@@ -107,6 +107,9 @@ RPQuest.Locales["en"] = {
     OPT_SHOW_LOCATION_AREAS = "[ ] Show location areas on map",
     OPT_SHOW_LOCATION_AREAS_ACTIVE = "|c33FF33[X] Show location areas on map|r",
     OPT_SHOW_LOCATION_AREAS_DISABLED = "[ ] Show location areas on map (no location)",
+    OPT_SHOW_DISCOVERY_AREAS = "[ ] Show discovery areas on map",
+    OPT_SHOW_DISCOVERY_AREAS_ACTIVE = "|c33FF33[X] Show discovery areas on map|r",
+    OPT_SHOW_DISCOVERY_AREAS_DISABLED = "[ ] Show discovery areas on map (no discovery points)",
     LABEL_INPUT_CLUE = "Player Dialogue Option:",
     LABEL_DIALOGUE_SECTION = "NPC Dialogues (Optional, 0-3)",
     LABEL_OPTIONS_SECTION = "Mission Settings",
@@ -219,6 +222,8 @@ RPQuest.Locales["en"] = {
     MAP_TOOLTIP_LOCATION = "Target Location: %s (%s, %dm)",
     MAP_TOOLTIP_LOC_REQUIRED = "Required",
     MAP_TOOLTIP_LOC_OPTIONAL = "Optional",
+    MAP_TOOLTIP_DISCOVERY_CREATOR = "Discovery Point #%d (%dm): %s",
+    MAP_TOOLTIP_DISCOVERY_PLAYER = "Discovery Point #%d",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "Send Mail",

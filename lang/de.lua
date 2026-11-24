@@ -107,6 +107,9 @@ RPQuest.Locales["de"] = {
     OPT_SHOW_LOCATION_AREAS = "[ ] Ortsbereiche auf der Karte anzeigen",
     OPT_SHOW_LOCATION_AREAS_ACTIVE = "|c33FF33[X] Ortsbereiche auf der Karte anzeigen|r",
     OPT_SHOW_LOCATION_AREAS_DISABLED = "[ ] Ortsbereiche auf der Karte anzeigen (kein Ort)",
+    OPT_SHOW_DISCOVERY_AREAS = "[ ] Entdeckungsbereiche auf der Karte anzeigen",
+    OPT_SHOW_DISCOVERY_AREAS_ACTIVE = "|c33FF33[X] Entdeckungsbereiche auf der Karte anzeigen|r",
+    OPT_SHOW_DISCOVERY_AREAS_DISABLED = "[ ] Entdeckungsbereiche auf der Karte anzeigen (keine Punkte)",
     LABEL_INPUT_CLUE = "Dialogoption des Spielers:",
     LABEL_DIALOGUE_SECTION = "NSC-Dialoge (Optional, 0-3)",
     LABEL_OPTIONS_SECTION = "Missions-Einstellungen",
@@ -219,6 +222,8 @@ RPQuest.Locales["de"] = {
     MAP_TOOLTIP_LOCATION = "Zielort: %s (%s, %dm)",
     MAP_TOOLTIP_LOC_REQUIRED = "Erforderlich",
     MAP_TOOLTIP_LOC_OPTIONAL = "Optional",
+    MAP_TOOLTIP_DISCOVERY_CREATOR = "Entdeckungspunkt #%d (%dm): %s",
+    MAP_TOOLTIP_DISCOVERY_PLAYER = "Entdeckungspunkt #%d",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "Post senden",

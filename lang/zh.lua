@@ -107,6 +107,9 @@ RPQuest.Locales["zh"] = {
     OPT_SHOW_LOCATION_AREAS = "[ ] 在地图上显示位置区域",
     OPT_SHOW_LOCATION_AREAS_ACTIVE = "|c33FF33[X] 在地图上显示位置区域|r",
     OPT_SHOW_LOCATION_AREAS_DISABLED = "[ ] 在地图上显示位置区域（无位置）",
+    OPT_SHOW_DISCOVERY_AREAS = "[ ] 在地图上显示探索区域",
+    OPT_SHOW_DISCOVERY_AREAS_ACTIVE = "|c33FF33[X] 在地图上显示探索区域|r",
+    OPT_SHOW_DISCOVERY_AREAS_DISABLED = "[ ] 在地图上显示探索区域（无探索点）",
     LABEL_INPUT_CLUE = "玩家对话选项：",
     LABEL_DIALOGUE_SECTION = "NPC 对话（可选，0-3）",
     LABEL_OPTIONS_SECTION = "任务设置",
@@ -219,6 +222,8 @@ RPQuest.Locales["zh"] = {
     MAP_TOOLTIP_LOCATION = "目标位置：%s（%s，%d米）",
     MAP_TOOLTIP_LOC_REQUIRED = "必需",
     MAP_TOOLTIP_LOC_OPTIONAL = "可选",
+    MAP_TOOLTIP_DISCOVERY_CREATOR = "探索点 #%d (%d米)：%s",
+    MAP_TOOLTIP_DISCOVERY_PLAYER = "探索点 #%d",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "发送邮件",

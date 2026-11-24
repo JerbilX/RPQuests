@@ -318,6 +318,7 @@ function QuestRepository:GetDefaults()
             autoSendCompletionMail = true,
             showSearchAreas = false,
             showLocationAreas = false,
+            showDiscoveryAreas = false,
         },
         uiState = {
             lastSectionKey = nil,
@@ -344,6 +345,7 @@ function QuestRepository:Initialize(savedVars)
         autoSendCompletionMail = true,
         showSearchAreas = false,
         showLocationAreas = false,
+        showDiscoveryAreas = false,
     }
     for k, v in pairs(defaultSettings) do
         if self.savedVars.settings[k] == nil then
@@ -911,8 +913,12 @@ function QuestRepository:HasQuestTargetLocation(quest)
     return false
 end
 
+function QuestRepository:HasQuestDiscoveryPoints(quest)
+    return type(quest) == "table" and type(quest.discoveries) == "table" and #quest.discoveries > 0
+end
+
 function QuestRepository:SetQuestMapVisibility(questId, key, enabled)
-    if key ~= "showSearchAreas" and key ~= "showLocationAreas" then
+    if key ~= "showSearchAreas" and key ~= "showLocationAreas" and key ~= "showDiscoveryAreas" then
         return false
     end
     local quest = self:GetQuestById(questId)

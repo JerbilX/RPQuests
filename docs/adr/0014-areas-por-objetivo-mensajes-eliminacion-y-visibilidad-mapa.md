@@ -35,7 +35,7 @@ Opción elegida: **"Opción 2: Esquema v3 con áreas por objetivo, recomendació
    * `Addon.Constants.QUEST_SCHEMA.CURRENT_VERSION` pasa a `3`.
    * Cada entrada de `targets[]` incorpora `areaCenterX`, `areaCenterY`, `areaRadius`, `customMessageInLocation` y `customMessageOutsideLocation` (junto a `customMessage`).
    * `recommendHideMapAreas` reemplaza la semántica de `hideMapArea` (valor por defecto `true` en borradores nuevos; la migración `v2 -> v3` preserva el valor previo de `hideMapArea`).
-   * Se agregan preferencias locales en `SavedVariables.settings`: `showSearchAreas = false` y `showLocationAreas = false` (nunca serializadas en `ShareCodec`).
+   * Se agregan preferencias locales en `SavedVariables.settings`: `showSearchAreas = false`, `showLocationAreas = false` y (enmienda Issue #298) `showDiscoveryAreas = false` (nunca serializadas en `ShareCodec`).
 2. **Códec `RPQ3` (`ShareCodec`):**
    * Usa los bits libres de `tFlags` (`16`: área de búsqueda por objetivo, `32`: `customMessageInLocation`, `64`: `customMessageOutsideLocation`) manteniendo decodificación retrocompatible con payloads `RPQ1`, `RPQ2` y `RPQ3` previos.
 3. **Lógica de Combate y Anuncios:**
@@ -49,3 +49,5 @@ Opción elegida: **"Opción 2: Esquema v3 con áreas por objetivo, recomendació
   * Cero pérdida de datos en misiones v2 existentes ni en códigos compartidos anteriormente.
 * **Negativas / Trade-offs:**
   * Los módulos de UI/mapa (`WorldMapArea`, `JournalDetailPane`, `JournalEditorSections`, `JournalEditorPane`) deben mantener compatibilidad transitoria con los campos v3 hasta completar sus mejoras dedicadas.
+
+> **Enmienda (2026-11-24, Issue #298):** Se extiende el modelo de capas cartográficas opcionales para el jugador incorporando `showDiscoveryAreas = false` (por defecto oculto, nunca serializado en `ShareCodec`) junto a `showSearchAreas` y `showLocationAreas`, con toggle independiente en `JournalDetailPane` y renderizado en `WorldMapArea` (`RPQUEST_DISCOVERY_AREA_PIN` púrpura) para puntos de descubrimiento pendientes en Play mode o todos los puntos configurados para el creador.

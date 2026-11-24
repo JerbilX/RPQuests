@@ -478,6 +478,7 @@ return function(T)
         AssertEqual(decoded.recommendHideMapAreas, false, "recommendHideMapAreas = false preserved")
         AssertEqual(decoded.showSearchAreas, nil, "Local preference showSearchAreas never serialized")
         AssertEqual(decoded.showLocationAreas, nil, "Local preference showLocationAreas never serialized")
+        AssertEqual(decoded.showDiscoveryAreas, nil, "Local preference showDiscoveryAreas never serialized")
         AssertEqual(#decoded.targets, 2, "2 targets decoded")
 
         AssertTrue(math.abs(decoded.targets[1].areaCenterX - 0.25) < 0.001, "Target 1 areaCenterX preserved")

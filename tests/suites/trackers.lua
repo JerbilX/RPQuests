@@ -1092,4 +1092,135 @@ return function(T)
         _G.GetNormalizedWorldPosition = origGetNormWorld
     end)
 
+    RunTest("Issue #298: purple discovery area pins, role-based visibility, resize persistence, auto-refresh, and spoiler-free tooltips", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+        local origTooltip = _G.InformationTooltip
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(zoneId, wx, wy, wz)
+            return wx / 100000, wz / 100000
+        end
+
+        local tooltipLines = {}
+        _G.InformationTooltip = {
+            AddLine = function(_, text)
+                table.insert(tooltipLines, text)
+            end,
+        }
+
+        -- 1. Discovery-only draft (Edit mode): renders purple pins automatically even when showDiscoveryAreas = false
+        RPQuest.QuestRepository:SetSetting("showDiscoveryAreas", false)
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:UpdateDraftFields({ mapId = 45, zoneId = 104 })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104,
+            worldX = 25000,
+            worldY = 0,
+            worldZ = 25000,
+            mapId = 45,
+            x = 0.25,
+            y = 0.25,
+            radius = 1500,
+            message = "Secret shrine behind the waterfall.",
+        })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104,
+            worldX = 75000,
+            worldY = 0,
+            worldZ = 75000,
+            mapId = 45,
+            x = 0.75,
+            y = 0.75,
+            radius = 3000,
+            message = "Hidden ledger under the bridge.",
+        })
+
+        RPQuest.WorldMapArea:RefreshPins()
+        local draftDiscPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.discoveryPinTypeId then
+                table.insert(draftDiscPins, p)
+            end
+        end
+        AssertEqual(#draftDiscPins, 2, "Edit mode renders 2 purple discovery pins for discovery-only draft")
+        local purple = RPQuest.Constants.UI.DISCOVERY_AREA_COLOR
+        AssertEqual(draftDiscPins[1].pinBlob.color.r, purple.r, "Discovery pin uses purple red channel")
+        AssertEqual(draftDiscPins[1].pinBlob.color.g, purple.g, "Discovery pin uses purple green channel")
+        AssertEqual(draftDiscPins[1].pinBlob.color.b, purple.b, "Discovery pin uses purple blue channel")
+        AssertEqual(draftDiscPins[1].pinBlob.color.a, purple.a, "Discovery pin uses purple alpha channel")
+        AssertEqual(draftDiscPins[1].pinTag.discoveryIndex, 1, "Discovery pin 1 tag has discoveryIndex 1")
+        AssertEqual(draftDiscPins[2].pinTag.discoveryIndex, 2, "Discovery pin 2 tag has discoveryIndex 2")
+
+        -- Color persists across map resize/zoom
+        local discCustomData = mockPinManager._customPins[RPQuest.WorldMapArea.discoveryPinTypeId]
+        AssertTrue(discCustomData and discCustomData.resizeCallback ~= nil, "Discovery pin registers pinTypeOnResizeCallback")
+        mockPinManager:SimulateResize()
+        AssertEqual(draftDiscPins[1].pinBlob.color.r, purple.r, "Discovery pin keeps purple red channel after resize")
+        AssertEqual(draftDiscPins[1].pinBlob.color.b, purple.b, "Discovery pin keeps purple blue channel after resize")
+
+        -- Creator tooltip (Edit mode): shows index, radius in meters, and message summary
+        local discCreator = discCustomData.pinTooltipCreator
+        tooltipLines = {}
+        discCreator.creator(draftDiscPins[1])
+        AssertEqual(#tooltipLines, 2, "Creator discovery tooltip has header + 1 line")
+        AssertEqual(tooltipLines[2], "Discovery Point #1 (15m): Secret shrine behind the waterfall.", "Creator tooltip shows radius and message")
+
+        -- 2. Prepared quest preview (Creator): renders all discovery points automatically + creator tooltip
+        local prepared = RPQuest.QuestRepository:SaveDraft("Discovery Hunt", "Find the clues.")
+        AssertEqual(RPQuest.WorldMapArea:ShouldRenderDiscoveryAreasOnCurrentMap(prepared), true, "Prepared quest renders discovery areas automatically")
+        mockState.mapId = 99
+        AssertEqual(RPQuest.WorldMapArea:ShouldRenderZoomOutOnCurrentMap(prepared), true, "ZoomOut pin enabled for discovery-only prepared quest")
+        mockState.mapId = 45
+
+        -- 3. Received quest (Play mode): hidden by default, spoiler-free tooltip, and auto-refresh on DISCOVERY_TRIGGERED
+        local code = RPQuest.ShareCodec:EncodeQuest(prepared)
+        local received = RPQuest.QuestRepository:ImportQuestFromCode(code)
+        RPQuest.QuestRepository:SetActiveQuest(received.id)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 0, "Play mode hides discovery areas by default")
+
+        mockState.mapId = 99
+        AssertEqual(RPQuest.WorldMapArea:ShouldRenderZoomOutOnCurrentMap(received), false, "ZoomOut pin hidden in play mode when all map toggles are false")
+        RPQuest.QuestRepository:SetQuestMapVisibility(received.id, "showDiscoveryAreas", true)
+        AssertEqual(RPQuest.WorldMapArea:ShouldRenderZoomOutOnCurrentMap(received), true, "ZoomOut pin shown for discovery-only quest when showDiscoveryAreas=true")
+        mockState.mapId = 45
+
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 2, "Play mode renders 2 pending discovery pins when showDiscoveryAreas=true")
+
+        -- Player tooltip: spoiler-free (no radius, no hidden message)
+        tooltipLines = {}
+        discCreator.creator(mockPinManager._createdPins[1])
+        AssertEqual(#tooltipLines, 2, "Player discovery tooltip has header + 1 line")
+        AssertEqual(tooltipLines[2], "Discovery Point #1", "Player tooltip hides radius and secret message")
+
+        -- Trigger discovery #1 while worldMap scene is showing -> auto-refreshes and hides discovered point
+        local origIsShowing = SCENE_MANAGER.IsShowing
+        SCENE_MANAGER.IsShowing = function(_, name)
+            return name == "worldMap"
+        end
+        RPQuest.QuestRepository:MarkDiscoveryTriggered(received.id, 1)
+        SCENE_MANAGER.IsShowing = origIsShowing
+
+        AssertEqual(#mockPinManager._createdPins, 1, "DISCOVERY_TRIGGERED auto-refreshes map and removes discovered point")
+        AssertEqual(mockPinManager._createdPins[1].pinTag.discoveryIndex, 2, "Only pending discovery point #2 remains on map")
+
+        _G.InformationTooltip = origTooltip
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+    end)
+
 end
