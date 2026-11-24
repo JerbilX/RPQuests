@@ -1223,4 +1223,112 @@ return function(T)
         _G.GetNormalizedWorldPosition = origGetNormWorld
     end)
 
+    RunTest("Issue #308: prepared quest in Test Quest uses player-mode discovery visibility, pending-only pins, and player tooltip", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+        local origTooltip = _G.InformationTooltip
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(zoneId, wx, wy, wz)
+            return wx / 100000, wz / 100000
+        end
+
+        local tooltipLines = {}
+        _G.InformationTooltip = {
+            AddLine = function(_, text)
+                table.insert(tooltipLines, text)
+            end,
+        }
+
+        RPQuest.QuestRepository:SetSetting("showDiscoveryAreas", false)
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:UpdateDraftFields({ mapId = 45, zoneId = 104 })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104,
+            worldX = 25000,
+            worldY = 0,
+            worldZ = 25000,
+            mapId = 45,
+            x = 0.25,
+            y = 0.25,
+            radius = 1500,
+            message = "Secret shrine behind the waterfall.",
+        })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104,
+            worldX = 75000,
+            worldY = 0,
+            worldZ = 75000,
+            mapId = 45,
+            x = 0.75,
+            y = 0.75,
+            radius = 3000,
+            message = "Hidden ledger under the bridge.",
+        })
+
+        local discCustomData = mockPinManager._customPins[RPQuest.WorldMapArea.discoveryPinTypeId]
+        local discCreator = discCustomData.pinTooltipCreator
+
+        -- 1. Draft in Edit mode: full creator view even when showDiscoveryAreas = false
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 2, "Draft in editor renders both discovery pins")
+        tooltipLines = {}
+        discCreator.creator(mockPinManager._createdPins[1])
+        AssertEqual(tooltipLines[2], "Discovery Point #1 (15m): Secret shrine behind the waterfall.", "Draft in editor uses creator tooltip")
+
+        -- 2. Prepared quest NOT in Test Quest: full creator view (all points + creator tooltip)
+        local prepared = RPQuest.QuestRepository:SaveDraft("Discovery Hunt", "Find the clues.")
+        prepared.discoveries[1].discovered = true
+        RPQuest.WorldMapArea:ShowQuestOnMap(prepared)
+        AssertEqual(#mockPinManager._createdPins, 2, "Prepared preview (not testing) renders all points including discovered")
+        tooltipLines = {}
+        discCreator.creator(mockPinManager._createdPins[1])
+        AssertEqual(tooltipLines[2], "Discovery Point #1 (15m): Secret shrine behind the waterfall.", "Prepared preview (not testing) uses creator tooltip")
+
+        -- 3. Prepared quest active in Test Quest: behaves 100% like player mode
+        prepared.discoveries[1].discovered = false
+        RPQuest.WorldMapArea.previewQuestId = nil
+        local actOk = RPQuest.QuestRepository:SetActiveQuest(prepared.id)
+        AssertEqual(actOk, true, "Prepared quest activated for Test Quest")
+
+        -- 3a. showDiscoveryAreas = false -> hidden on map
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 0, "Test Quest hides discovery pins when showDiscoveryAreas=false")
+
+        -- 3b. showDiscoveryAreas = true -> only pending points + player tooltip
+        RPQuest.QuestRepository:SetQuestMapVisibility(prepared.id, "showDiscoveryAreas", true)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 2, "Test Quest renders 2 pending discovery pins when showDiscoveryAreas=true")
+        tooltipLines = {}
+        discCreator.creator(mockPinManager._createdPins[1])
+        AssertEqual(tooltipLines[2], "Discovery Point #1", "Test Quest uses spoiler-free player tooltip")
+
+        -- 3c. Discovered point disappears from map during Test Quest
+        local origIsShowing = SCENE_MANAGER.IsShowing
+        SCENE_MANAGER.IsShowing = function(_, name)
+            return name == "worldMap"
+        end
+        RPQuest.QuestRepository:MarkDiscoveryTriggered(prepared.id, 1)
+        SCENE_MANAGER.IsShowing = origIsShowing
+
+        AssertEqual(#mockPinManager._createdPins, 1, "Test Quest removes discovered point from map")
+        AssertEqual(mockPinManager._createdPins[1].pinTag.discoveryIndex, 2, "Only pending discovery point #2 remains in Test Quest")
+
+        _G.InformationTooltip = origTooltip
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+    end)
+
 end
