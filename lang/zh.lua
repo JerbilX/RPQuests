@@ -9,7 +9,6 @@ RPQuest.Locales["zh"] = {
     -- Keybindings
     SI_KEYBINDINGS_CATEGORY_RPQUEST = "RPQuest - 自定义任务",
     SI_BINDING_NAME_RPQUEST_CAPTURE_TARGET = "捕获准星下的目标 (NPC)",
-    SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY = "在此处捕获隐藏探索点",
     SI_BINDING_NAME_RPQUEST_TOGGLE_JOURNAL = "打开 / 关闭自定义任务标签页",
 
     -- Tab & General
@@ -43,9 +42,6 @@ RPQuest.Locales["zh"] = {
     BTN_CLEAR_DISCOVERIES = "清除探索点",
     BTN_REMOVE_DISCOVERY = "移除此点",
     DISCOVERY_INDEX_FORMAT = "#%d / %d",
-    BTN_DISCOVERY_RAD_SMALL = "8米",
-    BTN_DISCOVERY_RAD_MEDIUM = "15米",
-    BTN_DISCOVERY_RAD_LARGE = "30米",
 
     -- Detail View
     STATUS_PENDING = "状态：|c66CCFF已接收|r — |cFFD155待处理（接受或拒绝）|r",
@@ -96,9 +92,11 @@ RPQuest.Locales["zh"] = {
     TARGET_NOT_CAPTURED = "|cFFAA33请瞄准活着的 NPC 并按下捕获快捷键。|r",
     LABEL_AREA_SIZE = "地图搜索区域大小：",
     LABEL_DISCOVERY_SECTION = "隐藏探索点（可选）",
+    LABEL_DISCOVERY_MSG = "探索点提示信息：",
+    LABEL_DISCOVERY_MSG_REQUIRED = "探索点提示信息：|cE8D5A0（必填）|r",
+    LABEL_DISCOVERY_MSG_MISSING = "探索点提示信息：|cFF5555（必填）|r",
     DISCOVERY_NONE_CAPTURED = "|cAAAAAA已添加 0 个隐藏探索点。|r",
     DISCOVERY_CAPTURED_FORMAT = "|c33FF33%d 个探索点|r：%s",
-    DEFAULT_DISCOVERY_MSG = "你注意到附近有些异样 (#%d)。",
     DISCOVERY_CLUE_FORMAT = "• 线索：%s",
     DISCOVERY_PREPARED_SUMMARY = "• 隐藏探索点：已配置 %d 个",
     LABEL_STEALTH_MODE = "潜行条件（不被发现）：",
@@ -164,6 +162,7 @@ RPQuest.Locales["zh"] = {
     ALERT_STEALTH_DETECTED = "RPQuest：你被发现了！（已记录到任务状态中）",
     ALERT_QUEST_FAILED_STEALTH = "你被发现了（需要全程潜行）。",
     ERR_MISSING_TARGET = "在发送或测试任务前，请至少添加一个探索/地点或 NPC 目标。",
+    ERR_DISCOVERY_MISSING_MSG = "在保存、测试或发送任务前，每个隐藏探索点都必须填写提示信息。",
     ERR_INVALID_CODE = "无效或已损坏的 RPQuest 代码。",
     ERR_IMPORT_EMPTY = "导入前请先粘贴任务代码。",
     ERR_IMPORT_INVALID_FORMAT = "代码格式无效。请确保完整粘贴，不要包含换行符或多余空格。",

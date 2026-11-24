@@ -856,6 +856,10 @@ function QuestDraftStore:SaveDraft(repo, titleInput, descriptionInput, areaRadiu
     draft.targets = draft.targets or {}
     draft.discoveries = draft.discoveries or {}
 
+    if repo:HasMissingDiscoveryMessage(draft) then
+        return nil, Addon.Locale:Get("ERR_DISCOVERY_MISSING_MSG")
+    end
+
     local defaultAreaRad = draft.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM
     for _, t in ipairs(draft.targets) do
         if not t.areaRadius or t.areaRadius <= 0 then

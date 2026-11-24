@@ -413,7 +413,6 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
 end
 
 function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
-    local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
     local CreateEditBox = Addon.JournalWidgets.CreateEditBoxWithBackdrop
 
     local function SetDiscRad(radius)
@@ -426,15 +425,35 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
         end
     end
 
-    local discRadii = Addon.Constants.DISCOVERY_RADIUS
-    tab.btnDiscRadSmall = CreateStyledButton(panelName .. "_BtnDiscRadSmall", discBody, 68, 24, "", function() SetDiscRad(discRadii.SMALL) end)
-    tab.btnDiscRadSmall:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 36)
+    local discRadDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_DiscRadDropdown", discBody, "ZO_ComboBox")
+    discRadDropdown:SetDimensions(220, 28)
+    discRadDropdown:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 36)
+    tab.discRadDropdown = discRadDropdown
 
-    tab.btnDiscRadMedium = CreateStyledButton(panelName .. "_BtnDiscRadMedium", discBody, 68, 24, "", function() SetDiscRad(discRadii.MEDIUM) end)
-    tab.btnDiscRadMedium:SetAnchor(TOPLEFT, discBody, TOPLEFT, 74, 36)
+    local discRadCombo = ZO_ComboBox_ObjectFromContainer(discRadDropdown)
+    if discRadCombo then
+        discRadCombo:SetSortsItems(false)
+        local discRadii = Addon.Constants.DISCOVERY_RADIUS
+        local options = {
+            { radius = discRadii.SMALL, label = Addon.Locale:Get("BTN_RADIUS_SMALL") },
+            { radius = discRadii.MEDIUM, label = Addon.Locale:Get("BTN_RADIUS_MEDIUM") },
+            { radius = discRadii.LARGE, label = Addon.Locale:Get("BTN_RADIUS_LARGE") },
+        }
+        for _, opt in ipairs(options) do
+            local entry = discRadCombo:CreateItemEntry(opt.label, function()
+                SetDiscRad(opt.radius)
+            end)
+            entry.discRadius = opt.radius
+            discRadCombo:AddItem(entry)
+        end
+        tab.discRadComboBox = discRadCombo
+    end
 
-    tab.btnDiscRadLarge = CreateStyledButton(panelName .. "_BtnDiscRadLarge", discBody, 68, 24, "", function() SetDiscRad(discRadii.LARGE) end)
-    tab.btnDiscRadLarge:SetAnchor(TOPLEFT, discBody, TOPLEFT, 148, 36)
+    local lblDiscoveryMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblDiscoveryMsg", discBody, CT_LABEL)
+    lblDiscoveryMsg:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 72)
+    if lblDiscoveryMsg.SetFont then lblDiscoveryMsg:SetFont("ZoFontGameBold") end
+    lblDiscoveryMsg:SetText(Addon.Locale:Get("LABEL_DISCOVERY_MSG"))
+    tab.lblDiscoveryMsg = lblDiscoveryMsg
 
     local discMsgBg, discMsgEdit = CreateEditBox(
         panelName .. "_DiscoveryMsgEdit", discBody, 510, 30, 160, false,
@@ -443,18 +462,20 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
             local idx = tab.selectedDiscoveryIndex
             if idx and draft.discoveries and draft.discoveries[idx] then
                 Addon.QuestRepository:UpdateDraftDiscoveryPoint(idx, { message = val }, true)
+                Addon.JournalEditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
+                Addon.JournalEditorPane.LayoutSections(tab)
             else
                 Addon.QuestRepository:UpdateDraftFields({ discoveryMessage = val }, true)
             end
         end
     )
-    discMsgBg:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 68)
+    discMsgBg:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 94)
     tab.discoveryMsgBg = discMsgBg
     tab.discoveryMsgEdit = discMsgEdit
 
     local lblCapturedDiscoveries = WINDOW_MANAGER:CreateControl(panelName .. "_LblCapturedDiscoveries", discBody, CT_LABEL)
     lblCapturedDiscoveries:SetDimensions(510, 32)
-    lblCapturedDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 4, 106)
+    lblCapturedDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 4, 132)
     if lblCapturedDiscoveries.SetFont then lblCapturedDiscoveries:SetFont("ZoFontGame") end
     tab.lblCapturedDiscoveries = lblCapturedDiscoveries
 end

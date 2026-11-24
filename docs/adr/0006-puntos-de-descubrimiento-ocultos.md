@@ -16,7 +16,9 @@ En `RPQuest`, las misiones actuales se centran en objetivos de combate dentro de
 * **Cero Interferencia con el Mapa:** La detección en segundo plano no debe llamar nunca a `SetMapToPlayerLocation()` para no alterar el mapa que el jugador esté consultando.
 * **Eficiencia de Recursos:** El polling de posición solo debe estar activo cuando la misión activa tiene puntos de descubrimiento pendientes sin descubrir.
 * **Flexibilidad de Diseño:** Soportar misiones puras de descubrimiento (sin objetivos de combate), misiones solo de combate, y misiones mixtas.
-* **Ergonomía de Autoría:** Permitir capturar puntos in-situ mediante keybind (`RPQUEST_CAPTURE_DISCOVERY`), comando `/rpquest discovery` o botón directo en el editor.
+* **Ergonomía de Autoría:** Permitir capturar puntos in-situ desde el formulario del editor (`+ Point Here` en la sección *Hidden Discovery Points*) con mensaje narrativo obligatorio y selector de radio (`Small` / `Medium` / `Large`).
+
+> **Enmienda (2026-11-24, Issue #294):** Se retiró el keybind independiente `RPQUEST_CAPTURE_DISCOVERY` y el comando `/rpquest discovery` para consolidar la captura exclusivamente en el formulario del editor, ya que cada punto requiere redactar su mensaje narrativo en el lugar. Se reemplazaron los botones `8m` / `15m` / `30m` por un `ZO_ComboBox` estandarizado (`Small` / `Medium` / `Large`) y se eliminó el relleno genérico `DEFAULT_DISCOVERY_MSG`, exigiendo mensaje no vacío antes de guardar, probar o enviar la misión.
 
 ## Decisión Adoptada
 1. **Modelo de Dominio (`Constants.lua` y `QuestRepository.lua`):**

@@ -1821,4 +1821,88 @@ return function(T)
         AssertEqual(tab.detailObjText:GetText():find("Recommend hiding", 1, true), nil, "Received quest does not show Master map recommendation line")
     end)
 
+    RunTest("Discovery area dropdown, required message indicator, and Save/Test/Send blocking (#294)", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenCreateEditor()
+
+        AssertEqual(RPQuest.JournalWidgets.FormatSelected, nil, "Dead code JournalWidgets.FormatSelected removed")
+        AssertEqual(tab.btnDiscRadSmall, nil, "Legacy btnDiscRadSmall removed")
+        AssertTrue(tab.discRadComboBox ~= nil, "discRadComboBox exists")
+        AssertTrue(tab.lblDiscoveryMsg ~= nil, "lblDiscoveryMsg exists")
+        AssertEqual(tab.lblDiscoveryMsg:GetText(), RPQuest.Locale:Get("LABEL_DISCOVERY_MSG"), "Default discovery label shown when 0 points")
+
+        -- 1. Selecting Small / Large in discRadComboBox before capturing updates draft.discoveryRadius
+        tab.discRadComboBox:SelectItemByIndex(1)
+        AssertEqual(repo:GetDraft().discoveryRadius, RPQuest.Constants.DISCOVERY_RADIUS.SMALL, "discRadComboBox Small updates draft.discoveryRadius")
+        tab.discRadComboBox:SelectItemByIndex(3)
+        AssertEqual(repo:GetDraft().discoveryRadius, RPQuest.Constants.DISCOVERY_RADIUS.LARGE, "discRadComboBox Large updates draft.discoveryRadius")
+
+        -- 2. Capture discovery point without message -> no DEFAULT_DISCOVERY_MSG, warning state active
+        mockState.zoneId = 381
+        mockState.worldX = 1000
+        mockState.worldZ = 2000
+        local _, count = RPQuest.TargetCapture:CaptureDiscoveryPoint("")
+        AssertEqual(count, 1, "Discovery point captured without auto-fill")
+        tab.selectedDiscoveryIndex = 1
+        tab:RefreshEditorPane()
+
+        local draft = repo:GetDraft()
+        AssertEqual(draft.discoveries[1].message, "", "Discovery point message stays empty without generic fallback")
+        AssertEqual(tab.discoveryMsgEdit._hasWarning, true, "discoveryMsgEdit marks warning state when message is empty")
+        AssertEqual(tab.lblDiscoveryMsg:GetText(), RPQuest.Locale:Get("LABEL_DISCOVERY_MSG_MISSING"), "Label highlights missing required message")
+        local discHeaderText = tab.editorSectionsByKey.discovery.headerBtn:GetText()
+        AssertTrue(discHeaderText:find("[1 !]", 1, true) ~= nil, "Discovery accordion badge shows [1 !] alert")
+
+        -- Changing discRadComboBox with selected point updates point radius
+        tab.discRadComboBox:SelectItemByIndex(2)
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.MEDIUM, "discRadComboBox updates selected discovery point radius")
+
+        -- 3. Save Draft, Test Quest, and Send Quest are blocked while discovery message is empty/whitespace
+        tab.discoveryMsgEdit:SetText("   ")
+        tab.discoveryMsgEdit:FireHandler("OnTextChanged")
+        local saved, saveErr = repo:SaveDraft("Discovery Quest", "Desc")
+        AssertEqual(saved, nil, "SaveDraft blocked when discovery message is whitespace-only")
+        AssertEqual(saveErr, RPQuest.Locale:Get("ERR_DISCOVERY_MISSING_MSG"), "SaveDraft returns ERR_DISCOVERY_MISSING_MSG")
+
+        -- Save via OnSaveDraftClicked also alerts and does not clear inputs
+        mockState.csaMessages = {}
+        tab:OnSaveDraftClicked()
+        AssertEqual(repo:GetDraft().discoveries[1] ~= nil, true, "OnSaveDraftClicked keeps draft open when blocked")
+
+        -- Test Quest & Send Quest blocked on a prepared quest with empty discovery message
+        local qid = draft.editingQuestId
+        local prep = repo:GetQuestById(qid)
+        prep.discoveries = { { zoneId = 381, worldX = 1000, worldZ = 2000, radius = 1500, message = "  ", discovered = false } }
+        local activated, testErrKey = repo:SetActiveQuest(qid)
+        AssertEqual(activated, false, "SetActiveQuest blocked when discovery message is empty")
+        AssertEqual(testErrKey, "ERR_DISCOVERY_MISSING_MSG", "SetActiveQuest returns ERR_DISCOVERY_MISSING_MSG")
+        local resetOk, resetErrKey = repo:ResetQuest(qid)
+        AssertEqual(resetOk, false, "ResetQuest(activate) blocked when discovery message is empty")
+        AssertEqual(resetErrKey, "ERR_DISCOVERY_MISSING_MSG", "ResetQuest returns ERR_DISCOVERY_MISSING_MSG")
+
+        RPQuest.MailTransport._isSending = false
+        local sentOk, sendErrKey = RPQuest.MailTransport:SendQuestToRecipients(prep, "@GuildMate", "")
+        AssertEqual(sentOk, false, "SendQuestToRecipients blocked when discovery message is empty")
+        AssertEqual(sendErrKey, "ERR_DISCOVERY_MISSING_MSG", "SendQuestToRecipients returns ERR_DISCOVERY_MISSING_MSG")
+
+        -- 4. Fill in valid discovery message -> clears warning and allows Save, Test, and Send
+        tab.discoveryMsgEdit:SetText("You spot fresh footprints in the mud.")
+        tab.discoveryMsgEdit:FireHandler("OnTextChanged")
+        AssertEqual(tab.discoveryMsgEdit._hasWarning, false, "discoveryMsgEdit clears warning when message is filled")
+        AssertEqual(tab.lblDiscoveryMsg:GetText(), RPQuest.Locale:Get("LABEL_DISCOVERY_MSG_REQUIRED"), "Label shows required-ok state")
+        local discHeaderOk = tab.editorSectionsByKey.discovery.headerBtn:GetText()
+        AssertTrue(discHeaderOk:find("[1]", 1, true) ~= nil and discHeaderOk:find("!", 1, true) == nil, "Discovery accordion badge clears alert")
+
+        tab.recipientEdit:SetText("@GuildMate")
+        tab.recipientEdit:FireHandler("OnTextChanged")
+        local savedOk, savedOkErr = repo:SaveDraft("Discovery Quest", "Desc")
+        AssertTrue(savedOk ~= nil and savedOkErr == nil, "SaveDraft succeeds with valid discovery message")
+        local testOk = repo:ResetQuest(savedOk.id)
+        AssertEqual(testOk, true, "ResetQuest/Test Quest succeeds with valid discovery message")
+        repo:SetActiveQuest(nil)
+    end)
+
 end

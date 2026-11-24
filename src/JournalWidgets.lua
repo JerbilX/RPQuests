@@ -80,7 +80,11 @@ function Widgets.CreateEditBoxWithBackdrop(name, parent, width, height, maxChars
     end)
     edit:SetHandler("OnFocusLost", function()
         edit._focused = false
-        bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
+        if edit._hasWarning then
+            bg:SetEdgeColor(0.95, 0.28, 0.28, 1.0)
+        else
+            bg:SetEdgeColor(0.68, 0.58, 0.36, 0.80)
+        end
     end)
     if onTextChanged then
         edit:SetHandler("OnTextChanged", function(ctrl)
@@ -89,13 +93,6 @@ function Widgets.CreateEditBoxWithBackdrop(name, parent, width, height, maxChars
     end
 
     return bg, edit
-end
-
-function Widgets.FormatSelected(label, isSelected)
-    if isSelected then
-        return "|c33FF33[" .. label .. "]|r"
-    end
-    return label
 end
 
 function Widgets.CycleIndex(currentIndex, totalCount, delta)

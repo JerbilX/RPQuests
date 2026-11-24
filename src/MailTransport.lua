@@ -413,6 +413,9 @@ function MailTransport:SendQuestToRecipients(quest, rawRecipients, roleMessage)
     if not Addon.QuestRepository:HasPlayableObjectives(quest) then
         return false, "ERR_MISSING_TARGET"
     end
+    if Addon.QuestRepository:HasMissingDiscoveryMessage(quest) then
+        return false, "ERR_DISCOVERY_MISSING_MSG"
+    end
 
     local recipients, recErr = self:ParseRecipients(rawRecipients)
     if recErr then
