@@ -20,8 +20,10 @@ Usage:
   Quest Master automatically via mail (separately from Draft/Sent/Received
   lifecycle).
 - In the quest details pane, view any Master map-hiding recommendation notice and
-  independently toggle "Show search areas on map" and "Show location areas on map"
-  (both off by default), or use "Show on Map" whenever a map/area is defined.
+  independently toggle "Show search areas on map", "Show location areas on map",
+  and "Show discovery areas on map" (all off by default for players, while
+  creators see discovery areas in purple automatically), or use "Show on Map"
+  whenever a map/area is defined.
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:

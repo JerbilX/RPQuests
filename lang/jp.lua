@@ -107,6 +107,9 @@ RPQuest.Locales["jp"] = {
     OPT_SHOW_LOCATION_AREAS = "[ ] マップに場所エリアを表示",
     OPT_SHOW_LOCATION_AREAS_ACTIVE = "|c33FF33[X] マップに場所エリアを表示|r",
     OPT_SHOW_LOCATION_AREAS_DISABLED = "[ ] マップに場所エリアを表示（場所なし）",
+    OPT_SHOW_DISCOVERY_AREAS = "[ ] マップに発見エリアを表示",
+    OPT_SHOW_DISCOVERY_AREAS_ACTIVE = "|c33FF33[X] マップに発見エリアを表示|r",
+    OPT_SHOW_DISCOVERY_AREAS_DISABLED = "[ ] マップに発見エリアを表示（ポイントなし）",
     LABEL_INPUT_CLUE = "プレイヤー会話選択肢:",
     LABEL_DIALOGUE_SECTION = "NPC会話 (任意, 0-3)",
     LABEL_OPTIONS_SECTION = "ミッション設定",
@@ -219,6 +222,8 @@ RPQuest.Locales["jp"] = {
     MAP_TOOLTIP_LOCATION = "ターゲットの場所: %s (%s, %dm)",
     MAP_TOOLTIP_LOC_REQUIRED = "必須",
     MAP_TOOLTIP_LOC_OPTIONAL = "任意",
+    MAP_TOOLTIP_DISCOVERY_CREATOR = "発見ポイント #%d (%dm): %s",
+    MAP_TOOLTIP_DISCOVERY_PLAYER = "発見ポイント #%d",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "メール送信",

@@ -1021,6 +1021,9 @@ return function(T)
         AssertEqual(defaults.draft.recommendHideMapAreas, true, "New draft defaults recommendHideMapAreas = true")
         AssertEqual(defaults.settings.showSearchAreas, false, "Local setting showSearchAreas defaults to false")
         AssertEqual(defaults.settings.showLocationAreas, false, "Local setting showLocationAreas defaults to false")
+        AssertEqual(defaults.settings.showDiscoveryAreas, false, "Local setting showDiscoveryAreas defaults to false")
+        AssertEqual(repo:HasQuestDiscoveryPoints({ discoveries = {} }), false, "HasQuestDiscoveryPoints false for empty discoveries")
+        AssertEqual(repo:HasQuestDiscoveryPoints({ discoveries = { { message = "x" } } }), true, "HasQuestDiscoveryPoints true when discoveries exist")
 
         local sv = {
             nextId = 10,

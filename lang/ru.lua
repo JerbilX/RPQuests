@@ -107,6 +107,9 @@ RPQuest.Locales["ru"] = {
     OPT_SHOW_LOCATION_AREAS = "[ ] Показать области местоположения на карте",
     OPT_SHOW_LOCATION_AREAS_ACTIVE = "|c33FF33[X] Показать области местоположения на карте|r",
     OPT_SHOW_LOCATION_AREAS_DISABLED = "[ ] Показать области местоположения на карте (нет места)",
+    OPT_SHOW_DISCOVERY_AREAS = "[ ] Показать области открытия на карте",
+    OPT_SHOW_DISCOVERY_AREAS_ACTIVE = "|c33FF33[X] Показать области открытия на карте|r",
+    OPT_SHOW_DISCOVERY_AREAS_DISABLED = "[ ] Показать области открытия на карте (нет точек)",
     LABEL_INPUT_CLUE = "Вариант диалога игрока:",
     LABEL_DIALOGUE_SECTION = "Диалоги с НИП (Необяз., 0-3)",
     LABEL_OPTIONS_SECTION = "Настройки задания",
@@ -219,6 +222,8 @@ RPQuest.Locales["ru"] = {
     MAP_TOOLTIP_LOCATION = "Местоположение цели: %s (%s, %dм)",
     MAP_TOOLTIP_LOC_REQUIRED = "Обязательно",
     MAP_TOOLTIP_LOC_OPTIONAL = "Необязательно",
+    MAP_TOOLTIP_DISCOVERY_CREATOR = "Точка открытия #%d (%dм): %s",
+    MAP_TOOLTIP_DISCOVERY_PLAYER = "Точка открытия #%d",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "Отправить письмо",

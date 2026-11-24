@@ -121,6 +121,17 @@ local function BuildDetailMapControls(tab, contentParent, panelName)
     end)
     tab.btnShowLocationAreas:SetAnchor(TOPLEFT, tab.btnShowSearchAreas, BOTTOMLEFT, 0, 6)
     tab.btnShowLocationAreas:SetHidden(true)
+
+    tab.btnShowDiscoveryAreas = CreateStyledButton(panelName .. "_BtnShowDiscoveryAreas", contentParent, 495, 26, "", function()
+        if not tab.selectedQuestId then return end
+        local q = Addon.QuestRepository:GetQuestById(tab.selectedQuestId)
+        if not q or not Addon.QuestRepository:HasQuestDiscoveryPoints(q) then return end
+        local cur = IsQuestMapOptionEnabled(q, "showDiscoveryAreas")
+        Addon.QuestRepository:SetQuestMapVisibility(q.id, "showDiscoveryAreas", not cur)
+        Addon.WorldMapArea:RefreshPins()
+    end)
+    tab.btnShowDiscoveryAreas:SetAnchor(TOPLEFT, tab.btnShowLocationAreas, BOTTOMLEFT, 0, 6)
+    tab.btnShowDiscoveryAreas:SetHidden(true)
 end
 
 local function BuildDetailActionButtons(tab, contentParent, panelName)
@@ -576,13 +587,35 @@ local function UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared
             end
             tab.btnShowLocationAreas:SetHidden(false)
 
-            anchorControl = tab.btnShowLocationAreas
+            if tab.btnShowDiscoveryAreas then
+                local hasDiscoveries = Addon.QuestRepository:HasQuestDiscoveryPoints(selectedQuest)
+                local discOn = hasDiscoveries and IsQuestMapOptionEnabled(selectedQuest, "showDiscoveryAreas")
+                tab.btnShowDiscoveryAreas:ClearAnchors()
+                tab.btnShowDiscoveryAreas:SetAnchor(TOPLEFT, tab.btnShowLocationAreas, BOTTOMLEFT, 0, 6)
+                if hasDiscoveries then
+                    tab.btnShowDiscoveryAreas:SetText(Addon.Locale:Get(discOn and "OPT_SHOW_DISCOVERY_AREAS_ACTIVE" or "OPT_SHOW_DISCOVERY_AREAS"))
+                else
+                    tab.btnShowDiscoveryAreas:SetText(Addon.Locale:Get("OPT_SHOW_DISCOVERY_AREAS_DISABLED"))
+                end
+                if tab.btnShowDiscoveryAreas.SetEnabled then
+                    tab.btnShowDiscoveryAreas:SetEnabled(hasDiscoveries)
+                end
+                if tab.btnShowDiscoveryAreas.SetAlpha then
+                    tab.btnShowDiscoveryAreas:SetAlpha(hasDiscoveries and 1 or 0.45)
+                end
+                tab.btnShowDiscoveryAreas:SetHidden(false)
+                anchorControl = tab.btnShowDiscoveryAreas
+                extraHeight = extraHeight + 104
+            else
+                anchorControl = tab.btnShowLocationAreas
+                extraHeight = extraHeight + 72
+            end
             offsetX = 0
             offsetY = 14
-            extraHeight = extraHeight + 72
         else
             tab.btnShowSearchAreas:SetHidden(true)
             tab.btnShowLocationAreas:SetHidden(true)
+            if tab.btnShowDiscoveryAreas then tab.btnShowDiscoveryAreas:SetHidden(true) end
         end
     end
 
@@ -654,6 +687,7 @@ local function RenderEmptyDetailPane(tab)
     if tab.detailMapRecommendNotice then tab.detailMapRecommendNotice:SetHidden(true) end
     if tab.btnShowSearchAreas then tab.btnShowSearchAreas:SetHidden(true) end
     if tab.btnShowLocationAreas then tab.btnShowLocationAreas:SetHidden(true) end
+    if tab.btnShowDiscoveryAreas then tab.btnShowDiscoveryAreas:SetHidden(true) end
     tab.btnActivate:SetHidden(true)
     if tab.btnComplete then tab.btnComplete:SetHidden(true) end
     if tab.btnAcceptOffered then tab.btnAcceptOffered:SetHidden(true) end

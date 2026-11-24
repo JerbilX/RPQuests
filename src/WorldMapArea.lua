@@ -11,6 +11,7 @@ local WorldMapArea = Addon.WorldMapArea
 
 local PIN_TYPE_STRING = Addon.Constants.UI.PIN_TYPE_STRING
 local LOCATION_PIN_TYPE_STRING = Addon.Constants.UI.LOCATION_PIN_TYPE_STRING
+local DISCOVERY_PIN_TYPE_STRING = Addon.Constants.UI.DISCOVERY_PIN_TYPE_STRING
 local ZOOM_OUT_PIN_TYPE_STRING = Addon.Constants.UI.ZOOM_OUT_PIN_TYPE_STRING
 local MAP_LISTENER_NAME = "RPQuest_WorldMapArea"
 local DRAFT_PIN_TAG = "__RPQUEST_DRAFT__"
@@ -102,7 +103,15 @@ function WorldMapArea:Initialize()
             return nil, nil
         end
         local target = (targetIndex and targetQuest.targets and targetQuest.targets[targetIndex]) or nil
-        return targetQuest, target
+        return targetQuest, target, tag
+    end
+
+    local function IsCreatorQuestForTooltip(quest)
+        local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft()
+        if draft ~= nil and quest == draft then
+            return true
+        end
+        return Addon.QuestRepository ~= nil and Addon.QuestRepository:IsPreparedQuest(quest)
     end
 
     local function AddTooltipHeader(tooltip, targetQuest)
@@ -163,6 +172,32 @@ function WorldMapArea:Initialize()
         tooltip = 1,
     }
 
+    local discoveryPinTooltipCreator = {
+        creator = function(pin)
+            local targetQuest, _, tag = ResolvePinQuestAndTarget(pin)
+            local discIndex = type(tag) == "table" and tag.discoveryIndex or nil
+            local discovery = discIndex and targetQuest and targetQuest.discoveries and targetQuest.discoveries[discIndex]
+            if not targetQuest or not discovery then return end
+            local tooltip = InformationTooltip
+            if tooltip and tooltip.AddLine then
+                AddTooltipHeader(tooltip, targetQuest)
+                if IsCreatorQuestForTooltip(targetQuest) then
+                    local meters = math.floor(((tonumber(discovery.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM) / 100) + 0.5)
+                    local msg = tostring(discovery.message or ""):gsub("[\r\n]+", " ")
+                    if #msg > 60 then
+                        msg = msg:sub(1, 57) .. "..."
+                    end
+                    local creatorText = Addon.Locale:Get("MAP_TOOLTIP_DISCOVERY_CREATOR", discIndex, meters, msg)
+                    tooltip:AddLine(creatorText, "ZoFontGame", 1, 1, 1)
+                else
+                    local playerText = Addon.Locale:Get("MAP_TOOLTIP_DISCOVERY_PLAYER", discIndex)
+                    tooltip:AddLine(playerText, "ZoFontGame", 1, 1, 1)
+                end
+            end
+        end,
+        tooltip = 1,
+    }
+
     local layoutCallback = function(pManager)
         self:OnLayoutPins(pManager)
     end
@@ -196,6 +231,29 @@ function WorldMapArea:Initialize()
 
     if self.locationPinTypeId then
         pinManager:SetCustomPinEnabled(self.locationPinTypeId, true)
+    end
+
+    local discoveryPinLayoutData = {
+        level = 117,
+        size = 24,
+        minAreaSize = 24,
+        texture = "",
+        showsPinAndArea = false,
+    }
+
+    local discoveryLayoutCallback = function(pManager)
+        self:OnLayoutDiscoveryPins(pManager)
+    end
+
+    local discoveryResizeCallback = function(pManager)
+        self:OnResizeDiscoveryPins(pManager)
+    end
+
+    pinManager:AddCustomPin(DISCOVERY_PIN_TYPE_STRING, discoveryLayoutCallback, discoveryResizeCallback, discoveryPinLayoutData, discoveryPinTooltipCreator)
+    self.discoveryPinTypeId = _G[DISCOVERY_PIN_TYPE_STRING]
+
+    if self.discoveryPinTypeId then
+        pinManager:SetCustomPinEnabled(self.discoveryPinTypeId, true)
     end
 
     local zoomOutPinLayoutData = {
@@ -235,7 +293,7 @@ function WorldMapArea:Initialize()
     end)
 
     Addon.QuestRepository:RegisterListener(function(eventType)
-        if eventType == "QUEST_PROGRESS" or eventType == "DISCOVERY_TRIGGERED" then
+        if eventType == "QUEST_PROGRESS" then
             return
         end
         if eventType == "ACTIVE_QUEST_CHANGED" or eventType == "QUEST_DELETED" then
@@ -275,6 +333,11 @@ local function IsEditModeQuest(quest)
     return draft ~= nil and quest == draft
 end
 
+local function IsCreatorDiscoveryQuest(quest)
+    return IsEditModeQuest(quest)
+        or (Addon.QuestRepository ~= nil and Addon.QuestRepository:IsPreparedQuest(quest))
+end
+
 local function ShouldShowSearchAreas(quest)
     if IsEditModeQuest(quest) then
         return true
@@ -293,6 +356,16 @@ local function ShouldShowLocationAreas(quest)
         return quest.showLocationAreas == true
     end
     return Addon.QuestRepository and Addon.QuestRepository:GetSetting("showLocationAreas") == true
+end
+
+local function ShouldShowDiscoveryAreas(quest)
+    if IsCreatorDiscoveryQuest(quest) then
+        return true
+    end
+    if quest.showDiscoveryAreas ~= nil then
+        return quest.showDiscoveryAreas == true
+    end
+    return Addon.QuestRepository and Addon.QuestRepository:GetSetting("showDiscoveryAreas") == true
 end
 
 local function IsCurrentMapEligibleForQuestArea(quest)
@@ -356,6 +429,30 @@ function WorldMapArea:ShouldRenderLocationAreasOnCurrentMap(quest)
     return false
 end
 
+function WorldMapArea:ShouldRenderDiscoveryAreasOnCurrentMap(quest)
+    if not IsCurrentMapEligibleForQuestArea(quest) or not ShouldShowDiscoveryAreas(quest) then
+        return false
+    end
+
+    if type(quest.discoveries) ~= "table" then
+        return false
+    end
+
+    local isCreator = IsCreatorDiscoveryQuest(quest)
+    local questZoneId = tonumber(quest.zoneId) or 0
+    for _, d in ipairs(quest.discoveries) do
+        if type(d) == "table" and (isCreator or not d.discovered) then
+            local hasWorld = d.worldX ~= nil and d.worldZ ~= nil and ((tonumber(d.zoneId) or questZoneId) > 0)
+            local hasMapXY = d.x ~= nil and d.y ~= nil and d.x > 0 and d.x < 1 and d.y > 0 and d.y < 1
+            if hasWorld or hasMapXY then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 local function ResolveQuestWorldPosition(quest)
     if type(quest) ~= "table" then
         return nil
@@ -395,7 +492,7 @@ function WorldMapArea:ShouldRenderZoomOutOnCurrentMap(quest)
     if not quest or quest.completed or quest.failed then
         return false
     end
-    if not ShouldShowSearchAreas(quest) and not ShouldShowLocationAreas(quest) then
+    if not ShouldShowSearchAreas(quest) and not ShouldShowLocationAreas(quest) and not ShouldShowDiscoveryAreas(quest) then
         return false
     end
 
@@ -431,8 +528,12 @@ end
 
 function WorldMapArea:ResolveTargetQuest()
     local draft = Addon.QuestRepository:GetDraft()
-    local draftReady = draft and draft.targets and #draft.targets > 0
-        and (self:ShouldRenderOnCurrentMap(draft) or self:ShouldRenderLocationAreasOnCurrentMap(draft))
+    local hasDraftTargets = draft and draft.targets and #draft.targets > 0
+    local hasDraftDiscoveries = draft and draft.discoveries and #draft.discoveries > 0
+    local draftReady = (hasDraftTargets or hasDraftDiscoveries)
+        and (self:ShouldRenderOnCurrentMap(draft)
+            or self:ShouldRenderLocationAreasOnCurrentMap(draft)
+            or self:ShouldRenderDiscoveryAreasOnCurrentMap(draft))
 
     if self.previewQuestId then
         if IsDraftPinTag(self.previewQuestId, draft) and draftReady then
@@ -514,19 +615,19 @@ function WorldMapArea:OnLayoutPins(pinManager)
     end
 end
 
-function WorldMapArea:ProjectTargetLocationToCurrentMap(quest, target)
-    if type(target) ~= "table" or target.worldX == nil or target.worldZ == nil then
+local function ProjectWorldAreaToCurrentMap(quest, item)
+    if type(item) ~= "table" or item.worldX == nil or item.worldZ == nil then
         return nil, nil, nil
     end
 
-    local zoneId = tonumber(target.zoneId) or (quest and tonumber(quest.zoneId)) or 0
+    local zoneId = tonumber(item.zoneId) or (quest and tonumber(quest.zoneId)) or 0
     if zoneId <= 0 then
         return nil, nil, nil
     end
 
-    local worldX = tonumber(target.worldX)
-    local worldY = tonumber(target.worldY) or 0
-    local worldZ = tonumber(target.worldZ)
+    local worldX = tonumber(item.worldX)
+    local worldY = tonumber(item.worldY) or 0
+    local worldZ = tonumber(item.worldZ)
     if not worldX or not worldZ then
         return nil, nil, nil
     end
@@ -536,7 +637,7 @@ function WorldMapArea:ProjectTargetLocationToCurrentMap(quest, target)
         return nil, nil, nil
     end
 
-    local worldRadius = tonumber(target.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+    local worldRadius = tonumber(item.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
     if worldRadius <= 0 then
         worldRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM
     end
@@ -554,6 +655,23 @@ function WorldMapArea:ProjectTargetLocationToCurrentMap(quest, target)
     end
 
     return normX, normY, normRadius
+end
+
+function WorldMapArea:ProjectTargetLocationToCurrentMap(quest, target)
+    return ProjectWorldAreaToCurrentMap(quest, target)
+end
+
+function WorldMapArea:ProjectDiscoveryToCurrentMap(quest, discovery)
+    local normX, normY, normRadius = ProjectWorldAreaToCurrentMap(quest, discovery)
+    if normX and normY and normRadius then
+        return normX, normY, normRadius
+    end
+    if type(discovery) == "table" and discovery.x and discovery.y and discovery.x > 0 and discovery.x < 1 and discovery.y > 0 and discovery.y < 1 then
+        local worldRadius = tonumber(discovery.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+        local fallbackRadius = math.max(0.008, worldRadius / 100000)
+        return discovery.x, discovery.y, fallbackRadius
+    end
+    return nil, nil, nil
 end
 
 function WorldMapArea:OnLayoutLocationPins(pinManager)
@@ -586,18 +704,56 @@ function WorldMapArea:OnLayoutLocationPins(pinManager)
     end
 end
 
-function WorldMapArea:OnResizeLocationPins(pinManager)
+local function ApplyPinBlobColorOnResize(pinManager, pinTypeId, color)
     local pManager = pinManager or GetWorldMapPinManager()
-    if not pManager or not self.locationPinTypeId or not pManager.GetActiveObjects then
+    if not pManager or not pinTypeId or not pManager.GetActiveObjects then
         return
     end
 
-    local color = Addon.Constants.UI.LOCATION_AREA_COLOR
     for _, pin in pairs(pManager:GetActiveObjects()) do
-        if pin and pin.GetPinType and pin:GetPinType() == self.locationPinTypeId and pin.pinBlob and pin.pinBlob.SetColor then
+        if pin and pin.GetPinType and pin:GetPinType() == pinTypeId and pin.pinBlob and pin.pinBlob.SetColor then
             pin.pinBlob:SetColor(color.r, color.g, color.b, color.a)
         end
     end
+end
+
+function WorldMapArea:OnResizeLocationPins(pinManager)
+    ApplyPinBlobColorOnResize(pinManager, self.locationPinTypeId, Addon.Constants.UI.LOCATION_AREA_COLOR)
+end
+
+function WorldMapArea:OnLayoutDiscoveryPins(pinManager)
+    local pManager = pinManager or GetWorldMapPinManager()
+    if not pManager or not self.discoveryPinTypeId then return end
+
+    local targetQuest, questTag = self:ResolveTargetQuest()
+    if not self:ShouldRenderDiscoveryAreasOnCurrentMap(targetQuest) then
+        return
+    end
+
+    local isCreator = IsCreatorDiscoveryQuest(targetQuest)
+    local color = Addon.Constants.UI.DISCOVERY_AREA_COLOR
+    for i, d in ipairs(targetQuest.discoveries or {}) do
+        if type(d) == "table" and (isCreator or not d.discovered) then
+            local discX, discY, discRadius = self:ProjectDiscoveryToCurrentMap(targetQuest, d)
+            if discX and discY and discRadius and discRadius > 0 then
+                local pinTag = { questId = questTag, discoveryIndex = i, kind = "discovery" }
+                local pin = pManager:CreatePin(
+                    self.discoveryPinTypeId,
+                    pinTag,
+                    discX,
+                    discY,
+                    discRadius
+                )
+                if pin and pin.pinBlob and pin.pinBlob.SetColor then
+                    pin.pinBlob:SetColor(color.r, color.g, color.b, color.a)
+                end
+            end
+        end
+    end
+end
+
+function WorldMapArea:OnResizeDiscoveryPins(pinManager)
+    ApplyPinBlobColorOnResize(pinManager, self.discoveryPinTypeId, Addon.Constants.UI.DISCOVERY_AREA_COLOR)
 end
 
 function WorldMapArea:OnLayoutZoomOutPins(pinManager)
@@ -635,12 +791,15 @@ function WorldMapArea:RefreshPins()
         return
     end
     self._pinsDirty = false
-    if self.pinTypeId or self.locationPinTypeId or self.zoomOutPinTypeId then
+    if self.pinTypeId or self.locationPinTypeId or self.discoveryPinTypeId or self.zoomOutPinTypeId then
         if self.pinTypeId then
             pinManager:RefreshCustomPins(self.pinTypeId)
         end
         if self.locationPinTypeId then
             pinManager:RefreshCustomPins(self.locationPinTypeId)
+        end
+        if self.discoveryPinTypeId then
+            pinManager:RefreshCustomPins(self.discoveryPinTypeId)
         end
         if self.zoomOutPinTypeId then
             pinManager:RefreshCustomPins(self.zoomOutPinTypeId)
