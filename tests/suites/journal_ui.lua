@@ -272,7 +272,7 @@ return function(T)
 
         -- 4. Editar radio de área, desactivar/reactivar y mostrar escena del mapa refresca el pin con el nuevo radio
         RPQuest.JournalTab:OpenEditEditor(q.id)
-        RPQuest.QuestRepository:UpdateDraftFields({ areaRadius = RPQuest.Constants.AREA_RADIUS.LARGE })
+        RPQuest.QuestRepository:UpdateDraftFields({ areaRadius = RPQuest.Constants.AREA_RADIUS.LARGE, recommendHideMapAreas = false })
         RPQuest.JournalTab:OnSaveDraftClicked()
         RPQuest.QuestRepository:SetActiveQuest(q.id)
 
@@ -320,7 +320,7 @@ return function(T)
         RPQuest.JournalTab.titleEdit:SetText("Ritual en Deshaan")
         RPQuest.JournalTab:OnSaveDraftClicked()
         local q = RPQuest.QuestRepository:GetAllQuests()[1]
-        AssertEqual(q.areaRadius, RPQuest.Constants.AREA_RADIUS.LARGE, "Saved quest keeps LARGE radius")
+        AssertEqual(q.targets[1].areaRadius, RPQuest.Constants.AREA_RADIUS.LARGE, "Saved quest target keeps LARGE radius")
 
         -- 3. Abrir Editar y cambiar radio a SMALL refleja el nuevo tamaño en el mapa al instante (sin guardar todavía)
         RPQuest.JournalTab:OpenEditEditor(q.id)
@@ -618,7 +618,7 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map remains visible after accepting quest")
         AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible remains true after accepting quest")
 
-        -- 4. Quest with hideMapArea=true -> still visible when selected in DETAIL mode
+        -- 4. Quest with recommendHideMapAreas=true -> still visible when selected in DETAIL mode
         RPQuest.QuestRepository:ResetDraft()
         RPQuest.QuestRepository:SetDraftCapturedTarget({
             targetName = "Cultista",
@@ -628,12 +628,12 @@ return function(T)
             targetX = 0.3,
             targetY = 0.3,
         })
-        RPQuest.QuestRepository:UpdateDraftFields({ hideMapArea = true })
+        RPQuest.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = true })
         local hiddenAreaQuest = RPQuest.QuestRepository:SaveDraft("Misión Sin Área", "Área oculta.")
         RPQuest.JournalTab:SelectQuest(hiddenAreaQuest.id)
         RPQuest.JournalTab:Refresh()
-        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible even when hideMapArea is true")
-        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible true even when hideMapArea is true")
+        AssertEqual(RPQuest.JournalTab.showOnMapKeybindButton:IsHidden(), false, "Show On Map visible even when recommendHideMapAreas is true")
+        AssertEqual(RPQuest.JournalTab.showOnMapDescriptor.visible(), true, "showOnMapDescriptor.visible true even when recommendHideMapAreas is true")
 
         -- 5. Callback invokes WorldMapArea:ShowQuestOnMap with selected quest
         local origShowQuestOnMap = RPQuest.WorldMapArea.ShowQuestOnMap
@@ -999,7 +999,7 @@ return function(T)
                 name = "Bandido",
                 currentCount = 0,
                 requiredCount = 1,
-                customMessage = "Bandido abatido",
+                customMessageInLocation = "Bandido abatido",
                 locationRequired = true,
                 worldZoneId = 41,
                 worldX = 1000,

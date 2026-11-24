@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0003-integracion-nativa-ui-diario-mapa-y-hud.md
 -- Ref: docs/adr/0004-objetivos-multiples-inferidos-por-reticula.md
+-- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -86,11 +87,14 @@ function Announcements:AnnounceDiscovery(_quest, point)
     emitDiscoveryStyleMessage(point.message)
 end
 
-function Announcements:AnnounceTargetCustomMessage(_quest, target)
-    if not target or type(target.customMessage) ~= "string" then
+function Announcements:AnnounceTargetCustomMessage(_quest, target, overrideText)
+    local rawText = (type(overrideText) == "string" and overrideText ~= "")
+        and overrideText
+        or (target and target.customMessage)
+    if type(rawText) ~= "string" then
         return
     end
-    local text = target.customMessage:gsub("^%s+", ""):gsub("%s+$", "")
+    local text = rawText:gsub("^%s+", ""):gsub("%s+$", "")
     if text == "" then return end
     emitDiscoveryStyleMessage(text)
 end
