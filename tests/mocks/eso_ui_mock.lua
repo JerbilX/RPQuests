@@ -177,10 +177,15 @@ local function CreateControlMock(name, parent, controlType)
     function ctrl:SetHandler(eventName, handler) self._handlers[eventName] = handler end
     function ctrl:GetHandler(eventName) return self._handlers[eventName] end
     function ctrl:FireHandler(eventName, ...)
+        if eventName == "OnClicked" and self._enabled == false then
+            return
+        end
         if self._handlers[eventName] then
             return self._handlers[eventName](self, ...)
         end
     end
+    function ctrl:SetEnabled(enabled) self._enabled = (enabled ~= false) end
+    function ctrl:IsEnabled() return self._enabled ~= false end
     function ctrl:SetMouseEnabled(enabled) self._mouseEnabled = not not enabled end
     function ctrl:IsMouseEnabled() return self._mouseEnabled end
     function ctrl:GetParent() return self._parent end
