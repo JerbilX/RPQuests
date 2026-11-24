@@ -161,7 +161,8 @@ function EditorSections.BuildTargetAreaControls(tab, targetBody, panelName)
 
     tab.btnHideMapArea = CreateStyledButton(panelName .. "_BtnHideMapArea", targetBody, 280, 26, Addon.Locale:Get("OPT_HIDE_MAP_AREA"), function()
         local d = Addon.QuestRepository:GetDraft()
-        Addon.QuestRepository:UpdateDraftFields({ hideMapArea = not (d and d.hideMapArea) })
+        local curHide = (d and d.recommendHideMapAreas ~= nil) and (d.recommendHideMapAreas == true) or (d and d.hideMapArea == true)
+        Addon.QuestRepository:UpdateDraftFields({ recommendHideMapAreas = not curHide })
     end)
     tab.btnHideMapArea:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 94)
 end

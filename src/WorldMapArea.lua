@@ -181,8 +181,40 @@ function WorldMapArea:Initialize()
     self:RequestRefreshPins()
 end
 
+local function ResolveQuestSearchArea(quest)
+    if type(quest) ~= "table" then
+        return nil, nil, nil
+    end
+    if type(quest.targets) == "table" then
+        for _, t in ipairs(quest.targets) do
+            if type(t) == "table" and t.areaCenterX and t.areaCenterY and t.areaRadius and t.areaRadius > 0 then
+                return t.areaCenterX, t.areaCenterY, t.areaRadius
+            end
+        end
+    end
+    if quest.areaCenterX and quest.areaCenterY and quest.areaRadius and quest.areaRadius > 0 then
+        return quest.areaCenterX, quest.areaCenterY, quest.areaRadius
+    end
+    return nil, nil, nil
+end
+
+local function IsMapAreaHiddenForQuest(quest)
+    local draft = Addon.QuestRepository and Addon.QuestRepository:GetDraft()
+    if draft and quest == draft then
+        return false
+    end
+    local showSearch = Addon.QuestRepository and Addon.QuestRepository:GetSetting("showSearchAreas") == true
+    if showSearch then
+        return false
+    end
+    if quest.recommendHideMapAreas ~= nil then
+        return quest.recommendHideMapAreas == true
+    end
+    return quest.hideMapArea == true
+end
+
 function WorldMapArea:ShouldRenderOnCurrentMap(quest)
-    if not quest or quest.completed or quest.failed or quest.hideMapArea then
+    if not quest or quest.completed or quest.failed or IsMapAreaHiddenForQuest(quest) then
         return false
     end
 
@@ -190,7 +222,8 @@ function WorldMapArea:ShouldRenderOnCurrentMap(quest)
         return false
     end
 
-    if not quest.areaCenterX or not quest.areaCenterY or not quest.areaRadius or quest.areaRadius <= 0 then
+    local areaCX, areaCY, areaRad = ResolveQuestSearchArea(quest)
+    if not areaCX or not areaCY or not areaRad or areaRad <= 0 then
         return false
     end
 
@@ -247,7 +280,7 @@ local function ResolveQuestWorldPosition(quest)
 end
 
 function WorldMapArea:ShouldRenderZoomOutOnCurrentMap(quest)
-    if not quest or quest.completed or quest.failed or quest.hideMapArea then
+    if not quest or quest.completed or quest.failed or IsMapAreaHiddenForQuest(quest) then
         return false
     end
 
@@ -334,14 +367,33 @@ function WorldMapArea:OnLayoutPins(pinManager)
         return
     end
 
-    local effectiveRadius = self:GetEffectiveAreaRadius(targetQuest.areaRadius)
-    pManager:CreatePin(
-        self.pinTypeId,
-        pinTag,
-        targetQuest.areaCenterX,
-        targetQuest.areaCenterY,
-        effectiveRadius
-    )
+    local createdAny = false
+    for _, t in ipairs(targetQuest.targets or {}) do
+        if type(t) == "table" and t.areaCenterX and t.areaCenterY and t.areaRadius and t.areaRadius > 0 then
+            local effectiveRadius = self:GetEffectiveAreaRadius(t.areaRadius)
+            pManager:CreatePin(
+                self.pinTypeId,
+                pinTag,
+                t.areaCenterX,
+                t.areaCenterY,
+                effectiveRadius
+            )
+            createdAny = true
+        end
+    end
+    if not createdAny then
+        local areaCX, areaCY, areaRad = ResolveQuestSearchArea(targetQuest)
+        if areaCX and areaCY and areaRad then
+            local effectiveRadius = self:GetEffectiveAreaRadius(areaRad)
+            pManager:CreatePin(
+                self.pinTypeId,
+                pinTag,
+                areaCX,
+                areaCY,
+                effectiveRadius
+            )
+        end
+    end
 end
 
 function WorldMapArea:OnLayoutZoomOutPins(pinManager)
@@ -403,8 +455,9 @@ local function ResolveQuestMapTarget(quest)
     end
 
     local mapId = tonumber(quest.mapId) or 0
-    local panX = quest.areaCenterX or quest.targetX
-    local panY = quest.areaCenterY or quest.targetY
+    local areaCX, areaCY = ResolveQuestSearchArea(quest)
+    local panX = areaCX or quest.targetX
+    local panY = areaCY or quest.targetY
 
     if (mapId <= 0 or not panX or not panY) and type(quest.targets) == "table" then
         for _, t in ipairs(quest.targets) do
@@ -412,7 +465,9 @@ local function ResolveQuestMapTarget(quest)
                 if mapId <= 0 and (tonumber(t.mapId) or 0) > 0 then
                     mapId = tonumber(t.mapId)
                 end
-                if (not panX or not panY) and t.targetX and t.targetY then
+                if (not panX or not panY) and (t.areaCenterX and t.areaCenterY) then
+                    panX, panY = t.areaCenterX, t.areaCenterY
+                elseif (not panX or not panY) and t.targetX and t.targetY then
                     panX, panY = t.targetX, t.targetY
                 end
             end
@@ -572,11 +627,12 @@ function WorldMapArea:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneId, 
     end
 
     -- Si tenemos coordenadas del jugador en el mismo mapa, verificar que esté dentro de un radio generoso del área de búsqueda
-    if (quest.mapId and quest.mapId > 0 and playerMapId == quest.mapId) and playerX and playerY and quest.areaCenterX and quest.areaCenterY then
-        local dx = playerX - quest.areaCenterX
-        local dy = playerY - quest.areaCenterY
+    local areaCX, areaCY, areaRad = ResolveQuestSearchArea(quest)
+    if (quest.mapId and quest.mapId > 0 and playerMapId == quest.mapId) and playerX and playerY and areaCX and areaCY then
+        local dx = playerX - areaCX
+        local dy = playerY - areaCY
         local dist = math.sqrt((dx * dx) + (dy * dy))
-        local toleranceRadius = self:GetEffectiveAreaRadius(quest.areaRadius) * 1.35
+        local toleranceRadius = self:GetEffectiveAreaRadius(areaRad) * 1.35
         return dist <= toleranceRadius
     end
 

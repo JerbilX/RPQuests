@@ -32,7 +32,7 @@ return function(T)
         RPQuest.QuestRepository:ResetDraft()
         RPQuest.QuestRepository:UpdateDraftFields({
             clue = "el sello roto",
-            hideMapArea = true,
+            recommendHideMapAreas = true,
         })
         local ok1, idx1 = RPQuest.QuestRepository:AddDraftDialogueFromLastNpc("Vi a un encapuchado huir hacia los muelles.")
         AssertTrue(ok1 ~= nil and idx1 == 1, "Dialogue #1 added from last NPC")
@@ -60,16 +60,16 @@ return function(T)
         mockState.reticleName = "Contrabandista"
         RPQuest.TargetCapture:CaptureFromReticle()
         local saved = RPQuest.QuestRepository:SaveDraft("El Sello Roto", "Investiga en el puerto.")
-        AssertTrue(saved ~= nil, "Quest with dialogues and hideMapArea saved")
+        AssertTrue(saved ~= nil, "Quest with dialogues and recommendHideMapAreas saved")
         AssertEqual(saved.clue, "el sello roto", "Clue persisted on quest")
-        AssertEqual(saved.hideMapArea, true, "hideMapArea persisted on quest")
+        AssertEqual(saved.recommendHideMapAreas, true, "recommendHideMapAreas persisted on quest")
         AssertEqual(#saved.dialogues, 3, "3 dialogues persisted on quest")
 
-        -- 3. WorldMapArea respects hideMapArea
+        -- 3. WorldMapArea respects recommendHideMapAreas when showSearchAreas is false
         RPQuest.QuestRepository:SetActiveQuest(saved.id)
         mockPinManager._createdPins = {}
         RPQuest.WorldMapArea:RefreshPins()
-        AssertEqual(#mockPinManager._createdPins, 0, "WorldMapArea does not render pin when hideMapArea is true")
+        AssertEqual(#mockPinManager._createdPins, 0, "WorldMapArea does not render pin when recommendHideMapAreas is true and showSearchAreas is false")
 
         -- 4. ShareCodec RPQ3 roundtrip
         local code = RPQuest.QuestRepository:ExportQuestToCode(saved.id)
@@ -78,7 +78,7 @@ return function(T)
         local imported = RPQuest.QuestRepository:ImportQuestFromCode(code)
         AssertTrue(imported ~= nil, "RPQ3 quest imported successfully")
         AssertEqual(imported.clue, "el sello roto", "Imported clue preserved")
-        AssertEqual(imported.hideMapArea, true, "Imported hideMapArea preserved")
+        AssertEqual(imported.recommendHideMapAreas, true, "Imported recommendHideMapAreas preserved")
         AssertEqual(#imported.dialogues, 3, "Imported 3 dialogues preserved")
         AssertEqual(imported.dialogues[3].response, "Dejó una nota bajo la mesa 4~5; busca allí.", "Special chars in dialogue response preserved")
 

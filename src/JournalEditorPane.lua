@@ -238,7 +238,8 @@ local function RefreshEditorBaseAndArea(tab, draft)
     tab.btnRadiusLarge:SetText(FormatSelected(Addon.Locale:Get("BTN_RADIUS_LARGE"), math.abs(curRad - radii.LARGE) < 0.005))
 
     if tab.btnHideMapArea then
-        tab.btnHideMapArea:SetText(Addon.Locale:Get(draft.hideMapArea and "OPT_HIDE_MAP_AREA_ACTIVE" or "OPT_HIDE_MAP_AREA"))
+        local recHide = (draft.recommendHideMapAreas ~= nil) and (draft.recommendHideMapAreas == true) or (draft.hideMapArea == true)
+        tab.btnHideMapArea:SetText(Addon.Locale:Get(recHide and "OPT_HIDE_MAP_AREA_ACTIVE" or "OPT_HIDE_MAP_AREA"))
     end
 end
 

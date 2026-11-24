@@ -2,6 +2,7 @@
 -- Ref: docs/adr/0002-modelo-de-dominio-captura-y-codec-de-comparticion.md
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0013-protocolo-versionado-de-esquema-y-migraciones-de-misiones.md
+-- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -14,7 +15,7 @@ Addon.Constants = {
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 2,
+        CURRENT_VERSION = 3,
     },
     STEALTH_MODE = {
         DISABLED = "disabled",

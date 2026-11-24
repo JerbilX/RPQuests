@@ -432,7 +432,7 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isPrepared, pI
             local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)
             table.insert(objLines, dlgLine)
         end
-        if selectedQuest.hideMapArea then
+        if selectedQuest.recommendHideMapAreas or selectedQuest.hideMapArea then
             local mapHiddenLine = Addon.Locale:Get("DIALOGUE_DETAIL_MAP_HIDDEN"):gsub("^•%s*", bullet)
             table.insert(objLines, mapHiddenLine)
         end
