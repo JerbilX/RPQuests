@@ -236,6 +236,10 @@ function QuestRepository:GetDefaults()
             autoAcceptMail = false,
             autoSendCompletionMail = true,
         },
+        uiState = {
+            lastSectionKey = nil,
+            lastSelectedQuestId = nil,
+        },
     }
 end
 
@@ -280,6 +284,15 @@ function QuestRepository:Initialize(savedVars)
         if not active or active.needsMigration then
             self.savedVars.activeQuestId = nil
         end
+    end
+    if type(self.savedVars.uiState) ~= "table" then
+        self.savedVars.uiState = {}
+    end
+    if self.savedVars.uiState.lastSectionKey ~= nil and type(self.savedVars.uiState.lastSectionKey) ~= "string" then
+        self.savedVars.uiState.lastSectionKey = nil
+    end
+    if self.savedVars.uiState.lastSelectedQuestId and not self._questById[self.savedVars.uiState.lastSelectedQuestId] then
+        self.savedVars.uiState.lastSelectedQuestId = nil
     end
     self._listeners = self._listeners or {}
 end
@@ -667,6 +680,26 @@ function QuestRepository:SetSetting(key, value)
     self:NotifyListeners("SETTINGS_UPDATED", self.savedVars.settings)
 end
 
+function QuestRepository:GetJournalUiState()
+    if not self.savedVars then
+        return { lastSectionKey = nil, lastSelectedQuestId = nil }
+    end
+    if type(self.savedVars.uiState) ~= "table" then
+        self.savedVars.uiState = { lastSectionKey = nil, lastSelectedQuestId = nil }
+    end
+    return self.savedVars.uiState
+end
+
+function QuestRepository:SetLastSectionKey(sectionKey)
+    local uiState = self:GetJournalUiState()
+    uiState.lastSectionKey = sectionKey
+end
+
+function QuestRepository:SetLastSelectedQuestId(questId)
+    local uiState = self:GetJournalUiState()
+    uiState.lastSelectedQuestId = questId
+end
+
 function QuestRepository:IsPreparedQuest(quest)
     return quest ~= nil and quest.role == Addon.Constants.QUEST_ROLE.PREPARED
 end
@@ -890,6 +923,9 @@ function QuestRepository:DeleteQuest(questId)
             end
             if self.savedVars.draft and self.savedVars.draft.editingQuestId == questId then
                 self:ResetDraft()
+            end
+            if self.savedVars.uiState and self.savedVars.uiState.lastSelectedQuestId == questId then
+                self.savedVars.uiState.lastSelectedQuestId = nil
             end
             if wasActive then
                 self.savedVars.activeQuestId = nil

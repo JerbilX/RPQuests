@@ -27,10 +27,40 @@ JournalTab.VIEW_MODE = VIEW_MODE
 
 local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
 
+local function IsValidSectionKey(sectionKey)
+    if not sectionKey then return false end
+    for _, key in ipairs(QUEST_SECTIONS) do
+        if key == sectionKey then
+            return true
+        end
+    end
+    return false
+end
+
+local function SetSelectedQuestId(self, questId)
+    self.selectedQuestId = questId
+    if Addon.QuestRepository and Addon.QuestRepository.SetLastSelectedQuestId then
+        Addon.QuestRepository:SetLastSelectedQuestId(questId)
+    end
+end
+
+local function GetExpandedSectionKey(self)
+    if not self.collapsedSections then return nil end
+    for _, key in ipairs(QUEST_SECTIONS) do
+        if self.collapsedSections[key] == false then
+            return key
+        end
+    end
+    return nil
+end
+
 local function ExpandOnlySection(self, sectionKey)
     if not sectionKey or not self.collapsedSections then return end
     for _, key in ipairs(QUEST_SECTIONS) do
         self.collapsedSections[key] = (key ~= sectionKey)
+    end
+    if Addon.QuestRepository and Addon.QuestRepository.SetLastSectionKey then
+        Addon.QuestRepository:SetLastSectionKey(sectionKey)
     end
 end
 
@@ -91,21 +121,21 @@ function JournalTab:RegisterRepositoryListener()
             if quest and quest.id then
                 ExpandOnlySection(self, GetQuestSectionKey(quest))
                 self.listOffset = 0
-                self.selectedQuestId = quest.id
+                SetSelectedQuestId(self, quest.id)
             end
             self.viewMode = VIEW_MODE.DETAIL
         elseif eventType == "QUEST_DRAFT_CREATED" then
             if quest and quest.id then
                 ExpandOnlySection(self, GetQuestSectionKey(quest))
                 self.listOffset = 0
-                self.selectedQuestId = quest.id
+                SetSelectedQuestId(self, quest.id)
             end
             self.viewMode = VIEW_MODE.EDITOR
         elseif eventType == "QUEST_IMPORTED" or eventType == "QUEST_ACCEPTED" then
             if quest and quest.id then
                 ExpandOnlySection(self, "missions")
                 self.listOffset = 0
-                self.selectedQuestId = quest.id
+                SetSelectedQuestId(self, quest.id)
             end
             self.viewMode = VIEW_MODE.DETAIL
         elseif eventType == "QUEST_OFFERED" then
@@ -113,12 +143,12 @@ function JournalTab:RegisterRepositoryListener()
                 ExpandOnlySection(self, "pending")
                 self.listOffset = 0
                 if not self.selectedQuestId then
-                    self.selectedQuestId = quest.id
+                    SetSelectedQuestId(self, quest.id)
                 end
             end
         elseif eventType == "QUEST_DELETED" or eventType == "QUEST_REJECTED" then
             if quest and self.selectedQuestId == quest.id then
-                self.selectedQuestId = nil
+                SetSelectedQuestId(self, nil)
             end
             local draft = Addon.QuestRepository:GetDraft()
             if quest and (self.viewMode == VIEW_MODE.EDITOR or draft.editingQuestId == quest.id) then
@@ -146,19 +176,28 @@ function JournalTab:RegisterRepositoryListener()
     end)
 end
 
+function JournalTab:RestoreUiState()
+    local uiState = Addon.QuestRepository and Addon.QuestRepository.GetJournalUiState and Addon.QuestRepository:GetJournalUiState() or {}
+    local targetSection = IsValidSectionKey(uiState.lastSectionKey) and uiState.lastSectionKey or "missions"
+    self.collapsedSections = {}
+    for _, key in ipairs(QUEST_SECTIONS) do
+        self.collapsedSections[key] = (key ~= targetSection)
+    end
+    local savedQuestId = uiState.lastSelectedQuestId
+    if savedQuestId and Addon.QuestRepository and Addon.QuestRepository:GetQuestById(savedQuestId) then
+        self.selectedQuestId = savedQuestId
+    else
+        self.selectedQuestId = nil
+    end
+end
+
 function JournalTab:Initialize()
     if self.isInitialized then
         return
     end
 
     self.viewMode = VIEW_MODE.DETAIL
-    self.collapsedSections = {
-        pending = true,
-        missions = false,
-        completed = true,
-        preparing = true,
-        sent = true,
-    }
+    self:RestoreUiState()
     self.editorSectionsCollapsed = {
         header = false,
         target = true,
@@ -166,7 +205,6 @@ function JournalTab:Initialize()
         dialogue = true,
         options = true,
     }
-    self.selectedQuestId = nil
     self.listOffset = 0
 
     local panel = WINDOW_MANAGER:CreateControl(PANEL_NAME, GuiRoot, CT_TOPLEVELCONTROL)
@@ -399,7 +437,7 @@ function JournalTab:MigrateSelectedQuest()
         end
         return nil
     end
-    self.selectedQuestId = newQuest.id
+    SetSelectedQuestId(self, newQuest.id)
     Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_QUEST_MIGRATED", newQuest.title or ""), false)
     self:OpenEditEditor(newQuest.id)
     return newQuest
@@ -515,7 +553,7 @@ function JournalTab:SelectQuest(questId)
     if Addon.QuestRepository:GetDraft().editingQuestId then
         Addon.QuestRepository:ResetDraft()
     end
-    self.selectedQuestId = questId
+    SetSelectedQuestId(self, questId)
     self.viewMode = VIEW_MODE.DETAIL
     if self.detailScroll and self.detailScroll.scroll and self.detailScroll.scroll.SetVerticalScroll then
         self.detailScroll.scroll:SetVerticalScroll(0)
@@ -549,7 +587,7 @@ function JournalTab:OpenCreateEditor()
     if newQuest then
         ExpandOnlySection(self, GetQuestSectionKey(newQuest))
         self.listOffset = 0
-        self.selectedQuestId = newQuest.id
+        SetSelectedQuestId(self, newQuest.id)
     end
     local draft = Addon.QuestRepository:GetDraft()
     ApplyDraftToEditor(self, draft)
@@ -577,7 +615,7 @@ function JournalTab:OpenEditEditor(questId)
     if quest then
         ExpandOnlySection(self, GetQuestSectionKey(quest))
         self.listOffset = 0
-        self.selectedQuestId = quest.id
+        SetSelectedQuestId(self, quest.id)
     end
     ApplyDraftToEditor(self, draft)
 end
@@ -1068,14 +1106,19 @@ function JournalTab:Refresh()
         if not selectedQuest then
             if activeQuest then
                 selectedQuest = activeQuest
-                self.selectedQuestId = activeQuest.id
-            elseif allQuests[1] then
-                selectedQuest = allQuests[1]
-                self.selectedQuestId = allQuests[1].id
             else
-                selectedQuest = nil
-                self.selectedQuestId = nil
+                local openKey = GetExpandedSectionKey(self)
+                if openKey then
+                    local buckets = PartitionQuestsBySection(allQuests)
+                    if buckets[openKey] and buckets[openKey][1] then
+                        selectedQuest = buckets[openKey][1]
+                    end
+                end
+                if not selectedQuest and allQuests[1] then
+                    selectedQuest = allQuests[1]
+                end
             end
+            SetSelectedQuestId(self, selectedQuest and selectedQuest.id or nil)
         end
     end
 
