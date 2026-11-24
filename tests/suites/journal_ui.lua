@@ -313,7 +313,7 @@ return function(T)
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft pin starts with MEDIUM radius")
 
         -- 2. Cambiar radio en el editor antes de guardar actualiza el pin al instante
-        RPQuest.JournalTab.btnRadiusLarge:FireHandler("OnClicked")
+        RPQuest.JournalTab.areaSizeComboBox:SelectItemByIndex(3)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed on radius change")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.LARGE, "Draft pin immediately reflects LARGE radius")
 
@@ -325,7 +325,7 @@ return function(T)
 
         -- 3. Abrir Editar y cambiar radio a SMALL refleja el nuevo tamaño en el mapa al instante (sin guardar todavía)
         RPQuest.JournalTab:OpenEditEditor(q.id)
-        RPQuest.JournalTab.btnRadiusSmall:FireHandler("OnClicked")
+        RPQuest.JournalTab.areaSizeComboBox:SelectItemByIndex(1)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed when editing quest radius")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "Edited draft pin immediately reflects SMALL radius")
 
@@ -710,10 +710,11 @@ return function(T)
         RPQuest.JournalTab.selectedTargetIndex = 2
         RPQuest.JournalTab:RefreshEditorPane()
 
-        AssertEqual(RPQuest.JournalTab.btnTargetOptional:IsHidden(), false, "btnTargetOptional visible when targets exist")
-        RPQuest.JournalTab.btnTargetOptional:GetHandler("OnClicked")()
+        AssertEqual(RPQuest.JournalTab.chkTargetOptional:IsHidden(), false, "chkTargetOptional visible when targets exist")
+        AssertEqual(RPQuest.JournalTab.chkTargetOptional:IsEnabled(), true, "chkTargetOptional enabled when targets exist")
+        RPQuest.JournalTab.chkTargetOptional:FireHandler("OnClicked")
         local draft = RPQuest.QuestRepository:GetDraft()
-        AssertEqual(draft.targets[2].optional, true, "Clicking btnTargetOptional toggles optional=true on selected target")
+        AssertEqual(draft.targets[2].optional, true, "Clicking chkTargetOptional toggles optional=true on selected target")
 
         local prepared = RPQuest.QuestRepository:SaveDraft("UI Optional Quest", "Desc")
         local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
@@ -773,25 +774,24 @@ return function(T)
 
         local tab = RPQuest.JournalTab
         AssertEqual(tab.btnCaptureTargetLoc:IsHidden(), false, "btnCaptureTargetLoc visible when target exists")
-        AssertEqual(tab.btnCaptureTargetLoc:GetText(), "Capture Loc", "btnCaptureTargetLoc shows plain label before capture")
-        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden before location capture")
-        AssertEqual(tab.btnTargetLocRequired:IsHidden(), true, "btnTargetLocRequired hidden before location capture")
-        AssertEqual(tab.btnTargetRadSmall:IsHidden(), true, "btnTargetRadSmall hidden before location capture")
-        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Status shows Location: None initially")
+        AssertTrue((tab.btnCaptureTargetLoc:GetText() or "") ~= "", "btnCaptureTargetLoc has label")
+        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible before location capture")
+        AssertEqual(tab.btnClearTargetLoc:IsEnabled(), false, "btnClearTargetLoc disabled before location capture")
+        AssertEqual(tab.chkTargetLocRequired:IsHidden(), false, "chkTargetLocRequired visible before location capture")
+        AssertEqual(tab.chkTargetLocRequired:IsEnabled(), false, "chkTargetLocRequired disabled before location capture")
+        AssertEqual(tab.targetLocRadComboBox:IsEnabled(), false, "targetLocRadComboBox disabled before location capture")
 
         -- Capture location via button
         tab.btnCaptureTargetLoc:GetHandler("OnClicked")()
         local draft = RPQuest.QuestRepository:GetDraft()
         AssertEqual(RPQuest.QuestRepository:HasTargetLocation(draft.targets[1]), true, "Target has captured location after btnCaptureTargetLoc")
-        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible immediately after capture")
-        AssertEqual(tab.btnTargetLocRequired:IsHidden(), false, "btnTargetLocRequired visible immediately after capture")
-        AssertEqual(tab.btnTargetRadSmall:IsHidden(), false, "btnTargetRadSmall visible immediately after capture")
-        AssertTrue(tab.btnCaptureTargetLoc:GetText():find("Capture Loc", 1, true) ~= nil and tab.btnCaptureTargetLoc:GetText():find("|c33FF33", 1, true) ~= nil, "btnCaptureTargetLoc highlighted when location is captured")
-        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_SET", 15), "Status updates to Location: Set (15m)")
+        AssertEqual(tab.btnClearTargetLoc:IsEnabled(), true, "btnClearTargetLoc enabled immediately after capture")
+        AssertEqual(tab.chkTargetLocRequired:IsEnabled(), true, "chkTargetLocRequired enabled immediately after capture")
+        AssertEqual(tab.targetLocRadComboBox:IsEnabled(), true, "targetLocRadComboBox enabled immediately after capture")
 
         -- Toggle locationRequired = true, then clear location via btnClearTargetLoc
-        tab.btnTargetLocRequired:GetHandler("OnClicked")()
-        AssertEqual(draft.targets[1].locationRequired, true, "btnTargetLocRequired sets locationRequired=true")
+        tab.chkTargetLocRequired:FireHandler("OnClicked")
+        AssertEqual(draft.targets[1].locationRequired, true, "chkTargetLocRequired sets locationRequired=true")
 
         tab.btnClearTargetLoc:GetHandler("OnClicked")()
         AssertEqual(RPQuest.QuestRepository:HasTargetLocation(draft.targets[1]), false, "HasTargetLocation false after btnClearTargetLoc")
@@ -800,13 +800,9 @@ return function(T)
         AssertEqual(draft.targets[1].worldZ, nil, "worldZ cleared to nil")
         AssertEqual(draft.targets[1].radius, nil, "radius cleared to nil")
         AssertEqual(draft.targets[1].locationRequired, false, "locationRequired reset to false")
-        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden immediately after clear")
-        AssertEqual(tab.btnTargetLocRequired:IsHidden(), true, "btnTargetLocRequired hidden immediately after clear")
-        AssertEqual(tab.btnTargetRadSmall:IsHidden(), true, "btnTargetRadSmall hidden immediately after clear")
-        AssertEqual(tab.btnTargetRadMedium:IsHidden(), true, "btnTargetRadMedium hidden immediately after clear")
-        AssertEqual(tab.btnTargetRadLarge:IsHidden(), true, "btnTargetRadLarge hidden immediately after clear")
-        AssertEqual(tab.btnCaptureTargetLoc:GetText(), "Capture Loc", "btnCaptureTargetLoc returns to plain label after clear")
-        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Status returns to Location: None after clear")
+        AssertEqual(tab.btnClearTargetLoc:IsEnabled(), false, "btnClearTargetLoc disabled immediately after clear")
+        AssertEqual(tab.chkTargetLocRequired:IsEnabled(), false, "chkTargetLocRequired disabled immediately after clear")
+        AssertEqual(tab.targetLocRadComboBox:IsEnabled(), false, "targetLocRadComboBox disabled immediately after clear")
 
         -- Save new draft and verify cleared state persists
         local savedNew = RPQuest.QuestRepository:SaveDraft("Cleared Loc New Quest", "Desc")
@@ -830,14 +826,14 @@ return function(T)
         AssertEqual(existingQuest.targets[1].locationRequired, true, "Existing quest saved with locationRequired=true")
 
         tab:OpenEditEditor(existingQuest.id)
-        AssertEqual(tab.btnClearTargetLoc:IsHidden(), false, "btnClearTargetLoc visible when editing quest with target location")
-        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_SET", 15), "Edit status shows Location: Set (15m)")
+        AssertEqual(tab.btnClearTargetLoc:IsEnabled(), true, "btnClearTargetLoc enabled when editing quest with target location")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkTargetLocRequired), true, "chkTargetLocRequired checked when editing required loc")
 
         tab.btnClearTargetLoc:GetHandler("OnClicked")()
         local editDraft = RPQuest.QuestRepository:GetDraft()
         AssertEqual(RPQuest.QuestRepository:HasTargetLocation(editDraft.targets[1]), false, "Edit draft target location cleared")
-        AssertEqual(tab.btnClearTargetLoc:IsHidden(), true, "btnClearTargetLoc hidden after clearing in edit mode")
-        AssertEqual(tab.lblTargetLocStatus:GetText(), RPQuest.Locale:Get("TARGET_LOC_STATUS_NONE"), "Edit status returns to Location: None")
+        AssertEqual(tab.btnClearTargetLoc:IsEnabled(), false, "btnClearTargetLoc disabled after clearing in edit mode")
+        AssertEqual(tab.chkTargetLocRequired:IsEnabled(), false, "chkTargetLocRequired disabled after clearing in edit mode")
 
         local updatedQuest = RPQuest.QuestRepository:SaveDraft()
         AssertEqual(updatedQuest.id, existingQuest.id, "Editing updates the existing quest record")
@@ -1533,6 +1529,87 @@ return function(T)
         AssertEqual(reloadedB.showLocationAreas, true, "showLocationAreas survives SavedVars reload")
 
         RPQuest.WorldMapArea.RefreshPins = origRefreshPins
+    end)
+
+    RunTest("JournalEditorPane: Target dropdown, per-target areaSize, 3-state elimination messages, and Options recommendHideMapAreas", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.JournalTab:Initialize()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        local tab = RPQuest.JournalTab
+        local draft = RPQuest.QuestRepository:GetDraft()
+
+        -- 1. Options accordion: chkHideMapArea defaults to true on new draft and toggles recommendHideMapAreas
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkHideMapArea), true, "chkHideMapArea checked by default on new draft")
+        tab.chkHideMapArea:FireHandler("OnClicked")
+        AssertEqual(draft.recommendHideMapAreas, false, "chkHideMapArea unchecks recommendHideMapAreas")
+        tab.chkHideMapArea:FireHandler("OnClicked")
+        AssertEqual(draft.recommendHideMapAreas, true, "chkHideMapArea re-checks recommendHideMapAreas")
+
+        -- 2. Empty state: target dropdown and delete icons disabled
+        AssertEqual(tab.targetComboBox:IsEnabled(), false, "targetComboBox disabled when no targets")
+        AssertEqual(tab.btnRemoveTarget:IsEnabled(), false, "btnRemoveTarget disabled when no targets")
+        AssertEqual(tab.btnClearTargets:IsEnabled(), false, "btnClearTargets disabled when no targets")
+        AssertEqual(tab.areaSizeComboBox:IsEnabled(), false, "areaSizeComboBox disabled when no targets")
+        AssertEqual(tab.targetCustomEdit._disabled, true, "targetCustomEdit disabled when no targets")
+
+        -- 3. Capture two targets; dropdown lists both without city name
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit Alpha", mapId = 32, zoneId = 381, mapName = "Daggerfall", targetX = 0.4, targetY = 0.4,
+        })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit Beta", mapId = 32, zoneId = 381, mapName = "Daggerfall", targetX = 0.6, targetY = 0.6,
+        })
+        tab:RefreshEditorPane()
+        AssertEqual(tab.targetComboBox:GetNumItems(), 2, "targetComboBox lists both captured targets")
+        AssertEqual(tab.targetComboBox:GetItems()[1].name, "Bandit Alpha", "Target dropdown item omits city name")
+        AssertEqual(tab.btnRemoveTarget:IsEnabled(), true, "btnRemoveTarget enabled when targets exist")
+        AssertEqual(tab.btnClearTargets:IsEnabled(), true, "btnClearTargets enabled when targets exist")
+
+        -- 4. Selecting target 1 and changing areaSizeComboBox updates only target 1
+        tab.targetComboBox:SelectItemByIndex(1)
+        AssertEqual(tab.selectedTargetIndex, 1, "Selecting target 1 updates selectedTargetIndex")
+        tab.areaSizeComboBox:SelectItemByIndex(1) -- SMALL
+        AssertEqual(draft.targets[1].areaRadius, RPQuest.Constants.AREA_RADIUS.SMALL, "Target 1 areaRadius updated to SMALL")
+        AssertEqual(draft.targets[2].areaRadius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Target 2 areaRadius remains MEDIUM")
+
+        -- 5. 3-state elimination messages: without required location, only 'elimination' is enabled
+        local msgItems = tab.targetMsgComboBox:GetItems()
+        AssertEqual(#msgItems, 3, "targetMsgComboBox has 3 message states")
+        AssertEqual(msgItems[1].enabled, true, "elimination state enabled when locationRequired=false")
+        AssertEqual(msgItems[2].enabled, false, "in_location state disabled when locationRequired=false")
+        AssertEqual(msgItems[3].enabled, false, "outside_location state disabled when locationRequired=false")
+        AssertEqual(tab.targetCustomEdit._disabled, false, "targetCustomEdit enabled for elimination message")
+        tab.targetCustomEdit:SetText("General kill msg")
+        tab.targetCustomEdit:FireHandler("OnTextChanged")
+        AssertEqual(draft.targets[1].customMessage, "General kill msg", "Editbox writes to customMessage")
+
+        -- 6. Capture location & set Required -> 'in_location' and 'outside_location' enabled, 'elimination' disabled
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1500)
+        tab:RefreshEditorPane()
+        tab.chkTargetLocRequired:FireHandler("OnClicked")
+        AssertEqual(draft.targets[1].locationRequired, true, "chkTargetLocRequired sets locationRequired=true")
+        msgItems = tab.targetMsgComboBox:GetItems()
+        AssertEqual(msgItems[1].enabled, false, "elimination state disabled when locationRequired=true")
+        AssertEqual(msgItems[2].enabled, true, "in_location state enabled when locationRequired=true")
+        AssertEqual(msgItems[3].enabled, true, "outside_location state enabled when locationRequired=true")
+        AssertEqual(tab.selectedTargetMsgState, "in_location", "Auto-switches to in_location when locationRequired=true")
+        tab.targetCustomEdit:SetText("In location msg")
+        tab.targetCustomEdit:FireHandler("OnTextChanged")
+        AssertEqual(draft.targets[1].customMessageInLocation, "In location msg", "Editbox writes to customMessageInLocation")
+
+        tab.targetMsgComboBox:SelectItemByIndex(3) -- outside_location
+        AssertEqual(tab.selectedTargetMsgState, "outside_location", "Switched to outside_location state")
+        tab.targetCustomEdit:SetText("Outside location msg")
+        tab.targetCustomEdit:FireHandler("OnTextChanged")
+        AssertEqual(draft.targets[1].customMessageOutsideLocation, "Outside location msg", "Editbox writes to customMessageOutsideLocation")
+
+        -- 7. Delete selected target via btnRemoveTarget, then delete all via btnClearTargets
+        tab.btnRemoveTarget:GetHandler("OnClicked")()
+        AssertEqual(#draft.targets, 1, "btnRemoveTarget deletes only selected target")
+        AssertEqual(draft.targets[1].name, "Bandit Beta", "Remaining target is Bandit Beta")
+        tab.btnClearTargets:GetHandler("OnClicked")()
+        AssertEqual(#draft.targets, 0, "btnClearTargets deletes all targets")
     end)
 
 end
