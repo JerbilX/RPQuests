@@ -356,7 +356,7 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
     local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
     local CycleIndex = Addon.JournalWidgets.CycleIndex
 
-    tab.btnCaptureDiscovery = CreateStyledButton(panelName .. "_BtnCaptureDiscovery", discBody, 130, 26, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
+    tab.btnCaptureDiscovery = CreateStyledButton(panelName .. "_BtnCaptureDiscovery", discBody, 128, 26, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
         local draft = Addon.QuestRepository:GetDraft()
         local hasExisting = #(draft.discoveries or {}) > 0
         local msgText = (not hasExisting and tab.discoveryMsgEdit) and tab.discoveryMsgEdit:GetText() or nil
@@ -369,11 +369,11 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
     end)
     tab.btnCaptureDiscovery:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 0)
 
-    tab.btnClearDiscoveries = CreateStyledButton(panelName .. "_BtnClearDiscoveries", discBody, 100, 26, Addon.Locale:Get("BTN_CLEAR_DISCOVERIES"), function()
+    tab.btnClearDiscoveries = CreateStyledButton(panelName .. "_BtnClearDiscoveries", discBody, 124, 26, Addon.Locale:Get("BTN_CLEAR_DISCOVERIES"), function()
         tab.selectedDiscoveryIndex = nil
         Addon.QuestRepository:ClearDraftDiscoveries()
     end)
-    tab.btnClearDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 140, 0)
+    tab.btnClearDiscoveries:SetAnchor(TOPLEFT, discBody, TOPLEFT, 134, 0)
     tab.btnClearDiscoveries:SetHidden(true)
 
     tab.btnDiscPrev = CreateStyledButton(panelName .. "_BtnDiscPrev", discBody, 28, 26, "<", function()
@@ -381,12 +381,12 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
         local nextIdx = CycleIndex(tab.selectedDiscoveryIndex, total, -1)
         if nextIdx then tab.selectedDiscoveryIndex = nextIdx; tab:RefreshEditorPane() end
     end)
-    tab.btnDiscPrev:SetAnchor(TOPLEFT, discBody, TOPLEFT, 256, 0)
+    tab.btnDiscPrev:SetAnchor(TOPLEFT, discBody, TOPLEFT, 264, 0)
     tab.btnDiscPrev:SetHidden(true)
 
     local lblDiscIndex = WINDOW_MANAGER:CreateControl(panelName .. "_LblDiscIndex", discBody, CT_LABEL)
-    lblDiscIndex:SetDimensions(66, 26)
-    lblDiscIndex:SetAnchor(TOPLEFT, discBody, TOPLEFT, 288, 3)
+    lblDiscIndex:SetDimensions(54, 26)
+    lblDiscIndex:SetAnchor(TOPLEFT, discBody, TOPLEFT, 294, 3)
     if lblDiscIndex.SetFont then lblDiscIndex:SetFont("ZoFontGameBold") end
     if lblDiscIndex.SetHorizontalAlignment then lblDiscIndex:SetHorizontalAlignment(TEXT_ALIGN_CENTER) end
     lblDiscIndex:SetHidden(true)
@@ -397,10 +397,10 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
         local nextIdx = CycleIndex(tab.selectedDiscoveryIndex, total, 1)
         if nextIdx then tab.selectedDiscoveryIndex = nextIdx; tab:RefreshEditorPane() end
     end)
-    tab.btnDiscNext:SetAnchor(TOPLEFT, discBody, TOPLEFT, 358, 0)
+    tab.btnDiscNext:SetAnchor(TOPLEFT, discBody, TOPLEFT, 350, 0)
     tab.btnDiscNext:SetHidden(true)
 
-    tab.btnDiscRemove = CreateStyledButton(panelName .. "_BtnDiscRemove", discBody, 114, 26, Addon.Locale:Get("BTN_REMOVE_DISCOVERY"), function()
+    tab.btnDiscRemove = CreateStyledButton(panelName .. "_BtnDiscRemove", discBody, 126, 26, Addon.Locale:Get("BTN_REMOVE_DISCOVERY"), function()
         local idx = tab.selectedDiscoveryIndex
         if not idx then return end
         local draft = Addon.QuestRepository:RemoveDraftDiscoveryPoint(idx)
@@ -408,7 +408,7 @@ function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
         tab.selectedDiscoveryIndex = (total == 0) and nil or math.min(idx, total)
         tab:RefreshEditorPane()
     end)
-    tab.btnDiscRemove:SetAnchor(TOPLEFT, discBody, TOPLEFT, 396, 0)
+    tab.btnDiscRemove:SetAnchor(TOPLEFT, discBody, TOPLEFT, 384, 0)
     tab.btnDiscRemove:SetHidden(true)
 end
 
@@ -529,21 +529,20 @@ function EditorSections.BuildDialogueInputs(tab, dlgBody, panelName)
     local CreateEditBox = Addon.JournalWidgets.CreateEditBoxWithBackdrop
 
     local lblLastNpc = WINDOW_MANAGER:CreateControl(panelName .. "_LblLastNpc", dlgBody, CT_LABEL)
-    lblLastNpc:SetDimensions(250, 22)
+    lblLastNpc:SetDimensions(506, 22)
     lblLastNpc:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 4, 34)
     if lblLastNpc.SetFont then lblLastNpc:SetFont("ZoFontGame") end
     tab.lblLastNpc = lblLastNpc
 
     local lblSelectedNpc = WINDOW_MANAGER:CreateControl(panelName .. "_LblSelectedNpc", dlgBody, CT_LABEL)
-    lblSelectedNpc:SetDimensions(250, 22)
-    lblSelectedNpc:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 258, 34)
+    lblSelectedNpc:SetDimensions(506, 22)
+    lblSelectedNpc:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 4, 58)
     if lblSelectedNpc.SetFont then lblSelectedNpc:SetFont("ZoFontGameBold") end
-    if lblSelectedNpc.SetHorizontalAlignment then lblSelectedNpc:SetHorizontalAlignment(TEXT_ALIGN_RIGHT) end
     lblSelectedNpc:SetHidden(true)
     tab.lblSelectedNpc = lblSelectedNpc
 
     local lblClue = WINDOW_MANAGER:CreateControl(panelName .. "_LblInputClue", dlgBody, CT_LABEL)
-    lblClue:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 64)
+    lblClue:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 88)
     if lblClue.SetFont then lblClue:SetFont("ZoFontGameBold") end
     lblClue:SetText(Addon.Locale:Get("LABEL_INPUT_CLUE"))
     tab.lblInputClue = lblClue
@@ -558,12 +557,12 @@ function EditorSections.BuildDialogueInputs(tab, dlgBody, panelName)
             end
         end
     )
-    clueBg:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 86)
+    clueBg:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 110)
     tab.clueBg = clueBg
     tab.clueEdit = clueEdit
 
     local lblDlgResponse = WINDOW_MANAGER:CreateControl(panelName .. "_LblDlgResponse", dlgBody, CT_LABEL)
-    lblDlgResponse:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 126)
+    lblDlgResponse:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 150)
     if lblDlgResponse.SetFont then lblDlgResponse:SetFont("ZoFontGameBold") end
     lblDlgResponse:SetText(Addon.Locale:Get("LABEL_DIALOGUE_RESPONSE"))
     tab.lblDlgResponse = lblDlgResponse
@@ -578,13 +577,13 @@ function EditorSections.BuildDialogueInputs(tab, dlgBody, panelName)
             end
         end
     )
-    dlgResponseBg:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 148)
+    dlgResponseBg:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 0, 172)
     tab.dlgResponseBg = dlgResponseBg
     tab.dlgResponseEdit = dlgResponseEdit
 
     local lblCapturedDialogues = WINDOW_MANAGER:CreateControl(panelName .. "_LblCapturedDialogues", dlgBody, CT_LABEL)
     lblCapturedDialogues:SetDimensions(510, 28)
-    lblCapturedDialogues:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 4, 208)
+    lblCapturedDialogues:SetAnchor(TOPLEFT, dlgBody, TOPLEFT, 4, 232)
     if lblCapturedDialogues.SetFont then lblCapturedDialogues:SetFont("ZoFontGame") end
     tab.lblCapturedDialogues = lblCapturedDialogues
 end
@@ -613,7 +612,7 @@ function EditorSections.BuildOptionsSection(tab, optBody, panelName)
     tab.lblStealthMode = lblStealth
 
     local stealthDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_StealthDropdown", optBody, "ZO_ComboBox")
-    stealthDropdown:SetDimensions(280, 28)
+    stealthDropdown:SetDimensions(510, 28)
     stealthDropdown:SetAnchor(TOPLEFT, optBody, TOPLEFT, 0, 84)
     tab.stealthDropdown = stealthDropdown
 

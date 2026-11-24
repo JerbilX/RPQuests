@@ -1613,4 +1613,43 @@ return function(T)
         AssertEqual(#draft.targets, 0, "btnClearTargets deletes all targets")
     end)
 
+    RunTest("Editor and detail UI controls have non-clipping widths and non-overlapping layout", function()
+        local tab = RPQuest.JournalTab
+        tab:OpenCreateEditor()
+
+        local lastW = tab.lblLastNpc:GetWidth()
+        local selW = tab.lblSelectedNpc:GetWidth()
+        AssertTrue(lastW >= 500 and lastW <= 510, "lblLastNpc has full available width")
+        AssertTrue(selW >= 500 and selW <= 510, "lblSelectedNpc has full available width")
+
+        local _, _, _, _, _, lastY = tab.lblLastNpc:GetAnchor(1)
+        local _, _, _, _, _, selY = tab.lblSelectedNpc:GetAnchor(1)
+        AssertTrue(selY >= lastY + 22, "lblSelectedNpc is placed on a separate row below lblLastNpc")
+
+        local dialogueSec = tab.editorSectionsByKey and tab.editorSectionsByKey["dialogue"]
+        AssertTrue(dialogueSec ~= nil and dialogueSec.bodyHeight >= 264, "dialogue section bodyHeight accommodates separate NPC rows")
+
+        AssertEqual(tab.stealthDropdown:GetWidth(), 510, "stealthDropdown widened to 510px")
+        AssertEqual(tab.btnShowSearchAreas:GetWidth(), 495, "btnShowSearchAreas widened to 495px")
+        AssertEqual(tab.btnShowLocationAreas:GetWidth(), 495, "btnShowLocationAreas widened to 495px")
+
+        local discRow = {
+            tab.btnCaptureDiscovery,
+            tab.btnClearDiscoveries,
+            tab.btnDiscPrev,
+            tab.lblDiscIndex,
+            tab.btnDiscNext,
+            tab.btnDiscRemove,
+        }
+        AssertTrue(tab.btnClearDiscoveries:GetWidth() >= 120, "btnClearDiscoveries widened to fit all locales")
+        local prevRight = -1
+        for i, ctrl in ipairs(discRow) do
+            local _, _, _, _, x = ctrl:GetAnchor(1)
+            local w = ctrl:GetWidth()
+            AssertTrue(x > prevRight, string.format("Discovery row control %d does not overlap previous control", i))
+            prevRight = x + w
+            AssertTrue(prevRight <= 510, string.format("Discovery row control %d fits within 510px", i))
+        end
+    end)
+
 end

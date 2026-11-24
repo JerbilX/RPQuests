@@ -56,7 +56,7 @@ function EditorPane.Build(tab, parent)
     EditorSections.BuildDiscoveryControls(tab, discoverySec.body, panelName)
     EditorSections.BuildDiscoveryInputs(tab, discoverySec.body, panelName)
 
-    local dialogueSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "dialogue", "LABEL_DIALOGUE_SECTION", 240)
+    local dialogueSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "dialogue", "LABEL_DIALOGUE_SECTION", 264)
     EditorSections.BuildDialogueControls(tab, dialogueSec.body, panelName)
     EditorSections.BuildDialogueInputs(tab, dialogueSec.body, panelName)
 
