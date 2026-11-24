@@ -958,4 +958,138 @@ return function(T)
         _G.GetNormalizedWorldPosition = origGetNormWorld
     end)
 
+    RunTest("Issue #297: location area color persists on resize, unique pinTags, and differentiated tooltips", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+        local origTooltip = _G.InformationTooltip
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(zoneId, wx, wy, wz)
+            return wx / 100000, wz / 100000
+        end
+
+        local tooltipLines = {}
+        _G.InformationTooltip = {
+            AddLine = function(_, text)
+                table.insert(tooltipLines, text)
+            end,
+        }
+
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:UpdateDraftFields({ mapId = 45, zoneId = 104 })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit A",
+            mapId = 45,
+            zoneId = 104,
+            targetX = 0.25,
+            targetY = 0.25,
+            areaRadius = 0.07,
+        })
+        RPQuest.QuestRepository:UpdateDraftTarget(1, {
+            areaCenterX = 0.26,
+            areaCenterY = 0.24,
+            areaRadius = 0.07,
+            locationRequired = true,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 104, 25000, 25000, 800)
+
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit B",
+            mapId = 45,
+            zoneId = 104,
+            targetX = 0.75,
+            targetY = 0.75,
+            areaRadius = 0.125,
+        })
+        RPQuest.QuestRepository:UpdateDraftTarget(2, {
+            areaCenterX = 0.74,
+            areaCenterY = 0.76,
+            areaRadius = 0.125,
+            locationRequired = false,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(2, 104, 75000, 75000, 3000)
+
+        local quest = RPQuest.QuestRepository:SaveDraft("Twin Targets", "Hunt both targets.")
+        RPQuest.QuestRepository:SetActiveQuest(quest.id)
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", true)
+        RPQuest.QuestRepository:SetSetting("showLocationAreas", true)
+        RPQuest.WorldMapArea:RefreshPins()
+
+        local searchPins = {}
+        local locPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.pinTypeId then
+                table.insert(searchPins, p)
+            elseif p.pinTypeId == RPQuest.WorldMapArea.locationPinTypeId then
+                table.insert(locPins, p)
+            end
+        end
+        AssertEqual(#searchPins, 2, "2 search area pins created")
+        AssertEqual(#locPins, 2, "2 location area pins created")
+
+        -- 1. Unique pinTags per pin/objective
+        AssertEqual(searchPins[1].pinTag.questId, quest.id, "Search pin 1 tag has questId")
+        AssertEqual(searchPins[1].pinTag.targetIndex, 1, "Search pin 1 tag has targetIndex 1")
+        AssertEqual(searchPins[1].pinTag.kind, "search", "Search pin 1 tag has kind search")
+        AssertEqual(searchPins[2].pinTag.targetIndex, 2, "Search pin 2 tag has targetIndex 2")
+        AssertEqual(locPins[1].pinTag.questId, quest.id, "Location pin 1 tag has questId")
+        AssertEqual(locPins[1].pinTag.targetIndex, 1, "Location pin 1 tag has targetIndex 1")
+        AssertEqual(locPins[1].pinTag.kind, "location", "Location pin 1 tag has kind location")
+        AssertEqual(locPins[2].pinTag.targetIndex, 2, "Location pin 2 tag has targetIndex 2")
+
+        -- 2. Orange color persists across map resize/zoom
+        local locCustomData = mockPinManager._customPins[RPQuest.WorldMapArea.locationPinTypeId]
+        AssertTrue(locCustomData and locCustomData.resizeCallback ~= nil, "Location pin registers pinTypeOnResizeCallback")
+        mockPinManager:SimulateResize()
+        local orange = RPQuest.Constants.UI.LOCATION_AREA_COLOR
+        for i, lp in ipairs(locPins) do
+            AssertEqual(lp.pinBlob.color.r, orange.r, "Location pin " .. i .. " keeps orange red channel after resize")
+            AssertEqual(lp.pinBlob.color.g, orange.g, "Location pin " .. i .. " keeps orange green channel after resize")
+            AssertEqual(lp.pinBlob.color.b, orange.b, "Location pin " .. i .. " keeps orange blue channel after resize")
+            AssertEqual(lp.pinBlob.color.a, orange.a, "Location pin " .. i .. " keeps orange alpha channel after resize")
+        end
+
+        -- 3. Differentiated tooltips: search area shows only that pin's target; location area uses its own creator
+        local searchCreator = mockPinManager._customPins[RPQuest.WorldMapArea.pinTypeId].pinTooltipCreator
+        local locCreator = mockPinManager._customPins[RPQuest.WorldMapArea.locationPinTypeId].pinTooltipCreator
+        AssertTrue(searchCreator ~= locCreator, "Search and location pins use distinct tooltipCreator tables")
+
+        tooltipLines = {}
+        searchCreator.creator(searchPins[1])
+        AssertEqual(#tooltipLines, 2, "Search pin 1 tooltip has header + 1 target line")
+        AssertEqual(tooltipLines[1], "RPQuest: Twin Targets", "Search pin 1 tooltip header")
+        AssertEqual(tooltipLines[2], "Search Area: Eliminate Bandit A (0/1)", "Search pin 1 tooltip shows only target 1")
+
+        tooltipLines = {}
+        searchCreator.creator(searchPins[2])
+        AssertEqual(#tooltipLines, 2, "Search pin 2 tooltip has header + 1 target line")
+        AssertEqual(tooltipLines[2], "Search Area: Eliminate Bandit B (0/1)", "Search pin 2 tooltip shows only target 2")
+
+        tooltipLines = {}
+        locCreator.creator(locPins[1])
+        AssertEqual(#tooltipLines, 2, "Location pin 1 tooltip has header + 1 location line")
+        AssertEqual(tooltipLines[2], "Target Location: Bandit A (Required, 8m)", "Location pin 1 tooltip shows Required and 8m")
+
+        tooltipLines = {}
+        locCreator.creator(locPins[2])
+        AssertEqual(#tooltipLines, 2, "Location pin 2 tooltip has header + 1 location line")
+        AssertEqual(tooltipLines[2], "Target Location: Bandit B (Optional, 30m)", "Location pin 2 tooltip shows Optional and 30m")
+
+        _G.InformationTooltip = origTooltip
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+    end)
+
 end

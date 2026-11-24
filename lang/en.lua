@@ -214,6 +214,9 @@ RPQuest.Locales["en"] = {
     -- Map
     MAP_TOOLTIP_HEADER = "RPQuest: %s",
     MAP_TOOLTIP_OBJECTIVE = "Search Area: Eliminate %s (%d/%d)",
+    MAP_TOOLTIP_LOCATION = "Target Location: %s (%s, %dm)",
+    MAP_TOOLTIP_LOC_REQUIRED = "Required",
+    MAP_TOOLTIP_LOC_OPTIONAL = "Optional",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "Send Mail",

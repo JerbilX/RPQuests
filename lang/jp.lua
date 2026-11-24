@@ -214,6 +214,9 @@ RPQuest.Locales["jp"] = {
     -- Map
     MAP_TOOLTIP_HEADER = "RPQuest: %s",
     MAP_TOOLTIP_OBJECTIVE = "捜索範囲: %s を倒す (%d/%d)",
+    MAP_TOOLTIP_LOCATION = "ターゲットの場所: %s (%s, %dm)",
+    MAP_TOOLTIP_LOC_REQUIRED = "必須",
+    MAP_TOOLTIP_LOC_OPTIONAL = "任意",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "メール送信",
