@@ -86,35 +86,78 @@ function WorldMapArea:Initialize()
         showsPinAndArea = false,
     }
 
+    local function ResolvePinQuestAndTarget(pin)
+        local tag = pin and ((pin.GetPinTypeAndTag and select(2, pin:GetPinTypeAndTag())) or pin.m_PinTag)
+        local questId = type(tag) == "table" and tag.questId or tag
+        local targetIndex = type(tag) == "table" and tag.targetIndex or nil
+        local draft = Addon.QuestRepository:GetDraft()
+        local targetQuest
+        if IsDraftPinTag(questId, draft) then
+            targetQuest = draft
+        elseif questId then
+            targetQuest = Addon.QuestRepository:GetQuestById(questId)
+        end
+        targetQuest = targetQuest or Addon.QuestRepository:GetActiveQuest()
+        if not targetQuest then
+            return nil, nil
+        end
+        local target = (targetIndex and targetQuest.targets and targetQuest.targets[targetIndex]) or nil
+        return targetQuest, target
+    end
+
+    local function AddTooltipHeader(tooltip, targetQuest)
+        local fallbackId = (Addon.QuestRepository.savedVars and Addon.QuestRepository.savedVars.nextId) or 1
+        local titleText = (targetQuest.title and targetQuest.title ~= "" and targetQuest.title)
+            or Addon.Locale:Get("DEFAULT_QUEST_TITLE", fallbackId)
+        local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", titleText)
+        tooltip:AddLine(headerText, "ZoFontWinH4", 0.91, 0.83, 0.63)
+    end
+
     local pinTooltipCreator = {
         creator = function(pin)
-            local questId = pin and pin.m_PinTag
-            local draft = Addon.QuestRepository:GetDraft()
-            local targetQuest
-            if IsDraftPinTag(questId, draft) then
-                targetQuest = draft
-            elseif questId then
-                targetQuest = Addon.QuestRepository:GetQuestById(questId)
-            end
-            targetQuest = targetQuest or Addon.QuestRepository:GetActiveQuest()
+            local targetQuest, target = ResolvePinQuestAndTarget(pin)
             if not targetQuest then return end
             local tooltip = InformationTooltip
             if tooltip and tooltip.AddLine then
-                local fallbackId = (Addon.QuestRepository.savedVars and Addon.QuestRepository.savedVars.nextId) or 1
-                local titleText = (targetQuest.title and targetQuest.title ~= "" and targetQuest.title)
-                    or Addon.Locale:Get("DEFAULT_QUEST_TITLE", fallbackId)
-                local headerText = Addon.Locale:Get("MAP_TOOLTIP_HEADER", titleText)
-                tooltip:AddLine(headerText, "ZoFontWinH4", 0.91, 0.83, 0.63)
-                local targets = targetQuest.targets or {}
-                for _, t in ipairs(targets) do
+                AddTooltipHeader(tooltip, targetQuest)
+                if target then
                     local objText = Addon.Locale:Get(
                         "MAP_TOOLTIP_OBJECTIVE",
-                        t.name or "",
-                        t.currentCount or 0,
-                        t.requiredCount or 1
+                        target.name or "",
+                        target.currentCount or 0,
+                        target.requiredCount or 1
                     )
                     tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
+                else
+                    local targets = targetQuest.targets or {}
+                    for _, t in ipairs(targets) do
+                        local objText = Addon.Locale:Get(
+                            "MAP_TOOLTIP_OBJECTIVE",
+                            t.name or "",
+                            t.currentCount or 0,
+                            t.requiredCount or 1
+                        )
+                        tooltip:AddLine(objText, "ZoFontGame", 1, 1, 1)
+                    end
                 end
+            end
+        end,
+        tooltip = 1,
+    }
+
+    local locationPinTooltipCreator = {
+        creator = function(pin)
+            local targetQuest, target = ResolvePinQuestAndTarget(pin)
+            if not targetQuest or not target then return end
+            local tooltip = InformationTooltip
+            if tooltip and tooltip.AddLine then
+                AddTooltipHeader(tooltip, targetQuest)
+                local reqLabel = target.locationRequired
+                    and Addon.Locale:Get("MAP_TOOLTIP_LOC_REQUIRED")
+                    or Addon.Locale:Get("MAP_TOOLTIP_LOC_OPTIONAL")
+                local meters = math.floor(((tonumber(target.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM) / 100) + 0.5)
+                local locText = Addon.Locale:Get("MAP_TOOLTIP_LOCATION", target.name or "", reqLabel, meters)
+                tooltip:AddLine(locText, "ZoFontGame", 1, 1, 1)
             end
         end,
         tooltip = 1,
@@ -144,7 +187,11 @@ function WorldMapArea:Initialize()
         self:OnLayoutLocationPins(pManager)
     end
 
-    pinManager:AddCustomPin(LOCATION_PIN_TYPE_STRING, locationLayoutCallback, nil, locationPinLayoutData, pinTooltipCreator)
+    local locationResizeCallback = function(pManager)
+        self:OnResizeLocationPins(pManager)
+    end
+
+    pinManager:AddCustomPin(LOCATION_PIN_TYPE_STRING, locationLayoutCallback, locationResizeCallback, locationPinLayoutData, locationPinTooltipCreator)
     self.locationPinTypeId = _G[LOCATION_PIN_TYPE_STRING]
 
     if self.locationPinTypeId then
@@ -431,15 +478,16 @@ function WorldMapArea:OnLayoutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.pinTypeId then return end
 
-    local targetQuest, pinTag = self:ResolveTargetQuest()
+    local targetQuest, questTag = self:ResolveTargetQuest()
     if not self:ShouldRenderOnCurrentMap(targetQuest) then
         return
     end
 
     local createdAny = false
-    for _, t in ipairs(targetQuest.targets or {}) do
+    for i, t in ipairs(targetQuest.targets or {}) do
         if IsTargetPending(t) and t.areaCenterX and t.areaCenterY and t.areaRadius and t.areaRadius > 0 then
             local effectiveRadius = self:GetEffectiveAreaRadius(t.areaRadius)
+            local pinTag = { questId = questTag, targetIndex = i, kind = "search" }
             pManager:CreatePin(
                 self.pinTypeId,
                 pinTag,
@@ -454,6 +502,7 @@ function WorldMapArea:OnLayoutPins(pinManager)
         local areaCX, areaCY, areaRad = ResolveQuestSearchArea(targetQuest)
         if areaCX and areaCY and areaRad then
             local effectiveRadius = self:GetEffectiveAreaRadius(areaRad)
+            local pinTag = { questId = questTag, kind = "search" }
             pManager:CreatePin(
                 self.pinTypeId,
                 pinTag,
@@ -511,16 +560,17 @@ function WorldMapArea:OnLayoutLocationPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.locationPinTypeId then return end
 
-    local targetQuest, pinTag = self:ResolveTargetQuest()
+    local targetQuest, questTag = self:ResolveTargetQuest()
     if not self:ShouldRenderLocationAreasOnCurrentMap(targetQuest) then
         return
     end
 
     local color = Addon.Constants.UI.LOCATION_AREA_COLOR
-    for _, t in ipairs(targetQuest.targets or {}) do
+    for i, t in ipairs(targetQuest.targets or {}) do
         if IsTargetPending(t) then
             local locX, locY, locRadius = self:ProjectTargetLocationToCurrentMap(targetQuest, t)
             if locX and locY and locRadius and locRadius > 0 then
+                local pinTag = { questId = questTag, targetIndex = i, kind = "location" }
                 local pin = pManager:CreatePin(
                     self.locationPinTypeId,
                     pinTag,
@@ -536,11 +586,25 @@ function WorldMapArea:OnLayoutLocationPins(pinManager)
     end
 end
 
+function WorldMapArea:OnResizeLocationPins(pinManager)
+    local pManager = pinManager or GetWorldMapPinManager()
+    if not pManager or not self.locationPinTypeId or not pManager.GetActiveObjects then
+        return
+    end
+
+    local color = Addon.Constants.UI.LOCATION_AREA_COLOR
+    for _, pin in pairs(pManager:GetActiveObjects()) do
+        if pin and pin.GetPinType and pin:GetPinType() == self.locationPinTypeId and pin.pinBlob and pin.pinBlob.SetColor then
+            pin.pinBlob:SetColor(color.r, color.g, color.b, color.a)
+        end
+    end
+end
+
 function WorldMapArea:OnLayoutZoomOutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.zoomOutPinTypeId then return end
 
-    local targetQuest, pinTag = self:ResolveTargetQuest()
+    local targetQuest, questTag = self:ResolveTargetQuest()
     if not self:ShouldRenderZoomOutOnCurrentMap(targetQuest) then
         return
     end
@@ -550,6 +614,7 @@ function WorldMapArea:OnLayoutZoomOutPins(pinManager)
         return
     end
 
+    local pinTag = { questId = questTag, kind = "zoom" }
     local pin = pManager:CreatePin(self.zoomOutPinTypeId, pinTag, projX, projY)
     if pin then
         pin:PingMapPin(ZO_MapPin.PulseAnimation)

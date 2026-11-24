@@ -214,6 +214,9 @@ RPQuest.Locales["ru"] = {
     -- Map
     MAP_TOOLTIP_HEADER = "RPQuest: %s",
     MAP_TOOLTIP_OBJECTIVE = "Область поиска: Устранить %s (%d/%d)",
+    MAP_TOOLTIP_LOCATION = "Местоположение цели: %s (%s, %dм)",
+    MAP_TOOLTIP_LOC_REQUIRED = "Обязательно",
+    MAP_TOOLTIP_LOC_OPTIONAL = "Необязательно",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "Отправить письмо",

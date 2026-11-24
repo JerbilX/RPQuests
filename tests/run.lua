@@ -339,10 +339,18 @@ local mockPinManager = {
         local p = {
             pinTypeId = pinTypeId,
             pinTag = pinTag,
+            m_PinType = pinTypeId,
+            m_PinTag = pinTag,
             x = xLoc,
             y = yLoc,
             radius = radius,
             pingAnimations = {},
+            GetPinType = function(pinSelf)
+                return pinSelf.m_PinType
+            end,
+            GetPinTypeAndTag = function(pinSelf)
+                return pinSelf.m_PinType, pinSelf.m_PinTag
+            end,
             PingMapPin = function(pinSelf, animation)
                 table.insert(pinSelf.pingAnimations, animation)
             end,
@@ -356,6 +364,21 @@ local mockPinManager = {
         end
         table.insert(self._createdPins, p)
         return p
+    end,
+    GetActiveObjects = function(self)
+        return self._createdPins
+    end,
+    SimulateResize = function(self)
+        for _, p in ipairs(self._createdPins) do
+            if p.pinBlob and p.pinBlob.SetColor then
+                p.pinBlob:SetColor(0.5, 0.8, 1.0, 1.0)
+            end
+        end
+        for _, data in pairs(self._customPins) do
+            if data.enabled and data.resizeCallback then
+                data.resizeCallback(self, 1000, 1000)
+            end
+        end
     end,
 }
 

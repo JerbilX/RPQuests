@@ -194,7 +194,7 @@ return function(T)
         RPQuest.WorldMapArea:ShowQuestOnMap(prep)
         local pins = ZO_WorldMap_GetPinManager()._createdPins
         AssertEqual(#pins, 1, "ShowQuestOnMap renders area pin for prepared quest even when inactive")
-        AssertEqual(pins[1].pinTag, prep.id, "Rendered preview pin belongs to prepared quest")
+        AssertEqual(pins[1].pinTag.questId, prep.id, "Rendered preview pin belongs to prepared quest")
         AssertEqual(pins[1].radius, 0.05, "Rendered preview pin uses prepared quest radius")
 
         -- 3. Probar localmente y luego detener prueba

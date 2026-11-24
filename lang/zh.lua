@@ -214,6 +214,9 @@ RPQuest.Locales["zh"] = {
     -- Map
     MAP_TOOLTIP_HEADER = "RPQuest：%s",
     MAP_TOOLTIP_OBJECTIVE = "搜索区域：消灭 %s (%d/%d)",
+    MAP_TOOLTIP_LOCATION = "目标位置：%s（%s，%d米）",
+    MAP_TOOLTIP_LOC_REQUIRED = "必需",
+    MAP_TOOLTIP_LOC_OPTIONAL = "可选",
 
     -- Mail Transport
     BTN_MAIL_SEND_CONFIRM = "发送邮件",
