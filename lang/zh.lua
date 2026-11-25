@@ -35,9 +35,11 @@ RPQuest.Locales["zh"] = {
     BTN_SAVE = "保存草稿",
     BTN_CLEAR_TARGETS = "清除目标",
     BTN_CANCEL = "取消",
+    BTN_RADIUS_TINY = "极小",
     BTN_RADIUS_SMALL = "小",
     BTN_RADIUS_MEDIUM = "中",
     BTN_RADIUS_LARGE = "大",
+    BTN_RADIUS_HUGE = "极大",
     BTN_CAPTURE_DISCOVERY = "+ 此处添加点",
 
     -- Detail View

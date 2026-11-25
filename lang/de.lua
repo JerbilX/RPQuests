@@ -35,9 +35,11 @@ RPQuest.Locales["de"] = {
     BTN_SAVE = "Entwurf speichern",
     BTN_CLEAR_TARGETS = "Ziele leeren",
     BTN_CANCEL = "Abbrechen",
+    BTN_RADIUS_TINY = "Winzig",
     BTN_RADIUS_SMALL = "Klein",
     BTN_RADIUS_MEDIUM = "Mittel",
     BTN_RADIUS_LARGE = "Groß",
+    BTN_RADIUS_HUGE = "Riesig",
     BTN_CAPTURE_DISCOVERY = "+ Punkt hier",
 
     -- Detail View

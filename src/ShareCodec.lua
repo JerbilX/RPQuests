@@ -81,7 +81,7 @@ local function EncodeTargetsList(targets)
     if type(targets) ~= "table" or #targets == 0 then
         return ""
     end
-    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 3900
     local items = {}
     for _, t in ipairs(targets) do
         if type(t) == "table" and type(t.name) == "string" and t.name ~= "" then
@@ -123,7 +123,7 @@ local function EncodeDiscoveriesList(discoveries)
     if type(discoveries) ~= "table" or #discoveries == 0 then
         return ""
     end
-    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 3900
     local items = {}
     for _, d in ipairs(discoveries) do
         if type(d) == "table" and d.worldX and d.worldZ then
@@ -378,7 +378,7 @@ local function PackQuestBinary(quest)
     BinaryCodec:WriteUVarint(buf, quest.zoneId or 0)
     BinaryCodec:WriteStr(buf, quest.mapName or "")
 
-    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 3900
     if #targets > 0 then
         PackTargetsBlock(buf, quest, targets, defaultRad)
     end
@@ -596,7 +596,7 @@ local function UnpackQuestBinary(data)
         return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
 
-    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 1500
+    local defaultRad = (Addon.Constants and Addon.Constants.DISCOVERY_RADIUS and Addon.Constants.DISCOVERY_RADIUS.MEDIUM) or 3900
     local targetsResult
     local decodedTargets = {}
     if hasTargets then

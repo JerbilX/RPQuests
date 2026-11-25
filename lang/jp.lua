@@ -35,9 +35,11 @@ RPQuest.Locales["jp"] = {
     BTN_SAVE = "下書き保存",
     BTN_CLEAR_TARGETS = "目標をクリア",
     BTN_CANCEL = "キャンセル",
+    BTN_RADIUS_TINY = "極小",
     BTN_RADIUS_SMALL = "小",
     BTN_RADIUS_MEDIUM = "中",
     BTN_RADIUS_LARGE = "大",
+    BTN_RADIUS_HUGE = "特大",
     BTN_CAPTURE_DISCOVERY = "+ 現在地を追加",
 
     -- Detail View

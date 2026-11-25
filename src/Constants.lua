@@ -72,9 +72,11 @@ Addon.Constants = {
         FAILED = "failed",
     },
     AREA_RADIUS = {
-        SMALL = 0.070,
-        MEDIUM = 0.125,
-        LARGE = 0.195,
+        TINY = 0.008,
+        SMALL = 0.0235,
+        MEDIUM = 0.039,
+        LARGE = 0.0545,
+        HUGE = 0.070,
     },
     AREA_SUBZONE_MULTIPLIER = 1.6,
     AREA_OFFSET = {
@@ -82,9 +84,11 @@ Addon.Constants = {
         MAX_RATIO = 0.65,
     },
     DISCOVERY_RADIUS = {
-        SMALL = 800,
-        MEDIUM = 1500,
-        LARGE = 3000,
+        TINY = 800,
+        SMALL = 2350,
+        MEDIUM = 3900,
+        LARGE = 5450,
+        HUGE = 7000,
     },
     DISCOVERY_POLL_INTERVAL_MS = 750,
     UI = {

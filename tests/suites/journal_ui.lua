@@ -313,7 +313,7 @@ return function(T)
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Draft pin starts with MEDIUM radius")
 
         -- 2. Cambiar radio en el editor antes de guardar actualiza el pin al instante
-        RPQuest.JournalTab.areaSizeComboBox:SelectItemByIndex(3)
+        RPQuest.JournalTab.areaSizeComboBox:SelectItemByIndex(4)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed on radius change")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.LARGE, "Draft pin immediately reflects LARGE radius")
 
@@ -325,7 +325,7 @@ return function(T)
 
         -- 3. Abrir Editar y cambiar radio a SMALL refleja el nuevo tamaño en el mapa al instante (sin guardar todavía)
         RPQuest.JournalTab:OpenEditEditor(q.id)
-        RPQuest.JournalTab.areaSizeComboBox:SelectItemByIndex(1)
+        RPQuest.JournalTab.areaSizeComboBox:SelectItemByIndex(2)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed when editing quest radius")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "Edited draft pin immediately reflects SMALL radius")
 
@@ -1568,10 +1568,16 @@ return function(T)
         AssertEqual(tab.btnRemoveTarget:IsEnabled(), true, "btnRemoveTarget enabled when targets exist")
         AssertEqual(tab.btnClearTargets:IsEnabled(), true, "btnClearTargets enabled when targets exist")
 
-        -- 4. Selecting target 1 and changing areaSizeComboBox updates only target 1
+        -- 4. Selecting target 1 and changing areaSizeComboBox updates only target 1 (5 tiers)
+        AssertEqual(tab.areaSizeComboBox:GetNumItems(), 5, "areaSizeComboBox has 5 tiers (Tiny..Huge)")
+        AssertEqual(tab.targetLocRadComboBox:GetNumItems(), 5, "targetLocRadComboBox has 5 tiers (Tiny..Huge)")
         tab.targetComboBox:SelectItemByIndex(1)
         AssertEqual(tab.selectedTargetIndex, 1, "Selecting target 1 updates selectedTargetIndex")
-        tab.areaSizeComboBox:SelectItemByIndex(1) -- SMALL
+        tab.areaSizeComboBox:SelectItemByIndex(1) -- TINY
+        AssertEqual(draft.targets[1].areaRadius, RPQuest.Constants.AREA_RADIUS.TINY, "Target 1 areaRadius updated to TINY")
+        tab.areaSizeComboBox:SelectItemByIndex(5) -- HUGE
+        AssertEqual(draft.targets[1].areaRadius, RPQuest.Constants.AREA_RADIUS.HUGE, "Target 1 areaRadius updated to HUGE")
+        tab.areaSizeComboBox:SelectItemByIndex(2) -- SMALL
         AssertEqual(draft.targets[1].areaRadius, RPQuest.Constants.AREA_RADIUS.SMALL, "Target 1 areaRadius updated to SMALL")
         AssertEqual(draft.targets[2].areaRadius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Target 2 areaRadius remains MEDIUM")
 
@@ -1873,12 +1879,17 @@ return function(T)
         local discHeaderText = tab.editorSectionsByKey.discovery.headerBtn:GetText()
         AssertTrue(discHeaderText:find("[1/10 !]", 1, true) ~= nil, "Discovery accordion badge shows [1/10 !] alert")
 
-        -- Changing discRadComboBox with selected point updates point radius
+        -- Changing discRadComboBox with selected point updates point radius (5 tiers)
+        AssertEqual(tab.discRadComboBox:GetNumItems(), 5, "discRadComboBox has 5 tiers (Tiny..Huge)")
         tab.discRadComboBox:SelectItemByIndex(1)
-        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.SMALL, "discRadComboBox updates selected discovery point radius to Small")
-        tab.discRadComboBox:SelectItemByIndex(3)
-        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.LARGE, "discRadComboBox updates selected discovery point radius to Large")
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.TINY, "discRadComboBox updates selected discovery point radius to Tiny")
+        tab.discRadComboBox:SelectItemByIndex(5)
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.HUGE, "discRadComboBox updates selected discovery point radius to Huge")
         tab.discRadComboBox:SelectItemByIndex(2)
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.SMALL, "discRadComboBox updates selected discovery point radius to Small")
+        tab.discRadComboBox:SelectItemByIndex(4)
+        AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.LARGE, "discRadComboBox updates selected discovery point radius to Large")
+        tab.discRadComboBox:SelectItemByIndex(3)
         AssertEqual(draft.discoveries[1].radius, RPQuest.Constants.DISCOVERY_RADIUS.MEDIUM, "discRadComboBox updates selected discovery point radius to Medium")
 
         -- 3. Save Draft, Test Quest, and Send Quest are blocked while discovery message is empty/whitespace
@@ -2114,6 +2125,52 @@ return function(T)
         qj.tabs.SelectFragment = origSelectFragment
         SCENE_MANAGER.Show = origSceneShow
         SCENE_MANAGER.IsShowing = origIsShowing
+    end)
+
+    RunTest("All 3 radius selectors expose 5 localized tiers across all 7 languages and preserve legacy ShareCodec radii", function()
+        local locales = { "en", "es", "de", "fr", "jp", "ru", "zh" }
+        local keys = { "BTN_RADIUS_TINY", "BTN_RADIUS_SMALL", "BTN_RADIUS_MEDIUM", "BTN_RADIUS_LARGE", "BTN_RADIUS_HUGE" }
+        for _, lang in ipairs(locales) do
+            RPQuest.Locale:Initialize(lang)
+            for _, key in ipairs(keys) do
+                local val = RPQuest.Locale:Get(key)
+                AssertTrue(type(val) == "string" and val ~= "" and val ~= key, string.format("Locale %s defines %s", lang, key))
+            end
+        end
+        RPQuest.Locale:Initialize("en")
+
+        local tab = RPQuest.JournalTab
+        AssertEqual(tab.areaSizeComboBox:GetNumItems(), 5, "Target Search Area selector has 5 tiers")
+        AssertEqual(tab.targetLocRadComboBox:GetNumItems(), 5, "Target Location selector has 5 tiers")
+        AssertEqual(tab.discRadComboBox:GetNumItems(), 5, "Discovery Point selector has 5 tiers")
+
+        -- Legacy radii (0.125, 0.195, 1500, 3000) round-trip cleanly through ShareCodec without migration
+        local legacyQuest = {
+            id = "legacy-radius-test",
+            title = "Legacy Radii",
+            description = "Desc",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Daggerfall",
+            targetX = 0.5,
+            targetY = 0.5,
+            areaCenterX = 0.5,
+            areaCenterY = 0.5,
+            areaRadius = 0.125,
+            targets = {
+                { name = "Bandit", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.195, zoneId = 381, worldX = 10000, worldZ = 20000, radius = 3000 },
+            },
+            discoveries = {
+                { zoneId = 381, worldX = 12000, worldY = 0, worldZ = 22000, mapId = 32, x = 0.4, y = 0.4, radius = 1500, message = "Legacy spot" },
+            },
+        }
+        local encoded = RPQuest.ShareCodec:EncodeQuest(legacyQuest)
+        AssertTrue(type(encoded) == "string" and encoded ~= "", "Legacy quest encodes via ShareCodec")
+        local decoded = RPQuest.ShareCodec:DecodeQuest(encoded)
+        AssertTrue(decoded ~= nil, "Legacy quest decodes via ShareCodec")
+        AssertTrue(math.abs(decoded.targets[1].areaRadius - 0.195) < 0.001, "Legacy target areaRadius 0.195 preserved")
+        AssertEqual(decoded.targets[1].radius, 3000, "Legacy target location radius 3000 preserved")
+        AssertEqual(decoded.discoveries[1].radius, 1500, "Legacy discovery radius 1500 preserved")
     end)
 
 end

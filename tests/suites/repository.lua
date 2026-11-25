@@ -21,15 +21,20 @@ return function(T)
         end
     end)
 
-    RunTest("AREA_RADIUS enlarged progression and ComputeOffsetCenter bounds for zone and subzone radii", function()
+    RunTest("Unified 5-tier AREA_RADIUS and DISCOVERY_RADIUS progression and ComputeOffsetCenter bounds", function()
         RPQuest.QuestRepository:Initialize({})
         local radii = RPQuest.Constants.AREA_RADIUS
+        local discRadii = RPQuest.Constants.DISCOVERY_RADIUS
         local mult = RPQuest.Constants.AREA_SUBZONE_MULTIPLIER
-        AssertTrue(radii.MEDIUM > 0.075, "Default MEDIUM radius is enlarged beyond legacy 0.075")
-        AssertTrue(radii.SMALL < radii.MEDIUM and radii.MEDIUM < radii.LARGE, "AREA_RADIUS maintains coherent progression")
+        AssertTrue(math.abs(radii.TINY - 0.008) < 0.0001, "AREA_RADIUS.TINY matches 800 world units normalized (0.008)")
+        AssertTrue(math.abs(radii.HUGE - 0.070) < 0.0001, "AREA_RADIUS.HUGE matches legacy Small search area (0.070)")
+        AssertTrue(radii.TINY < radii.SMALL and radii.SMALL < radii.MEDIUM and radii.MEDIUM < radii.LARGE and radii.LARGE < radii.HUGE, "AREA_RADIUS maintains coherent 5-tier progression")
+        AssertEqual(discRadii.TINY, 800, "DISCOVERY_RADIUS.TINY is 800 world units (~8m)")
+        AssertEqual(discRadii.HUGE, 7000, "DISCOVERY_RADIUS.HUGE matches 0.070 normalized (7000 world units)")
+        AssertTrue(discRadii.TINY < discRadii.SMALL and discRadii.SMALL < discRadii.MEDIUM and discRadii.MEDIUM < discRadii.LARGE and discRadii.LARGE < discRadii.HUGE, "DISCOVERY_RADIUS maintains coherent 5-tier progression")
         AssertTrue(mult > 1.0, "Subzone multiplier enlarges city/subzone maps")
 
-        local testRadii = { radii.SMALL, radii.MEDIUM, radii.LARGE, radii.MEDIUM * mult, radii.LARGE * mult }
+        local testRadii = { radii.TINY, radii.SMALL, radii.MEDIUM, radii.LARGE, radii.HUGE, radii.MEDIUM * mult, radii.HUGE * mult }
         local corners = { { 0.01, 0.01 }, { 0.99, 0.01 }, { 0.01, 0.99 }, { 0.99, 0.99 }, { 0.50, 0.50 } }
         for _, r in ipairs(testRadii) do
             for _, pt in ipairs(corners) do
