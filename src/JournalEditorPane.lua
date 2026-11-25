@@ -56,7 +56,7 @@ function EditorPane.Build(tab, parent)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
     EditorSections.BuildTargetConfigControls(tab, targetSec.body, panelName)
 
-    local discoverySec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "discovery", "LABEL_DISCOVERY_SECTION", 134)
+    local discoverySec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "discovery", "LABEL_DISCOVERY_SECTION", 156)
     EditorSections.BuildDiscoveryControls(tab, discoverySec.body, panelName)
     EditorSections.BuildDiscoveryInputs(tab, discoverySec.body, panelName)
 
@@ -217,6 +217,9 @@ end
 local function SyncUnfocusedEdit(editCtrl, text)
     if editCtrl and not editCtrl._focused and editCtrl:GetText() ~= text then
         editCtrl:SetText(text)
+        if editCtrl._updateScrollbar then
+            editCtrl._updateScrollbar()
+        end
     end
 end
 
@@ -396,7 +399,7 @@ function EditorPane.RefreshDiscoveryMessageIndicator(tab, draft)
     end
 end
 
-local MAX_DISCOVERY_PREVIEW_CHARS = 28
+local MAX_DISCOVERY_PREVIEW_CHARS = 42
 
 local function TruncateDiscoveryText(text, maxChars)
     local trimmed = (text or ""):gsub("^%s+", ""):gsub("%s+$", "")
@@ -417,9 +420,9 @@ end
 local function FormatDiscoveryDropdownEntry(index, point)
     local preview = TruncateDiscoveryText(point and point.message or "", MAX_DISCOVERY_PREVIEW_CHARS)
     if preview == "" then
-        return string.format("#%d — ...", index)
+        return string.format("#%d - ...", index)
     end
-    return string.format("#%d — %s", index, preview)
+    return string.format("#%d - %s", index, preview)
 end
 
 function EditorPane.RefreshDiscoveryDropdown(tab, draft)

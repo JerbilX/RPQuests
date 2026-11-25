@@ -235,12 +235,11 @@ function WorldMapArea:Initialize()
             if tooltip and tooltip.AddLine then
                 AddTooltipHeader(tooltip, targetQuest)
                 if IsCreatorDiscoveryQuest(targetQuest) then
-                    local meters = math.floor(((tonumber(discovery.radius) or Addon.Constants.DISCOVERY_RADIUS.MEDIUM) / 100) + 0.5)
                     local msg = tostring(discovery.message or ""):gsub("[\r\n]+", " ")
                     if #msg > 60 then
                         msg = msg:sub(1, 57) .. "..."
                     end
-                    local creatorText = Addon.Locale:Get("MAP_TOOLTIP_DISCOVERY_CREATOR", discIndex, meters, msg)
+                    local creatorText = Addon.Locale:Get("MAP_TOOLTIP_DISCOVERY_CREATOR", discIndex, msg)
                     tooltip:AddLine(creatorText, "ZoFontGame", 1, 1, 1)
                 else
                     local playerText = Addon.Locale:Get("MAP_TOOLTIP_DISCOVERY_PLAYER", discIndex)

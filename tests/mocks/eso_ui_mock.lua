@@ -174,6 +174,13 @@ local function CreateControlMock(name, parent, controlType)
         if a then return true, a.point, a.relTo, a.relPoint, a.x, a.y end
         return false
     end
+    if controlType == CT_EDITBOX then
+        ctrl._topLineIndex = 1
+        ctrl._scrollExtents = 0
+        function ctrl:GetTopLineIndex() return self._topLineIndex end
+        function ctrl:SetTopLineIndex(idx) self._topLineIndex = idx end
+        function ctrl:GetScrollExtents() return self._scrollExtents end
+    end
     function ctrl:SetHandler(eventName, handler) self._handlers[eventName] = handler end
     function ctrl:GetHandler(eventName) return self._handlers[eventName] end
     function ctrl:FireHandler(eventName, ...)
@@ -312,6 +319,17 @@ function CreateControlFromVirtual(name, parent, templateName, optionalId)
         ctrl:SetHandler("OnClicked", function(self)
             ZO_CheckButton_OnClicked(self)
         end)
+    elseif templateName == "ZO_VerticalScrollbarBase" then
+        ctrl._minVal = 1
+        ctrl._maxVal = 1
+        ctrl._value = 1
+        function ctrl:SetMinMax(minV, maxV) self._minVal = minV; self._maxVal = maxV end
+        function ctrl:GetMinMax() return self._minVal, self._maxVal end
+        function ctrl:SetValue(v)
+            self._value = v
+            self:FireHandler("OnValueChanged", v)
+        end
+        function ctrl:GetValue() return self._value end
     end
     return ctrl
 end

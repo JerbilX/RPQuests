@@ -1181,7 +1181,7 @@ return function(T)
         tooltipLines = {}
         discCreator.creator(draftDiscPins[1])
         AssertEqual(#tooltipLines, 2, "Creator discovery tooltip has header + 1 line")
-        AssertEqual(tooltipLines[2], "Discovery Point #1 (15m): Secret shrine behind the waterfall.", "Creator tooltip shows radius and message")
+        AssertEqual(tooltipLines[2], "Discovery #1: Secret shrine behind the waterfall.", "Creator tooltip shows index and message")
 
         -- 2. Prepared quest preview (Creator): renders all discovery points automatically + creator tooltip
         local prepared = RPQuest.QuestRepository:SaveDraft("Discovery Hunt", "Find the clues.")
@@ -1210,7 +1210,7 @@ return function(T)
         tooltipLines = {}
         discCreator.creator(mockPinManager._createdPins[1])
         AssertEqual(#tooltipLines, 2, "Player discovery tooltip has header + 1 line")
-        AssertEqual(tooltipLines[2], "Discovery Point #1", "Player tooltip hides radius and secret message")
+        AssertEqual(tooltipLines[2], "Discovery #1", "Player tooltip hides radius and secret message")
 
         -- Trigger discovery #1 while worldMap scene is showing -> auto-refreshes and hides discovered point
         local origIsShowing = SCENE_MANAGER.IsShowing
@@ -1291,7 +1291,7 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 2, "Draft in editor renders both discovery pins")
         tooltipLines = {}
         discCreator.creator(mockPinManager._createdPins[1])
-        AssertEqual(tooltipLines[2], "Discovery Point #1 (15m): Secret shrine behind the waterfall.", "Draft in editor uses creator tooltip")
+        AssertEqual(tooltipLines[2], "Discovery #1: Secret shrine behind the waterfall.", "Draft in editor uses creator tooltip")
 
         -- 2. Prepared quest NOT in Test Quest: full creator view (all points + creator tooltip)
         local prepared = RPQuest.QuestRepository:SaveDraft("Discovery Hunt", "Find the clues.")
@@ -1300,7 +1300,7 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 2, "Prepared preview (not testing) renders all points including discovered")
         tooltipLines = {}
         discCreator.creator(mockPinManager._createdPins[1])
-        AssertEqual(tooltipLines[2], "Discovery Point #1 (15m): Secret shrine behind the waterfall.", "Prepared preview (not testing) uses creator tooltip")
+        AssertEqual(tooltipLines[2], "Discovery #1: Secret shrine behind the waterfall.", "Prepared preview (not testing) uses creator tooltip")
 
         -- 3. Prepared quest active in Test Quest: behaves 100% like player mode
         prepared.discoveries[1].discovered = false
@@ -1318,7 +1318,7 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 2, "Test Quest renders 2 pending discovery pins when showDiscoveryAreas=true")
         tooltipLines = {}
         discCreator.creator(mockPinManager._createdPins[1])
-        AssertEqual(tooltipLines[2], "Discovery Point #1", "Test Quest uses spoiler-free player tooltip")
+        AssertEqual(tooltipLines[2], "Discovery #1", "Test Quest uses spoiler-free player tooltip")
 
         -- 3c. Discovered point disappears from map during Test Quest
         local origIsShowing = SCENE_MANAGER.IsShowing

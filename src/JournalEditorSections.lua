@@ -350,25 +350,32 @@ function EditorSections.BuildTargetConfigControls(tab, targetBody, panelName)
 end
 
 function EditorSections.BuildDiscoveryControls(tab, discBody, panelName)
-    local CreateStyledButton = Addon.JournalWidgets.CreateStyledButton
     local CreateIconButton = Addon.JournalWidgets.CreateIconButton
 
-    tab.btnCaptureDiscovery = CreateStyledButton(panelName .. "_BtnCaptureDiscovery", discBody, 128, 26, Addon.Locale:Get("BTN_CAPTURE_DISCOVERY"), function()
-        local draft = Addon.QuestRepository:GetDraft()
-        local hasExisting = #(draft.discoveries or {}) > 0
-        local msgText = (not hasExisting and tab.discoveryMsgEdit) and tab.discoveryMsgEdit:GetText() or nil
-        local updatedDraft, countOrErr = Addon.TargetCapture:CaptureDiscoveryPoint(msgText)
-        if updatedDraft and type(countOrErr) == "number" and countOrErr > 0 then
-            tab.selectedDiscoveryIndex = countOrErr
-            Addon.QuestRepository:UpdateDraftFields({ discoveryMessage = "" }, true)
-            tab:RefreshEditorPane()
+    tab.btnCaptureDiscovery = CreateIconButton(
+        panelName .. "_BtnCaptureDiscovery", discBody, 28,
+        "/esoui/art/buttons/plus_up.dds",
+        "/esoui/art/buttons/plus_down.dds",
+        "/esoui/art/buttons/plus_over.dds",
+        "/esoui/art/buttons/plus_disabled.dds",
+        Addon.Locale:Get("TOOLTIP_ADD_DISCOVERY"),
+        function()
+            local draft = Addon.QuestRepository:GetDraft()
+            local hasExisting = #(draft.discoveries or {}) > 0
+            local msgText = (not hasExisting and tab.discoveryMsgEdit) and tab.discoveryMsgEdit:GetText() or nil
+            local updatedDraft, countOrErr = Addon.TargetCapture:CaptureDiscoveryPoint(msgText)
+            if updatedDraft and type(countOrErr) == "number" and countOrErr > 0 then
+                tab.selectedDiscoveryIndex = countOrErr
+                Addon.QuestRepository:UpdateDraftFields({ discoveryMessage = "" }, true)
+                tab:RefreshEditorPane()
+            end
         end
-    end)
+    )
     tab.btnCaptureDiscovery:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 0)
 
     local discoveryDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_DiscoveryDropdown", discBody, "ZO_ComboBox")
-    discoveryDropdown:SetDimensions(304, 28)
-    discoveryDropdown:SetAnchor(TOPLEFT, discBody, TOPLEFT, 134, 0)
+    discoveryDropdown:SetDimensions(404, 28)
+    discoveryDropdown:SetAnchor(TOPLEFT, discBody, TOPLEFT, 34, 0)
     tab.discoveryDropdown = discoveryDropdown
 
     local discCombo = ZO_ComboBox_ObjectFromContainer(discoveryDropdown)
@@ -439,7 +446,7 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
     tab.lblDiscoveryMsg = lblDiscoveryMsg
 
     local discMsgBg, discMsgEdit = CreateEditBox(
-        panelName .. "_DiscoveryMsgEdit", discBody, 510, 30, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, false,
+        panelName .. "_DiscoveryMsgEdit", discBody, 510, 52, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, true,
         function(val)
             local draft = Addon.QuestRepository:GetDraft()
             local idx = tab.selectedDiscoveryIndex

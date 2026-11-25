@@ -1148,7 +1148,8 @@ return function(T)
         table.insert(repo.savedVars.quests, qOpt)
         repo._questById[10] = qOpt
         tab:SelectQuest(10)
-        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_UNDETECTED"), 1, true) ~= nil, "Detail pane shows Optional Undetected")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), false, "Detail pane shows MISSION DETAILS when stealth is optional")
+        AssertTrue(tab.detailMissionText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_UNDETECTED"), 1, true) ~= nil, "Detail pane shows Optional Undetected")
 
         local qReq = repo:BuildQuestRecord(11, "Req Quest", "D", {
             { name = "G", currentCount = 0, requiredCount = 1 },
@@ -1158,7 +1159,7 @@ return function(T)
         table.insert(repo.savedVars.quests, qReq)
         repo._questById[11] = qReq
         tab:SelectQuest(11)
-        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Detail pane shows Required Failed")
+        AssertTrue(tab.detailMissionText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Detail pane shows Required Failed")
     end)
 
     RunTest("Issue #253: + New creates localized Preparing draft, auto-preserves edits, removes Cancel, and allows Abandon", function()
@@ -1443,65 +1444,71 @@ return function(T)
         local prepB = repo:SaveDraft("Quest B", "With target location.")
         local codeB = repo:ExportQuestToCode(prepB.id)
 
-        -- 1. Inactive prepared quest: toggles hidden, yellow recommendation banner hidden in Master view
+        -- 1. Inactive prepared quest: MAP MARKERS segment hidden in Master view
         tab:SelectQuest(prepA.id)
         tab:Refresh()
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Player-facing recommendation banner hidden in Master view")
-        AssertEqual(tab.btnShowSearchAreas:IsHidden(), true, "Toggles hidden on inactive prepared quest")
-        AssertEqual(tab.btnShowLocationAreas:IsHidden(), true, "Location toggle hidden on inactive prepared quest")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), true, "Player-facing MISSION DETAILS block hidden in Master summary view")
+        AssertEqual(tab.detailMapMarkersHeader:IsHidden(), true, "MAP MARKERS header hidden on inactive prepared quest")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), true, "Search row hidden on inactive prepared quest")
+        AssertEqual(tab.mapMarkerLocationRow:IsHidden(), true, "Location row hidden on inactive prepared quest")
+        AssertEqual(tab.mapMarkerDiscoveryRow:IsHidden(), true, "Discovery row hidden on inactive prepared quest")
 
-        -- 2. Testing prepared quest (active): toggles become visible, yellow banner stays hidden
+        -- 2. Testing prepared quest (active): switches to player view with MISSION DETAILS + TASKS + MAP MARKERS (applicable rows only)
         repo:SetActiveQuest(prepA.id)
         tab:SelectQuest(prepA.id)
         tab:Refresh()
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Player-facing recommendation banner stays hidden when testing prepared quest")
-        AssertEqual(tab.btnShowSearchAreas:IsHidden(), false, "Search toggle visible when testing prepared quest")
-        AssertEqual(tab.btnShowLocationAreas:IsHidden(), false, "Location toggle visible when testing prepared quest")
-        AssertEqual(tab.btnShowLocationAreas:IsEnabled(), false, "Location toggle disabled when no target has captured location")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), false, "MISSION DETAILS block shown when testing prepared quest with recommendHideMapAreas=true")
+        AssertTrue(tab.detailMissionText:GetText():find(RPQuest.Locale:Get("DETAIL_MAP_MARKERS_NOT_RECOMMENDED"), 1, true) ~= nil, "MISSION DETAILS shows not recommended line")
+        AssertEqual(tab.detailObjHeader:GetText(), RPQuest.Locale:Get("LABEL_OBJECTIVE_HEADER"), "TASKS header shown when testing prepared quest")
+        AssertEqual(tab.detailMapMarkersHeader:IsHidden(), false, "MAP MARKERS header visible when testing prepared quest")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), false, "Search Areas row visible when testing prepared quest")
+        AssertEqual(tab.mapMarkerLocationRow:IsHidden(), true, "Location row hidden when no target has captured location")
+        AssertEqual(tab.mapMarkerDiscoveryRow:IsHidden(), true, "Discovery row hidden when quest has no discovery points")
 
         -- Verify vertical anchoring avoids overlap
-        local _, _, searchRelTo = tab.btnShowSearchAreas:GetAnchor(1)
-        AssertEqual(searchRelTo, tab.detailObjText, "Search toggle anchored below detailObjText when banner is hidden")
+        local _, _, mapHdrRelTo = tab.detailMapMarkersHeader:GetAnchor(1)
+        AssertEqual(mapHdrRelTo, tab.detailObjText, "MAP MARKERS header anchored below detailObjText")
         local _, _, actRelTo = tab.btnActivate:GetAnchor(1)
-        AssertEqual(actRelTo, tab.btnShowDiscoveryAreas, "Action buttons anchored below discovery toggle")
+        AssertEqual(actRelTo, tab.mapMarkerSearchRow, "Action buttons anchored below last visible MAP MARKERS row")
 
         -- Stop testing prepared quest
         repo:SetActiveQuest(nil)
 
-        -- 3. Offered quest: toggles hidden, recommendation notice shown
+        -- 3. Offered quest: MAP MARKERS hidden, MISSION DETAILS shows recommendation
         local offeredA = repo:ImportQuestFromCode(codeA, "@Master", {
             status = RPQuest.Constants.QUEST_STATUS.OFFERED,
             sourceMailId = "mail_279_a",
         })
         tab:SelectQuest(offeredA.id)
         tab:Refresh()
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Recommendation notice shown on offered quest with recommendHideMapAreas=true")
-        AssertEqual(tab.btnShowSearchAreas:IsHidden(), true, "Toggles hidden on offered quest")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), false, "MISSION DETAILS shown on offered quest with recommendHideMapAreas=true")
+        AssertTrue(tab.detailMissionText:GetText():find(RPQuest.Locale:Get("DETAIL_MAP_MARKERS_NOT_RECOMMENDED"), 1, true) ~= nil, "Offered quest shows not recommended line in MISSION DETAILS")
+        AssertEqual(tab.detailMapMarkersHeader:IsHidden(), true, "MAP MARKERS hidden on offered quest")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), true, "Search row hidden on offered quest")
 
-        -- 4. Accepted (received) Quest A: notice shown, toggles visible, both off by default, Show on Map always visible/enabled
+        -- 4. Accepted (received) Quest A: MISSION DETAILS shown, Search row visible (Off by default), Location/Discovery hidden, Show on Map enabled
         repo:AcceptOfferedQuest(offeredA.id)
         tab:SelectQuest(offeredA.id)
         tab:Refresh()
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Recommendation notice shown on received Quest A")
-        AssertEqual(tab.btnShowSearchAreas:IsHidden(), false, "Search toggle visible on received Quest A")
-        AssertEqual(tab.btnShowLocationAreas:IsHidden(), false, "Location toggle visible on received Quest A")
-        AssertEqual(tab.btnShowLocationAreas:IsEnabled(), false, "Location toggle disabled on Quest A (no captured location)")
-        AssertEqual(tab.btnShowSearchAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_SEARCH_AREAS"), "Search toggle off by default")
-        AssertEqual(tab.btnShowLocationAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_LOCATION_AREAS_DISABLED"), "Location toggle shows disabled label")
-        AssertEqual(tab.showOnMapKeybindButton:IsHidden(), false, "Show on Map visible even with both toggles off")
-        AssertEqual(tab.showOnMapDescriptor.enabled(), true, "Show on Map enabled even with both toggles off")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), false, "MISSION DETAILS shown on received Quest A")
+        AssertEqual(tab.detailMapMarkersHeader:IsHidden(), false, "MAP MARKERS shown on received Quest A")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), false, "Search Areas row visible on received Quest A")
+        AssertEqual(tab.mapMarkerLocationRow:IsHidden(), true, "Location row hidden on Quest A (no captured location)")
+        AssertEqual(tab.mapMarkerDiscoveryRow:IsHidden(), true, "Discovery row hidden on Quest A (no discovery points)")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.mapMarkerSearchRow._chk), false, "Search Areas checkbox off by default")
+        AssertEqual(tab.mapMarkerSearchRow._chk._labelText, RPQuest.Locale:Get("MAP_MARKER_STATE_OFF"), "Search Areas status label is Off by default")
+        AssertEqual(tab.showOnMapKeybindButton:IsHidden(), false, "Show on Map visible even with all toggles off")
+        AssertEqual(tab.showOnMapDescriptor.enabled(), true, "Show on Map enabled even with all toggles off")
 
-        -- Clicking disabled location toggle does nothing
-        tab.btnShowLocationAreas:FireHandler("OnClicked")
-        AssertEqual(offeredA.showLocationAreas, nil, "Disabled location toggle does not mutate quest.showLocationAreas")
-
-        -- 5. Received Quest B (recommendHideMapAreas=false, WITH captured location)
+        -- 5. Received Quest B (recommendHideMapAreas=false, stealthMode=disabled, WITH captured location)
         local recB = repo:ImportQuestFromCode(codeB, "@Master")
         tab:SelectQuest(recB.id)
         tab:Refresh()
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Recommendation notice hidden when recommendHideMapAreas=false")
-        AssertEqual(tab.btnShowLocationAreas:IsEnabled(), true, "Location toggle enabled when target has captured location")
-        AssertEqual(tab.btnShowLocationAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_LOCATION_AREAS"), "Location toggle off by default")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), true, "MISSION DETAILS block completely hidden when recommendHideMapAreas=false and stealthMode=disabled")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), false, "Search Areas row visible on Quest B")
+        AssertEqual(tab.mapMarkerLocationRow:IsHidden(), false, "Location row visible when target has captured location")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.mapMarkerLocationRow._chk), false, "Location checkbox off by default")
+        AssertEqual(tab.mapMarkerLocationRow._chk._labelText, RPQuest.Locale:Get("MAP_MARKER_STATE_OFF"), "Location status label is Off by default")
 
         -- Toggle showSearchAreas -> persists on recB, refreshes WorldMapArea pins, leaves showLocationAreas off
         local origRefreshPins = RPQuest.WorldMapArea.RefreshPins
@@ -1510,18 +1517,18 @@ return function(T)
             refreshCount = refreshCount + 1
         end
 
-        tab.btnShowSearchAreas:FireHandler("OnClicked")
+        ZO_CheckButton_OnClicked(tab.mapMarkerSearchRow._chk)
         AssertEqual(recB.showSearchAreas, true, "showSearchAreas persisted on Quest B")
         AssertEqual(recB.showLocationAreas, nil, "showLocationAreas remains off when showSearchAreas toggled")
-        AssertEqual(tab.btnShowSearchAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_SEARCH_AREAS_ACTIVE"), "Search toggle label updated to active")
+        AssertEqual(tab.mapMarkerSearchRow._chk._labelText, RPQuest.Locale:Get("MAP_MARKER_STATE_SHOW"), "Search Areas status label updated to Show")
         AssertEqual(refreshCount >= 1, true, "WorldMapArea:RefreshPins called immediately on showSearchAreas toggle")
         AssertEqual(offeredA.showSearchAreas, nil, "Per-quest toggle on Quest B does not affect Quest A")
 
         -- Toggle showLocationAreas -> persists on recB, refreshes WorldMapArea pins
         local prevCount = refreshCount
-        tab.btnShowLocationAreas:FireHandler("OnClicked")
+        ZO_CheckButton_OnClicked(tab.mapMarkerLocationRow._chk)
         AssertEqual(recB.showLocationAreas, true, "showLocationAreas persisted on Quest B")
-        AssertEqual(tab.btnShowLocationAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_LOCATION_AREAS_ACTIVE"), "Location toggle label updated to active")
+        AssertEqual(tab.mapMarkerLocationRow._chk._labelText, RPQuest.Locale:Get("MAP_MARKER_STATE_SHOW"), "Location status label updated to Show")
         AssertEqual(refreshCount > prevCount, true, "WorldMapArea:RefreshPins called immediately on showLocationAreas toggle")
 
         -- Reload from SavedVars -> toggles remain persisted per quest
@@ -1637,8 +1644,9 @@ return function(T)
         AssertTrue(dialogueSec ~= nil and dialogueSec.bodyHeight >= 264, "dialogue section bodyHeight accommodates separate NPC rows")
 
         AssertEqual(tab.stealthDropdown:GetWidth(), 510, "stealthDropdown widened to 510px")
-        AssertEqual(tab.btnShowSearchAreas:GetWidth(), 495, "btnShowSearchAreas widened to 495px")
-        AssertEqual(tab.btnShowLocationAreas:GetWidth(), 495, "btnShowLocationAreas widened to 495px")
+        AssertEqual(tab.mapMarkerSearchRow:GetWidth(), 495, "mapMarkerSearchRow has 495px width")
+        AssertEqual(tab.mapMarkerLocationRow:GetWidth(), 495, "mapMarkerLocationRow has 495px width")
+        AssertEqual(tab.mapMarkerDiscoveryRow:GetWidth(), 495, "mapMarkerDiscoveryRow has 495px width")
 
         local discRow = {
             tab.btnCaptureDiscovery,
@@ -1651,11 +1659,12 @@ return function(T)
         AssertEqual(tab.lblDiscIndex, nil, "Legacy lblDiscIndex removed")
         AssertEqual(tab.btnDiscRemove, nil, "Legacy btnDiscRemove removed")
         AssertEqual(tab.lblCapturedDiscoveries, nil, "Redundant lblCapturedDiscoveries removed")
+        AssertEqual(tab.btnCaptureDiscovery:GetWidth(), 28, "btnCaptureDiscovery is 28x28 icon")
         AssertEqual(tab.btnRemoveDiscovery:GetWidth(), 28, "btnRemoveDiscovery is 28x28 icon")
         AssertEqual(tab.btnClearDiscoveries:GetWidth(), 28, "btnClearDiscoveries is 28x28 icon")
-        AssertTrue(tab.discoveryDropdown:GetWidth() >= 300, "discoveryDropdown is ~300px")
+        AssertTrue(tab.discoveryDropdown:GetWidth() >= 400, "discoveryDropdown widened to ~404px")
         local discSec = tab.editorSectionsByKey and tab.editorSectionsByKey["discovery"]
-        AssertTrue(discSec ~= nil and discSec.bodyHeight <= 140, "discovery section bodyHeight adjusted after removing summary line")
+        AssertTrue(discSec ~= nil and discSec.bodyHeight >= 156, "discovery section bodyHeight accommodates 2-line discoveryMsgEdit")
         local prevRight = -1
         for i, ctrl in ipairs(discRow) do
             local _, _, _, _, x = ctrl:GetAnchor(1)
@@ -1779,7 +1788,7 @@ return function(T)
         local masterText101 = tab.detailObjText:GetText()
         AssertTrue(masterText101:find(RPQuest.Locale:Get("MASTER_STEALTH_DISABLED"), 1, true) ~= nil, "Master draft with disabled stealth shows Stealth: Disabled")
         AssertTrue(masterText101:find("Recommend hiding", 1, true) ~= nil, "Master quest with recommendHideMapAreas=true shows Recommend hiding")
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), true, "Yellow banner hidden on Master quest")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), true, "Player MISSION DETAILS header hidden on Master quest")
 
         -- Draft with Optional & Required stealth + recommendHideMapAreas=false
         local qOptDraft = repo:BuildQuestRecord(103, "Opt Draft", "Desc", {
@@ -1802,12 +1811,14 @@ return function(T)
         tab:Refresh()
         AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("MASTER_STEALTH_REQUIRED"), 1, true) ~= nil, "Master draft with required stealth shows configured Required wording")
 
-        -- 3. Testing a Master quest preserves live detection status
+        -- 3. Testing a Master quest switches to player view (MISSION DETAILS + TASKS) without Master-only summary lines
         repo:SetActiveQuest(103)
         qOptDraft.wasDetected = true
         tab:SelectQuest(103)
         tab:Refresh()
-        AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_DETECTED"), 1, true) ~= nil, "Testing Master quest preserves live detection status")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), false, "Testing Master quest shows MISSION DETAILS block")
+        AssertTrue(tab.detailMissionText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_OPTIONAL_DETECTED"), 1, true) ~= nil, "Testing Master quest preserves live detection status in MISSION DETAILS")
+        AssertEqual(tab.detailObjHeader:GetText(), RPQuest.Locale:Get("LABEL_OBJECTIVE_HEADER"), "Testing Master quest uses TASKS header")
         repo:SetActiveQuest(nil)
 
         -- Sent + Failed Master quest preserves reported detection status
@@ -1821,7 +1832,7 @@ return function(T)
         tab:Refresh()
         AssertTrue(tab.detailObjText:GetText():find(RPQuest.Locale:Get("STEALTH_STATUS_REQUIRED_FAILED"), 1, true) ~= nil, "Sent+Failed Master quest preserves reported detection status")
 
-        -- 4. Player (received) quest keeps TASKS header and shows yellow banner when recommendHideMapAreas=true
+        -- 4. Player (received) quest uses TASKS header and shows map markers line inside MISSION DETAILS when recommendHideMapAreas=true
         local qRec = repo:BuildQuestRecord(105, "Received Quest", "Desc", {
             { name = "Guard", currentCount = 0, requiredCount = 1 },
         }, { mapId = 1, zoneId = 2, stealthMode = "disabled", recommendHideMapAreas = true }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
@@ -1830,7 +1841,8 @@ return function(T)
         tab:SelectQuest(105)
         tab:Refresh()
         AssertEqual(tab.detailObjHeader:GetText(), RPQuest.Locale:Get("LABEL_OBJECTIVE_HEADER"), "Received quest keeps TASKS header")
-        AssertEqual(tab.detailMapRecommendNotice:IsHidden(), false, "Received quest shows yellow recommendation banner")
+        AssertEqual(tab.detailMissionHeader:IsHidden(), false, "Received quest shows MISSION DETAILS block")
+        AssertTrue(tab.detailMissionText:GetText():find(RPQuest.Locale:Get("DETAIL_MAP_MARKERS_NOT_RECOMMENDED"), 1, true) ~= nil, "Received quest shows not recommended inside MISSION DETAILS")
         AssertEqual(tab.detailObjText:GetText():find("Recommend hiding", 1, true), nil, "Received quest does not show Master map recommendation line")
     end)
 
@@ -1954,9 +1966,9 @@ return function(T)
 
         local items = tab.discoveryComboBox:GetItems()
         AssertEqual(#items, 2, "discoveryComboBox lists both discovery points")
-        AssertTrue(items[1].name:find("^#1 — Welcome to RPQuest!") ~= nil, "First item uses #<index> — <truncated> format")
+        AssertTrue(items[1].name:find("^#1 %- Welcome to RPQuest!") ~= nil, "First item uses #<index> - <truncated> format")
         AssertTrue(items[1].name:find("%.%.%.$") ~= nil, "Long discovery message is truncated with ellipsis")
-        AssertEqual(items[2].name, "#2 — Short clue", "Second item shows full short message")
+        AssertEqual(items[2].name, "#2 - Short clue", "Second item shows full short message")
 
         -- Select #1 via dropdown
         tab.discoveryComboBox:SelectItemByIndex(1)
@@ -1978,7 +1990,7 @@ return function(T)
         AssertEqual(tab.btnClearDiscoveries:GetAlpha(), 0.45, "btnClearDiscoveries returns to 0.45 alpha after clear")
     end)
 
-    RunTest("Issue #298: JournalDetailPane btnShowDiscoveryAreas toggle state, disabled state, and persistence", function()
+    RunTest("Issue #298 & #307: JournalDetailPane MAP MARKERS Discovery row visibility, state, and persistence", function()
         mockState.language = "en"
         RPQuest.Locale:Initialize("en")
         local savedVars = RPQuest.QuestRepository:GetDefaults()
@@ -1987,7 +1999,7 @@ return function(T)
         local tab = RPQuest.JournalTab
         tab:Initialize()
 
-        -- 1. Received quest WITHOUT discovery points -> button visible, disabled with "(no discovery points)"
+        -- 1. Received quest WITHOUT discovery points -> Discovery row hidden, Search Areas row visible
         repo:ResetDraft()
         repo:SetDraftCapturedTarget({
             targetName = "Bandit",
@@ -2003,13 +2015,11 @@ return function(T)
         tab:SelectQuest(recNoDisc.id)
         tab:Refresh()
 
-        AssertEqual(tab.btnShowDiscoveryAreas:IsHidden(), false, "Discovery toggle visible on received quest without discoveries")
-        AssertEqual(tab.btnShowDiscoveryAreas:IsEnabled(), false, "Discovery toggle disabled when quest has no discoveries")
-        AssertEqual(tab.btnShowDiscoveryAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_DISCOVERY_AREAS_DISABLED"), "Disabled label shown when no discoveries")
-        tab.btnShowDiscoveryAreas:FireHandler("OnClicked")
-        AssertEqual(recNoDisc.showDiscoveryAreas, nil, "Clicking disabled discovery toggle does not mutate quest")
+        AssertEqual(tab.detailMapMarkersHeader:IsHidden(), false, "MAP MARKERS header visible when Search Areas applies")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), false, "Search Areas row visible")
+        AssertEqual(tab.mapMarkerDiscoveryRow:IsHidden(), true, "Discovery row hidden when quest has no discoveries")
 
-        -- 2. Received quest WITH discovery points -> enabled, off by default, toggles & persists
+        -- 2. Received quest WITH discovery points -> Discovery row visible, off by default, toggles & persists
         repo:ResetDraft()
         repo:UpdateDraftFields({ mapId = 45, zoneId = 104 })
         repo:AddDraftDiscoveryPoint({
@@ -2029,8 +2039,11 @@ return function(T)
         tab:SelectQuest(recWithDisc.id)
         tab:Refresh()
 
-        AssertEqual(tab.btnShowDiscoveryAreas:IsEnabled(), true, "Discovery toggle enabled when quest has discoveries")
-        AssertEqual(tab.btnShowDiscoveryAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_DISCOVERY_AREAS"), "Discovery toggle off by default")
+        AssertEqual(tab.mapMarkerSearchRow:IsHidden(), true, "Search Areas row hidden when discovery-only quest has no search area")
+        AssertEqual(tab.mapMarkerLocationRow:IsHidden(), true, "Location row hidden when discovery-only quest has no target location")
+        AssertEqual(tab.mapMarkerDiscoveryRow:IsHidden(), false, "Discovery row visible when quest has discoveries")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.mapMarkerDiscoveryRow._chk), false, "Discovery checkbox off by default")
+        AssertEqual(tab.mapMarkerDiscoveryRow._chk._labelText, RPQuest.Locale:Get("MAP_MARKER_STATE_OFF"), "Discovery status label is Off by default")
 
         local origRefreshPins = RPQuest.WorldMapArea.RefreshPins
         local refreshCount = 0
@@ -2038,9 +2051,9 @@ return function(T)
             refreshCount = refreshCount + 1
         end
 
-        tab.btnShowDiscoveryAreas:FireHandler("OnClicked")
+        ZO_CheckButton_OnClicked(tab.mapMarkerDiscoveryRow._chk)
         AssertEqual(recWithDisc.showDiscoveryAreas, true, "showDiscoveryAreas persisted on quest")
-        AssertEqual(tab.btnShowDiscoveryAreas:GetText(), RPQuest.Locale:Get("OPT_SHOW_DISCOVERY_AREAS_ACTIVE"), "Discovery toggle label updated to active")
+        AssertEqual(tab.mapMarkerDiscoveryRow._chk._labelText, RPQuest.Locale:Get("MAP_MARKER_STATE_SHOW"), "Discovery status label updated to Show")
         AssertEqual(refreshCount >= 1, true, "WorldMapArea:RefreshPins called on discovery toggle")
 
         repo:Initialize(savedVars)
@@ -2048,6 +2061,39 @@ return function(T)
         AssertEqual(reloaded.showDiscoveryAreas, true, "showDiscoveryAreas survives SavedVars reload")
 
         RPQuest.WorldMapArea.RefreshPins = origRefreshPins
+    end)
+
+    RunTest("Issue #307: multiline textarea scrollbars, mouse wheel, and empty MAP MARKERS hiding", function()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenCreateEditor()
+
+        -- Multiline fields have vertical scrollbars hidden when no overflow and shown on overflow
+        for _, edit in ipairs({ tab.descEdit, tab.discoveryMsgEdit, tab.dlgResponseEdit }) do
+            AssertTrue(edit._scrollbar ~= nil, "Multiline edit has vertical scrollbar")
+            AssertEqual(edit._scrollbar:IsHidden(), true, "Scrollbar hidden when content does not overflow")
+            edit._scrollExtents = 3
+            edit:FireHandler("OnTextChanged")
+            AssertEqual(edit._scrollbar:IsHidden(), false, "Scrollbar shown when content overflows")
+            edit:FireHandler("OnMouseWheel", -1, 0, 0, false)
+            AssertEqual(edit:GetTopLineIndex(), 2, "Mouse wheel down scrolls multiline editbox")
+            edit._scrollExtents = 0
+            edit:FireHandler("OnTextChanged")
+            AssertEqual(edit._scrollbar:IsHidden(), true, "Scrollbar hides again when overflow clears")
+        end
+
+        -- Quest with no search area, no location, no discoveries hides MAP MARKERS block completely
+        local bareQuest = repo:BuildQuestRecord(307, "Bare", "Desc", {
+            { name = "Guard", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2, stealthMode = "disabled", recommendHideMapAreas = false }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(repo.savedVars.quests, bareQuest)
+        repo._questById[307] = bareQuest
+        tab:SelectQuest(307)
+        tab:Refresh()
+        AssertEqual(tab.detailMissionHeader:IsHidden(), true, "MISSION DETAILS hidden when both stealth and map rec are absent")
+        AssertEqual(tab.detailMapMarkersHeader:IsHidden(), true, "MAP MARKERS block hidden when no marker rows apply")
     end)
 
     RunTest("Issue #309: asynchronous questJournal reopen from map preserves RPQuest tab over Rumors fallback", function()
