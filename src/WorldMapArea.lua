@@ -13,6 +13,7 @@ local PIN_TYPE_STRING = Addon.Constants.UI.PIN_TYPE_STRING
 local LOCATION_PIN_TYPE_STRING = Addon.Constants.UI.LOCATION_PIN_TYPE_STRING
 local DISCOVERY_PIN_TYPE_STRING = Addon.Constants.UI.DISCOVERY_PIN_TYPE_STRING
 local ZOOM_OUT_PIN_TYPE_STRING = Addon.Constants.UI.ZOOM_OUT_PIN_TYPE_STRING
+local TARGET_PING_PIN_TYPE_STRING = Addon.Constants.UI.TARGET_PING_PIN_TYPE_STRING
 local MAP_LISTENER_NAME = "RPQuest_WorldMapArea"
 local DRAFT_PIN_TAG = "__RPQUEST_DRAFT__"
 
@@ -91,6 +92,7 @@ local function RegisterMapSceneCallbacks(self, scene)
             self._pendingMapTarget = nil
             self.previewQuestId = nil
             self:StopPulseAnimations()
+            self:ClearTargetPing()
         end
     end)
 end
@@ -334,6 +336,27 @@ function WorldMapArea:Initialize()
     if self.zoomOutPinTypeId then
         pinManager:SetCustomPinEnabled(self.zoomOutPinTypeId, true)
         ZO_MapPin.ASSISTED_PIN_TYPES[self.zoomOutPinTypeId] = true
+    end
+
+    local targetPingPinLayoutData = {
+        level = 120,
+        minSize = 100,
+        texture = Addon.Constants.UI.TARGET_PING_TEXTURE,
+        isAnimated = true,
+        framesWide = 32,
+        framesHigh = 1,
+        framesPerSecond = 32,
+    }
+
+    local targetPingLayoutCallback = function(pManager)
+        self:OnLayoutTargetPingPins(pManager)
+    end
+
+    pinManager:AddCustomPin(TARGET_PING_PIN_TYPE_STRING, targetPingLayoutCallback, nil, targetPingPinLayoutData)
+    self.targetPingPinTypeId = _G[TARGET_PING_PIN_TYPE_STRING]
+
+    if self.targetPingPinTypeId then
+        pinManager:SetCustomPinEnabled(self.targetPingPinTypeId, true)
     end
 
     CALLBACK_MANAGER:RegisterCallback("OnWorldMapChanged", function()
@@ -964,6 +987,58 @@ function WorldMapArea:OnResizeZoomOutPins(pinManager)
     ApplyPinBlobColorOnResize(pinManager, self.zoomOutPinTypeId, Addon.Constants.UI.SEARCH_AREA_COLOR)
 end
 
+function WorldMapArea:OnLayoutTargetPingPins(pinManager)
+    local pManager = pinManager or GetWorldMapPinManager()
+    if not pManager or not self.targetPingPinTypeId then
+        return
+    end
+
+    local ping = self._activeTargetPing
+    if not ping or not ping.x or not ping.y then
+        return
+    end
+
+    if ZO_WorldMapPins_Manager.IsCurrentMapGlobal() then
+        return
+    end
+
+    local mapType = GetMapType()
+    if mapType == MAPTYPE_WORLD or mapType == MAPTYPE_COSMIC then
+        return
+    end
+
+    local currentMapId = GetCurrentMapId()
+    if ping.mapId and ping.mapId > 0 and currentMapId and currentMapId > 0 and currentMapId ~= ping.mapId then
+        return
+    end
+
+    local pinTag = {
+        questId = ping.questId,
+        targetIndex = ping.targetIndex,
+        kind = "targetPing",
+    }
+    pManager:CreatePin(self.targetPingPinTypeId, pinTag, ping.x, ping.y)
+end
+
+function WorldMapArea:RefreshTargetPingPins()
+    local pinManager = GetWorldMapPinManager()
+    if not pinManager or not pinManager.RefreshCustomPins then
+        return
+    end
+    if self.targetPingPinTypeId then
+        pinManager:RefreshCustomPins(self.targetPingPinTypeId)
+    end
+end
+
+function WorldMapArea:ClearTargetPing(skipRefresh)
+    self._targetPingToken = (self._targetPingToken or 0) + 1
+    local hadPing = self._activeTargetPing ~= nil
+    self._activeTargetPing = nil
+    if hadPing and not skipRefresh then
+        self:RefreshTargetPingPins()
+    end
+end
+
 function WorldMapArea:RequestRefreshPins()
     if not IsMapSceneShowing() then
         self._pinsDirty = true
@@ -979,7 +1054,7 @@ function WorldMapArea:RefreshPins()
     end
     self._pinsDirty = false
     self:StopPulseAnimations()
-    if self.pinTypeId or self.locationPinTypeId or self.discoveryPinTypeId or self.zoomOutPinTypeId then
+    if self.pinTypeId or self.locationPinTypeId or self.discoveryPinTypeId or self.zoomOutPinTypeId or self.targetPingPinTypeId then
         if self.pinTypeId then
             pinManager:RefreshCustomPins(self.pinTypeId)
         end
@@ -991,6 +1066,9 @@ function WorldMapArea:RefreshPins()
         end
         if self.zoomOutPinTypeId then
             pinManager:RefreshCustomPins(self.zoomOutPinTypeId)
+        end
+        if self.targetPingPinTypeId then
+            pinManager:RefreshCustomPins(self.targetPingPinTypeId)
         end
     else
         pinManager:RefreshCustomPins()
@@ -1059,15 +1137,68 @@ function WorldMapArea:HasMapLocation(quest)
     return false
 end
 
-function WorldMapArea:ShowQuestOnMap(quest)
+local function ResolveSelectedTargetMapPosition(self, quest, targetIndex)
+    if type(quest) ~= "table" or type(targetIndex) ~= "number" or type(quest.targets) ~= "table" then
+        return nil, nil, nil
+    end
+
+    local target = quest.targets[targetIndex]
+    if type(target) ~= "table" then
+        return nil, nil, nil
+    end
+
+    local mapId = tonumber(target.mapId) or tonumber(quest.mapId) or 0
+    if mapId <= 0 then
+        return nil, nil, nil
+    end
+
+    if target.areaCenterX and target.areaCenterY then
+        return mapId, target.areaCenterX, target.areaCenterY
+    end
+
+    if target.worldX ~= nil and target.worldZ ~= nil then
+        SetWorldMapToId(mapId)
+        local locX, locY = self:ProjectTargetLocationToCurrentMap(quest, target)
+        if locX and locY then
+            return mapId, locX, locY
+        end
+    end
+
+    return nil, nil, nil
+end
+
+function WorldMapArea:ShowQuestOnMap(quest, targetIndex)
     local targetQuest = quest or Addon.QuestRepository:GetActiveQuest()
     if not targetQuest then return false end
 
-    local mapId, panX, panY = ResolveQuestMapTarget(targetQuest)
-    if mapId <= 0 then return false end
+    local mapId, panX, panY = ResolveSelectedTargetMapPosition(self, targetQuest, targetIndex)
+    local hasSelectedTargetPing = (mapId ~= nil and panX ~= nil and panY ~= nil)
+    if not hasSelectedTargetPing then
+        mapId, panX, panY = ResolveQuestMapTarget(targetQuest)
+    end
+    if not mapId or mapId <= 0 then return false end
 
     self.previewQuestId = targetQuest.id or targetQuest.editingQuestId or DRAFT_PIN_TAG
     self._pinsDirty = true
+
+    self:ClearTargetPing(true)
+    if hasSelectedTargetPing then
+        local token = self._targetPingToken
+        self._activeTargetPing = {
+            mapId = mapId,
+            x = panX,
+            y = panY,
+            questId = self.previewQuestId,
+            targetIndex = targetIndex,
+        }
+        local durationMs = Addon.Constants.UI.TARGET_PING_DURATION_MS or 4500
+        zo_callLater(function()
+            if self._targetPingToken == token then
+                self:ClearTargetPing()
+            end
+        end, durationMs)
+    end
+
     local wasShowing = IsMapSceneShowing()
     if not wasShowing then
         self._pendingMapTarget = {

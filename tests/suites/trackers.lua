@@ -1567,4 +1567,237 @@ return function(T)
         _G.GetNormalizedWorldPosition = origGetNormWorld
     end)
 
+    RunTest("Issue #321: editor selected target concentric ping priority, fallback, and cleanup", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+        local origCallLater = _G.zo_callLater
+        local origSetMapById = WORLD_MAP_MANAGER.SetMapById
+
+        local scheduled = {}
+        _G.zo_callLater = function(fn, delayMs)
+            table.insert(scheduled, { fn = fn, delayMs = delayMs })
+        end
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        WORLD_MAP_MANAGER.SetMapById = function(_, mapId)
+            mockState.mapId = mapId
+        end
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(_, worldX, _, worldZ)
+            if worldX == 1000 and worldZ == 2000 then
+                return 0.75, 0.85
+            elseif worldX == 1800 and worldZ == 2000 then
+                return 0.78, 0.85
+            end
+            return nil, nil
+        end
+
+        local pingTypeId = RPQuest.WorldMapArea.targetPingPinTypeId
+        AssertTrue(pingTypeId ~= nil, "Target ping custom pin type is registered")
+        local pingLayout = mockPinManager._customPins[pingTypeId].pinLayoutData
+        AssertEqual(pingLayout.texture, "EsoUI/Art/MapPins/QuestPing.dds", "Target ping uses QuestPing.dds texture")
+        AssertEqual(pingLayout.framesWide, 32, "Target ping uses 32 horizontal frames")
+        AssertEqual(pingLayout.framesHigh, 1, "Target ping uses 1 vertical frame")
+        AssertEqual(pingLayout.framesPerSecond, 32, "Target ping runs at 32 fps")
+        AssertEqual(pingLayout.isAnimated, true, "Target ping is animated")
+        AssertEqual(pingLayout.minSize, 100, "Target ping minSize is 100")
+
+        local function CountPingPins()
+            local count = 0
+            local lastPin = nil
+            for _, p in ipairs(mockPinManager._createdPins) do
+                if p.pinTypeId == pingTypeId then
+                    count = count + 1
+                    lastPin = p
+                end
+            end
+            return count, lastPin
+        end
+
+        local quest = {
+            id = "q_321",
+            title = "Target Ping Quest",
+            mapId = 45,
+            zoneId = 104,
+            showSearchAreas = false,
+            showLocationAreas = false,
+            targets = {
+                {
+                    name = "Target With Area And Location",
+                    areaCenterX = 0.25,
+                    areaCenterY = 0.35,
+                    areaRadius = RPQuest.Constants.AREA_RADIUS.SMALL,
+                    worldX = 1000,
+                    worldZ = 2000,
+                    zoneId = 104,
+                    mapId = 45,
+                },
+                {
+                    name = "Target With Location Only",
+                    worldX = 1000,
+                    worldZ = 2000,
+                    zoneId = 104,
+                    mapId = 45,
+                },
+                {
+                    name = "Target Without Coordinates",
+                },
+            },
+        }
+
+        -- 1. Priority: Search Area center wins over Location projection
+        SCENE_MANAGER:Show("worldMap")
+        scheduled = {}
+        local ok1 = RPQuest.WorldMapArea:ShowQuestOnMap(quest, 1)
+        AssertEqual(ok1, true, "ShowQuestOnMap succeeds for target 1")
+        AssertEqual(mockState.lastPannedX, 0.25, "Search Area X takes priority over Location X")
+        AssertEqual(mockState.lastPannedY, 0.35, "Search Area Y takes priority over Location Y")
+        local c1, p1 = CountPingPins()
+        AssertEqual(c1, 1, "Creates 1 target ping pin for target 1")
+        AssertEqual(p1.x, 0.25, "Ping pin placed at Search Area X")
+        AssertEqual(p1.y, 0.35, "Ping pin placed at Search Area Y")
+
+        local pingTimer1 = nil
+        for _, item in ipairs(scheduled) do
+            if item.delayMs == 4500 then
+                pingTimer1 = item.fn
+            end
+        end
+        AssertTrue(pingTimer1 ~= nil, "Schedules ~4.5s (4500ms) cleanup timer for target ping")
+
+        -- 2. Second ShowQuestOnMap on target 2 (Location only) replaces ping and invalidates timer 1
+        scheduled = {}
+        local ok2 = RPQuest.WorldMapArea:ShowQuestOnMap(quest, 2)
+        AssertEqual(ok2, true, "ShowQuestOnMap succeeds for target 2")
+        AssertEqual(mockState.lastPannedX, 0.75, "Location projection X used when Search Area is absent")
+        AssertEqual(mockState.lastPannedY, 0.85, "Location projection Y used when Search Area is absent")
+        local c2, p2 = CountPingPins()
+        AssertEqual(c2, 1, "Replaces previous ping with 1 pin for target 2")
+        AssertEqual(p2.x, 0.75, "Ping pin placed at Location projection X")
+        AssertEqual(p2.y, 0.85, "Ping pin placed at Location projection Y")
+
+        -- Firing stale timer 1 must not clear target 2's ping
+        pingTimer1()
+        local cAfterStale = CountPingPins()
+        AssertEqual(cAfterStale, 1, "Stale timer from previous ShowQuestOnMap does not clear new ping")
+
+        -- Firing active timer 2 clears the ping
+        local pingTimer2 = nil
+        for _, item in ipairs(scheduled) do
+            if item.delayMs == 4500 then
+                pingTimer2 = item.fn
+            end
+        end
+        AssertTrue(pingTimer2 ~= nil, "Schedules 4500ms timer for target 2")
+        pingTimer2()
+        local cAfterExpire = CountPingPins()
+        AssertEqual(cAfterExpire, 0, "Ping is removed after 4.5s timer expires")
+
+        -- 3. Closing map scene (SCENE_HIDDEN) cleans up active ping
+        RPQuest.WorldMapArea:ShowQuestOnMap(quest, 1)
+        AssertEqual(CountPingPins(), 1, "Ping active before closing map")
+        SCENE_MANAGER:Hide("worldMap")
+        AssertEqual(CountPingPins(), 0, "Ping is removed when map scene closes")
+
+        -- 4. Target without own coordinates falls back to ResolveQuestMapTarget without ping
+        SCENE_MANAGER:Show("worldMap")
+        local ok3 = RPQuest.WorldMapArea:ShowQuestOnMap(quest, 3)
+        AssertEqual(ok3, true, "Fallback ShowQuestOnMap succeeds for target without own coordinates")
+        AssertEqual(mockState.lastPannedX, 0.25, "Fallback centers on quest general target X")
+        AssertEqual(mockState.lastPannedY, 0.35, "Fallback centers on quest general target Y")
+        AssertEqual(CountPingPins(), 0, "No target ping shown when selected target has no own coordinates")
+
+        SCENE_MANAGER:Hide("worldMap")
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+        _G.zo_callLater = origCallLater
+        WORLD_MAP_MANAGER.SetMapById = origSetMapById
+    end)
+
+    RunTest("Issue #321: ShowQuestOnMap switches mapId before projecting Location-only target ping", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+        local origCallLater = _G.zo_callLater
+        local origSetMapById = WORLD_MAP_MANAGER.SetMapById
+
+        _G.zo_callLater = function() end
+        mockState.mapId = 99 -- Player is currently viewing a different map
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        WORLD_MAP_MANAGER.SetMapById = function(_, mapId)
+            mockState.mapId = mapId
+        end
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(_, worldX, _, worldZ)
+            if mockState.mapId == 45 and worldX == 1000 and worldZ == 2000 then
+                return 0.75, 0.85
+            end
+            return nil, nil
+        end
+
+        local quest = {
+            id = "q_321_cross_map",
+            title = "Cross-Map Location Ping Quest",
+            mapId = 45,
+            zoneId = 104,
+            showSearchAreas = false,
+            showLocationAreas = false,
+            targets = {
+                {
+                    name = "Target With Location Only",
+                    worldX = 1000,
+                    worldZ = 2000,
+                    zoneId = 104,
+                    mapId = 45,
+                },
+            },
+        }
+
+        SCENE_MANAGER:Show("worldMap")
+        local ok = RPQuest.WorldMapArea:ShowQuestOnMap(quest, 1)
+        AssertEqual(ok, true, "ShowQuestOnMap succeeds when starting from a different map")
+        AssertEqual(mockState.mapId, 45, "ShowQuestOnMap switches mapId to target map before projecting")
+        AssertEqual(mockState.lastPannedX, 0.75, "Location projection X is resolved on target map")
+        AssertEqual(mockState.lastPannedY, 0.85, "Location projection Y is resolved on target map")
+
+        local pingTypeId = RPQuest.WorldMapArea.targetPingPinTypeId
+        local pingCount = 0
+        local pingPin = nil
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == pingTypeId then
+                pingCount = pingCount + 1
+                pingPin = p
+            end
+        end
+        AssertEqual(pingCount, 1, "Target ping pin is placed even when starting on a different map")
+        AssertEqual(pingPin.x, 0.75, "Target ping pin X matches projected coordinate on target map")
+        AssertEqual(pingPin.y, 0.85, "Target ping pin Y matches projected coordinate on target map")
+
+        SCENE_MANAGER:Hide("worldMap")
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+        _G.zo_callLater = origCallLater
+        WORLD_MAP_MANAGER.SetMapById = origSetMapById
+    end)
+
 end

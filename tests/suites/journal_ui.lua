@@ -329,10 +329,20 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 1, "Map pin refreshed when editing quest radius")
         AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "Edited draft pin immediately reflects SMALL radius")
 
-        -- 4. Pulsar [M] Show On Map desde el editor abre el mapa mostrando el pin editado
+        -- 4. Pulsar [M] Show On Map desde el editor abre el mapa mostrando el pin editado y el ping del objetivo seleccionado
         RPQuest.JournalTab.showOnMapDescriptor.callback()
-        AssertEqual(#mockPinManager._createdPins, 1, "ShowQuestOnMap from editor renders pin")
-        AssertEqual(mockPinManager._createdPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
+        local searchPins = {}
+        local pingPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.pinTypeId then
+                table.insert(searchPins, p)
+            elseif p.pinTypeId == RPQuest.WorldMapArea.targetPingPinTypeId then
+                table.insert(pingPins, p)
+            end
+        end
+        AssertEqual(#searchPins, 1, "ShowQuestOnMap from editor renders search area pin")
+        AssertEqual(searchPins[1].radius, RPQuest.Constants.AREA_RADIUS.SMALL, "ShowQuestOnMap from editor uses current edited SMALL radius")
+        AssertEqual(#pingPins, 1, "ShowQuestOnMap from editor renders target ping pin for selected target")
     end)
 
     RunTest("City/subzone map detection enlarges effective search area radius on Show on Map", function()
@@ -668,12 +678,17 @@ return function(T)
 
         local origEditorShow = RPQuest.WorldMapArea.ShowQuestOnMap
         local shownEditorTarget = nil
-        RPQuest.WorldMapArea.ShowQuestOnMap = function(_, target)
+        local shownEditorTargetIndex = nil
+        RPQuest.WorldMapArea.ShowQuestOnMap = function(_, target, targetIndex)
             shownEditorTarget = target
+            shownEditorTargetIndex = targetIndex
             return true
         end
+        RPQuest.JournalTab.selectedTargetIndex = 2
         RPQuest.JournalTab.showOnMapDescriptor.callback()
         AssertEqual(shownEditorTarget, RPQuest.QuestRepository:GetDraft(), "showOnMapDescriptor callback in Editor mode passes live draft")
+        AssertEqual(shownEditorTargetIndex, 2, "showOnMapDescriptor callback in Editor mode passes selectedTargetIndex")
+        RPQuest.JournalTab.selectedTargetIndex = nil
         RPQuest.WorldMapArea.ShowQuestOnMap = origEditorShow
 
         -- Text-only quest without coordinates in Detail mode -> hidden (vanilla behavior)
