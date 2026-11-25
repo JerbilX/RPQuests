@@ -288,7 +288,8 @@ local function RegisterAbandonDialogAndKeybinds(tab, pane, parent, panelName)
         callback = function()
             local target = ResolveShowOnMapTarget(tab, DETAIL_MODE, EDITOR_MODE)
             if target then
-                Addon.WorldMapArea:ShowQuestOnMap(target)
+                local targetIndex = (tab.viewMode == EDITOR_MODE) and tab.selectedTargetIndex or nil
+                Addon.WorldMapArea:ShowQuestOnMap(target, targetIndex)
             end
         end,
         visible = function()
