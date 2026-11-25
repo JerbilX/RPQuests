@@ -89,11 +89,10 @@ local function EncodeTargetsList(targets)
             local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
             local reqLoc = (t.locationRequired == true)
             local isOpt = (t.optional == true)
-            local msg = (not reqLoc and type(t.customMessage) == "string") and t.customMessage or ""
-            local msgInLoc = (reqLoc and type(t.customMessageInLocation) == "string") and t.customMessageInLocation or ""
-            local msgOutLoc = (reqLoc and type(t.customMessageOutsideLocation) == "string") and t.customMessageOutsideLocation or ""
+            local msg = type(t.customMessage) == "string" and t.customMessage or ""
+            local msgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
             local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and tonumber(t.areaRadius) > 0)
-            if hasLoc or reqLoc or msg ~= "" or msgInLoc ~= "" or msgOutLoc ~= "" or isOpt or hasArea then
+            if hasLoc or reqLoc or msg ~= "" or msgInLoc ~= "" or isOpt or hasArea then
                 local parts = {
                     EscapeField(t.name),
                     tostring(req),
@@ -108,7 +107,6 @@ local function EncodeTargetsList(targets)
                     hasArea and string.format("%.4f", tonumber(t.areaCenterY)) or "",
                     hasArea and string.format("%.4f", tonumber(t.areaRadius)) or "",
                     EscapeField(msgInLoc),
-                    EscapeField(msgOutLoc),
                 }
                 table.insert(items, table.concat(parts, "~"))
             else
@@ -261,9 +259,8 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
         local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
         local reqLoc = (t.locationRequired == true)
         local isOpt = (t.optional == true)
-        local tMsg = (not reqLoc and type(t.customMessage) == "string") and t.customMessage or ""
-        local tMsgInLoc = (reqLoc and type(t.customMessageInLocation) == "string") and t.customMessageInLocation or ""
-        local tMsgOutLoc = (reqLoc and type(t.customMessageOutsideLocation) == "string") and t.customMessageOutsideLocation or ""
+        local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
+        local tMsgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
         local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and (tonumber(t.areaRadius) or 0) > 0)
         local tFlags = (hasLoc and 1 or 0)
             + (reqLoc and 2 or 0)
@@ -271,7 +268,6 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
             + (isOpt and 8 or 0)
             + (hasArea and 16 or 0)
             + (tMsgInLoc ~= "" and 32 or 0)
-            + (tMsgOutLoc ~= "" and 64 or 0)
         BinaryCodec:WriteByte(buf, tFlags)
         BinaryCodec:WriteStr(buf, t.name or "")
         BinaryCodec:WriteUVarint(buf, math.max(1, math.floor(tonumber(t.requiredCount) or 1)))
@@ -291,9 +287,6 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
         end
         if tMsgInLoc ~= "" then
             BinaryCodec:WriteStr(buf, tMsgInLoc)
-        end
-        if tMsgOutLoc ~= "" then
-            BinaryCodec:WriteStr(buf, tMsgOutLoc)
         end
     end
 end
@@ -477,6 +470,9 @@ local function UnpackTargetsBlock(data, pos, len)
             tMsgOutLoc, pos = BinaryCodec:ReadStr(data, pos, len)
             if not tMsgOutLoc then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
         end
+        if tMsg == "" and tMsgOutLoc ~= "" then
+            tMsg = tMsgOutLoc
+        end
         table.insert(decodedTargets, {
             name = tName,
             currentCount = 0,
@@ -492,7 +488,6 @@ local function UnpackTargetsBlock(data, pos, len)
             optional = tOptional,
             customMessage = tMsg,
             customMessageInLocation = tMsgInLoc,
-            customMessageOutsideLocation = tMsgOutLoc,
         })
     end
 

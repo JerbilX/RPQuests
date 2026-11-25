@@ -470,8 +470,8 @@ return function(T)
                 radius = RPQuest.Constants.DISCOVERY_RADIUS.LARGE,
                 locationRequired = true,
                 optional = true,
+                customMessage = RandomAscii(limits.SHORT_MESSAGE),
                 customMessageInLocation = RandomAscii(limits.SHORT_MESSAGE),
-                customMessageOutsideLocation = RandomAscii(limits.SHORT_MESSAGE),
             }
         end
 

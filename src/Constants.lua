@@ -17,7 +17,7 @@ Addon.Constants = {
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 4,
+        CURRENT_VERSION = 5,
     },
     STEALTH_MODE = {
         DISABLED = "disabled",

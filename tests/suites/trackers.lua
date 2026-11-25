@@ -540,23 +540,22 @@ return function(T)
         RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1000)
         RPQuest.QuestRepository:UpdateDraftTarget(1, {
             locationRequired = true,
-            customMessage = "Should NOT fire when locationRequired is true.",
+            customMessage = "You alerted the district!",
             customMessageInLocation = "Silent takedown in the alley.",
-            customMessageOutsideLocation = "You alerted the district!",
         })
         local qReq = RPQuest.QuestRepository:SaveDraft("Required Loc Quest", "Desc")
         RPQuest.QuestRepository:SetActiveQuest(qReq.id)
 
-        -- Kill outside required location -> fails quest, kill does NOT count, shows customMessageOutsideLocation
+        -- Kill outside required location -> fails quest, kill does NOT count, shows customMessage
         _G.GetUnitWorldPosition = function() return 381, 50000, 0, 50000 end
         RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Guard", 0, 1, 0, 0, false, 1, 901, 0)
         AssertEqual(qReq.failed, true, "Quest fails when required location target is killed outside radius")
         AssertEqual(qReq.targets[1].currentCount, 0, "Kill outside required location does not count")
         AssertEqual(#failedCalls, 1, "AnnounceQuestFailed called once")
-        AssertEqual(failedCalls[1].reasonText, "You alerted the district!", "Failure uses customMessageOutsideLocation")
+        AssertEqual(failedCalls[1].reasonText, "You alerted the district!", "Failure uses customMessage")
         AssertEqual(RPQuest.QuestRepository:GetActiveQuest(), nil, "Failed quest is deactivated")
 
-        -- Reset quest and kill inside required location -> counts kill + shows customMessageInLocation (NOT customMessage)
+        -- Reset quest and kill inside required location -> counts kill + shows customMessageInLocation
         RPQuest.QuestRepository:ResetQuest(qReq.id)
         AssertEqual(qReq.failed, false, "ResetQuest clears failed flag")
         _G.GetUnitWorldPosition = function() return 381, 10200, 0, 20200 end
@@ -566,7 +565,7 @@ return function(T)
         AssertEqual(#customMsgCalls, 1, "Custom message shown inside required location")
         AssertEqual(customMsgCalls[1], "Silent takedown in the alley.", "Exact customMessageInLocation emitted")
 
-        -- Case 3: Optional location + defined point -> kills count anywhere in Tamriel and fire customMessage
+        -- Case 3: Optional location + defined point -> kills count anywhere in Tamriel; inside prioritizes customMessageInLocation
         RPQuest.QuestRepository:ResetDraft()
         RPQuest.QuestRepository:SetDraftCapturedTarget({
             targetName = "Scout",
@@ -580,8 +579,7 @@ return function(T)
         RPQuest.QuestRepository:UpdateDraftTarget(1, {
             locationRequired = false,
             customMessage = "Scout ambushed!",
-            customMessageInLocation = "Should NOT fire when locationRequired is false.",
-            customMessageOutsideLocation = "Should NOT fire when locationRequired is false.",
+            customMessageInLocation = "Scout ambushed in the alley!",
         })
         RPQuest.QuestRepository:GetDraft().targets[1].requiredCount = 2
         local qOpt = RPQuest.QuestRepository:SaveDraft("Optional Loc Quest", "Desc")
@@ -592,14 +590,15 @@ return function(T)
         RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Scout", 0, 1, 0, 0, false, 1, 903, 0)
         AssertEqual(qOpt.failed, false, "Optional location does not fail quest outside radius")
         AssertEqual(qOpt.targets[1].currentCount, 1, "Kill outside optional location still counts")
-        AssertEqual(#customMsgCalls, 2, "customMessage shown on kill when locationRequired is false")
-        AssertEqual(customMsgCalls[2], "Scout ambushed!", "Uses customMessage (not location messages)")
+        AssertEqual(#customMsgCalls, 2, "customMessage shown on kill outside optional location")
+        AssertEqual(customMsgCalls[2], "Scout ambushed!", "Uses customMessage outside optional location")
 
-        -- Kill inside defined point -> counts kill + shows customMessage
+        -- Kill inside defined point -> counts kill + prioritizes customMessageInLocation
         _G.GetUnitWorldPosition = function() return 381, 10100, 0, 20100 end
         RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Scout", 0, 1, 0, 0, false, 1, 904, 0)
         AssertEqual(qOpt.targets[1].currentCount, 2, "Second kill inside optional location counts")
-        AssertEqual(#customMsgCalls, 3, "customMessage shown inside optional location")
+        AssertEqual(#customMsgCalls, 3, "customMessageInLocation shown inside optional location")
+        AssertEqual(customMsgCalls[3], "Scout ambushed in the alley!", "Prioritizes customMessageInLocation inside optional location")
 
         -- Case 4: Optional location + NO defined point
         RPQuest.QuestRepository:ResetDraft()
@@ -621,7 +620,7 @@ return function(T)
         AssertEqual(qNoLoc.targets[1].currentCount, 1, "Target without location counts anywhere")
         AssertEqual(#customMsgCalls, 4, "Custom message shown anywhere when no location defined")
 
-        -- ShareCodec roundtrip for target conditions & 3-state custom messages
+        -- ShareCodec roundtrip for target conditions & 2-state custom messages
         local exported = RPQuest.QuestRepository:ExportQuestToCode(qReq.id)
         local decoded = RPQuest.ShareCodec:DecodeQuest(exported)
         AssertTrue(decoded ~= nil and decoded.targets ~= nil and #decoded.targets == 1, "Encoded quest with target condition decoded")
@@ -630,9 +629,9 @@ return function(T)
         AssertEqual(decoded.targets[1].worldZ, 20000, "Target worldZ preserved in ShareCodec")
         AssertEqual(decoded.targets[1].radius, 1000, "Target radius preserved in ShareCodec")
         AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved in ShareCodec")
-        AssertEqual(decoded.targets[1].customMessage, "", "Inactive customMessage pruned when locationRequired is true")
+        AssertEqual(decoded.targets[1].customMessage, "You alerted the district!", "Target customMessage preserved in ShareCodec")
         AssertEqual(decoded.targets[1].customMessageInLocation, "Silent takedown in the alley.", "Target customMessageInLocation preserved in ShareCodec")
-        AssertEqual(decoded.targets[1].customMessageOutsideLocation, "You alerted the district!", "Target customMessageOutsideLocation preserved in ShareCodec")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, nil, "Legacy customMessageOutsideLocation not serialized")
 
         RPQuest.Announcements.AnnounceTargetCustomMessage = origCustom
         RPQuest.Announcements.AnnounceQuestFailed = origFailed
@@ -786,8 +785,7 @@ return function(T)
         RPQuest.QuestRepository:UpdateDraftTarget(1, {
             locationRequired = false,
             customMessage = "Roamer down anywhere!",
-            customMessageInLocation = "Must NOT fire",
-            customMessageOutsideLocation = "Must NOT fire",
+            customMessageInLocation = "Must NOT fire without location",
         })
         local qTamriel = RPQuest.QuestRepository:SaveDraft("Tamriel Hunt", "Desc")
         RPQuest.QuestRepository:SetActiveQuest(qTamriel.id)
@@ -801,7 +799,7 @@ return function(T)
         AssertEqual(#customMsgCalls, 1, "Only customMessage fires")
         AssertEqual(customMsgCalls[1], "Roamer down anywhere!", "Exact general customMessage fired")
 
-        -- 2. locationRequired == true with empty customMessageOutsideLocation -> fallback (reasonText == nil)
+        -- 2. locationRequired == true with empty customMessage -> fallback (reasonText == nil)
         RPQuest.QuestRepository:ResetDraft()
         RPQuest.QuestRepository:SetDraftCapturedTarget({
             targetName = "Sentinel",
@@ -814,9 +812,8 @@ return function(T)
         RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1000)
         RPQuest.QuestRepository:UpdateDraftTarget(1, {
             locationRequired = true,
-            customMessage = "Must NOT fire",
+            customMessage = "",
             customMessageInLocation = "",
-            customMessageOutsideLocation = "",
         })
         local qFallback = RPQuest.QuestRepository:SaveDraft("Fallback Fail", "Desc")
         RPQuest.QuestRepository:SetActiveQuest(qFallback.id)
@@ -825,7 +822,36 @@ return function(T)
         RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Sentinel", 0, 1, 0, 0, false, 1, 9502, 0)
         AssertEqual(qFallback.failed, true, "Quest fails outside required location")
         AssertEqual(#failedReasonCalls, 1, "AnnounceQuestFailed called")
-        AssertEqual(failedReasonCalls[1].reasonText, nil, "Empty customMessageOutsideLocation falls back to nil (ALERT_QUEST_FAILED_LOCATION)")
+        AssertEqual(failedReasonCalls[1].reasonText, nil, "Empty customMessage falls back to nil (ALERT_QUEST_FAILED_LOCATION)")
+
+        -- 3. Kill inside location with empty customMessageInLocation falls back to customMessage
+        RPQuest.QuestRepository:UpdateDraftTarget(1, {
+            locationRequired = true,
+            customMessage = "Fallback kill message",
+            customMessageInLocation = "",
+        })
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Warden",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1000)
+        RPQuest.QuestRepository:UpdateDraftTarget(1, {
+            locationRequired = true,
+            customMessage = "Fallback kill message",
+            customMessageInLocation = "",
+        })
+        local qInFallback = RPQuest.QuestRepository:SaveDraft("InLoc Fallback", "Desc")
+        RPQuest.QuestRepository:SetActiveQuest(qInFallback.id)
+        _G.GetUnitWorldPosition = function() return 381, 10100, 0, 20100 end
+        RPQuest.CombatTracker:OnCombatEvent(0, ACTION_RESULT_DIED, false, "", 0, 0, "Player", COMBAT_UNIT_TYPE_PLAYER, "Warden", 0, 1, 0, 0, false, 1, 9503, 0)
+        AssertEqual(qInFallback.completed, true, "Quest completes inside required location")
+        AssertEqual(#customMsgCalls, 2, "Fallback customMessage fires inside location")
+        AssertEqual(customMsgCalls[2], "Fallback kill message", "Empty customMessageInLocation falls back to customMessage")
 
         RPQuest.Announcements.AnnounceTargetCustomMessage = origCustom
         RPQuest.Announcements.AnnounceQuestFailed = origFailed

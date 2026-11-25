@@ -308,41 +308,43 @@ local function BuildTargetLocationControls(tab, targetBody, panelName)
         end
     end)
 
-    local lblTargetMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblTargetMsg", targetBody, CT_LABEL)
-    lblTargetMsg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 246)
-    if lblTargetMsg.SetFont then lblTargetMsg:SetFont("ZoFontGameBold") end
-    lblTargetMsg:SetText(Addon.Locale:Get("LABEL_TARGET_MSG_SECTION"))
-    tab.lblTargetMsg = lblTargetMsg
-
-    local targetMsgDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_TargetMsgDropdown", targetBody, "ZO_ComboBox")
-    targetMsgDropdown:SetDimensions(300, 28)
-    targetMsgDropdown:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 268)
-    tab.targetMsgDropdown = targetMsgDropdown
-
-    local msgCombo = ZO_ComboBox_ObjectFromContainer(targetMsgDropdown)
-    if msgCombo then
-        msgCombo:SetSortsItems(false)
-        tab.targetMsgComboBox = msgCombo
-    end
+    local lblTargetCustomMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblTargetCustomMsg", targetBody, CT_LABEL)
+    lblTargetCustomMsg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 246)
+    if lblTargetCustomMsg.SetFont then lblTargetCustomMsg:SetFont("ZoFontGameBold") end
+    lblTargetCustomMsg:SetText(Addon.Locale:Get("OPT_TARGET_MSG_ELIMINATION"))
+    tab.lblTargetCustomMsg = lblTargetCustomMsg
 
     local targetCustomBg, targetCustomEdit = CreateEditBox(
         panelName .. "_TargetCustomMsgEdit", targetBody, 510, 30, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, false,
         function(val)
             local idx = tab.selectedTargetIndex
-            if not idx then return end
-            local state = tab.selectedTargetMsgState or "elimination"
-            if state == "in_location" then
-                Addon.QuestRepository:UpdateDraftTarget(idx, { customMessageInLocation = val }, true)
-            elseif state == "outside_location" then
-                Addon.QuestRepository:UpdateDraftTarget(idx, { customMessageOutsideLocation = val }, true)
-            else
+            if idx then
                 Addon.QuestRepository:UpdateDraftTarget(idx, { customMessage = val }, true)
             end
         end
     )
-    targetCustomBg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 302)
+    targetCustomBg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 266)
     tab.targetCustomBg = targetCustomBg
     tab.targetCustomEdit = targetCustomEdit
+
+    local lblTargetInLocMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblTargetInLocMsg", targetBody, CT_LABEL)
+    lblTargetInLocMsg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 304)
+    if lblTargetInLocMsg.SetFont then lblTargetInLocMsg:SetFont("ZoFontGameBold") end
+    lblTargetInLocMsg:SetText(Addon.Locale:Get("OPT_TARGET_MSG_IN_LOCATION"))
+    tab.lblTargetInLocMsg = lblTargetInLocMsg
+
+    local targetInLocBg, targetInLocEdit = CreateEditBox(
+        panelName .. "_TargetInLocMsgEdit", targetBody, 510, 30, Addon.Constants.TEXT_LIMITS.SHORT_MESSAGE, false,
+        function(val)
+            local idx = tab.selectedTargetIndex
+            if idx then
+                Addon.QuestRepository:UpdateDraftTarget(idx, { customMessageInLocation = val }, true)
+            end
+        end
+    )
+    targetInLocBg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 324)
+    tab.targetInLocBg = targetInLocBg
+    tab.targetInLocEdit = targetInLocEdit
 end
 
 function EditorSections.BuildTargetConfigControls(tab, targetBody, panelName)

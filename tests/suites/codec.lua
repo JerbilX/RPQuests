@@ -451,9 +451,8 @@ return function(T)
                     worldZ = 22000,
                     radius = 1200,
                     locationRequired = true,
-                    customMessage = "Unused when locationRequired=true",
+                    customMessage = "The vanguard escaped the outpost!",
                     customMessageInLocation = "Struck down inside the outpost!",
-                    customMessageOutsideLocation = "The vanguard escaped the outpost!",
                 },
                 {
                     name = "Courier",
@@ -474,7 +473,7 @@ return function(T)
 
         local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
         AssertTrue(decoded ~= nil, "v3 quest decoded cleanly: " .. tostring(decErr))
-        AssertEqual(decoded.schemaVersion, 4, "Decoded quest has schemaVersion = 4")
+        AssertEqual(decoded.schemaVersion, 5, "Decoded quest has schemaVersion = 5")
         AssertEqual(decoded.recommendHideMapAreas, false, "recommendHideMapAreas = false preserved")
         AssertEqual(decoded.showSearchAreas, nil, "Local preference showSearchAreas never serialized")
         AssertEqual(decoded.showLocationAreas, nil, "Local preference showLocationAreas never serialized")
@@ -484,8 +483,9 @@ return function(T)
         AssertTrue(math.abs(decoded.targets[1].areaCenterX - 0.25) < 0.001, "Target 1 areaCenterX preserved")
         AssertTrue(math.abs(decoded.targets[1].areaCenterY - 0.35) < 0.001, "Target 1 areaCenterY preserved")
         AssertTrue(math.abs(decoded.targets[1].areaRadius - 0.070) < 0.001, "Target 1 areaRadius preserved")
+        AssertEqual(decoded.targets[1].customMessage, "The vanguard escaped the outpost!", "Target 1 customMessage preserved even when locationRequired=true")
         AssertEqual(decoded.targets[1].customMessageInLocation, "Struck down inside the outpost!", "Target 1 customMessageInLocation preserved")
-        AssertEqual(decoded.targets[1].customMessageOutsideLocation, "The vanguard escaped the outpost!", "Target 1 customMessageOutsideLocation preserved")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, nil, "Target 1 legacy customMessageOutsideLocation not serialized")
 
         AssertTrue(math.abs(decoded.targets[2].areaCenterX - 0.75) < 0.001, "Target 2 areaCenterX preserved")
         AssertTrue(math.abs(decoded.targets[2].areaCenterY - 0.65) < 0.001, "Target 2 areaCenterY preserved")
@@ -518,7 +518,7 @@ return function(T)
         local legacyCode = RPQuest.ShareCodec:EncodeQuest(legacyV2Payload)
         local legacyDecoded = RPQuest.ShareCodec:DecodeQuest(legacyCode)
         AssertTrue(legacyDecoded ~= nil, "Older RPQ3-style payload decodes cleanly")
-        AssertEqual(legacyDecoded.schemaVersion, 4, "Decoded older RPQ3 payload upgraded to schema v4")
+        AssertEqual(legacyDecoded.schemaVersion, 5, "Decoded older RPQ3 payload upgraded to schema v5")
         AssertEqual(legacyDecoded.recommendHideMapAreas, true, "Older hideMapArea bit mapped to recommendHideMapAreas")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterX - 0.42) < 0.001, "Target inherits header areaCenterX")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterY - 0.58) < 0.001, "Target inherits header areaCenterY")
@@ -591,8 +591,7 @@ return function(T)
                     radius = 1500,
                     locationRequired = false,
                     customMessage = "Active general msg",
-                    customMessageInLocation = "Stale in-loc msg",
-                    customMessageOutsideLocation = "Stale out-loc msg",
+                    customMessageInLocation = "Optional in-loc msg",
                 },
                 {
                     name = "Target B",
@@ -602,9 +601,8 @@ return function(T)
                     worldZ = 4000,
                     radius = 1500,
                     locationRequired = true,
-                    customMessage = "Stale general msg",
+                    customMessage = "Required general msg",
                     customMessageInLocation = "Active in-loc msg",
-                    customMessageOutsideLocation = "Active out-loc msg",
                 },
                 { name = "Target C", requiredCount = 1 },
                 { name = "Target D", requiredCount = 1 },
@@ -637,13 +635,13 @@ return function(T)
         AssertEqual(#decoded.discoveries, 10, "10 discoveries round-trip")
         AssertEqual(#decoded.dialogues, 4, "4 dialogues round-trip")
 
-        AssertEqual(decoded.targets[1].customMessage, "Active general msg", "Target A keeps active customMessage")
-        AssertEqual(decoded.targets[1].customMessageInLocation, "", "Target A prunes inactive customMessageInLocation")
-        AssertEqual(decoded.targets[1].customMessageOutsideLocation, "", "Target A prunes inactive customMessageOutsideLocation")
+        AssertEqual(decoded.targets[1].customMessage, "Active general msg", "Target A keeps customMessage")
+        AssertEqual(decoded.targets[1].customMessageInLocation, "Optional in-loc msg", "Target A keeps customMessageInLocation even when locationRequired=false")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, nil, "Target A does not emit legacy customMessageOutsideLocation")
 
-        AssertEqual(decoded.targets[2].customMessage, "", "Target B prunes inactive customMessage")
-        AssertEqual(decoded.targets[2].customMessageInLocation, "Active in-loc msg", "Target B keeps active customMessageInLocation")
-        AssertEqual(decoded.targets[2].customMessageOutsideLocation, "Active out-loc msg", "Target B keeps active customMessageOutsideLocation")
+        AssertEqual(decoded.targets[2].customMessage, "Required general msg", "Target B keeps customMessage even when locationRequired=true")
+        AssertEqual(decoded.targets[2].customMessageInLocation, "Active in-loc msg", "Target B keeps customMessageInLocation")
+        AssertEqual(decoded.targets[2].customMessageOutsideLocation, nil, "Target B does not emit legacy customMessageOutsideLocation")
     end)
 
 end
