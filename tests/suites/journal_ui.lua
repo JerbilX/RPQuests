@@ -2356,6 +2356,53 @@ return function(T)
         AssertTrue(r >= 0.85 and g >= 0.85 and b >= 0.75 and a == 1, "versionLabel uses high-contrast legible color")
     end)
 
+    RunTest("Issue #330: RPQuest tab is added rightmost after Quests and Rumors on first OnShowing", function()
+        RPQuest.QuestRepository:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        local qj = QUEST_JOURNAL_KEYBOARD
+        local origInitializedTabs = qj.initializedTabs
+        local origOnShowing = qj.OnShowing
+        local origAdd = qj.tabs.Add
+        local wasPanelHidden = tab.panel and tab.panel:IsHidden()
+
+        local addedOrder = {}
+        qj.initializedTabs = false
+        qj.OnShowing = function(self)
+            if not self.initializedTabs then
+                self.tabs:Add("Quests", {}, { categoryName = "Quests" })
+                self.tabs:Add("Rumors", {}, { categoryName = "Rumors" })
+                self.initializedTabs = true
+            end
+        end
+        qj.tabs.Add = function(self, name, fragments, tabData, keybindStripDescriptor)
+            table.insert(addedOrder, name)
+            return origAdd(self, name, fragments, tabData, keybindStripDescriptor)
+        end
+
+        tab.isInitialized = false
+        tab.isTabAdded = false
+        tab:Initialize()
+
+        AssertEqual(#addedOrder, 0, "RPQuest tab is not added before QuestJournal initializes its native tabs")
+
+        qj:OnShowing()
+        AssertEqual(#addedOrder, 3, "All 3 tabs added on first OnShowing")
+        AssertEqual(addedOrder[1], "Quests", "First tab is Quests")
+        AssertEqual(addedOrder[2], "Rumors", "Second tab is Rumors")
+        AssertEqual(addedOrder[3], tab.tabCategoryName, "Third (rightmost) tab is RPQuest")
+
+        -- Subsequent OnShowing calls do not duplicate the RPQuest tab
+        qj:OnShowing()
+        AssertEqual(#addedOrder, 3, "RPQuest tab is not duplicated on subsequent OnShowing calls")
+
+        qj.initializedTabs = origInitializedTabs
+        qj.OnShowing = origOnShowing
+        qj.tabs.Add = origAdd
+        if tab.panel and wasPanelHidden ~= nil then
+            tab.panel:SetHidden(wasPanelHidden)
+        end
+    end)
+
     RunTest("Issue #53: Journal editor selects quest icon and list/detail display it", function()
         RPQuest.QuestRepository:Initialize(nil)
         local repo = RPQuest.QuestRepository

@@ -225,6 +225,7 @@ function JournalTab:Initialize()
     versionLabel:SetDrawLevel(10)
     if versionLabel.SetFont then versionLabel:SetFont("ZoFontGameSmall") end
     if versionLabel.SetColor then versionLabel:SetColor(0.95, 0.92, 0.82, 1) end
+    if versionLabel.SetStyleColor then versionLabel:SetStyleColor(0, 0, 0, 1) end
     if versionLabel.SetHorizontalAlignment then
         versionLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
     end
@@ -500,7 +501,6 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
     local pendingRPQuestMode = false
 
     ZO_PreHook(qj, "OnShowing", function(qjSelf)
-        EnsureTabAdded()
         if self._pendingRPQuestOpen then
             pendingRPQuestMode = true
             self._pendingRPQuestOpen = false
