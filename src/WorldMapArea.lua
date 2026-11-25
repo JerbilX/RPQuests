@@ -90,6 +90,7 @@ local function RegisterMapSceneCallbacks(self, scene)
         elseif newState == SCENE_HIDDEN then
             self._pendingMapTarget = nil
             self.previewQuestId = nil
+            self:StopPulseAnimations()
         end
     end)
 end
@@ -254,7 +255,11 @@ function WorldMapArea:Initialize()
         self:OnLayoutPins(pManager)
     end
 
-    pinManager:AddCustomPin(PIN_TYPE_STRING, layoutCallback, nil, pinLayoutData, pinTooltipCreator)
+    local searchResizeCallback = function(pManager)
+        self:OnResizeSearchPins(pManager)
+    end
+
+    pinManager:AddCustomPin(PIN_TYPE_STRING, layoutCallback, searchResizeCallback, pinLayoutData, pinTooltipCreator)
     self.pinTypeId = _G[PIN_TYPE_STRING]
 
     if self.pinTypeId then
@@ -311,7 +316,8 @@ function WorldMapArea:Initialize()
     local zoomOutPinLayoutData = {
         level = 115,
         size = 32,
-        texture = Addon.Constants.UI.ICON_QUEST,
+        minAreaSize = 48,
+        texture = "",
         showsPinAndArea = false,
     }
 
@@ -319,7 +325,11 @@ function WorldMapArea:Initialize()
         self:OnLayoutZoomOutPins(pManager)
     end
 
-    pinManager:AddCustomPin(ZOOM_OUT_PIN_TYPE_STRING, zoomOutLayoutCallback, nil, zoomOutPinLayoutData, pinTooltipCreator)
+    local zoomOutResizeCallback = function(pManager)
+        self:OnResizeZoomOutPins(pManager)
+    end
+
+    pinManager:AddCustomPin(ZOOM_OUT_PIN_TYPE_STRING, zoomOutLayoutCallback, zoomOutResizeCallback, zoomOutPinLayoutData, pinTooltipCreator)
     self.zoomOutPinTypeId = _G[ZOOM_OUT_PIN_TYPE_STRING]
 
     if self.zoomOutPinTypeId then
@@ -617,27 +627,148 @@ function WorldMapArea:GetEffectiveAreaRadius(baseRadius, mapType)
     return radius
 end
 
+local function HashString(str, seed)
+    local h = seed or 5381
+    for i = 1, #str do
+        h = ((h * 33) + string.byte(str, i)) % 2147483647
+    end
+    return h
+end
+
+local function ComputeZoomOutSeed(quest)
+    local idPart = tostring((quest and (quest.id or quest.editingQuestId)) or "")
+    local titlePart = tostring((quest and quest.title) or "")
+    local mapPart = tostring((quest and quest.mapId) or 0)
+    local zonePart = tostring((quest and quest.zoneId) or 0)
+    local key = idPart .. ":" .. titlePart .. ":" .. mapPart .. ":" .. zonePart
+    local uAngle = (HashString(key, 5381) % 10000) / 10000
+    local uDist = (HashString(key, 31337) % 10000) / 10000
+    return uAngle, uDist
+end
+
+local function ApplyPinBlobColor(pin, color)
+    if pin and pin.pinBlob and pin.pinBlob.SetColor and color then
+        pin.pinBlob:SetColor(color.r, color.g, color.b, color.a)
+    end
+end
+
+function WorldMapArea:StopPulseAnimations(kindFilter)
+    local active = self._activePulseAnimations
+    if not active then
+        return
+    end
+    for i = #active, 1, -1 do
+        local entry = active[i]
+        if not kindFilter or entry.kind == kindFilter then
+            table.remove(active, i)
+            entry.stopped = true
+            if entry.timeline and entry.timeline.Stop then
+                entry.timeline:Stop()
+            end
+            if entry.anim and entry.anim.SetAnimatedControl then
+                entry.anim:SetAnimatedControl(nil)
+            end
+            if entry.blob and entry.blob.SetAlpha then
+                entry.blob:SetAlpha(1)
+            end
+        end
+    end
+end
+
+function WorldMapArea:StartPulseAnimation(pin, kind)
+    if not pin or not pin.pinBlob then
+        return
+    end
+    if not ANIMATION_MANAGER or not ANIMATION_MANAGER.CreateTimeline then
+        return
+    end
+
+    local blob = pin.pinBlob
+    local timeline = ANIMATION_MANAGER:CreateTimeline()
+    if not timeline or not timeline.InsertAnimation then
+        return
+    end
+
+    local anim = timeline:InsertAnimation(ANIMATION_ALPHA, blob, 0)
+    if not anim then
+        return
+    end
+
+    if anim.SetAlphaValues then
+        anim:SetAlphaValues(1.0, 0.35)
+    end
+    if anim.SetDuration then
+        anim:SetDuration(450)
+    end
+    if timeline.SetPlaybackType then
+        timeline:SetPlaybackType(ANIMATION_PLAYBACK_PING_PONG, 4)
+    end
+
+    self._activePulseAnimations = self._activePulseAnimations or {}
+    local entry = {
+        timeline = timeline,
+        anim = anim,
+        blob = blob,
+        kind = kind,
+        stopped = false,
+    }
+    table.insert(self._activePulseAnimations, entry)
+
+    if timeline.SetHandler then
+        timeline:SetHandler("OnStop", function()
+            if entry.stopped then
+                return
+            end
+            entry.stopped = true
+            local list = self._activePulseAnimations
+            if list then
+                for i = #list, 1, -1 do
+                    if list[i] == entry then
+                        table.remove(list, i)
+                        break
+                    end
+                end
+            end
+            if anim.SetAnimatedControl then
+                anim:SetAnimatedControl(nil)
+            end
+            if blob.SetAlpha then
+                blob:SetAlpha(1)
+            end
+        end)
+    end
+
+    if timeline.PlayFromStart then
+        timeline:PlayFromStart()
+    end
+end
+
 function WorldMapArea:OnLayoutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.pinTypeId then return end
+
+    self:StopPulseAnimations("search")
 
     local targetQuest, questTag = self:ResolveTargetQuest()
     if not self:ShouldRenderOnCurrentMap(targetQuest) then
         return
     end
 
+    local color = Addon.Constants.UI.SEARCH_AREA_COLOR
     local createdAny = false
     for i, t in ipairs(targetQuest.targets or {}) do
         if IsTargetPending(t) and t.areaCenterX and t.areaCenterY and t.areaRadius and t.areaRadius > 0 then
             local effectiveRadius = self:GetEffectiveAreaRadius(t.areaRadius)
             local pinTag = { questId = questTag, targetIndex = i, kind = "search" }
-            pManager:CreatePin(
+            local pin = pManager:CreatePin(
                 self.pinTypeId,
                 pinTag,
                 t.areaCenterX,
                 t.areaCenterY,
                 effectiveRadius
             )
+            ApplyPinBlobColor(pin, color)
+            self:StartPulseAnimation(pin, "search")
             createdAny = true
         end
     end
@@ -646,13 +777,15 @@ function WorldMapArea:OnLayoutPins(pinManager)
         if areaCX and areaCY and areaRad then
             local effectiveRadius = self:GetEffectiveAreaRadius(areaRad)
             local pinTag = { questId = questTag, kind = "search" }
-            pManager:CreatePin(
+            local pin = pManager:CreatePin(
                 self.pinTypeId,
                 pinTag,
                 areaCX,
                 areaCY,
                 effectiveRadius
             )
+            ApplyPinBlobColor(pin, color)
+            self:StartPulseAnimation(pin, "search")
         end
     end
 end
@@ -759,6 +892,10 @@ local function ApplyPinBlobColorOnResize(pinManager, pinTypeId, color)
     end
 end
 
+function WorldMapArea:OnResizeSearchPins(pinManager)
+    ApplyPinBlobColorOnResize(pinManager, self.pinTypeId, Addon.Constants.UI.SEARCH_AREA_COLOR)
+end
+
 function WorldMapArea:OnResizeLocationPins(pinManager)
     ApplyPinBlobColorOnResize(pinManager, self.locationPinTypeId, Addon.Constants.UI.LOCATION_AREA_COLOR)
 end
@@ -802,6 +939,8 @@ function WorldMapArea:OnLayoutZoomOutPins(pinManager)
     local pManager = pinManager or GetWorldMapPinManager()
     if not pManager or not self.zoomOutPinTypeId then return end
 
+    self:StopPulseAnimations("zoom")
+
     local targetQuest, questTag = self:ResolveTargetQuest()
     if not self:ShouldRenderZoomOutOnCurrentMap(targetQuest) then
         return
@@ -812,11 +951,18 @@ function WorldMapArea:OnLayoutZoomOutPins(pinManager)
         return
     end
 
+    local zoomOutRadius = Addon.Constants.AREA_RADIUS.MEDIUM
+    local uAngle, uDist = ComputeZoomOutSeed(targetQuest)
+    local offsetX, offsetY = self:ComputeOffsetCenter(projX, projY, zoomOutRadius, uAngle, uDist)
+
     local pinTag = { questId = questTag, kind = "zoom" }
-    local pin = pManager:CreatePin(self.zoomOutPinTypeId, pinTag, projX, projY)
-    if pin then
-        pin:PingMapPin(ZO_MapPin.PulseAnimation)
-    end
+    local pin = pManager:CreatePin(self.zoomOutPinTypeId, pinTag, offsetX, offsetY, zoomOutRadius)
+    ApplyPinBlobColor(pin, Addon.Constants.UI.SEARCH_AREA_COLOR)
+    self:StartPulseAnimation(pin, "zoom")
+end
+
+function WorldMapArea:OnResizeZoomOutPins(pinManager)
+    ApplyPinBlobColorOnResize(pinManager, self.zoomOutPinTypeId, Addon.Constants.UI.SEARCH_AREA_COLOR)
 end
 
 function WorldMapArea:RequestRefreshPins()
@@ -833,6 +979,7 @@ function WorldMapArea:RefreshPins()
         return
     end
     self._pinsDirty = false
+    self:StopPulseAnimations()
     if self.pinTypeId or self.locationPinTypeId or self.discoveryPinTypeId or self.zoomOutPinTypeId then
         if self.pinTypeId then
             pinManager:RefreshCustomPins(self.pinTypeId)

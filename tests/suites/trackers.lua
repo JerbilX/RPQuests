@@ -691,20 +691,26 @@ return function(T)
         AssertEqual(#mockPinManager._createdPins, 1, "Zoom-out reference pin rendered on parent zone map")
         local zonePin = mockPinManager._createdPins[1]
         AssertEqual(zonePin.pinTypeId, RPQuest.WorldMapArea.zoomOutPinTypeId, "Parent zone renders zoom-out pin type")
-        AssertEqual(zonePin.x, 0.55, "Projected X matches parent zone")
-        AssertEqual(zonePin.y, 0.48, "Projected Y matches parent zone")
-        AssertEqual(zonePin.radius, nil, "Zoom-out pin has no search area radius")
-        AssertEqual(#zonePin.pingAnimations, 1, "Zoom-out pin triggers pulse animation")
-        AssertEqual(zonePin.pingAnimations[1], ZO_MapPin.PulseAnimation, "Zoom-out pin uses ZO_MapPin.PulseAnimation")
+        local zDx = zonePin.x - 0.55
+        local zDy = zonePin.y - 0.48
+        local zDist = math.sqrt((zDx * zDx) + (zDy * zDy))
+        AssertTrue(zDist > 0.001, "Parent zone zoom-out center is offset from exact projection")
+        AssertTrue(zDist <= zonePin.radius, "Parent zone projected point remains inside zoom-out radius")
+        AssertEqual(zonePin.radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Zoom-out pin uses medium area radius")
+        AssertTrue(#(RPQuest.WorldMapArea._activePulseAnimations or {}) == 1, "Zoom-out pin triggers pulse animation")
 
         -- 3. Zoom out to world map (mapId 27, MAPTYPE_WORLD): zoom-out pin still renders
         mockState.mapId = 27
         mockState.mapType = MAPTYPE_WORLD
         RPQuest.WorldMapArea:RefreshPins()
         AssertEqual(#mockPinManager._createdPins, 1, "Zoom-out reference pin rendered on world map")
-        AssertEqual(mockPinManager._createdPins[1].pinTypeId, RPQuest.WorldMapArea.zoomOutPinTypeId, "World map renders zoom-out pin")
-        AssertEqual(mockPinManager._createdPins[1].x, 0.78, "Projected X matches world map")
-        AssertEqual(mockPinManager._createdPins[1].y, 0.36, "Projected Y matches world map")
+        local worldPin = mockPinManager._createdPins[1]
+        AssertEqual(worldPin.pinTypeId, RPQuest.WorldMapArea.zoomOutPinTypeId, "World map renders zoom-out pin")
+        local wDx = worldPin.x - 0.78
+        local wDy = worldPin.y - 0.36
+        local wDist = math.sqrt((wDx * wDx) + (wDy * wDy))
+        AssertTrue(wDist > 0.001, "World map zoom-out center is offset from exact projection")
+        AssertTrue(wDist <= worldPin.radius, "World map projected point remains inside zoom-out radius")
 
         -- 4. Cosmic map (MAPTYPE_COSMIC): no zoom-out pin
         mockState.mapType = MAPTYPE_COSMIC
@@ -1438,6 +1444,127 @@ return function(T)
         MAIN_MENU_KEYBOARD.ShowCategory = origMainMenuShow
         SCENE_MANAGER.Show = origSceneShow
         SCENE_MANAGER.Hide = origSceneHide
+    end)
+
+    RunTest("Issue #310: zoom-out emerald area with deterministic offset, search area emerald tint, resize persistence, and pulse cleanup", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        local projX, projY = 0.62, 0.38
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function()
+            return projX, projY
+        end
+
+        -- 1. Zoom-out pin layout config uses circular blob (no vanilla arrow texture)
+        local zoomLayout = mockPinManager._customPins[RPQuest.WorldMapArea.zoomOutPinTypeId].pinLayoutData
+        AssertEqual(zoomLayout.texture, "", "ZoomOut pin has empty texture (blob only, no vanilla arrow)")
+        AssertEqual(zoomLayout.showsPinAndArea, false, "ZoomOut pin sets showsPinAndArea=false")
+        AssertTrue((zoomLayout.minAreaSize or 0) >= 48, "ZoomOut pin defines legible minAreaSize")
+
+        -- 2. Create quest on map 45 with search area & world position
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:UpdateDraftFields({ mapId = 45, zoneId = 104, worldX = 50000, worldZ = 50000 })
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Emerald Guard",
+            mapId = 45,
+            zoneId = 104,
+            targetX = 0.5,
+            targetY = 0.5,
+            areaRadius = 0.125,
+            worldX = 50000,
+            worldZ = 50000,
+        })
+        local quest = RPQuest.QuestRepository:SaveDraft("Emerald Hunt", "Track the guard.")
+        RPQuest.QuestRepository:SetActiveQuest(quest.id)
+        RPQuest.QuestRepository:SetSetting("showSearchAreas", true)
+
+        -- Same-map search area uses emerald SEARCH_AREA_COLOR, pulses, and persists across resize
+        ANIMATION_MANAGER._timelines = {}
+        RPQuest.WorldMapArea:RefreshPins()
+        local searchPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.pinTypeId then
+                table.insert(searchPins, p)
+            end
+        end
+        AssertEqual(#searchPins, 1, "Same map renders 1 search area pin")
+        local emerald = RPQuest.Constants.UI.SEARCH_AREA_COLOR
+        AssertEqual(searchPins[1].pinBlob.color.r, emerald.r, "Search pin uses emerald red channel")
+        AssertEqual(searchPins[1].pinBlob.color.g, emerald.g, "Search pin uses emerald green channel")
+        AssertEqual(searchPins[1].pinBlob.color.b, emerald.b, "Search pin uses emerald blue channel")
+        AssertEqual(searchPins[1].pinBlob.color.a, emerald.a, "Search pin uses emerald alpha channel")
+        AssertTrue(#(RPQuest.WorldMapArea._activePulseAnimations or {}) == 1, "Search pin starts 1 pulse animation")
+        local searchTl = RPQuest.WorldMapArea._activePulseAnimations[1].timeline
+        AssertEqual(searchTl:IsPlaying(), true, "Search pulse timeline is playing")
+        AssertEqual(searchTl._playbackType, ANIMATION_PLAYBACK_PING_PONG, "Pulse uses ping-pong playback")
+
+        mockPinManager:SimulateResize()
+        AssertEqual(searchPins[1].pinBlob.color.r, emerald.r, "Search pin keeps emerald red channel after resize")
+        AssertEqual(searchPins[1].pinBlob.color.g, emerald.g, "Search pin keeps emerald green channel after resize")
+        AssertEqual(searchPins[1].pinBlob.color.b, emerald.b, "Search pin keeps emerald blue channel after resize")
+
+        -- 3. Zoom-out to parent/world map (mapId = 1, MAPTYPE_WORLD): renders deterministic offset emerald area
+        mockState.mapId = 1
+        mockState.mapType = MAPTYPE_WORLD
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(searchTl:IsPlaying(), false, "Previous search pulse timeline stopped on RefreshPins")
+
+        local zoomPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.zoomOutPinTypeId then
+                table.insert(zoomPins, p)
+            end
+        end
+        AssertEqual(#zoomPins, 1, "Zoom-out map renders 1 zoom-out area pin")
+        local zp = zoomPins[1]
+        AssertEqual(zp.radius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Zoom-out pin uses medium normalized radius")
+        AssertEqual(zp.pinBlob.color.r, emerald.r, "Zoom-out pin uses emerald red channel")
+        AssertEqual(zp.pinBlob.color.g, emerald.g, "Zoom-out pin uses emerald green channel")
+        AssertEqual(zp.pinBlob.color.b, emerald.b, "Zoom-out pin uses emerald blue channel")
+
+        -- Offset is non-zero (does not reveal exact projected point) and target remains inside radius
+        local dx = zp.x - projX
+        local dy = zp.y - projY
+        local dist = math.sqrt((dx * dx) + (dy * dy))
+        AssertTrue(dist > 0.001, "Zoom-out area center is offset from exact projected position")
+        AssertTrue(dist <= zp.radius, "Projected target remains inside zoom-out area radius")
+
+        -- Reopening / refreshing produces identical deterministic center (no jumping)
+        local firstX, firstY = zp.x, zp.y
+        RPQuest.WorldMapArea:RefreshPins()
+        local zp2 = mockPinManager._createdPins[1]
+        AssertEqual(zp2.x, firstX, "Zoom-out offset X is deterministic across refreshes")
+        AssertEqual(zp2.y, firstY, "Zoom-out offset Y is deterministic across refreshes")
+
+        -- Zoom-out color persists across resize
+        mockPinManager:SimulateResize()
+        AssertEqual(zp2.pinBlob.color.r, emerald.r, "Zoom-out pin keeps emerald red channel after resize")
+        AssertEqual(zp2.pinBlob.color.g, emerald.g, "Zoom-out pin keeps emerald green channel after resize")
+
+        -- Pulse animation stops and detaches cleanly on SCENE_HIDDEN
+        local zoomEntry = RPQuest.WorldMapArea._activePulseAnimations[1]
+        AssertTrue(zoomEntry ~= nil and zoomEntry.timeline:IsPlaying(), "Zoom-out pulse timeline is playing")
+        SCENE_MANAGER:Hide("worldMap")
+        AssertEqual(zoomEntry.timeline:IsPlaying(), false, "Pulse timeline stops on SCENE_HIDDEN")
+        AssertEqual(#(RPQuest.WorldMapArea._activePulseAnimations or {}), 0, "Active pulse animations cleared on SCENE_HIDDEN")
+        AssertEqual(zoomEntry.anim._control, nil, "Animated control detached from pinBlob on cleanup")
+        AssertEqual(zp2.pinBlob:GetAlpha(), 1, "pinBlob alpha restored to 1 on cleanup")
+
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
     end)
 
 end

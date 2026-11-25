@@ -91,6 +91,7 @@ Addon.Constants = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",
         TAB_DESCRIPTOR = "rpquest_custom_quests",
         PIN_TYPE_STRING = "RPQUEST_SEARCH_AREA_PIN",
+        SEARCH_AREA_COLOR = { r = 0.16, g = 0.78, b = 0.48, a = 0.65 },
         LOCATION_PIN_TYPE_STRING = "RPQUEST_TARGET_LOCATION_PIN",
         LOCATION_AREA_COLOR = { r = 1.0, g = 0.58, b = 0.18, a = 0.65 },
         DISCOVERY_PIN_TYPE_STRING = "RPQUEST_DISCOVERY_AREA_PIN",

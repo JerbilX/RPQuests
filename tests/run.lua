@@ -79,6 +79,8 @@ MAPTYPE_WORLD = 1
 MAPTYPE_COSMIC = 2
 MAPTYPE_ZONE = 3
 MAPTYPE_SUBZONE = 4
+ANIMATION_ALPHA = 1
+ANIMATION_PLAYBACK_PING_PONG = 2
 SET_MAP_RESULT_MAP_CHANGED = 1
 SET_MAP_RESULT_CURRENT_MAP_UNCHANGED = 2
 SET_MAP_RESULT_FAILED = 0
@@ -365,8 +367,15 @@ local mockPinManager = {
         }
         if radius and radius > 0 then
             p.pinBlob = {
+                alpha = 1,
                 SetColor = function(blobSelf, r, g, b, a)
                     blobSelf.color = { r = r, g = g, b = b, a = a }
+                end,
+                SetAlpha = function(blobSelf, a)
+                    blobSelf.alpha = a
+                end,
+                GetAlpha = function(blobSelf)
+                    return blobSelf.alpha
                 end,
             }
         end
