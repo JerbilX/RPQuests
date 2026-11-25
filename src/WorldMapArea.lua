@@ -1157,6 +1157,7 @@ local function ResolveSelectedTargetMapPosition(self, quest, targetIndex)
     end
 
     if target.worldX ~= nil and target.worldZ ~= nil then
+        SetWorldMapToId(mapId)
         local locX, locY = self:ProjectTargetLocationToCurrentMap(quest, target)
         if locX and locY then
             return mapId, locX, locY

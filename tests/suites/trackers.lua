@@ -1725,4 +1725,79 @@ return function(T)
         WORLD_MAP_MANAGER.SetMapById = origSetMapById
     end)
 
+    RunTest("Issue #321: ShowQuestOnMap switches mapId before projecting Location-only target ping", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+        local origCallLater = _G.zo_callLater
+        local origSetMapById = WORLD_MAP_MANAGER.SetMapById
+
+        _G.zo_callLater = function() end
+        mockState.mapId = 99 -- Player is currently viewing a different map
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        WORLD_MAP_MANAGER.SetMapById = function(_, mapId)
+            mockState.mapId = mapId
+        end
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(_, worldX, _, worldZ)
+            if mockState.mapId == 45 and worldX == 1000 and worldZ == 2000 then
+                return 0.75, 0.85
+            end
+            return nil, nil
+        end
+
+        local quest = {
+            id = "q_321_cross_map",
+            title = "Cross-Map Location Ping Quest",
+            mapId = 45,
+            zoneId = 104,
+            showSearchAreas = false,
+            showLocationAreas = false,
+            targets = {
+                {
+                    name = "Target With Location Only",
+                    worldX = 1000,
+                    worldZ = 2000,
+                    zoneId = 104,
+                    mapId = 45,
+                },
+            },
+        }
+
+        SCENE_MANAGER:Show("worldMap")
+        local ok = RPQuest.WorldMapArea:ShowQuestOnMap(quest, 1)
+        AssertEqual(ok, true, "ShowQuestOnMap succeeds when starting from a different map")
+        AssertEqual(mockState.mapId, 45, "ShowQuestOnMap switches mapId to target map before projecting")
+        AssertEqual(mockState.lastPannedX, 0.75, "Location projection X is resolved on target map")
+        AssertEqual(mockState.lastPannedY, 0.85, "Location projection Y is resolved on target map")
+
+        local pingTypeId = RPQuest.WorldMapArea.targetPingPinTypeId
+        local pingCount = 0
+        local pingPin = nil
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == pingTypeId then
+                pingCount = pingCount + 1
+                pingPin = p
+            end
+        end
+        AssertEqual(pingCount, 1, "Target ping pin is placed even when starting on a different map")
+        AssertEqual(pingPin.x, 0.75, "Target ping pin X matches projected coordinate on target map")
+        AssertEqual(pingPin.y, 0.85, "Target ping pin Y matches projected coordinate on target map")
+
+        SCENE_MANAGER:Hide("worldMap")
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+        _G.zo_callLater = origCallLater
+        WORLD_MAP_MANAGER.SetMapById = origSetMapById
+    end)
+
 end
