@@ -178,6 +178,8 @@ read_globals = {
     "TEXT_ALIGN_RIGHT",
     "TEXT_ALIGN_TOP",
     "TOP",
+    "LEFT",
+    "RIGHT",
     "TOPLEFT",
     "TOPRIGHT",
     "UI_ALERT_CATEGORY_ALERT",

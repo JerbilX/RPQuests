@@ -20,8 +20,8 @@ Usage:
   Quest Master automatically via mail (separately from Draft/Sent/Received
   lifecycle).
 - In the quest details pane, view any Master map-hiding recommendation notice and
-  independently toggle "Show search areas on map", "Show location areas on map",
-  and "Show discovery areas on map" (all off by default for players, while
+  independently toggle "Search Areas", "Location", and "Discovery" in
+  MAP MARKERS (all off by default for players, while Show on Map remains
   creators see discovery areas in purple automatically; search and zoomed-out
   reference areas render in pulsing emerald green with deterministic offsets),
   or use "Show on Map" whenever a map/area is defined.

@@ -913,6 +913,20 @@ function QuestRepository:HasQuestTargetLocation(quest)
     return false
 end
 
+function QuestRepository:HasQuestSearchAreas(quest)
+    if type(quest) ~= "table" then
+        return false
+    end
+    if type(quest.targets) == "table" then
+        for _, target in ipairs(quest.targets) do
+            if type(target) == "table" and target.areaCenterX and target.areaCenterY and target.areaRadius and target.areaRadius > 0 then
+                return true
+            end
+        end
+    end
+    return quest.areaCenterX ~= nil and quest.areaCenterY ~= nil and quest.areaRadius ~= nil and quest.areaRadius > 0
+end
+
 function QuestRepository:HasQuestDiscoveryPoints(quest)
     return type(quest) == "table" and type(quest.discoveries) == "table" and #quest.discoveries > 0
 end
