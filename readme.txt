@@ -20,12 +20,12 @@ Usage:
   Accepted, Rejected, Completed, and Failed results are reported back to the
   Quest Master automatically via mail (separately from Draft/Sent/Received
   lifecycle).
-- In the quest details pane, view any Master map-hiding recommendation notice and
+- In the quest details pane, view any Master map-hiding recommendation notice,
   independently toggle "Search Areas", "Location", and "Discovery" in
-  MAP MARKERS (all off by default for players, while Show on Map remains
-  creators see discovery areas in purple automatically; search and zoomed-out
-  reference areas render in pulsing emerald green with deterministic offsets),
-  or use "Show on Map" whenever a map/area is defined.
+  MAP MARKERS (all off by default for players, while creators see discovery
+  areas in purple automatically and search/zoomed-out reference areas render
+  in pulsing emerald green with deterministic offsets), or use "Show on Map"
+  whenever a map/area is defined.
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:
