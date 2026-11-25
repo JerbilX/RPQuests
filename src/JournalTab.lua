@@ -499,7 +499,19 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
 
     ZO_PreHook(qj, "OnShowing", function(qjSelf)
         EnsureTabAdded()
-        pendingRPQuestMode = (qjSelf.mode == tabDescriptor)
+        if self._pendingRPQuestOpen then
+            pendingRPQuestMode = true
+            self._pendingRPQuestOpen = false
+        else
+            pendingRPQuestMode = false
+            if qjSelf.mode == tabDescriptor then
+                if qjSelf.SetMode then
+                    qjSelf:SetMode(ZO_QUEST_JOURNAL_MODE.QUESTS)
+                else
+                    qjSelf.mode = ZO_QUEST_JOURNAL_MODE.QUESTS
+                end
+            end
+        end
     end)
 
     ZO_PostHook(qj, "OnShowing", function(qjSelf)
@@ -520,6 +532,16 @@ function JournalTab:IntegrateIntoQuestJournalModeBar()
         end
         if qjSelf.tabs and qjSelf.tabs.UpdateButtons then
             qjSelf.tabs:UpdateButtons()
+        end
+    end)
+
+    ZO_PostHook(qj, "OnHiding", function(qjSelf)
+        if not self._pendingRPQuestOpen and qjSelf.mode == tabDescriptor then
+            if qjSelf.SetMode then
+                qjSelf:SetMode(ZO_QUEST_JOURNAL_MODE.QUESTS)
+            else
+                qjSelf.mode = ZO_QUEST_JOURNAL_MODE.QUESTS
+            end
         end
     end)
 end
@@ -736,6 +758,7 @@ function JournalTab:OpenTab()
     end
 
     local qj = QUEST_JOURNAL_KEYBOARD or SYSTEMS:GetKeyboardObject("questJournal")
+    self._pendingRPQuestOpen = true
     if qj and qj.SetMode then
         qj:SetMode(self.tabDescriptor or Addon.Constants.UI.TAB_DESCRIPTOR)
     end
@@ -749,6 +772,7 @@ function JournalTab:OpenTab()
     -- OnShowing lo seleccionará cuando la escena previa termine de ocultarse y libere su keybind strip.
     local isShowingNow = SCENE_MANAGER:IsShowing("questJournal")
     if wasShowing or isShowingNow then
+        self._pendingRPQuestOpen = false
         if qj and qj.tabs and qj.tabs.SelectFragment and self.tabCategoryName then
             qj.tabs:SelectFragment(self.tabCategoryName)
         elseif self.panel then

@@ -41,6 +41,7 @@ read_globals = {
     "WINDOW_MANAGER",
     "WORLD_MAP_MANAGER",
     "WORLD_MAP_SCENE",
+    "ZO_QUEST_JOURNAL_MODE",
     "ZO_QuestJournal",
     "ZO_SavedVars",
     "ZO_SimpleSceneFragment",

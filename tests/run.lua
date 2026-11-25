@@ -450,11 +450,14 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
     end,
 }
 
+ZO_QUEST_JOURNAL_MODE = { QUESTS = 1, RUMORS = 2 }
+
 QUEST_JOURNAL_KEYBOARD = {
     initializedTabs = true,
     mode = 1,
     SetMode = function(self, m) self.mode = m end,
     OnShowing = function(self) end,
+    OnHiding = function(self) end,
     tabs = {
         _addedTabs = {},
         _selectedFragment = nil,
