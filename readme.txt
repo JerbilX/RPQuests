@@ -22,8 +22,9 @@ Usage:
 - In the quest details pane, view any Master map-hiding recommendation notice and
   independently toggle "Show search areas on map", "Show location areas on map",
   and "Show discovery areas on map" (all off by default for players, while
-  creators see discovery areas in purple automatically), or use "Show on Map"
-  whenever a map/area is defined.
+  creators see discovery areas in purple automatically; search and zoomed-out
+  reference areas render in pulsing emerald green with deterministic offsets),
+  or use "Show on Map" whenever a map/area is defined.
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:

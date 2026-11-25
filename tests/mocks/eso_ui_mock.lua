@@ -630,6 +630,55 @@ ANIMATION_MANAGER = ANIMATION_MANAGER or {
         table.insert(self._timelines, timeline)
         return timeline
     end,
+    CreateTimeline = function(self)
+        local timeline = {
+            _playing = false,
+            _animations = {},
+            _handlers = {},
+            _playbackType = nil,
+            _loopCount = nil,
+            InsertAnimation = function(tl, animType, control, offset)
+                local anim = {
+                    _type = animType,
+                    _control = control,
+                    _offset = offset or 0,
+                    _startAlpha = 1,
+                    _endAlpha = 1,
+                    _duration = 0,
+                    SetAnimatedControl = function(a, ctrl) a._control = ctrl end,
+                    SetAlphaValues = function(a, s, e)
+                        a._startAlpha = s
+                        a._endAlpha = e
+                    end,
+                    SetDuration = function(a, d) a._duration = d end,
+                }
+                table.insert(tl._animations, anim)
+                return anim
+            end,
+            SetPlaybackType = function(tl, playbackType, maxLoopCount)
+                tl._playbackType = playbackType
+                tl._loopCount = maxLoopCount
+            end,
+            SetHandler = function(tl, event, fn)
+                tl._handlers[event] = fn
+            end,
+            PlayFromStart = function(tl)
+                tl._playing = true
+            end,
+            Stop = function(tl)
+                local wasPlaying = tl._playing
+                tl._playing = false
+                if wasPlaying and tl._handlers.OnStop then
+                    tl._handlers.OnStop(tl)
+                end
+            end,
+            IsPlaying = function(tl)
+                return tl._playing
+            end,
+        }
+        table.insert(self._timelines, timeline)
+        return timeline
+    end,
 }
 
 return M
