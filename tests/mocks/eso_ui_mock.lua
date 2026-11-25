@@ -107,6 +107,10 @@ TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT or 0
 TEXT_ALIGN_CENTER = TEXT_ALIGN_CENTER or 1
 TEXT_ALIGN_RIGHT = TEXT_ALIGN_RIGHT or 2
 KEYBIND_STRIP_ALIGN_CENTER = KEYBIND_STRIP_ALIGN_CENTER or 1
+DL_BACKGROUND = DL_BACKGROUND or 0
+DL_CONTROLS = DL_CONTROLS or 1
+DL_TEXT = DL_TEXT or 2
+DL_OVERLAY = DL_OVERLAY or 3
 
 SI_QUEST_JOURNAL_ABANDON = SI_QUEST_JOURNAL_ABANDON or "SI_QUEST_JOURNAL_ABANDON"
 SI_QUEST_JOURNAL_SHOW_ON_MAP = SI_QUEST_JOURNAL_SHOW_ON_MAP or "SI_QUEST_JOURNAL_SHOW_ON_MAP"
@@ -130,6 +134,8 @@ local function CreateControlMock(name, parent, controlType)
         _width = 100,
         _height = 100,
         _alpha = 1.0,
+        _drawLayer = DL_CONTROLS,
+        _drawLevel = 0,
         _text = "",
         _font = "",
         _texture = "",
@@ -151,6 +157,10 @@ local function CreateControlMock(name, parent, controlType)
     function ctrl:SetHeight(h) self._height = h end
     function ctrl:SetAlpha(alpha) self._alpha = alpha end
     function ctrl:GetAlpha() return self._alpha end
+    function ctrl:SetDrawLayer(layer) self._drawLayer = layer end
+    function ctrl:GetDrawLayer() return self._drawLayer end
+    function ctrl:SetDrawLevel(level) self._drawLevel = level end
+    function ctrl:GetDrawLevel() return self._drawLevel end
     function ctrl:SetColor(r, g, b, a) self._color = {r=r, g=g, b=b, a=a} end
     function ctrl:GetColor()
         return self._color and self._color.r or 1,

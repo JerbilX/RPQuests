@@ -132,6 +132,7 @@ read_globals = {
     "CT_SCROLL",
     "CT_TEXTURE",
     "CT_TOPLEVELCONTROL",
+    "DL_OVERLAY",
     "EVENT_ADD_ON_LOADED",
     "EVENT_CHATTER_BEGIN",
     "EVENT_COMBAT_EVENT",

@@ -2323,4 +2323,28 @@ return function(T)
         SCENE_MANAGER.IsShowing = origIsShowing
     end)
 
+    RunTest("Issue #320: versionLabel is rendered on DL_OVERLAY with high contrast under RPQuest tab icon", function()
+        RPQuest.QuestRepository:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        local label = tab.versionLabel
+        AssertTrue(label ~= nil, "versionLabel exists")
+        AssertEqual(label._parent, tab.panel, "versionLabel is parented to RPQuest panel so it only shows on RPQuest tab")
+
+        local ok, point, relTo, relPoint, x, y = label:GetAnchor(1)
+        AssertTrue(ok, "versionLabel has anchor")
+        AssertEqual(point, TOPRIGHT, "versionLabel anchor point is TOPRIGHT")
+        AssertEqual(relTo, tab.panel, "versionLabel anchored to panel")
+        AssertEqual(relPoint, TOPRIGHT, "versionLabel relPoint is TOPRIGHT")
+        AssertEqual(x, -33, "versionLabel X offset preserved")
+        AssertEqual(y, 38, "versionLabel Y offset preserved")
+
+        AssertEqual(label:GetDrawLayer(), DL_OVERLAY, "versionLabel uses DL_OVERLAY draw layer")
+        AssertTrue(label:GetDrawLevel() >= 10, "versionLabel uses elevated draw level above tab icon")
+
+        local r, g, b, a = label:GetColor()
+        AssertTrue(r >= 0.85 and g >= 0.85 and b >= 0.75 and a == 1, "versionLabel uses high-contrast legible color")
+    end)
+
 end
