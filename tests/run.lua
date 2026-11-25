@@ -79,6 +79,8 @@ MAPTYPE_WORLD = 1
 MAPTYPE_COSMIC = 2
 MAPTYPE_ZONE = 3
 MAPTYPE_SUBZONE = 4
+ANIMATION_ALPHA = 1
+ANIMATION_PLAYBACK_PING_PONG = 2
 SET_MAP_RESULT_MAP_CHANGED = 1
 SET_MAP_RESULT_CURRENT_MAP_UNCHANGED = 2
 SET_MAP_RESULT_FAILED = 0
@@ -86,6 +88,14 @@ MENU_CATEGORY_MAP = 4
 MOUSE_BUTTON_INDEX_LEFT = 1
 MOUSE_BUTTON_INDEX_RIGHT = 2
 TEXT_ALIGN_RIGHT = 2
+
+ZO_PreHook = function(tbl, fnName, hookFn)
+    local orig = tbl[fnName]
+    tbl[fnName] = function(...)
+        if hookFn(...) then return end
+        if orig then return orig(...) end
+    end
+end
 
 ZO_PostHook = function(tbl, fnName, hookFn)
     local orig = tbl[fnName]
@@ -339,23 +349,53 @@ local mockPinManager = {
         local p = {
             pinTypeId = pinTypeId,
             pinTag = pinTag,
+            m_PinType = pinTypeId,
+            m_PinTag = pinTag,
             x = xLoc,
             y = yLoc,
             radius = radius,
             pingAnimations = {},
+            GetPinType = function(pinSelf)
+                return pinSelf.m_PinType
+            end,
+            GetPinTypeAndTag = function(pinSelf)
+                return pinSelf.m_PinType, pinSelf.m_PinTag
+            end,
             PingMapPin = function(pinSelf, animation)
                 table.insert(pinSelf.pingAnimations, animation)
             end,
         }
         if radius and radius > 0 then
             p.pinBlob = {
+                alpha = 1,
                 SetColor = function(blobSelf, r, g, b, a)
                     blobSelf.color = { r = r, g = g, b = b, a = a }
+                end,
+                SetAlpha = function(blobSelf, a)
+                    blobSelf.alpha = a
+                end,
+                GetAlpha = function(blobSelf)
+                    return blobSelf.alpha
                 end,
             }
         end
         table.insert(self._createdPins, p)
         return p
+    end,
+    GetActiveObjects = function(self)
+        return self._createdPins
+    end,
+    SimulateResize = function(self)
+        for _, p in ipairs(self._createdPins) do
+            if p.pinBlob and p.pinBlob.SetColor then
+                p.pinBlob:SetColor(0.5, 0.8, 1.0, 1.0)
+            end
+        end
+        for _, data in pairs(self._customPins) do
+            if data.enabled and data.resizeCallback then
+                data.resizeCallback(self, 1000, 1000)
+            end
+        end
     end,
 }
 
@@ -410,11 +450,14 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
     end,
 }
 
+ZO_QUEST_JOURNAL_MODE = { QUESTS = 1, RUMORS = 2 }
+
 QUEST_JOURNAL_KEYBOARD = {
     initializedTabs = true,
     mode = 1,
     SetMode = function(self, m) self.mode = m end,
     OnShowing = function(self) end,
+    OnHiding = function(self) end,
     tabs = {
         _addedTabs = {},
         _selectedFragment = nil,

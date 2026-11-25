@@ -191,8 +191,10 @@ return function(T)
         local prepared = RPQuest.QuestRepository:SaveDraft("Contrato Directo", "Cuerpo", nil, "", false, "PlayerTarget")
         AssertEqual(prepared.recipientAccount, "@PlayerTarget", "Recipient normalized and persisted on prepared quest")
 
-        local status1 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
-        AssertEqual(status1, "draft", "Initial status is draft")
+        local lifecycle1 = RPQuest.QuestRepository:GetQuestLifecycle(prepared)
+        local res1 = RPQuest.QuestRepository:GetQuestResolution(prepared)
+        AssertEqual(lifecycle1, "draft", "Initial lifecycle is draft")
+        AssertEqual(res1, nil, "Initial resolution is nil")
 
         RPQuest.JournalTab:SelectQuest(prepared.id)
         RPQuest.JournalTab:Refresh()
@@ -215,8 +217,10 @@ return function(T)
         AssertEqual(sentMails[1].to, "@PlayerTarget", "Mail sent to @PlayerTarget")
         RPQuest.MailTransport:OnMailSendSuccess("@PlayerTarget")
 
-        local status2 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
-        AssertEqual(status2, "sent", "Status transitions to sent after mail dispatch")
+        local lifecycle2 = RPQuest.QuestRepository:GetQuestLifecycle(prepared)
+        local res2 = RPQuest.QuestRepository:GetQuestResolution(prepared)
+        AssertEqual(lifecycle2, "sent", "Lifecycle transitions to sent after mail dispatch")
+        AssertEqual(res2, nil, "Resolution remains nil until player responds")
         AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("@PlayerTarget", 1, true) ~= nil, "Detail status shows sent recipient")
 
         -- Transition to completed
@@ -226,8 +230,9 @@ return function(T)
             completed = true,
             wasDetected = false,
         })
-        local status3 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
-        AssertEqual(status3, "completed", "Status transitions to completed")
+        local res3 = RPQuest.QuestRepository:GetQuestResolution(prepared)
+        AssertEqual(RPQuest.QuestRepository:GetQuestLifecycle(prepared), "sent", "Lifecycle remains sent")
+        AssertEqual(res3, "completed", "Resolution transitions to completed")
         AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("TargetChar", 1, true) ~= nil, "Detail status includes character name")
 
         -- Transition to rejected
@@ -236,8 +241,9 @@ return function(T)
             completedAt = 1000,
             completed = false,
         })
-        local status4 = RPQuest.QuestRepository:GetPreparedQuestStatus(prepared)
-        AssertEqual(status4, "rejected", "Status transitions to rejected")
+        local res4 = RPQuest.QuestRepository:GetQuestResolution(prepared)
+        AssertEqual(RPQuest.QuestRepository:GetQuestLifecycle(prepared), "sent", "Lifecycle remains sent")
+        AssertEqual(res4, "rejected", "Resolution transitions to rejected")
 
         _G.SendMail = origSendMail
         _G.RequestOpenMailbox = origReqOpen
@@ -433,6 +439,93 @@ return function(T)
         AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Offered detail To shows recipient character name")
 
         _G.GetUnitName = origUnitName
+    end)
+
+    RunTest("Issue #295 & #311: worst-case uncompressible 4/10/4 quest + max MAIL_ROLE_MESSAGE fits within 6 mails (<= 4104 chars)", function()
+        local limits = RPQuest.Constants.TEXT_LIMITS
+        local seed = 13579
+        local alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{}"
+        local alphaLen = #alphabet
+        local function RandomAscii(len)
+            local out = {}
+            for i = 1, len do
+                seed = (seed * 1103515245 + 12345) % 2147483648
+                local idx = (seed % alphaLen) + 1
+                out[i] = string.sub(alphabet, idx, idx)
+            end
+            return table.concat(out)
+        end
+
+        local targets = {}
+        for i = 1, RPQuest.Constants.TARGET.MAX_TARGETS do
+            targets[i] = {
+                name = RandomAscii(32),
+                requiredCount = 10,
+                areaCenterX = 0.4512,
+                areaCenterY = 0.6543,
+                areaRadius = RPQuest.Constants.AREA_RADIUS.LARGE,
+                zoneId = 381,
+                worldX = -123456 + i * 1000,
+                worldZ = -78901 + i * 1000,
+                radius = RPQuest.Constants.DISCOVERY_RADIUS.LARGE,
+                locationRequired = true,
+                optional = true,
+                customMessage = RandomAscii(limits.SHORT_MESSAGE),
+                customMessageInLocation = RandomAscii(limits.SHORT_MESSAGE),
+            }
+        end
+
+        local discoveries = {}
+        for i = 1, RPQuest.Constants.DISCOVERY.MAX_POINTS do
+            discoveries[i] = {
+                zoneId = 381,
+                worldX = -50000 + i * 1500,
+                worldY = 1200 + i * 50,
+                worldZ = 80000 + i * 1500,
+                mapId = 32,
+                x = 0.41 + i * 0.05,
+                y = 0.61 + i * 0.05,
+                radius = RPQuest.Constants.DISCOVERY_RADIUS.LARGE,
+                message = RandomAscii(limits.SHORT_MESSAGE),
+            }
+        end
+
+        local dialogues = {}
+        for i = 1, RPQuest.Constants.DIALOGUE.MAX_NPCS do
+            dialogues[i] = {
+                npcName = RandomAscii(32),
+                zoneId = 381,
+                clue = RandomAscii(limits.DIALOGUE_OPTION),
+                response = RandomAscii(limits.DIALOGUE_RESPONSE),
+            }
+        end
+
+        local worstCaseQuest = {
+            title = RandomAscii(limits.TITLE),
+            description = RandomAscii(limits.DESCRIPTION),
+            completionMessage = RandomAscii(limits.SHORT_MESSAGE),
+            senderCharacterName = RandomAscii(limits.CHARACTER_NAME),
+            recipientCharacterName = RandomAscii(limits.CHARACTER_NAME),
+            mapId = 32,
+            zoneId = 381,
+            mapName = RandomAscii(32),
+            targetX = 0.4321,
+            targetY = 0.6789,
+            stealthMode = RPQuest.Constants.STEALTH_MODE.REQUIRED,
+            recommendHideMapAreas = true,
+            targets = targets,
+            discoveries = discoveries,
+            dialogues = dialogues,
+        }
+
+        local code, encErr = RPQuest.ShareCodec:EncodeQuest(worstCaseQuest)
+        AssertTrue(code ~= nil, "Worst-case quest encodes cleanly: " .. tostring(encErr))
+
+        local roleMsg = RandomAscii(limits.MAIL_ROLE_MESSAGE)
+        local plan = RPQuest.MailTransport:BuildQuestMailPackets(roleMsg, code, worstCaseQuest.title)
+        AssertEqual(plan.fits, true, string.format("Worst-case uncompressible quest must fit in 6 mails (totalLen=%d, maxTotalChars=%d)", plan.totalLen, plan.maxTotalChars))
+        AssertTrue(plan.partCount <= 6, "Worst-case partCount <= 6, got " .. tostring(plan.partCount))
+        AssertTrue(plan.totalLen <= 4104, "Worst-case totalLen <= 4104, got " .. tostring(plan.totalLen))
     end)
 
 end

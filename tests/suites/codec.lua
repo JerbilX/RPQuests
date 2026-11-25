@@ -171,7 +171,7 @@ return function(T)
                     worldZ = -78901,
                     radius = 1500,
                     locationRequired = true,
-                    customMessage = "Has interceptado al explorador en el puente secreto.",
+                    customMessageInLocation = "Has interceptado al explorador en el puente secreto.",
                 },
                 {
                     name = "Capitán Contrabandista",
@@ -271,7 +271,7 @@ return function(T)
         AssertEqual(decoded.targets[1].worldX, -123456, "Negative worldX preserved via ZigZag varint")
         AssertEqual(decoded.targets[1].worldZ, -78901, "Negative worldZ preserved via ZigZag varint")
         AssertEqual(decoded.targets[1].locationRequired, true, "Target locationRequired preserved")
-        AssertEqual(decoded.targets[1].customMessage, complexQuest.targets[1].customMessage, "Target customMessage preserved")
+        AssertEqual(decoded.targets[1].customMessageInLocation, complexQuest.targets[1].customMessageInLocation, "Target customMessageInLocation preserved")
         AssertEqual(decoded.targets[2].worldX, nil, "Target without location has nil worldX")
         AssertEqual(#decoded.discoveries, 2, "2 discoveries preserved")
         AssertEqual(decoded.discoveries[1].worldX, -45000, "Discovery negative worldX preserved")
@@ -451,9 +451,8 @@ return function(T)
                     worldZ = 22000,
                     radius = 1200,
                     locationRequired = true,
-                    customMessage = "Unused when locationRequired=true",
+                    customMessage = "The vanguard escaped the outpost!",
                     customMessageInLocation = "Struck down inside the outpost!",
-                    customMessageOutsideLocation = "The vanguard escaped the outpost!",
                 },
                 {
                     name = "Courier",
@@ -474,17 +473,19 @@ return function(T)
 
         local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
         AssertTrue(decoded ~= nil, "v3 quest decoded cleanly: " .. tostring(decErr))
-        AssertEqual(decoded.schemaVersion, 3, "Decoded quest has schemaVersion = 3")
+        AssertEqual(decoded.schemaVersion, 5, "Decoded quest has schemaVersion = 5")
         AssertEqual(decoded.recommendHideMapAreas, false, "recommendHideMapAreas = false preserved")
         AssertEqual(decoded.showSearchAreas, nil, "Local preference showSearchAreas never serialized")
         AssertEqual(decoded.showLocationAreas, nil, "Local preference showLocationAreas never serialized")
+        AssertEqual(decoded.showDiscoveryAreas, nil, "Local preference showDiscoveryAreas never serialized")
         AssertEqual(#decoded.targets, 2, "2 targets decoded")
 
         AssertTrue(math.abs(decoded.targets[1].areaCenterX - 0.25) < 0.001, "Target 1 areaCenterX preserved")
         AssertTrue(math.abs(decoded.targets[1].areaCenterY - 0.35) < 0.001, "Target 1 areaCenterY preserved")
         AssertTrue(math.abs(decoded.targets[1].areaRadius - 0.070) < 0.001, "Target 1 areaRadius preserved")
+        AssertEqual(decoded.targets[1].customMessage, "The vanguard escaped the outpost!", "Target 1 customMessage preserved even when locationRequired=true")
         AssertEqual(decoded.targets[1].customMessageInLocation, "Struck down inside the outpost!", "Target 1 customMessageInLocation preserved")
-        AssertEqual(decoded.targets[1].customMessageOutsideLocation, "The vanguard escaped the outpost!", "Target 1 customMessageOutsideLocation preserved")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, nil, "Target 1 legacy customMessageOutsideLocation not serialized")
 
         AssertTrue(math.abs(decoded.targets[2].areaCenterX - 0.75) < 0.001, "Target 2 areaCenterX preserved")
         AssertTrue(math.abs(decoded.targets[2].areaCenterY - 0.65) < 0.001, "Target 2 areaCenterY preserved")
@@ -517,11 +518,168 @@ return function(T)
         local legacyCode = RPQuest.ShareCodec:EncodeQuest(legacyV2Payload)
         local legacyDecoded = RPQuest.ShareCodec:DecodeQuest(legacyCode)
         AssertTrue(legacyDecoded ~= nil, "Older RPQ3-style payload decodes cleanly")
-        AssertEqual(legacyDecoded.schemaVersion, 3, "Decoded older RPQ3 payload upgraded to schema v3")
+        AssertEqual(legacyDecoded.schemaVersion, 5, "Decoded older RPQ3 payload upgraded to schema v5")
         AssertEqual(legacyDecoded.recommendHideMapAreas, true, "Older hideMapArea bit mapped to recommendHideMapAreas")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterX - 0.42) < 0.001, "Target inherits header areaCenterX")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterY - 0.58) < 0.001, "Target inherits header areaCenterY")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaRadius - 0.125) < 0.001, "Target inherits header areaRadius")
+    end)
+
+    RunTest("Issue #255: ShareCodec EncodeFailure / DecodeCompletion / ValidateResultForQuest round-trip", function()
+        local quest = {
+            id = 55,
+            title = "Stealth Contract",
+            description = "Do not get caught",
+            stealthMode = "required",
+            wasDetected = true,
+            failed = true,
+            targets = { { name = "Guard", requiredCount = 1 } },
+            discoveries = {},
+            dialogues = {},
+        }
+        local failCode, err = RPQuest.ShareCodec:EncodeFailure(quest, "ShadowPlayer", 1700001234)
+        AssertTrue(failCode ~= nil and failCode:sub(1, 6) == "RPQC1:", "EncodeFailure returns RPQC1 code: " .. tostring(err))
+
+        local decoded, decErr = RPQuest.ShareCodec:DecodeCompletion(failCode)
+        AssertTrue(decoded ~= nil, "DecodeCompletion decodes failure code: " .. tostring(decErr))
+        AssertEqual(decoded.resultType, "failed", "resultType is 'failed'")
+        AssertEqual(decoded.failed, true, "failed boolean is true")
+        AssertEqual(decoded.completed, false, "completed boolean is false")
+        AssertEqual(decoded.rejected, false, "rejected boolean is false")
+        AssertEqual(decoded.accepted, false, "accepted boolean is false")
+        AssertEqual(decoded.wasDetected, true, "wasDetected=true preserved for stealth failure")
+        AssertEqual(decoded.characterName, "ShadowPlayer", "characterName preserved")
+
+        local okRes, valRes = RPQuest.ShareCodec:ValidateResultForQuest(quest, failCode)
+        AssertEqual(okRes, true, "ValidateResultForQuest accepts failure code")
+        AssertEqual(valRes.resultType, "failed", "Validated resultType is 'failed'")
+
+        local okComp, compErr = RPQuest.ShareCodec:ValidateCompletionForQuest(quest, failCode)
+        AssertEqual(okComp, false, "ValidateCompletionForQuest rejects failure code")
+        AssertEqual(compErr, "VALIDATE_ERR_NOT_COMPLETED", "ValidateCompletionForQuest returns VALIDATE_ERR_NOT_COMPLETED")
+
+        -- Non-stealth failure omits wasDetected
+        local locFailQuest = {
+            id = 56,
+            title = "Location Contract",
+            stealthMode = "disabled",
+            failed = true,
+            targets = { { name = "Scout", requiredCount = 1 } },
+            discoveries = {},
+            dialogues = {},
+        }
+        local locCode = RPQuest.ShareCodec:EncodeFailure(locFailQuest, "RogueTwo", 1700002000)
+        local locDecoded = RPQuest.ShareCodec:DecodeCompletion(locCode)
+        AssertEqual(locDecoded.resultType, "failed", "Location failure resultType is 'failed'")
+        AssertEqual(locDecoded.wasDetected, nil, "wasDetected is nil when stealthMode is disabled")
+    end)
+
+    RunTest("Issue #295: ShareCodec prunes inactive target elimination messages and round-trips 4/4/4 caps", function()
+        local quest = {
+            title = "Prune Test",
+            description = "Verify inactive elimination messages are pruned",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targets = {
+                {
+                    name = "Target A",
+                    requiredCount = 1,
+                    zoneId = 381,
+                    worldX = 1000,
+                    worldZ = 2000,
+                    radius = 1500,
+                    locationRequired = false,
+                    customMessage = "Active general msg",
+                    customMessageInLocation = "Optional in-loc msg",
+                },
+                {
+                    name = "Target B",
+                    requiredCount = 2,
+                    zoneId = 381,
+                    worldX = 3000,
+                    worldZ = 4000,
+                    radius = 1500,
+                    locationRequired = true,
+                    customMessage = "Required general msg",
+                    customMessageInLocation = "Active in-loc msg",
+                },
+                { name = "Target C", requiredCount = 1 },
+                { name = "Target D", requiredCount = 1 },
+            },
+            discoveries = {
+                { zoneId = 381, worldX = 100, worldY = 10, worldZ = 100, mapId = 32, x = 0.1, y = 0.1, radius = 800, message = "D1" },
+                { zoneId = 381, worldX = 200, worldY = 10, worldZ = 200, mapId = 32, x = 0.2, y = 0.2, radius = 800, message = "D2" },
+                { zoneId = 381, worldX = 300, worldY = 10, worldZ = 300, mapId = 32, x = 0.3, y = 0.3, radius = 800, message = "D3" },
+                { zoneId = 381, worldX = 400, worldY = 10, worldZ = 400, mapId = 32, x = 0.4, y = 0.4, radius = 800, message = "D4" },
+                { zoneId = 381, worldX = 500, worldY = 10, worldZ = 500, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "D5" },
+                { zoneId = 381, worldX = 600, worldY = 10, worldZ = 600, mapId = 32, x = 0.6, y = 0.6, radius = 800, message = "D6" },
+                { zoneId = 381, worldX = 700, worldY = 10, worldZ = 700, mapId = 32, x = 0.7, y = 0.7, radius = 800, message = "D7" },
+                { zoneId = 381, worldX = 800, worldY = 10, worldZ = 800, mapId = 32, x = 0.8, y = 0.8, radius = 800, message = "D8" },
+                { zoneId = 381, worldX = 900, worldY = 10, worldZ = 900, mapId = 32, x = 0.9, y = 0.9, radius = 800, message = "D9" },
+                { zoneId = 381, worldX = 1000, worldY = 10, worldZ = 1000, mapId = 32, x = 0.95, y = 0.95, radius = 800, message = "D10" },
+            },
+            dialogues = {
+                { npcName = "NPC 1", zoneId = 381, clue = "C1", response = "R1" },
+                { npcName = "NPC 2", zoneId = 381, clue = "C2", response = "R2" },
+                { npcName = "NPC 3", zoneId = 381, clue = "C3", response = "R3" },
+                { npcName = "NPC 4", zoneId = 381, clue = "C4", response = "R4" },
+            },
+        }
+
+        local code = RPQuest.ShareCodec:EncodeQuest(quest)
+        AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "Max-cap quest encodes to RPQ3")
+        local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(decoded ~= nil, "Max-cap quest decodes cleanly")
+        AssertEqual(#decoded.targets, 4, "4 targets round-trip")
+        AssertEqual(#decoded.discoveries, 10, "10 discoveries round-trip")
+        AssertEqual(#decoded.dialogues, 4, "4 dialogues round-trip")
+
+        AssertEqual(decoded.targets[1].customMessage, "Active general msg", "Target A keeps customMessage")
+        AssertEqual(decoded.targets[1].customMessageInLocation, "Optional in-loc msg", "Target A keeps customMessageInLocation even when locationRequired=false")
+        AssertEqual(decoded.targets[1].customMessageOutsideLocation, nil, "Target A does not emit legacy customMessageOutsideLocation")
+
+        AssertEqual(decoded.targets[2].customMessage, "Required general msg", "Target B keeps customMessage even when locationRequired=true")
+        AssertEqual(decoded.targets[2].customMessageInLocation, "Active in-loc msg", "Target B keeps customMessageInLocation")
+        AssertEqual(decoded.targets[2].customMessageOutsideLocation, nil, "Target B does not emit legacy customMessageOutsideLocation")
+    end)
+
+    RunTest("Issue #53: ShareCodec round-trips quest icon and preserves backward compatibility when nil", function()
+        for _, iconId in ipairs({ "black_hand", "search", "steal" }) do
+            local quest = {
+                title = "Icon Quest " .. iconId,
+                description = "Desc",
+                icon = iconId,
+                stealthMode = RPQuest.Constants.STEALTH_MODE.REQUIRED,
+                mapId = 32,
+                zoneId = 381,
+                mapName = "Auridon",
+                targets = {
+                    { name = "Target", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 },
+                },
+            }
+            local code = RPQuest.ShareCodec:EncodeQuest(quest)
+            AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "Icon quest encodes to RPQ3")
+            local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+            AssertTrue(decoded ~= nil, "Icon quest decodes cleanly")
+            AssertEqual(decoded.icon, iconId, "Decoded icon matches " .. iconId)
+            AssertEqual(decoded.stealthMode, RPQuest.Constants.STEALTH_MODE.REQUIRED, "Stealth required preserved alongside icon")
+        end
+
+        local noIconQuest = {
+            title = "Legacy No Icon",
+            description = "Desc",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targets = {
+                { name = "Target", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 },
+            },
+        }
+        local noIconCode = RPQuest.ShareCodec:EncodeQuest(noIconQuest)
+        local noIconDecoded = RPQuest.ShareCodec:DecodeQuest(noIconCode)
+        AssertTrue(noIconDecoded ~= nil, "No-icon quest decodes cleanly")
+        AssertEqual(noIconDecoded.icon, nil, "No-icon quest decodes icon as nil")
     end)
 
 end

@@ -293,7 +293,8 @@ return function(T)
         AssertEqual(#alerts, 1, "Master receives alert for acceptance mail")
         AssertEqual(alerts[1].msg, RPQuest.Locale:Get("ALERT_MAIL_ACCEPTANCE_RECEIVED", "@PlayerAcc", prepared.title), "Acceptance alert text matches")
         AssertTrue(prepared.lastResult ~= nil and prepared.lastResult.status == "accepted", "Prepared quest records lastResult.status == 'accepted'")
-        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "accepted", "GetPreparedQuestStatus returns 'accepted'")
+        AssertEqual(RPQuest.QuestRepository:GetQuestLifecycle(prepared), "sent", "GetQuestLifecycle remains 'sent'")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(prepared), "accepted", "GetQuestResolution returns 'accepted'")
         AssertEqual(#deletedIds, 1, "Acceptance mail auto-deleted on Master")
 
         RPQuest.JournalTab:SelectQuest(prepared.id)
@@ -308,7 +309,8 @@ return function(T)
             resultType = "completed",
             wasDetected = false,
         })
-        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "completed", "Completion overwrites accepted status")
+        AssertEqual(RPQuest.QuestRepository:GetQuestLifecycle(prepared), "sent", "Lifecycle remains sent")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(prepared), "completed", "Completion overwrites accepted resolution")
 
         -- 5. Late acceptance arriving after completion does not overwrite completed status
         local lateEntry, isNewLate = RPQuest.QuestRepository:RecordMailDelivery(prepared.id, "@PlayerAcc", {
@@ -320,7 +322,7 @@ return function(T)
         })
         AssertEqual(isNewLate, true, "Late acceptance recorded in deliveries")
         AssertEqual(lateEntry.status, "accepted", "Late delivery entry has status='accepted'")
-        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(prepared), "completed", "Late acceptance does not overwrite completed status")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(prepared), "completed", "Late acceptance does not overwrite completed resolution")
         AssertEqual(prepared.lastResult.status, "completed", "lastResult remains completed")
 
         _G.SendMail = origSendMail
@@ -349,7 +351,8 @@ return function(T)
         -- 1. Unsent draft stays in Preparing
         RPQuest.TargetCapture:CaptureFromReticle()
         local draftQuest = RPQuest.QuestRepository:SaveDraft("Unsent Draft", "Still preparing", nil, "", false, "@PlayerA")
-        AssertEqual(RPQuest.QuestRepository:GetPreparedQuestStatus(draftQuest), "draft", "Draft starts with status 'draft'")
+        AssertEqual(RPQuest.QuestRepository:GetQuestLifecycle(draftQuest), "draft", "Draft starts with lifecycle 'draft'")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(draftQuest), nil, "Draft has nil resolution")
 
         -- 2. Prepared quest with requireUndetected + optional target
         RPQuest.TargetCapture:CaptureFromReticle()
@@ -436,6 +439,160 @@ return function(T)
         AssertTrue(statusDetected:find("0/1", 1, true) ~= nil, "Detail status shows optional 0/1 result")
         local objDetected = RPQuest.JournalTab.detailObjText:GetText()
         AssertTrue(objDetected:find("Detected", 1, true) ~= nil, "Objective lines reflect Detected completion result")
+    end)
+
+    RunTest("Issue #255: End-to-end QUEST_FAILED (location & stealth) auto-mail, Master inbox processing, and retry precedence", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        sv.settings.autoSendCompletionMail = true
+        sv.settings.autoDeleteMail = true
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+        RPQuest.JournalTab:Initialize()
+
+        local sentMails = {}
+        local alerts = {}
+        local origSendMail = _G.SendMail
+        local origReqOpen = _G.RequestOpenMailbox
+        local origClose = _G.CloseMailbox
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        _G.SendMail = function(to, subject, body)
+            table.insert(sentMails, { to = to, subject = subject, body = body })
+        end
+        _G.RequestOpenMailbox = function() end
+        _G.CloseMailbox = function() end
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+
+        -- 1. Master prepares stealth-required quest and sends to player
+        local masterPrep = RPQuest.QuestRepository:BuildQuestRecord(1, "Stealth Failure", "Do not get caught",
+            RPQuest.QuestDraftStore:CloneTargetsList({
+                { name = "Sentry", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.125 },
+            }), {
+            mapId = 10,
+            zoneId = 20,
+            targetX = 0.5,
+            targetY = 0.5,
+            stealthMode = "required",
+            recipientAccount = "@PlayerAcc",
+        }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        table.insert(sv.quests, masterPrep)
+        sv.nextId = 2
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.QuestRepository:MarkPreparedQuestSent(masterPrep.id, "@PlayerAcc")
+
+        local stealthCode = RPQuest.QuestRepository:ExportQuestToCode(masterPrep.id)
+        local stealthQuest = RPQuest.QuestRepository:ImportQuestFromCode(stealthCode, "@Master", {
+            status = RPQuest.Constants.QUEST_STATUS.ACTIVE,
+            sourceMailId = "mail_fail_stealth",
+        })
+        RPQuest.QuestRepository:SetActiveQuest(stealthQuest.id)
+
+        RPQuest.QuestRepository:RecordPlayerDetected({ mapId = 10, zoneId = 20, x = 0.5, y = 0.5 })
+        RPQuest.MailTransport:OnMailboxOpened()
+        RPQuest.MailTransport:OnMailSendSuccess("@Master")
+
+        AssertEqual(stealthQuest.failed, true, "Stealth quest marked failed")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(stealthQuest), "failed", "Received quest resolution is 'failed'")
+        AssertEqual(stealthQuest.failureReported, true, "failureReported marked true after mail send")
+        AssertEqual(#sentMails, 1, "Auto-sent 1 failure mail to @Master")
+        AssertTrue(sentMails[1].subject:find("[RPQuest:Failed] ", 1, true) == 1, "Failure mail has [RPQuest:Failed] prefix")
+
+        -- Reset clears failureReported
+        RPQuest.QuestRepository:ResetQuest(stealthQuest.id)
+        AssertEqual(stealthQuest.failureReported, false, "ResetQuest clears failureReported")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(stealthQuest), "accepted", "ResetQuest restores accepted resolution on received quest")
+
+        -- 2. Player receives location-required quest and fails outside location
+        local locQuest = RPQuest.QuestRepository:BuildQuestRecord(10, "Location Failure", "Eliminate inside area", {
+            { name = "Target", requiredCount = 1, locationRequired = true, locationZoneId = 20, worldX = 1000, worldZ = 1000, locationRadius = 800 },
+        }, {
+            mapId = 10,
+            zoneId = 20,
+            senderDisplayName = "@Master",
+            status = RPQuest.Constants.QUEST_STATUS.ACTIVE,
+        }, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        table.insert(sv.quests, locQuest)
+        sv.nextId = 11
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.QuestRepository:SetActiveQuest(locQuest.id)
+        RPQuest.QuestRepository:RecordTargetEliminated("Target", { worldZoneId = 20, worldX = 99999, worldZ = 99999 })
+        RPQuest.MailTransport:OnMailboxOpened()
+        RPQuest.MailTransport:OnMailSendSuccess("@Master")
+        AssertEqual(#sentMails, 2, "Location failure auto-sends second failure mail")
+        AssertEqual(locQuest.failureReported, true, "Location failure sets failureReported=true")
+
+        -- 3. Master side: process [RPQuest:Failed] mail
+        masterPrep = RPQuest.QuestRepository:GetQuestById(1)
+
+        local mailRead = false
+        _G.GetNextMailId = function(prev)
+            if not prev and not mailRead then return 701 end
+            return nil
+        end
+        _G.GetMailItemInfo = function(id)
+            if id == 701 then
+                return "@PlayerAcc", "ShadowChar", sentMails[1].subject, "", true, false, false, false, 0, 0, 0, 30, 1, 0
+            end
+        end
+        _G.ReadMail = function(id) return (id == 701) and sentMails[1].body or "" end
+        _G.DeleteMail = function(id)
+            if id == 701 then mailRead = true end
+        end
+
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(RPQuest.QuestRepository:GetQuestLifecycle(masterPrep), "sent", "Master quest stays in 'sent' lifecycle")
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(masterPrep), "failed", "Master quest resolution updated to 'failed'")
+        AssertTrue(alerts[#alerts].msg == RPQuest.Locale:Get("ALERT_MAIL_FAILURE_RECEIVED", "@PlayerAcc", masterPrep.title), "Master receives ALERT_MAIL_FAILURE_RECEIVED")
+
+        -- UI reflects Sent — Failed in detail and [Failed] in Sent list
+        RPQuest.JournalTab:SelectQuest(masterPrep.id)
+        if RPQuest.JournalTab.collapsedSections and RPQuest.JournalTab.collapsedSections.sent then
+            RPQuest.JournalTab:ToggleSection("sent")
+        end
+        RPQuest.JournalTab:Refresh()
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Sent", 1, true) ~= nil, "Detail status shows Sent")
+        AssertTrue(RPQuest.JournalTab.detailStatus:GetText():find("Failed", 1, true) ~= nil, "Detail status shows Failed")
+        local foundSentFailedRow = false
+        for _, b in pairs(RPQuest.JournalTab.rowBindings) do
+            if b.questId == masterPrep.id then
+                local rowText = b.text or ""
+                foundSentFailedRow = rowText:find(RPQuest.Locale:Get("LIST_SENT_STATUS_FAILED"), 1, true) ~= nil
+            end
+        end
+        AssertTrue(foundSentFailedRow, "Sent list row displays [Failed]")
+
+        -- 4. Late acceptance does not overwrite failed, but later completion after retry DOES overwrite failed
+        RPQuest.QuestRepository:RecordMailDelivery(masterPrep.id, "@PlayerAcc", {
+            characterName = "ShadowChar",
+            completedAt = 2000,
+            accepted = true,
+            resultType = "accepted",
+        })
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(masterPrep), "failed", "Late acceptance does not overwrite failed")
+
+        RPQuest.QuestRepository:RecordMailDelivery(masterPrep.id, "@PlayerAcc", {
+            characterName = "ShadowChar",
+            completedAt = 2001,
+            completed = true,
+            resultType = "completed",
+            wasDetected = false,
+        })
+        AssertEqual(RPQuest.QuestRepository:GetQuestResolution(masterPrep), "completed", "Later completion after retry overwrites failed")
+
+        _G.SendMail = origSendMail
+        _G.RequestOpenMailbox = origReqOpen
+        _G.CloseMailbox = origClose
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+        RPQuest.Announcements.ShowAlert = origShowAlert
     end)
 
 end

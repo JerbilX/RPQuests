@@ -21,15 +21,20 @@ return function(T)
         end
     end)
 
-    RunTest("AREA_RADIUS enlarged progression and ComputeOffsetCenter bounds for zone and subzone radii", function()
+    RunTest("Unified 5-tier AREA_RADIUS and DISCOVERY_RADIUS progression and ComputeOffsetCenter bounds", function()
         RPQuest.QuestRepository:Initialize({})
         local radii = RPQuest.Constants.AREA_RADIUS
+        local discRadii = RPQuest.Constants.DISCOVERY_RADIUS
         local mult = RPQuest.Constants.AREA_SUBZONE_MULTIPLIER
-        AssertTrue(radii.MEDIUM > 0.075, "Default MEDIUM radius is enlarged beyond legacy 0.075")
-        AssertTrue(radii.SMALL < radii.MEDIUM and radii.MEDIUM < radii.LARGE, "AREA_RADIUS maintains coherent progression")
+        AssertTrue(math.abs(radii.TINY - 0.008) < 0.0001, "AREA_RADIUS.TINY matches 800 world units normalized (0.008)")
+        AssertTrue(math.abs(radii.HUGE - 0.070) < 0.0001, "AREA_RADIUS.HUGE matches legacy Small search area (0.070)")
+        AssertTrue(radii.TINY < radii.SMALL and radii.SMALL < radii.MEDIUM and radii.MEDIUM < radii.LARGE and radii.LARGE < radii.HUGE, "AREA_RADIUS maintains coherent 5-tier progression")
+        AssertEqual(discRadii.TINY, 800, "DISCOVERY_RADIUS.TINY is 800 world units (~8m)")
+        AssertEqual(discRadii.HUGE, 7000, "DISCOVERY_RADIUS.HUGE matches 0.070 normalized (7000 world units)")
+        AssertTrue(discRadii.TINY < discRadii.SMALL and discRadii.SMALL < discRadii.MEDIUM and discRadii.MEDIUM < discRadii.LARGE and discRadii.LARGE < discRadii.HUGE, "DISCOVERY_RADIUS maintains coherent 5-tier progression")
         AssertTrue(mult > 1.0, "Subzone multiplier enlarges city/subzone maps")
 
-        local testRadii = { radii.SMALL, radii.MEDIUM, radii.LARGE, radii.MEDIUM * mult, radii.LARGE * mult }
+        local testRadii = { radii.TINY, radii.SMALL, radii.MEDIUM, radii.LARGE, radii.HUGE, radii.MEDIUM * mult, radii.HUGE * mult }
         local corners = { { 0.01, 0.01 }, { 0.99, 0.01 }, { 0.01, 0.99 }, { 0.99, 0.99 }, { 0.50, 0.50 } }
         for _, r in ipairs(testRadii) do
             for _, pt in ipairs(corners) do
@@ -194,7 +199,7 @@ return function(T)
         RPQuest.WorldMapArea:ShowQuestOnMap(prep)
         local pins = ZO_WorldMap_GetPinManager()._createdPins
         AssertEqual(#pins, 1, "ShowQuestOnMap renders area pin for prepared quest even when inactive")
-        AssertEqual(pins[1].pinTag, prep.id, "Rendered preview pin belongs to prepared quest")
+        AssertEqual(pins[1].pinTag.questId, prep.id, "Rendered preview pin belongs to prepared quest")
         AssertEqual(pins[1].radius, 0.05, "Rendered preview pin uses prepared quest radius")
 
         -- 3. Probar localmente y luego detener prueba
@@ -358,10 +363,10 @@ return function(T)
         local code = RPQuest.QuestRepository:ExportQuestToCode(q.id)
         AssertTrue(type(code) == "string" and #code > 100 and code:sub(1, 5) == "RPQ3:", "Exported RPQ3 code generated cleanly")
 
-        -- Verificar que detailObjText tiene altura acotada (<= 96px)
+        -- Verificar que detailObjText tiene altura acotada (4 líneas de objetivos + líneas de config Master <= 144px)
         RPQuest.JournalTab:SelectQuest(q.id)
         local _, objHeight = RPQuest.JournalTab.detailObjText:GetDimensions()
-        AssertTrue(objHeight <= 96, "detailObjText height capped at <= 96px to prevent vertical overflow")
+        AssertTrue(objHeight <= 144, "detailObjText height capped at <= 144px to prevent vertical overflow")
 
         -- Verificar invalidación de caché de ExportQuestToCode al editar
         RPQuest.QuestRepository:LoadQuestIntoDraft(q.id)
@@ -380,10 +385,11 @@ return function(T)
     RunTest("Optimizations: completion code cache, discovery-only FindPendingTarget, ShareCodec escape, keybind string", function()
         RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
 
-        -- 1. Keybind string for discovery capture is registered
+        -- 1. Legacy discovery capture keybind is completely removed
         RPQuest.Locale._stringsRegistered = false
         RPQuest.Locale:Initialize("en")
-        AssertTrue(_G["SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"] ~= nil, "SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY is registered")
+        AssertEqual(_G["SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY"], nil, "SI_BINDING_NAME_RPQUEST_CAPTURE_DISCOVERY is not registered")
+        AssertEqual(RPQuest.OnCaptureDiscoveryKeybind, nil, "OnCaptureDiscoveryKeybind is removed")
 
         -- 2. ShareCodec escaping roundtrip with special delimiters
         local specialQuest = {
@@ -727,7 +733,8 @@ return function(T)
         AssertTrue(copyFromPrep ~= nil, "Copy from PREPARING succeeds")
         AssertEqual(copyFromPrep.id ~= prepQuest.id, true, "Copy has a new unique quest ID")
         AssertEqual(copyFromPrep.role, RPQuest.Constants.QUEST_ROLE.PREPARED, "Copy has PREPARED role")
-        AssertEqual(repo:GetPreparedQuestStatus(copyFromPrep), "draft", "Copy from PREPARING is in draft/Preparing")
+        AssertEqual(repo:GetQuestLifecycle(copyFromPrep), "draft", "Copy from PREPARING is in draft/Preparing")
+        AssertEqual(repo:GetQuestResolution(copyFromPrep), nil, "Copy from PREPARING has nil resolution")
         AssertEqual(copyFromPrep.title, "Contract One", "Title preserved")
         AssertEqual(copyFromPrep.description, "Desc One", "Description preserved")
         AssertEqual(copyFromPrep.completionMessage, "Well done", "Completion message preserved")
@@ -750,12 +757,14 @@ return function(T)
         -- Mark original as SENT with delivery history and copy it
         repo:MarkPreparedQuestSent(prepQuest.id, "@TargetUser")
         repo:RecordMailDelivery(prepQuest.id, "@TargetUser", { status = "completed", characterName = "HeroChar" })
-        AssertEqual(repo:GetPreparedQuestStatus(prepQuest), "completed", "Original is in SENT/completed")
+        AssertEqual(repo:GetQuestLifecycle(prepQuest), "sent", "Original is in SENT lifecycle")
+        AssertEqual(repo:GetQuestResolution(prepQuest), "completed", "Original has completed resolution")
 
         local copyFromSent = repo:DuplicateQuest(prepQuest.id)
         AssertTrue(copyFromSent ~= nil, "Copy from SENT succeeds")
         AssertEqual(copyFromSent.id ~= prepQuest.id, true, "Sent copy has new ID")
-        AssertEqual(repo:GetPreparedQuestStatus(copyFromSent), "draft", "Copy from SENT starts in Preparing")
+        AssertEqual(repo:GetQuestLifecycle(copyFromSent), "draft", "Copy from SENT starts in Preparing")
+        AssertEqual(repo:GetQuestResolution(copyFromSent), nil, "Copy from SENT has nil resolution")
         AssertTrue(copyFromSent.sentTo == nil, "sentTo cleared")
         AssertTrue(copyFromSent.sentAt == nil, "sentAt cleared")
         AssertTrue(copyFromSent.lastResult == nil, "lastResult cleared")
@@ -929,10 +938,10 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 3, "Quest 1 upgraded to current schema v3")
+        AssertEqual(q1.schemaVersion, 5, "Quest 1 upgraded to current schema v5")
         AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
         AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
-        AssertEqual(q2.schemaVersion, 3, "Quest 2 upgraded to current schema v3")
+        AssertEqual(q2.schemaVersion, 5, "Quest 2 upgraded to current schema v5")
         AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
         AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
 
@@ -1017,6 +1026,9 @@ return function(T)
         AssertEqual(defaults.draft.recommendHideMapAreas, true, "New draft defaults recommendHideMapAreas = true")
         AssertEqual(defaults.settings.showSearchAreas, false, "Local setting showSearchAreas defaults to false")
         AssertEqual(defaults.settings.showLocationAreas, false, "Local setting showLocationAreas defaults to false")
+        AssertEqual(defaults.settings.showDiscoveryAreas, false, "Local setting showDiscoveryAreas defaults to false")
+        AssertEqual(repo:HasQuestDiscoveryPoints({ discoveries = {} }), false, "HasQuestDiscoveryPoints false for empty discoveries")
+        AssertEqual(repo:HasQuestDiscoveryPoints({ discoveries = { { message = "x" } } }), true, "HasQuestDiscoveryPoints true when discoveries exist")
 
         local sv = {
             nextId = 10,
@@ -1060,7 +1072,7 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 3, "v2 quest 1 migrated to schema v3")
+        AssertEqual(q1.schemaVersion, 5, "v2 quest 1 migrated to schema v5")
         AssertEqual(q1.recommendHideMapAreas, true, "v2 hideMapArea=true preserved in recommendHideMapAreas")
         AssertEqual(q1.hideMapArea, nil, "Legacy hideMapArea cleared on q1")
         AssertEqual(q1.areaCenterX, nil, "Legacy quest-level areaCenterX cleared on q1")
@@ -1070,9 +1082,32 @@ return function(T)
         AssertEqual(q1.targets[2].areaCenterY, 0.62, "Target 2 inherits q1 areaCenterY")
         AssertEqual(q1.targets[2].areaRadius, 0.125, "Target 2 inherits q1 areaRadius")
         AssertEqual(q1.targets[1].customMessageInLocation, "", "Target 1 initializes customMessageInLocation")
-        AssertEqual(q1.targets[1].customMessageOutsideLocation, "", "Target 1 initializes customMessageOutsideLocation")
+        AssertEqual(q1.targets[1].customMessageOutsideLocation, nil, "Target 1 clears legacy customMessageOutsideLocation")
 
-        AssertEqual(q2.schemaVersion, 3, "v2 quest 2 migrated to schema v3")
+        AssertEqual(q2.schemaVersion, 5, "v2 quest 2 migrated to schema v5")
+
+        -- v4 -> v5 migration: consolidate customMessageOutsideLocation into customMessage and clean legacy field
+        local svV4 = {
+            quests = {
+                {
+                    id = 10,
+                    schemaVersion = 4,
+                    title = "V4 Consolidation",
+                    targets = {
+                        { name = "Guard", requiredCount = 1, customMessage = "", customMessageInLocation = "In loc", customMessageOutsideLocation = "Legacy outside" },
+                        { name = "Scout", requiredCount = 1, customMessage = "Keep existing", customMessageInLocation = "", customMessageOutsideLocation = "Ignored legacy" },
+                    },
+                },
+            },
+        }
+        repo:Initialize(svV4)
+        local qV4 = repo:GetQuestById(10)
+        AssertEqual(qV4.schemaVersion, 5, "v4 quest migrated to schema v5")
+        AssertEqual(qV4.targets[1].customMessage, "Legacy outside", "Empty customMessage adopts customMessageOutsideLocation")
+        AssertEqual(qV4.targets[1].customMessageInLocation, "In loc", "customMessageInLocation preserved")
+        AssertEqual(qV4.targets[1].customMessageOutsideLocation, nil, "Target 1 legacy customMessageOutsideLocation removed")
+        AssertEqual(qV4.targets[2].customMessage, "Keep existing", "Non-empty customMessage is not overwritten")
+        AssertEqual(qV4.targets[2].customMessageOutsideLocation, nil, "Target 2 legacy customMessageOutsideLocation removed")
         AssertEqual(q2.recommendHideMapAreas, false, "v2 hideMapArea=false preserved in recommendHideMapAreas")
         AssertEqual(q2.targets[1].areaRadius, 0.070, "q2 target inherits 0.070 areaRadius")
 
@@ -1106,6 +1141,223 @@ return function(T)
         AssertEqual(#dAfter2.targets, 0, "0 targets remain after removing last target")
         AssertEqual(dAfter2.lastCapturedDisplay, nil, "lastCapturedDisplay cleared when empty")
         AssertEqual(dAfter2.mapId, 0, "mapId cleared when targets and discoveries are empty")
+    end)
+
+    RunTest("Issue #255: v3 -> v4 migration, lifecycle/resolution orthogonality, GM testing isolation, and recipient reset", function()
+        local repo = RPQuest.QuestRepository
+        local sv = repo:GetDefaults()
+        sv.nextId = 10
+        sv.quests = {
+            { id = 1, schemaVersion = 3, role = "prepared", title = "V3 Draft", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 2, schemaVersion = 3, role = "prepared", title = "V3 Sent Unanswered", sentTo = "@P1", sentAt = 100, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 3, schemaVersion = 3, role = "prepared", title = "V3 Sent Accepted", sentTo = "@P2", lastResult = { status = "accepted", characterName = "C2" }, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 4, schemaVersion = 3, role = "prepared", title = "V3 Sent Rejected", sentTo = "@P3", deliveries = { { status = "rejected", characterName = "C3" } }, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 5, schemaVersion = 3, role = "prepared", title = "V3 Sent Completed", sentTo = "@P4", lastResult = { status = "completed", characterName = "C4" }, targets = { { name = "A", requiredCount = 1 } } },
+            { id = 6, schemaVersion = 3, role = "received", status = "offered", title = "V3 Offered", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 7, schemaVersion = 3, role = "received", status = "active", title = "V3 Active", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 8, schemaVersion = 3, role = "received", status = "active", completed = true, title = "V3 Completed", targets = { { name = "A", requiredCount = 1 } } },
+            { id = 9, schemaVersion = 3, role = "received", status = "active", failed = true, title = "V3 Failed", targets = { { name = "A", requiredCount = 1 } } },
+        }
+        repo:Initialize(sv)
+
+        local q1 = repo:GetQuestById(1)
+        local q2 = repo:GetQuestById(2)
+        local q3 = repo:GetQuestById(3)
+        local q4 = repo:GetQuestById(4)
+        local q5 = repo:GetQuestById(5)
+        local q6 = repo:GetQuestById(6)
+        local q7 = repo:GetQuestById(7)
+        local q8 = repo:GetQuestById(8)
+        local q9 = repo:GetQuestById(9)
+
+        AssertEqual(q1.schemaVersion, 5, "v3 quests migrated to v5")
+        AssertEqual(repo:GetQuestLifecycle(q1), "draft", "q1 lifecycle=draft")
+        AssertEqual(repo:GetQuestResolution(q1), nil, "q1 resolution=nil")
+        AssertEqual(repo:GetQuestLifecycle(q2), "sent", "q2 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q2), nil, "q2 resolution=nil")
+        AssertEqual(repo:GetQuestLifecycle(q3), "sent", "q3 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q3), "accepted", "q3 resolution=accepted")
+        AssertEqual(repo:GetQuestLifecycle(q4), "sent", "q4 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q4), "rejected", "q4 resolution=rejected")
+        AssertEqual(repo:GetQuestLifecycle(q5), "sent", "q5 lifecycle=sent")
+        AssertEqual(repo:GetQuestResolution(q5), "completed", "q5 resolution=completed")
+        AssertEqual(repo:GetQuestLifecycle(q6), "received", "q6 lifecycle=received")
+        AssertEqual(repo:GetQuestResolution(q6), nil, "q6 offered resolution=nil")
+        AssertEqual(repo:GetQuestLifecycle(q7), "received", "q7 lifecycle=received")
+        AssertEqual(repo:GetQuestResolution(q7), "accepted", "q7 active resolution=accepted")
+        AssertEqual(repo:GetQuestResolution(q8), "completed", "q8 completed resolution=completed")
+        AssertEqual(repo:GetQuestResolution(q9), "failed", "q9 failed resolution=failed")
+        AssertEqual(q9.failureReported, false, "q9 failureReported initialized to false")
+
+        -- Local GM testing on Draft and Sent does not corrupt lifecycle or remote resolution
+        repo:SetActiveQuest(q1.id)
+        repo:RecordTargetEliminated("A", { mapId = 0, zoneId = 0, x = 0.5, y = 0.5 })
+        AssertEqual(q1.completed, true, "Local GM test completes draft locally")
+        AssertEqual(repo:GetQuestLifecycle(q1), "draft", "Draft lifecycle unchanged by GM test")
+        AssertEqual(repo:GetQuestResolution(q1), nil, "Draft resolution stays nil even after GM test")
+        repo:ResetQuest(q1.id, { activate = false })
+        AssertEqual(repo:GetQuestResolution(q1), nil, "Draft resolution stays nil after Reset")
+
+        repo:SetActiveQuest(q3.id)
+        repo:RecordTargetEliminated("A", { mapId = 0, zoneId = 0, x = 0.5, y = 0.5 })
+        AssertEqual(q3.completed, true, "Local GM test completes sent quest locally")
+        AssertEqual(repo:GetQuestLifecycle(q3), "sent", "Sent lifecycle unchanged by GM test")
+        AssertEqual(repo:GetQuestResolution(q3), "accepted", "Remote resolution on Sent quest untouched by GM test")
+        repo:ResetQuest(q3.id, { activate = false })
+        AssertEqual(repo:GetQuestResolution(q3), "accepted", "Remote resolution on Sent quest untouched by Reset")
+
+        -- Editing recipientAccount on a Sent quest resets lifecycle to draft and clears resolution
+        RPQuest.QuestDraftStore:LoadQuestIntoDraft(repo, q3.id)
+        RPQuest.QuestDraftStore:SaveDraft(repo, q3.title, "New Desc", nil, "", "disabled", "@NewPlayer")
+        AssertEqual(repo:GetQuestLifecycle(q3), "draft", "Changing recipient resets lifecycle to draft")
+        AssertEqual(repo:GetQuestResolution(q3), nil, "Changing recipient clears resolution")
+        AssertEqual(q3.sentTo, nil, "Changing recipient clears sentTo")
+    end)
+
+    RunTest("Issue #295 & #311: Entity caps (4/10/4), localized alerts, dynamic badges, and legacy backwards compatibility", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({})
+        RPQuest.JournalTab:Initialize()
+
+        AssertEqual(RPQuest.Constants.TARGET.MAX_TARGETS, 4, "MAX_TARGETS is 4")
+        AssertEqual(RPQuest.Constants.DISCOVERY.MAX_POINTS, 10, "MAX_POINTS is 10")
+        AssertEqual(RPQuest.Constants.DIALOGUE.MAX_NPCS, 4, "MAX_NPCS is 4")
+
+        -- 1. Target cap (4) blocks 5th distinct target, but allows stacking existing target
+        repo:ResetDraft()
+        for i = 1, 4 do
+            mockState.reticleExists = true
+            mockState.reticleName = "Target " .. tostring(i)
+            local d = RPQuest.TargetCapture:CaptureFromReticle()
+            AssertTrue(d ~= nil, "Target " .. tostring(i) .. " captured")
+        end
+        -- Stacking existing target at cap 4/4 must still succeed
+        mockState.reticleName = "Target 1"
+        local stackedDraft = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertTrue(stackedDraft ~= nil and stackedDraft.targets[1].requiredCount == 2, "Stacking existing target allowed at cap")
+
+        -- 5th distinct target must fail with ALERT_TARGET_LIMIT
+        mockState.alerts = {}
+        mockState.reticleName = "Target 5"
+        local blockedTarget, targetErr = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertEqual(blockedTarget, nil, "5th distinct target rejected")
+        AssertEqual(targetErr, RPQuest.Locale:Get("ALERT_TARGET_LIMIT", 4), "Target limit returns ALERT_TARGET_LIMIT")
+        AssertEqual(#mockState.alerts, 1, "Target limit emits alert")
+
+        -- 2. Discovery cap (10) blocks 11th discovery point with ALERT_DISCOVERY_LIMIT
+        for i = 1, 10 do
+            local d, idx = RPQuest.TargetCapture:CaptureDiscoveryPoint("Point " .. tostring(i))
+            AssertTrue(d ~= nil and idx == i, "Discovery " .. tostring(i) .. " captured")
+        end
+        mockState.alerts = {}
+        local blockedDisc, discErr = RPQuest.TargetCapture:CaptureDiscoveryPoint("Point 11")
+        AssertEqual(blockedDisc, nil, "11th discovery point rejected")
+        AssertEqual(discErr, RPQuest.Locale:Get("ALERT_DISCOVERY_LIMIT", 10), "Discovery limit returns ALERT_DISCOVERY_LIMIT")
+        AssertEqual(#mockState.alerts, 1, "Discovery limit emits alert")
+
+        -- 3. Dialogue cap (4) allows 4 NPCs and blocks 5th with ALERT_DIALOGUE_LIMIT
+        for i = 1, 4 do
+            local d, idx = repo:AddDraftDialogue("NPC " .. tostring(i), 381, "Resp " .. tostring(i), "Clue " .. tostring(i))
+            AssertTrue(d ~= nil and idx == i, "Dialogue " .. tostring(i) .. " added")
+        end
+        local blockedDlg, dlgErr = repo:AddDraftDialogue("NPC 5", 381, "Resp 5", "Clue 5")
+        AssertEqual(blockedDlg, nil, "5th dialogue NPC rejected")
+        AssertEqual(dlgErr, RPQuest.Locale:Get("ALERT_DIALOGUE_LIMIT", 4), "Dialogue limit returns ALERT_DIALOGUE_LIMIT")
+
+        -- 4. Dynamic [%d/%d] badges in JournalEditorPane
+        RPQuest.JournalTab:RefreshEditorPane()
+        local targetHdrText = RPQuest.JournalTab.editorSectionsByKey.target.headerBtn:GetText()
+        local discHdrText = RPQuest.JournalTab.editorSectionsByKey.discovery.headerBtn:GetText()
+        local dlgHdrText = RPQuest.JournalTab.editorSectionsByKey.dialogue.headerBtn:GetText()
+        AssertTrue(targetHdrText:find("[4/4]", 1, true) ~= nil, "Target section badge shows [4/4]")
+        AssertTrue(discHdrText:find("[10/10]", 1, true) ~= nil, "Discovery section badge shows [10/10]")
+        AssertTrue(dlgHdrText:find("[4/4]", 1, true) ~= nil, "Dialogue section badge shows [4/4]")
+
+        -- 5. Backwards compatibility: legacy quest exceeding new caps/lengths loads cleanly
+        local longTitle = string.rep("T", 95)
+        local longDesc = string.rep("D", 380)
+        repo:Initialize({
+            nextId = 2,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 4,
+                    role = "received",
+                    status = "active",
+                    title = longTitle,
+                    description = longDesc,
+                    targets = {
+                        { name = "A", requiredCount = 1 },
+                        { name = "B", requiredCount = 1 },
+                        { name = "C", requiredCount = 1 },
+                        { name = "D", requiredCount = 1 },
+                        { name = "E", requiredCount = 1 },
+                    },
+                    discoveries = {
+                        { zoneId = 1, worldX = 1, worldY = 1, worldZ = 1, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "1" },
+                        { zoneId = 1, worldX = 2, worldY = 1, worldZ = 2, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "2" },
+                        { zoneId = 1, worldX = 3, worldY = 1, worldZ = 3, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "3" },
+                        { zoneId = 1, worldX = 4, worldY = 1, worldZ = 4, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "4" },
+                        { zoneId = 1, worldX = 5, worldY = 1, worldZ = 5, mapId = 1, x = 0.5, y = 0.5, radius = 800, message = "5" },
+                    },
+                },
+            },
+        })
+        local legacy = repo:GetQuestById(1)
+        AssertEqual(legacy.title, longTitle, "Legacy long title preserved")
+        AssertEqual(legacy.description, longDesc, "Legacy long description preserved")
+        AssertEqual(#legacy.targets, 5, "Legacy 5-target quest preserved")
+        AssertEqual(#legacy.discoveries, 5, "Legacy 5-discovery quest preserved")
+    end)
+
+    RunTest("Issue #53: QuestDraftStore & QuestRepository persist, normalize, and clone quest icon", function()
+        local repo = RPQuest.QuestRepository
+        local store = RPQuest.QuestDraftStore
+        repo:Initialize({
+            nextId = 2,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 5,
+                    title = "Legacy Quest Without Icon",
+                    description = "Old",
+                    role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+                    targets = { { name = "Bandit", requiredCount = 1 } },
+                },
+            },
+        })
+
+        local legacy = repo:GetQuestById(1)
+        AssertEqual(legacy.icon, nil, "Legacy quest without icon defaults to nil")
+        AssertEqual(store:NormalizeQuestIcon("unknown_icon"), nil, "Unknown icon normalizes to nil")
+        AssertEqual(store:NormalizeQuestIcon("none"), nil, "'none' normalizes to nil")
+        AssertEqual(store:NormalizeQuestIcon("black_hand"), "black_hand", "Valid icon normalizes to id")
+        AssertEqual(store:GetQuestIconTexture("search"), "/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds", "Search icon texture resolves")
+
+        local draft = store:CreateNewPreparedDraft(repo)
+        AssertEqual(repo:GetDraft().icon, nil, "New draft starts with nil icon")
+
+        repo:UpdateDraftFields({ icon = "steal" })
+        AssertEqual(repo:GetDraft().icon, "steal", "Draft icon updates to steal")
+
+        local targetQuest = repo:GetQuestById(draft.id)
+        table.insert(targetQuest.targets, { name = "Guard", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 })
+        store:LoadQuestIntoDraft(repo, draft.id)
+        repo:UpdateDraftFields({ icon = "black_hand" })
+        local committed = store:CommitDraftChanges(repo)
+        AssertTrue(committed ~= nil, "Draft commits cleanly")
+        AssertEqual(committed.icon, "black_hand", "Committed quest persists icon")
+
+        local cloned = repo:DuplicateQuest(committed.id)
+        AssertTrue(cloned ~= nil, "Cloned quest created")
+        AssertEqual(cloned.icon, "black_hand", "Cloned quest preserves icon")
+
+        store:LoadQuestIntoDraft(repo, cloned.id)
+        repo:UpdateDraftFields({ icon = "none" })
+        local cleared = store:CommitDraftChanges(repo)
+        AssertEqual(cleared.icon, nil, "Selecting none clears quest icon back to nil")
     end)
 
 end

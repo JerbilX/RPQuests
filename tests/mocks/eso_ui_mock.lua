@@ -107,6 +107,10 @@ TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT or 0
 TEXT_ALIGN_CENTER = TEXT_ALIGN_CENTER or 1
 TEXT_ALIGN_RIGHT = TEXT_ALIGN_RIGHT or 2
 KEYBIND_STRIP_ALIGN_CENTER = KEYBIND_STRIP_ALIGN_CENTER or 1
+DL_BACKGROUND = DL_BACKGROUND or 0
+DL_CONTROLS = DL_CONTROLS or 1
+DL_TEXT = DL_TEXT or 2
+DL_OVERLAY = DL_OVERLAY or 3
 
 SI_QUEST_JOURNAL_ABANDON = SI_QUEST_JOURNAL_ABANDON or "SI_QUEST_JOURNAL_ABANDON"
 SI_QUEST_JOURNAL_SHOW_ON_MAP = SI_QUEST_JOURNAL_SHOW_ON_MAP or "SI_QUEST_JOURNAL_SHOW_ON_MAP"
@@ -130,6 +134,8 @@ local function CreateControlMock(name, parent, controlType)
         _width = 100,
         _height = 100,
         _alpha = 1.0,
+        _drawLayer = DL_CONTROLS,
+        _drawLevel = 0,
         _text = "",
         _font = "",
         _texture = "",
@@ -151,6 +157,10 @@ local function CreateControlMock(name, parent, controlType)
     function ctrl:SetHeight(h) self._height = h end
     function ctrl:SetAlpha(alpha) self._alpha = alpha end
     function ctrl:GetAlpha() return self._alpha end
+    function ctrl:SetDrawLayer(layer) self._drawLayer = layer end
+    function ctrl:GetDrawLayer() return self._drawLayer end
+    function ctrl:SetDrawLevel(level) self._drawLevel = level end
+    function ctrl:GetDrawLevel() return self._drawLevel end
     function ctrl:SetColor(r, g, b, a) self._color = {r=r, g=g, b=b, a=a} end
     function ctrl:GetColor()
         return self._color and self._color.r or 1,
@@ -173,6 +183,13 @@ local function CreateControlMock(name, parent, controlType)
         local a = self._anchors[i or 1]
         if a then return true, a.point, a.relTo, a.relPoint, a.x, a.y end
         return false
+    end
+    if controlType == CT_EDITBOX then
+        ctrl._topLineIndex = 1
+        ctrl._scrollExtents = 0
+        function ctrl:GetTopLineIndex() return self._topLineIndex end
+        function ctrl:SetTopLineIndex(idx) self._topLineIndex = idx end
+        function ctrl:GetScrollExtents() return self._scrollExtents end
     end
     function ctrl:SetHandler(eventName, handler) self._handlers[eventName] = handler end
     function ctrl:GetHandler(eventName) return self._handlers[eventName] end
@@ -312,6 +329,17 @@ function CreateControlFromVirtual(name, parent, templateName, optionalId)
         ctrl:SetHandler("OnClicked", function(self)
             ZO_CheckButton_OnClicked(self)
         end)
+    elseif templateName == "ZO_VerticalScrollbarBase" then
+        ctrl._minVal = 1
+        ctrl._maxVal = 1
+        ctrl._value = 1
+        function ctrl:SetMinMax(minV, maxV) self._minVal = minV; self._maxVal = maxV end
+        function ctrl:GetMinMax() return self._minVal, self._maxVal end
+        function ctrl:SetValue(v)
+            self._value = v
+            self:FireHandler("OnValueChanged", v)
+        end
+        function ctrl:GetValue() return self._value end
     end
     return ctrl
 end
@@ -625,6 +653,55 @@ ANIMATION_MANAGER = ANIMATION_MANAGER or {
                 if (tl._direction == 1 and rawProgress >= 1) or (tl._direction == -1 and rawProgress <= 0) then
                     tl._playing = false
                 end
+            end,
+        }
+        table.insert(self._timelines, timeline)
+        return timeline
+    end,
+    CreateTimeline = function(self)
+        local timeline = {
+            _playing = false,
+            _animations = {},
+            _handlers = {},
+            _playbackType = nil,
+            _loopCount = nil,
+            InsertAnimation = function(tl, animType, control, offset)
+                local anim = {
+                    _type = animType,
+                    _control = control,
+                    _offset = offset or 0,
+                    _startAlpha = 1,
+                    _endAlpha = 1,
+                    _duration = 0,
+                    SetAnimatedControl = function(a, ctrl) a._control = ctrl end,
+                    SetAlphaValues = function(a, s, e)
+                        a._startAlpha = s
+                        a._endAlpha = e
+                    end,
+                    SetDuration = function(a, d) a._duration = d end,
+                }
+                table.insert(tl._animations, anim)
+                return anim
+            end,
+            SetPlaybackType = function(tl, playbackType, maxLoopCount)
+                tl._playbackType = playbackType
+                tl._loopCount = maxLoopCount
+            end,
+            SetHandler = function(tl, event, fn)
+                tl._handlers[event] = fn
+            end,
+            PlayFromStart = function(tl)
+                tl._playing = true
+            end,
+            Stop = function(tl)
+                local wasPlaying = tl._playing
+                tl._playing = false
+                if wasPlaying and tl._handlers.OnStop then
+                    tl._handlers.OnStop(tl)
+                end
+            end,
+            IsPlaying = function(tl)
+                return tl._playing
             end,
         }
         table.insert(self._timelines, timeline)
