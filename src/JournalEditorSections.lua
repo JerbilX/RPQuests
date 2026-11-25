@@ -12,6 +12,31 @@ local Addon = RPQuest
 Addon.JournalEditorSections = {}
 local EditorSections = Addon.JournalEditorSections
 
+local RADIUS_TIERS = {
+    { key = "TINY", labelKey = "BTN_RADIUS_TINY" },
+    { key = "SMALL", labelKey = "BTN_RADIUS_SMALL" },
+    { key = "MEDIUM", labelKey = "BTN_RADIUS_MEDIUM" },
+    { key = "LARGE", labelKey = "BTN_RADIUS_LARGE" },
+    { key = "HUGE", labelKey = "BTN_RADIUS_HUGE" },
+}
+
+local function PopulateRadiusComboBox(dropdownControl, radiiTable, entryField, onSelect)
+    local combo = ZO_ComboBox_ObjectFromContainer(dropdownControl)
+    if not combo then
+        return nil
+    end
+    combo:SetSortsItems(false)
+    for _, tier in ipairs(RADIUS_TIERS) do
+        local radiusVal = radiiTable[tier.key]
+        local entry = combo:CreateItemEntry(Addon.Locale:Get(tier.labelKey), function()
+            onSelect(radiusVal)
+        end)
+        entry[entryField] = radiusVal
+        combo:AddItem(entry)
+    end
+    return combo
+end
+
 function EditorSections.CreateAccordionSection(tab, formParent, panelName, key, localeKey, bodyHeight)
     local divider = WINDOW_MANAGER:CreateControl(panelName .. "_EdDiv_" .. key, formParent, CT_TEXTURE)
     divider:SetDimensions(512, 4)
@@ -194,27 +219,12 @@ function EditorSections.BuildTargetAreaControls(tab, targetBody, panelName)
     areaSizeDropdown:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 88)
     tab.areaSizeDropdown = areaSizeDropdown
 
-    local areaCombo = ZO_ComboBox_ObjectFromContainer(areaSizeDropdown)
-    if areaCombo then
-        areaCombo:SetSortsItems(false)
-        local radii = Addon.Constants.AREA_RADIUS
-        local options = {
-            { radius = radii.SMALL, label = Addon.Locale:Get("BTN_RADIUS_SMALL") },
-            { radius = radii.MEDIUM, label = Addon.Locale:Get("BTN_RADIUS_MEDIUM") },
-            { radius = radii.LARGE, label = Addon.Locale:Get("BTN_RADIUS_LARGE") },
-        }
-        for _, opt in ipairs(options) do
-            local entry = areaCombo:CreateItemEntry(opt.label, function()
-                local idx = tab.selectedTargetIndex
-                if idx then
-                    Addon.QuestRepository:UpdateDraftTarget(idx, { areaRadius = opt.radius })
-                end
-            end)
-            entry.areaRadius = opt.radius
-            areaCombo:AddItem(entry)
+    tab.areaSizeComboBox = PopulateRadiusComboBox(areaSizeDropdown, Addon.Constants.AREA_RADIUS, "areaRadius", function(radiusVal)
+        local idx = tab.selectedTargetIndex
+        if idx then
+            Addon.QuestRepository:UpdateDraftTarget(idx, { areaRadius = radiusVal })
         end
-        tab.areaSizeComboBox = areaCombo
-    end
+    end)
 end
 
 local function BuildTargetLocationControls(tab, targetBody, panelName)
@@ -292,26 +302,11 @@ local function BuildTargetLocationControls(tab, targetBody, panelName)
     locRadDropdown:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 184, 206)
     tab.targetLocRadDropdown = locRadDropdown
 
-    local locRadCombo = ZO_ComboBox_ObjectFromContainer(locRadDropdown)
-    if locRadCombo then
-        locRadCombo:SetSortsItems(false)
-        local discRadii = Addon.Constants.DISCOVERY_RADIUS
-        local options = {
-            { radius = discRadii.SMALL, label = Addon.Locale:Get("BTN_RADIUS_SMALL") },
-            { radius = discRadii.MEDIUM, label = Addon.Locale:Get("BTN_RADIUS_MEDIUM") },
-            { radius = discRadii.LARGE, label = Addon.Locale:Get("BTN_RADIUS_LARGE") },
-        }
-        for _, opt in ipairs(options) do
-            local entry = locRadCombo:CreateItemEntry(opt.label, function()
-                if tab.selectedTargetIndex then
-                    Addon.QuestRepository:UpdateDraftTarget(tab.selectedTargetIndex, { radius = opt.radius })
-                end
-            end)
-            entry.locRadius = opt.radius
-            locRadCombo:AddItem(entry)
+    tab.targetLocRadComboBox = PopulateRadiusComboBox(locRadDropdown, Addon.Constants.DISCOVERY_RADIUS, "locRadius", function(radiusVal)
+        if tab.selectedTargetIndex then
+            Addon.QuestRepository:UpdateDraftTarget(tab.selectedTargetIndex, { radius = radiusVal })
         end
-        tab.targetLocRadComboBox = locRadCombo
-    end
+    end)
 
     local lblTargetMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblTargetMsg", targetBody, CT_LABEL)
     lblTargetMsg:SetAnchor(TOPLEFT, targetBody, TOPLEFT, 0, 246)
@@ -433,24 +428,9 @@ function EditorSections.BuildDiscoveryInputs(tab, discBody, panelName)
     discRadDropdown:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 36)
     tab.discRadDropdown = discRadDropdown
 
-    local discRadCombo = ZO_ComboBox_ObjectFromContainer(discRadDropdown)
-    if discRadCombo then
-        discRadCombo:SetSortsItems(false)
-        local discRadii = Addon.Constants.DISCOVERY_RADIUS
-        local options = {
-            { radius = discRadii.SMALL, label = Addon.Locale:Get("BTN_RADIUS_SMALL") },
-            { radius = discRadii.MEDIUM, label = Addon.Locale:Get("BTN_RADIUS_MEDIUM") },
-            { radius = discRadii.LARGE, label = Addon.Locale:Get("BTN_RADIUS_LARGE") },
-        }
-        for _, opt in ipairs(options) do
-            local entry = discRadCombo:CreateItemEntry(opt.label, function()
-                SetDiscRad(opt.radius)
-            end)
-            entry.discRadius = opt.radius
-            discRadCombo:AddItem(entry)
-        end
-        tab.discRadComboBox = discRadCombo
-    end
+    tab.discRadComboBox = PopulateRadiusComboBox(discRadDropdown, Addon.Constants.DISCOVERY_RADIUS, "discRadius", function(radiusVal)
+        SetDiscRad(radiusVal)
+    end)
 
     local lblDiscoveryMsg = WINDOW_MANAGER:CreateControl(panelName .. "_LblDiscoveryMsg", discBody, CT_LABEL)
     lblDiscoveryMsg:SetAnchor(TOPLEFT, discBody, TOPLEFT, 0, 72)

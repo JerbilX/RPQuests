@@ -35,9 +35,11 @@ RPQuest.Locales["ru"] = {
     BTN_SAVE = "Сохранить черновик",
     BTN_CLEAR_TARGETS = "Очистить цели",
     BTN_CANCEL = "Отмена",
+    BTN_RADIUS_TINY = "Крошечная",
     BTN_RADIUS_SMALL = "Малая",
     BTN_RADIUS_MEDIUM = "Средняя",
     BTN_RADIUS_LARGE = "Большая",
+    BTN_RADIUS_HUGE = "Огромная",
     BTN_CAPTURE_DISCOVERY = "+ Точка здесь",
 
     -- Detail View

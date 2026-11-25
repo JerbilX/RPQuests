@@ -39,7 +39,7 @@ QuestMigration.SCHEMA_MIGRATORS[2] = function(quest)
     end
     quest.hideMapArea = nil
 
-    local defaultRad = (Addon.Constants and Addon.Constants.AREA_RADIUS and Addon.Constants.AREA_RADIUS.MEDIUM) or 0.125
+    local defaultRad = (Addon.Constants and Addon.Constants.AREA_RADIUS and Addon.Constants.AREA_RADIUS.MEDIUM) or 0.039
     local qCenterX = quest.areaCenterX
     local qCenterY = quest.areaCenterY
     local qRadius = tonumber(quest.areaRadius)
