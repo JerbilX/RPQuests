@@ -154,7 +154,6 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
                 customMessageInLocation = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or "",
-                customMessageOutsideLocation = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or "",
             })
         end
     end
@@ -549,7 +548,6 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
             optional = false,
             customMessage = "",
             customMessageInLocation = "",
-            customMessageOutsideLocation = "",
         }
         table.insert(draft.targets, matchedEntry)
     end
@@ -623,9 +621,6 @@ function QuestDraftStore:UpdateDraftTarget(repo, index, fields, silent)
     end
     if fields.customMessageInLocation ~= nil then
         target.customMessageInLocation = tostring(fields.customMessageInLocation)
-    end
-    if fields.customMessageOutsideLocation ~= nil then
-        target.customMessageOutsideLocation = tostring(fields.customMessageOutsideLocation)
     end
     if fields.areaRadius ~= nil then
         local newAreaRad = tonumber(fields.areaRadius)

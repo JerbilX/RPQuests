@@ -571,8 +571,13 @@ function JournalTab:SyncEditorInputsToDraft()
         Addon.QuestRepository:UpdateDraftDiscoveryPoint(discIdx, { message = self.discoveryMsgEdit:GetText() }, true)
     end
     local targetIdx = self.selectedTargetIndex
-    if targetIdx and draft.targets and draft.targets[targetIdx] and self.targetCustomEdit then
-        Addon.QuestRepository:UpdateDraftTarget(targetIdx, { customMessage = self.targetCustomEdit:GetText() }, true)
+    if targetIdx and draft.targets and draft.targets[targetIdx] then
+        local targetFields = {}
+        if self.targetCustomEdit then targetFields.customMessage = self.targetCustomEdit:GetText() end
+        if self.targetInLocEdit then targetFields.customMessageInLocation = self.targetInLocEdit:GetText() end
+        if next(targetFields) ~= nil then
+            Addon.QuestRepository:UpdateDraftTarget(targetIdx, targetFields, true)
+        end
     end
 end
 

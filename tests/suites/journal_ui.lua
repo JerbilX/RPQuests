@@ -1603,36 +1603,30 @@ return function(T)
         AssertEqual(draft.targets[1].areaRadius, RPQuest.Constants.AREA_RADIUS.SMALL, "Target 1 areaRadius updated to SMALL")
         AssertEqual(draft.targets[2].areaRadius, RPQuest.Constants.AREA_RADIUS.MEDIUM, "Target 2 areaRadius remains MEDIUM")
 
-        -- 5. 3-state elimination messages: without required location, only 'elimination' is enabled
-        local msgItems = tab.targetMsgComboBox:GetItems()
-        AssertEqual(#msgItems, 3, "targetMsgComboBox has 3 message states")
-        AssertEqual(msgItems[1].enabled, true, "elimination state enabled when locationRequired=false")
-        AssertEqual(msgItems[2].enabled, false, "in_location state disabled when locationRequired=false")
-        AssertEqual(msgItems[3].enabled, false, "outside_location state disabled when locationRequired=false")
-        AssertEqual(tab.targetCustomEdit._disabled, false, "targetCustomEdit enabled for elimination message")
+        -- 5. Two optional elimination message EditBoxes: both enabled regardless of locationRequired
+        AssertEqual(tab.targetMsgDropdown, nil, "3-state targetMsgDropdown removed")
+        AssertEqual(tab.targetCustomEdit._disabled, false, "targetCustomEdit enabled when target selected")
+        AssertEqual(tab.targetInLocEdit._disabled, false, "targetInLocEdit enabled when target selected (even with locationRequired=false)")
         tab.targetCustomEdit:SetText("General kill msg")
         tab.targetCustomEdit:FireHandler("OnTextChanged")
-        AssertEqual(draft.targets[1].customMessage, "General kill msg", "Editbox writes to customMessage")
+        AssertEqual(draft.targets[1].customMessage, "General kill msg", "targetCustomEdit writes to customMessage")
+        tab.targetInLocEdit:SetText("In location msg")
+        tab.targetInLocEdit:FireHandler("OnTextChanged")
+        AssertEqual(draft.targets[1].customMessageInLocation, "In location msg", "targetInLocEdit writes to customMessageInLocation")
 
-        -- 6. Capture location & set Required -> 'in_location' and 'outside_location' enabled, 'elimination' disabled
+        -- 6. Capture location & set Required -> both EditBoxes remain enabled and preserve values
         RPQuest.QuestRepository:CaptureDraftTargetLocation(1, 381, 10000, 20000, 1500)
         tab:RefreshEditorPane()
         tab.chkTargetLocRequired:FireHandler("OnClicked")
         AssertEqual(draft.targets[1].locationRequired, true, "chkTargetLocRequired sets locationRequired=true")
-        msgItems = tab.targetMsgComboBox:GetItems()
-        AssertEqual(msgItems[1].enabled, false, "elimination state disabled when locationRequired=true")
-        AssertEqual(msgItems[2].enabled, true, "in_location state enabled when locationRequired=true")
-        AssertEqual(msgItems[3].enabled, true, "outside_location state enabled when locationRequired=true")
-        AssertEqual(tab.selectedTargetMsgState, "in_location", "Auto-switches to in_location when locationRequired=true")
-        tab.targetCustomEdit:SetText("In location msg")
-        tab.targetCustomEdit:FireHandler("OnTextChanged")
-        AssertEqual(draft.targets[1].customMessageInLocation, "In location msg", "Editbox writes to customMessageInLocation")
+        AssertEqual(tab.targetCustomEdit._disabled, false, "targetCustomEdit remains enabled when locationRequired=true")
+        AssertEqual(tab.targetInLocEdit._disabled, false, "targetInLocEdit remains enabled when locationRequired=true")
+        AssertEqual(tab.targetCustomEdit:GetText(), "General kill msg", "targetCustomEdit preserves value")
+        AssertEqual(tab.targetInLocEdit:GetText(), "In location msg", "targetInLocEdit preserves value")
 
-        tab.targetMsgComboBox:SelectItemByIndex(3) -- outside_location
-        AssertEqual(tab.selectedTargetMsgState, "outside_location", "Switched to outside_location state")
-        tab.targetCustomEdit:SetText("Outside location msg")
+        tab.targetCustomEdit:SetText("Outside or fallback msg")
         tab.targetCustomEdit:FireHandler("OnTextChanged")
-        AssertEqual(draft.targets[1].customMessageOutsideLocation, "Outside location msg", "Editbox writes to customMessageOutsideLocation")
+        AssertEqual(draft.targets[1].customMessage, "Outside or fallback msg", "targetCustomEdit updates customMessage with locationRequired=true")
 
         -- 7. Delete selected target via btnRemoveTarget, then delete all via btnClearTargets
         tab.btnRemoveTarget:GetHandler("OnClicked")()

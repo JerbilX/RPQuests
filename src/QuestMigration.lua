@@ -65,9 +65,6 @@ QuestMigration.SCHEMA_MIGRATORS[2] = function(quest)
                 if type(target.customMessageInLocation) ~= "string" then
                     target.customMessageInLocation = ""
                 end
-                if type(target.customMessageOutsideLocation) ~= "string" then
-                    target.customMessageOutsideLocation = ""
-                end
             end
         end
     end
@@ -155,6 +152,30 @@ QuestMigration.SCHEMA_MIGRATORS[3] = function(quest)
         quest.failureReported = (quest.failureReported == true)
     end
 
+    return true
+end
+
+QuestMigration.SCHEMA_MIGRATORS[4] = function(quest)
+    if type(quest) ~= "table" then
+        return true
+    end
+    if type(quest.targets) == "table" then
+        for _, target in ipairs(quest.targets) do
+            if type(target) == "table" then
+                if type(target.customMessage) ~= "string" then
+                    target.customMessage = ""
+                end
+                if type(target.customMessageInLocation) ~= "string" then
+                    target.customMessageInLocation = ""
+                end
+                local legacyOut = target.customMessageOutsideLocation
+                if target.customMessage == "" and type(legacyOut) == "string" and legacyOut ~= "" then
+                    target.customMessage = legacyOut
+                end
+                target.customMessageOutsideLocation = nil
+            end
+        end
+    end
     return true
 end
 

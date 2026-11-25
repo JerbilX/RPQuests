@@ -52,7 +52,7 @@ function EditorPane.Build(tab, parent)
     local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 186)
     EditorSections.BuildOptionsSection(tab, optionsSec.body, panelName)
 
-    local targetSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "target", "LABEL_TARGET_SECTION", 342)
+    local targetSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "target", "LABEL_TARGET_SECTION", 364)
     EditorSections.BuildTargetAreaControls(tab, targetSec.body, panelName)
     EditorSections.BuildTargetConfigControls(tab, targetSec.body, panelName)
 
@@ -262,55 +262,12 @@ local function RefreshTargetDropdown(tab, targets, hasTargets)
     end
 end
 
-local function RefreshTargetMessageControls(tab, selTarget, hasTargets, isLocRequired)
-    local validState = tab.selectedTargetMsgState
-    if isLocRequired then
-        if validState ~= "in_location" and validState ~= "outside_location" then
-            validState = "in_location"
-        end
-    else
-        validState = "elimination"
-    end
-    tab.selectedTargetMsgState = validState
+local function RefreshTargetMessageControls(tab, selTarget, hasTargets)
+    Addon.JournalWidgets.SetEditBoxEnabled(tab.targetCustomBg, tab.targetCustomEdit, hasTargets)
+    SyncUnfocusedEdit(tab.targetCustomEdit, selTarget and selTarget.customMessage or "")
 
-    local msgCombo = tab.targetMsgComboBox
-    if msgCombo then
-        msgCombo:ClearItems()
-        local msgOptions = {
-            { state = "elimination", label = Addon.Locale:Get("OPT_TARGET_MSG_ELIMINATION"), enabled = not isLocRequired },
-            { state = "in_location", label = Addon.Locale:Get("OPT_TARGET_MSG_IN_LOCATION"), enabled = isLocRequired },
-            { state = "outside_location", label = Addon.Locale:Get("OPT_TARGET_MSG_OUTSIDE_LOCATION"), enabled = isLocRequired },
-        }
-        for _, opt in ipairs(msgOptions) do
-            local entry = msgCombo:CreateItemEntry(opt.label, function()
-                tab.selectedTargetMsgState = opt.state
-                tab:RefreshEditorPane()
-            end, opt.enabled)
-            entry.msgState = opt.state
-            msgCombo:AddItem(entry)
-        end
-        msgCombo:SetEnabled(hasTargets)
-        msgCombo:SetSelectedItemByEval(function(item)
-            return item.msgState == tab.selectedTargetMsgState
-        end, true)
-    end
-
-    local isEditable = hasTargets and (
-        (tab.selectedTargetMsgState == "elimination" and not isLocRequired)
-        or ((tab.selectedTargetMsgState == "in_location" or tab.selectedTargetMsgState == "outside_location") and isLocRequired)
-    )
-    local msgText = ""
-    if selTarget then
-        if tab.selectedTargetMsgState == "in_location" then
-            msgText = selTarget.customMessageInLocation or ""
-        elseif tab.selectedTargetMsgState == "outside_location" then
-            msgText = selTarget.customMessageOutsideLocation or ""
-        else
-            msgText = selTarget.customMessage or ""
-        end
-    end
-    Addon.JournalWidgets.SetEditBoxEnabled(tab.targetCustomBg, tab.targetCustomEdit, isEditable)
-    SyncUnfocusedEdit(tab.targetCustomEdit, msgText)
+    Addon.JournalWidgets.SetEditBoxEnabled(tab.targetInLocBg, tab.targetInLocEdit, hasTargets)
+    SyncUnfocusedEdit(tab.targetInLocEdit, selTarget and selTarget.customMessageInLocation or "")
 end
 
 local function RefreshEditorTargetConfig(tab, draft)
@@ -364,7 +321,7 @@ local function RefreshEditorTargetConfig(tab, draft)
         end, true)
     end
 
-    RefreshTargetMessageControls(tab, selTarget, hasTargets, isLocRequired)
+    RefreshTargetMessageControls(tab, selTarget, hasTargets)
 end
 
 function EditorPane.RefreshDiscoveryMessageIndicator(tab, draft)

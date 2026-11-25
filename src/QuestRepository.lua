@@ -504,7 +504,6 @@ function QuestRepository:NormalizeImportedTargets(rawTargets, targetX, targetY)
                 optional = (t.optional == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
                 customMessageInLocation = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or "",
-                customMessageOutsideLocation = type(t.customMessageOutsideLocation) == "string" and t.customMessageOutsideLocation or "",
             })
         end
     end
@@ -1230,26 +1229,30 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
     local hasTargetLoc = self:HasTargetLocation(matchedTarget)
     local isLocRequired = hasTargetLoc and (matchedTarget.locationRequired == true)
     local customMsgToShow = nil
+    local generalMsg = TrimText(matchedTarget.customMessage)
 
-    if isLocRequired then
+    if hasTargetLoc then
         local pZone = type(playerContext) == "table" and playerContext.worldZoneId or nil
         local pWX = type(playerContext) == "table" and playerContext.worldX or nil
         local pWZ = type(playerContext) == "table" and playerContext.worldZ or nil
         local inTargetLoc = self:IsPlayerInsideTargetLocation(matchedTarget, pZone, pWX, pWZ)
-        if not inTargetLoc then
-            FinalizeFailedQuest(self, activeQuest)
-            local failMsg = TrimText(matchedTarget.customMessageOutsideLocation)
-            return false, activeQuest, false, matchedTarget, true, (failMsg ~= "" and failMsg or nil)
+        if inTargetLoc then
+            local inLocMsg = TrimText(matchedTarget.customMessageInLocation)
+            if inLocMsg ~= "" then
+                customMsgToShow = inLocMsg
+            elseif generalMsg ~= "" then
+                customMsgToShow = generalMsg
+            end
+        else
+            if isLocRequired then
+                FinalizeFailedQuest(self, activeQuest)
+                return false, activeQuest, false, matchedTarget, true, (generalMsg ~= "" and generalMsg or nil)
+            elseif generalMsg ~= "" then
+                customMsgToShow = generalMsg
+            end
         end
-        local inLocMsg = TrimText(matchedTarget.customMessageInLocation)
-        if inLocMsg ~= "" then
-            customMsgToShow = inLocMsg
-        end
-    else
-        local generalMsg = TrimText(matchedTarget.customMessage)
-        if generalMsg ~= "" then
-            customMsgToShow = generalMsg
-        end
+    elseif generalMsg ~= "" then
+        customMsgToShow = generalMsg
     end
 
     matchedTarget.currentCount = math.min(matchedTarget.requiredCount or 1, (matchedTarget.currentCount or 0) + 1)

@@ -938,10 +938,10 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 4, "Quest 1 upgraded to current schema v4")
+        AssertEqual(q1.schemaVersion, 5, "Quest 1 upgraded to current schema v5")
         AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
         AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
-        AssertEqual(q2.schemaVersion, 4, "Quest 2 upgraded to current schema v4")
+        AssertEqual(q2.schemaVersion, 5, "Quest 2 upgraded to current schema v5")
         AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
         AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
 
@@ -1072,7 +1072,7 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 4, "v2 quest 1 migrated to schema v4")
+        AssertEqual(q1.schemaVersion, 5, "v2 quest 1 migrated to schema v5")
         AssertEqual(q1.recommendHideMapAreas, true, "v2 hideMapArea=true preserved in recommendHideMapAreas")
         AssertEqual(q1.hideMapArea, nil, "Legacy hideMapArea cleared on q1")
         AssertEqual(q1.areaCenterX, nil, "Legacy quest-level areaCenterX cleared on q1")
@@ -1082,9 +1082,32 @@ return function(T)
         AssertEqual(q1.targets[2].areaCenterY, 0.62, "Target 2 inherits q1 areaCenterY")
         AssertEqual(q1.targets[2].areaRadius, 0.125, "Target 2 inherits q1 areaRadius")
         AssertEqual(q1.targets[1].customMessageInLocation, "", "Target 1 initializes customMessageInLocation")
-        AssertEqual(q1.targets[1].customMessageOutsideLocation, "", "Target 1 initializes customMessageOutsideLocation")
+        AssertEqual(q1.targets[1].customMessageOutsideLocation, nil, "Target 1 clears legacy customMessageOutsideLocation")
 
-        AssertEqual(q2.schemaVersion, 4, "v2 quest 2 migrated to schema v4")
+        AssertEqual(q2.schemaVersion, 5, "v2 quest 2 migrated to schema v5")
+
+        -- v4 -> v5 migration: consolidate customMessageOutsideLocation into customMessage and clean legacy field
+        local svV4 = {
+            quests = {
+                {
+                    id = 10,
+                    schemaVersion = 4,
+                    title = "V4 Consolidation",
+                    targets = {
+                        { name = "Guard", requiredCount = 1, customMessage = "", customMessageInLocation = "In loc", customMessageOutsideLocation = "Legacy outside" },
+                        { name = "Scout", requiredCount = 1, customMessage = "Keep existing", customMessageInLocation = "", customMessageOutsideLocation = "Ignored legacy" },
+                    },
+                },
+            },
+        }
+        repo:Initialize(svV4)
+        local qV4 = repo:GetQuestById(10)
+        AssertEqual(qV4.schemaVersion, 5, "v4 quest migrated to schema v5")
+        AssertEqual(qV4.targets[1].customMessage, "Legacy outside", "Empty customMessage adopts customMessageOutsideLocation")
+        AssertEqual(qV4.targets[1].customMessageInLocation, "In loc", "customMessageInLocation preserved")
+        AssertEqual(qV4.targets[1].customMessageOutsideLocation, nil, "Target 1 legacy customMessageOutsideLocation removed")
+        AssertEqual(qV4.targets[2].customMessage, "Keep existing", "Non-empty customMessage is not overwritten")
+        AssertEqual(qV4.targets[2].customMessageOutsideLocation, nil, "Target 2 legacy customMessageOutsideLocation removed")
         AssertEqual(q2.recommendHideMapAreas, false, "v2 hideMapArea=false preserved in recommendHideMapAreas")
         AssertEqual(q2.targets[1].areaRadius, 0.070, "q2 target inherits 0.070 areaRadius")
 
@@ -1147,7 +1170,7 @@ return function(T)
         local q8 = repo:GetQuestById(8)
         local q9 = repo:GetQuestById(9)
 
-        AssertEqual(q1.schemaVersion, 4, "v3 quests migrated to v4")
+        AssertEqual(q1.schemaVersion, 5, "v3 quests migrated to v5")
         AssertEqual(repo:GetQuestLifecycle(q1), "draft", "q1 lifecycle=draft")
         AssertEqual(repo:GetQuestResolution(q1), nil, "q1 resolution=nil")
         AssertEqual(repo:GetQuestLifecycle(q2), "sent", "q2 lifecycle=sent")
