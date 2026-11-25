@@ -221,8 +221,10 @@ function JournalTab:Initialize()
     local versionLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_VersionLabel", panel, CT_LABEL)
     versionLabel:SetDimensions(140, 20)
     versionLabel:SetAnchor(TOPRIGHT, panel, TOPRIGHT, -33, 38)
+    versionLabel:SetDrawLayer(DL_OVERLAY)
+    versionLabel:SetDrawLevel(10)
     if versionLabel.SetFont then versionLabel:SetFont("ZoFontGameSmall") end
-    if versionLabel.SetColor then versionLabel:SetColor(0.68, 0.68, 0.68, 1) end
+    if versionLabel.SetColor then versionLabel:SetColor(0.95, 0.92, 0.82, 1) end
     if versionLabel.SetHorizontalAlignment then
         versionLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
     end
