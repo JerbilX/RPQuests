@@ -2219,4 +2219,108 @@ return function(T)
         AssertEqual(decoded.discoveries[1].radius, 1500, "Legacy discovery radius 1500 preserved")
     end)
 
+    RunTest("Issue #319: [J] always opens vanilla Quests tab while RPQuest keybind and map-return preserve RPQuest", function()
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(nil)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        local qj = QUEST_JOURNAL_KEYBOARD
+        local origOnShowing = qj.OnShowing
+        local origOnHiding = qj.OnHiding
+        local origSelectFragment = qj.tabs.SelectFragment
+        local origSceneShow = SCENE_MANAGER.Show
+        local origIsShowing = SCENE_MANAGER.IsShowing
+
+        local selectedFragments = {}
+        local isJournalShowing = false
+
+        qj.OnShowing = function(self)
+            if self.mode == ZO_QUEST_JOURNAL_MODE.QUESTS then
+                self.tabs:SelectFragment("Quests")
+            else
+                self.mode = ZO_QUEST_JOURNAL_MODE.RUMORS
+                self.tabs:SelectFragment("Rumors")
+            end
+        end
+        qj.OnHiding = function(self)
+            isJournalShowing = false
+        end
+        tab.isInitialized = false
+        tab.isTabAdded = false
+        tab:Initialize()
+
+        qj.tabs.SelectFragment = function(self, name)
+            table.insert(selectedFragments, name)
+            return origSelectFragment(self, name)
+        end
+
+        SCENE_MANAGER.IsShowing = function(_, name)
+            if name == "questJournal" then
+                return isJournalShowing
+            end
+            return origIsShowing(SCENE_MANAGER, name)
+        end
+        SCENE_MANAGER.Show = function(_, name)
+            if name == "questJournal" then
+                isJournalShowing = true
+                qj:OnShowing()
+            else
+                return origSceneShow(SCENE_MANAGER, name)
+            end
+        end
+
+        -- 1. Open via RPQuest keybind -> opens RPQuest tab
+        selectedFragments = {}
+        RPQuest:OnToggleJournalKeybind()
+        AssertEqual(qj.mode, RPQuest.Constants.UI.TAB_DESCRIPTOR, "RPQuest keybind sets RPQuest mode")
+        AssertEqual(selectedFragments[#selectedFragments], tab.tabCategoryName, "RPQuest keybind selects RPQuest tab")
+
+        -- 2. Close journal (OnHiding) and press [J] -> opens vanilla Quests tab
+        qj:OnHiding()
+        AssertEqual(qj.mode, ZO_QUEST_JOURNAL_MODE.QUESTS, "OnHiding resets RPQuest mode to vanilla Quests")
+        selectedFragments = {}
+        SCENE_MANAGER:Show("questJournal")
+        AssertEqual(qj.mode, ZO_QUEST_JOURNAL_MODE.QUESTS, "Pressing [J] keeps vanilla Quests mode")
+        AssertEqual(selectedFragments[#selectedFragments], "Quests", "Pressing [J] selects vanilla Quests tab")
+
+        -- 3. Even if qj.mode remained tabDescriptor without OnHiding, [J] still resets to vanilla Quests
+        qj:SetMode(RPQuest.Constants.UI.TAB_DESCRIPTOR)
+        selectedFragments = {}
+        SCENE_MANAGER:Show("questJournal")
+        AssertEqual(qj.mode, ZO_QUEST_JOURNAL_MODE.QUESTS, "[J] resets dangling RPQuest mode to vanilla Quests")
+        AssertEqual(selectedFragments[#selectedFragments], "Quests", "[J] opens vanilla Quests tab instead of RPQuest")
+
+        -- 4. Async return from Show on Map (OpenTab while questJournal is not yet showing) preserves RPQuest tab
+        SCENE_MANAGER.Show = function(_, name)
+            if name == "questJournal" then
+                isJournalShowing = false
+            else
+                return origSceneShow(SCENE_MANAGER, name)
+            end
+        end
+        selectedFragments = {}
+        isJournalShowing = false
+        tab:OpenTab()
+        AssertEqual(#selectedFragments, 0, "Async map-return defers SelectFragment until OnShowing")
+        isJournalShowing = true
+        qj:OnShowing()
+        AssertEqual(qj.mode, RPQuest.Constants.UI.TAB_DESCRIPTOR, "Async map-return preserves RPQuest mode")
+        AssertEqual(selectedFragments[#selectedFragments], tab.tabCategoryName, "Async map-return selects RPQuest tab")
+
+        -- 5. Closing after map-return and pressing [J] again opens vanilla Quests
+        qj:OnHiding()
+        selectedFragments = {}
+        isJournalShowing = true
+        qj:OnShowing()
+        AssertEqual(qj.mode, ZO_QUEST_JOURNAL_MODE.QUESTS, "Subsequent [J] after map-return opens vanilla Quests")
+        AssertEqual(selectedFragments[#selectedFragments], "Quests", "Subsequent [J] selects Quests fragment")
+
+        qj.OnShowing = origOnShowing
+        qj.OnHiding = origOnHiding
+        qj.tabs.SelectFragment = origSelectFragment
+        SCENE_MANAGER.Show = origSceneShow
+        SCENE_MANAGER.IsShowing = origIsShowing
+    end)
+
 end
