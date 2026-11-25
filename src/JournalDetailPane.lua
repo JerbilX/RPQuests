@@ -41,12 +41,19 @@ end
 local function BuildDetailHeaderAndBody(tab, pane, panelName)
     local contentParent = CreateDetailScrollContainer(tab, pane, panelName)
 
+    local detailIcon = WINDOW_MANAGER:CreateControl(panelName .. "_DetailIcon", contentParent, CT_TEXTURE)
+    detailIcon:SetDimensions(28, 28)
+    detailIcon:SetAnchor(TOPLEFT, contentParent, TOPLEFT, 0, 2)
+    detailIcon:SetHidden(true)
+    tab.detailIcon = detailIcon
+    tab.detailTitleParent = contentParent
+
     local titleLabel = CreateDetailLabel(contentParent, panelName .. "_DetailTitle", 500, 34, "ZoFontWinH2", contentParent, TOPLEFT, 0, 0)
     if titleLabel.SetColor then titleLabel:SetColor(1, 1, 1, 1) end
     if titleLabel.SetModifyTextType then titleLabel:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE) end
     tab.detailTitle = titleLabel
 
-    tab.detailStatus = CreateDetailLabel(contentParent, panelName .. "_DetailStatus", 500, 24, "ZoFontWinH4", titleLabel, BOTTOMLEFT, 0, 8)
+    tab.detailStatus = CreateDetailLabel(contentParent, panelName .. "_DetailStatus", 500, 24, "ZoFontWinH4", contentParent, TOPLEFT, 0, 42)
 
     local fromLabel = CreateDetailLabel(contentParent, panelName .. "_DetailFrom", 500, 22, "ZoFontWinH4", tab.detailStatus, BOTTOMLEFT, 0, 6)
     if fromLabel.SetColor then fromLabel:SetColor(0.77, 0.76, 0.62, 1) end
@@ -685,6 +692,14 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
 end
 
 local function RenderEmptyDetailPane(tab)
+    if tab.detailIcon then
+        tab.detailIcon:SetHidden(true)
+    end
+    if tab.detailTitle and tab.detailTitleParent then
+        tab.detailTitle:ClearAnchors()
+        tab.detailTitle:SetAnchor(TOPLEFT, tab.detailTitleParent, TOPLEFT, 0, 0)
+        tab.detailTitle:SetDimensions(500, 34)
+    end
     tab.detailTitle:SetText(Addon.Locale:Get("TAB_TITLE"))
     tab.detailStatus:SetText(Addon.Locale:Get("EMPTY_QUEST_LIST"))
     tab.detailFrom:SetText("")
@@ -728,6 +743,21 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     end
 
     tab.detailObjHeader:SetHidden(false)
+    local iconTex = Addon.QuestDraftStore and Addon.QuestDraftStore:GetQuestIconTexture(selectedQuest.icon) or nil
+    if tab.detailIcon and tab.detailTitleParent then
+        if iconTex then
+            tab.detailIcon:SetTexture(iconTex)
+            tab.detailIcon:SetHidden(false)
+            tab.detailTitle:ClearAnchors()
+            tab.detailTitle:SetAnchor(TOPLEFT, tab.detailIcon, TOPRIGHT, 8, -2)
+            tab.detailTitle:SetDimensions(464, 34)
+        else
+            tab.detailIcon:SetHidden(true)
+            tab.detailTitle:ClearAnchors()
+            tab.detailTitle:SetAnchor(TOPLEFT, tab.detailTitleParent, TOPLEFT, 0, 0)
+            tab.detailTitle:SetDimensions(500, 34)
+        end
+    end
     tab.detailTitle:SetText((selectedQuest.title or ""):upper())
 
     local isPrepared = Addon.QuestRepository:IsPreparedQuest(selectedQuest)

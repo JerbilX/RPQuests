@@ -1312,4 +1312,52 @@ return function(T)
         AssertEqual(#legacy.discoveries, 5, "Legacy 5-discovery quest preserved")
     end)
 
+    RunTest("Issue #53: QuestDraftStore & QuestRepository persist, normalize, and clone quest icon", function()
+        local repo = RPQuest.QuestRepository
+        local store = RPQuest.QuestDraftStore
+        repo:Initialize({
+            nextId = 2,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 5,
+                    title = "Legacy Quest Without Icon",
+                    description = "Old",
+                    role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+                    targets = { { name = "Bandit", requiredCount = 1 } },
+                },
+            },
+        })
+
+        local legacy = repo:GetQuestById(1)
+        AssertEqual(legacy.icon, nil, "Legacy quest without icon defaults to nil")
+        AssertEqual(store:NormalizeQuestIcon("unknown_icon"), nil, "Unknown icon normalizes to nil")
+        AssertEqual(store:NormalizeQuestIcon("none"), nil, "'none' normalizes to nil")
+        AssertEqual(store:NormalizeQuestIcon("black_hand"), "black_hand", "Valid icon normalizes to id")
+        AssertEqual(store:GetQuestIconTexture("search"), "/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds", "Search icon texture resolves")
+
+        local draft = store:CreateNewPreparedDraft(repo)
+        AssertEqual(repo:GetDraft().icon, nil, "New draft starts with nil icon")
+
+        repo:UpdateDraftFields({ icon = "steal" })
+        AssertEqual(repo:GetDraft().icon, "steal", "Draft icon updates to steal")
+
+        local targetQuest = repo:GetQuestById(draft.id)
+        table.insert(targetQuest.targets, { name = "Guard", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 })
+        store:LoadQuestIntoDraft(repo, draft.id)
+        repo:UpdateDraftFields({ icon = "black_hand" })
+        local committed = store:CommitDraftChanges(repo)
+        AssertTrue(committed ~= nil, "Draft commits cleanly")
+        AssertEqual(committed.icon, "black_hand", "Committed quest persists icon")
+
+        local cloned = repo:DuplicateQuest(committed.id)
+        AssertTrue(cloned ~= nil, "Cloned quest created")
+        AssertEqual(cloned.icon, "black_hand", "Cloned quest preserves icon")
+
+        store:LoadQuestIntoDraft(repo, cloned.id)
+        repo:UpdateDraftFields({ icon = "none" })
+        local cleared = store:CommitDraftChanges(repo)
+        AssertEqual(cleared.icon, nil, "Selecting none clears quest icon back to nil")
+    end)
+
 end

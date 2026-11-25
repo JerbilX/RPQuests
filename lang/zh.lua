@@ -269,4 +269,11 @@ RPQuest.Locales["zh"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest：%s 接受了“%s”。",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest：%s 拒绝了“%s”。",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest：%s 未能完成“%s”。",
+
+    -- Quest Icons
+    LABEL_QUEST_ICON = "任务图标：",
+    OPT_QUEST_ICON_NONE = "无（默认）",
+    QUEST_ICON_BLACK_HAND = "黑手",
+    QUEST_ICON_SEARCH = "搜寻",
+    QUEST_ICON_STEAL = "偷窃",
 }

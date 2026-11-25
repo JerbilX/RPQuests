@@ -2356,4 +2356,60 @@ return function(T)
         AssertTrue(r >= 0.85 and g >= 0.85 and b >= 0.75 and a == 1, "versionLabel uses high-contrast legible color")
     end)
 
+    RunTest("Issue #53: Journal editor selects quest icon and list/detail display it", function()
+        RPQuest.QuestRepository:Initialize(nil)
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        AssertTrue(tab.questIconComboBox ~= nil, "questIconComboBox exists in editor")
+        local items = tab.questIconComboBox:GetItems()
+        AssertEqual(#items, 4, "questIconComboBox has None + 3 catalog icons")
+
+        tab:OpenCreateEditor()
+        local draft = repo:GetDraft()
+        AssertTrue(draft ~= nil and draft.editingQuestId ~= nil, "Create editor opened draft")
+
+        -- Select 'search' icon via combo box callback
+        local searchItem
+        for _, item in ipairs(items) do
+            if item.questIconId == "search" then
+                searchItem = item
+                break
+            end
+        end
+        AssertTrue(searchItem ~= nil, "Search icon item exists in combo box")
+        searchItem.callback()
+        AssertEqual(repo:GetDraft().icon, "search", "Selecting search in combo box updates draft icon")
+
+        table.insert(repo:GetDraft().targets, { name = "Spy", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 })
+        local saved = RPQuest.QuestDraftStore:CommitDraftChanges(repo)
+        AssertTrue(saved ~= nil, "Draft committed with icon")
+        AssertEqual(saved.icon, "search", "Saved quest has search icon")
+
+        tab:SelectQuest(saved.id)
+        AssertTrue(tab.detailIcon ~= nil and not tab.detailIcon:IsHidden(), "detailIcon is visible for quest with icon")
+        AssertEqual(tab.detailIcon._texture, "/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds", "detailIcon shows search texture")
+
+        -- Verify list row includes icon texture markup
+        local foundRowWithIcon = false
+        for _, sec in pairs(tab.accordionSections or {}) do
+            for _, rowBtn in ipairs(sec.rowPool or {}) do
+                if not rowBtn:IsHidden() and rowBtn._questId == saved.id then
+                    local rowText = rowBtn:GetText()
+                    if rowText and rowText:find("/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds", 1, true) then
+                        foundRowWithIcon = true
+                    end
+                end
+            end
+        end
+        AssertTrue(foundRowWithIcon, "Quest list row displays assigned icon texture")
+
+        -- Verify quest without icon hides detailIcon
+        table.insert(repo:GetDraft().targets, { name = "Target", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 })
+        local noIconQuest = repo:SaveDraft("No Icon", "Desc")
+        tab:SelectQuest(noIconQuest.id)
+        AssertTrue(tab.detailIcon:IsHidden(), "detailIcon is hidden for quest without icon")
+    end)
+
 end

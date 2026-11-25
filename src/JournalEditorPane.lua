@@ -46,7 +46,7 @@ function EditorPane.Build(tab, parent)
     tab.editorSections = {}
     tab.editorSectionsByKey = {}
 
-    local headerSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "header", "LABEL_HEADER_SECTION", 218)
+    local headerSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "header", "LABEL_HEADER_SECTION", 284)
     EditorSections.BuildBaseFields(tab, headerSec.body, panelName)
 
     local optionsSec = EditorSections.CreateAccordionSection(tab, formParent, panelName, "options", "LABEL_OPTIONS_SECTION", 186)
@@ -230,6 +230,15 @@ local function RefreshEditorBaseAndArea(tab, draft)
     SyncUnfocusedEdit(tab.recipientEdit, draft.recipientAccount or "")
     SyncUnfocusedEdit(tab.recipientCharEdit, draft.recipientCharacterName or "")
     SyncUnfocusedEdit(tab.completionEdit, draft.completionMessage or "")
+    if tab.questIconComboBox then
+        local targetIcon = Addon.QuestDraftStore:NormalizeQuestIcon(draft.icon) or ""
+        local selected = tab.questIconComboBox:GetSelectedItemData()
+        if not selected or selected.questIconId ~= targetIcon then
+            tab.questIconComboBox:SetSelectedItemByEval(function(item)
+                return item.questIconId == targetIcon
+            end, true)
+        end
+    end
 end
 
 local function SetButtonEnabled(btn, enabled)

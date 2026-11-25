@@ -269,4 +269,11 @@ RPQuest.Locales["jp"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s が「%s」を受諾しました。",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s が「%s」を辞退しました。",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest: %s が「%s」に失敗しました。",
+
+    -- Quest Icons
+    LABEL_QUEST_ICON = "クエストアイコン:",
+    OPT_QUEST_ICON_NONE = "なし (デフォルト)",
+    QUEST_ICON_BLACK_HAND = "黒い手",
+    QUEST_ICON_SEARCH = "調査",
+    QUEST_ICON_STEAL = "盗み",
 }

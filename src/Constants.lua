@@ -24,6 +24,23 @@ Addon.Constants = {
         OPTIONAL = "optional",
         REQUIRED = "required",
     },
+    QUEST_ICONS = {
+        {
+            id = "black_hand",
+            localeKey = "QUEST_ICON_BLACK_HAND",
+            texture = "/esoui/art/floatingmarkers/darkbrotherhood_target.dds",
+        },
+        {
+            id = "search",
+            localeKey = "QUEST_ICON_SEARCH",
+            texture = "/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds",
+        },
+        {
+            id = "steal",
+            localeKey = "QUEST_ICON_STEAL",
+            texture = "/esoui/art/inventory/inventory_stolenitem_icon.dds",
+        },
+    },
     SAVED_VARS = {
         NAME = "RPQuest_SavedVariables",
         VERSION = 1,

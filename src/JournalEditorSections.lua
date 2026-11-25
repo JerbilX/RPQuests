@@ -147,6 +147,37 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
     recipientCharBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 188)
     tab.recipientCharBg = recipientCharBg
     tab.recipientCharEdit = recipientCharEdit
+
+    local lblQuestIcon = WINDOW_MANAGER:CreateControl(panelName .. "_LblQuestIcon", formParent, CT_LABEL)
+    lblQuestIcon:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 228)
+    if lblQuestIcon.SetFont then lblQuestIcon:SetFont("ZoFontGameBold") end
+    lblQuestIcon:SetText(Addon.Locale:Get("LABEL_QUEST_ICON"))
+    tab.lblQuestIcon = lblQuestIcon
+
+    local iconDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_QuestIconDropdown", formParent, "ZO_ComboBox")
+    iconDropdown:SetDimensions(510, 28)
+    iconDropdown:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 250)
+    tab.questIconDropdown = iconDropdown
+
+    local iconCombo = ZO_ComboBox_ObjectFromContainer(iconDropdown)
+    if iconCombo then
+        iconCombo:SetSortsItems(false)
+        local noneEntry = iconCombo:CreateItemEntry(Addon.Locale:Get("OPT_QUEST_ICON_NONE"), function()
+            Addon.QuestRepository:UpdateDraftFields({ icon = "none" })
+        end)
+        noneEntry.questIconId = ""
+        iconCombo:AddItem(noneEntry)
+
+        for _, iconEntry in ipairs(Addon.Constants.QUEST_ICONS or {}) do
+            local label = string.format("|t18:18:%s|t %s", iconEntry.texture, Addon.Locale:Get(iconEntry.localeKey))
+            local entry = iconCombo:CreateItemEntry(label, function()
+                Addon.QuestRepository:UpdateDraftFields({ icon = iconEntry.id })
+            end)
+            entry.questIconId = iconEntry.id
+            iconCombo:AddItem(entry)
+        end
+        tab.questIconComboBox = iconCombo
+    end
 end
 
 function EditorSections.BuildTargetAreaControls(tab, targetBody, panelName)
