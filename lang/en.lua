@@ -269,4 +269,11 @@ RPQuest.Locales["en"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s accepted '%s'.",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s rejected '%s'.",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest: %s failed '%s'.",
+
+    -- Quest Icons
+    LABEL_QUEST_ICON = "Quest Icon:",
+    OPT_QUEST_ICON_NONE = "None (Default)",
+    QUEST_ICON_BLACK_HAND = "Black Hand",
+    QUEST_ICON_SEARCH = "Search",
+    QUEST_ICON_STEAL = "Steal",
 }

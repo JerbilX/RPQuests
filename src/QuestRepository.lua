@@ -287,6 +287,7 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         worldZ = data.worldZ,
         recommendHideMapAreas = ResolveRecommendHideMapAreas(data),
         stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(data.stealthMode, data.requireUndetected),
+        icon = Addon.QuestDraftStore:NormalizeQuestIcon(data.icon),
         wasDetected = false,
         failed = false,
         senderDisplayName = type(data.senderDisplayName) == "string" and data.senderDisplayName or nil,
@@ -1081,6 +1082,7 @@ local function ClonePreparedQuestRecord(repo, source)
         targetY = source.targetY,
         recommendHideMapAreas = (source.recommendHideMapAreas ~= false),
         stealthMode = Addon.QuestDraftStore:NormalizeStealthMode(source.stealthMode, source.requireUndetected),
+        icon = Addon.QuestDraftStore:NormalizeQuestIcon(source.icon),
     }
 
     local newQuest = repo:BuildQuestRecord(

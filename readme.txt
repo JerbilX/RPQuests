@@ -12,7 +12,8 @@ Manual Installation:
 
 Usage:
 - Open the Quest Journal (J) and select the RPQuests tab in the top-right icons.
-- Click "+ New" to create a quest, or use "Test Quest" / "Reset" on prepared quests.
+- Click "+ New" to create a quest (optionally assigning a Quest Icon: Black Hand,
+  Search, or Steal), or use "Test Quest" / "Reset" on prepared quests.
 - Assign a recipient (@AccountName) in the editor and click "Send Quest" in the
   quest details pane to send via in-game mail.
 - Incoming quests appear automatically in Pending (Accept or Reject), and

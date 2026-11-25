@@ -892,7 +892,9 @@ local function FormatQuestRowText(tab, q, sectionKey, isCompleted, activeQuest)
             end
         end
     end
-    return prefix .. selColor .. (q.title or "") .. "|r" .. suffix
+    local iconTex = Addon.QuestDraftStore and Addon.QuestDraftStore:GetQuestIconTexture(q.icon) or nil
+    local iconMarkup = iconTex and string.format("|t18:18:%s|t ", iconTex) or ""
+    return prefix .. iconMarkup .. selColor .. (q.title or "") .. "|r" .. suffix
 end
 
 function JournalTab:EnsureAccordionRow(sectionKey, section, index)

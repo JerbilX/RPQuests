@@ -644,4 +644,42 @@ return function(T)
         AssertEqual(decoded.targets[2].customMessageOutsideLocation, nil, "Target B does not emit legacy customMessageOutsideLocation")
     end)
 
+    RunTest("Issue #53: ShareCodec round-trips quest icon and preserves backward compatibility when nil", function()
+        for _, iconId in ipairs({ "black_hand", "search", "steal" }) do
+            local quest = {
+                title = "Icon Quest " .. iconId,
+                description = "Desc",
+                icon = iconId,
+                stealthMode = RPQuest.Constants.STEALTH_MODE.REQUIRED,
+                mapId = 32,
+                zoneId = 381,
+                mapName = "Auridon",
+                targets = {
+                    { name = "Target", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 },
+                },
+            }
+            local code = RPQuest.ShareCodec:EncodeQuest(quest)
+            AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "Icon quest encodes to RPQ3")
+            local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+            AssertTrue(decoded ~= nil, "Icon quest decodes cleanly")
+            AssertEqual(decoded.icon, iconId, "Decoded icon matches " .. iconId)
+            AssertEqual(decoded.stealthMode, RPQuest.Constants.STEALTH_MODE.REQUIRED, "Stealth required preserved alongside icon")
+        end
+
+        local noIconQuest = {
+            title = "Legacy No Icon",
+            description = "Desc",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targets = {
+                { name = "Target", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 },
+            },
+        }
+        local noIconCode = RPQuest.ShareCodec:EncodeQuest(noIconQuest)
+        local noIconDecoded = RPQuest.ShareCodec:DecodeQuest(noIconCode)
+        AssertTrue(noIconDecoded ~= nil, "No-icon quest decodes cleanly")
+        AssertEqual(noIconDecoded.icon, nil, "No-icon quest decodes icon as nil")
+    end)
+
 end

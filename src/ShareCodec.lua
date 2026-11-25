@@ -244,6 +244,11 @@ local function BuildQuestPayloadString(quest)
         EscapeField((type(quest.language) == "string" and quest.language ~= "" and quest.language:lower()) or GetClientLanguage()),
     }
 
+    local questIcon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(quest.icon) or nil
+    if questIcon then
+        table.insert(fields, EscapeField(questIcon))
+    end
+
     return table.concat(fields, "|")
 end
 
@@ -390,7 +395,9 @@ local function PackQuestBinary(quest)
     local recipientChar = (type(quest.recipientCharacterName) == "string") and quest.recipientCharacterName or ""
     local hasCharNames = (senderChar ~= "" or recipientChar ~= "")
     local isStealthRequired = (stealthMode == modes.REQUIRED)
-    local hasTrailing = hasCharNames or isStealthRequired
+    local questIcon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(quest.icon) or nil
+    local hasIcon = (questIcon ~= nil)
+    local hasTrailing = hasCharNames or isStealthRequired or hasIcon
 
     if #dialogues > 0 then
         PackDialogueCluesBlock(buf, dialogues, hasTrailing)
@@ -401,8 +408,12 @@ local function PackQuestBinary(quest)
         BinaryCodec:WriteStr(buf, recipientChar)
     end
 
-    if isStealthRequired then
-        BinaryCodec:WriteByte(buf, 1)
+    if isStealthRequired or hasIcon then
+        local extFlags = (isStealthRequired and 1 or 0) + (hasIcon and 2 or 0)
+        BinaryCodec:WriteByte(buf, extFlags)
+        if hasIcon then
+            BinaryCodec:WriteStr(buf, questIcon)
+        end
     end
 
     return table.concat(buf)
@@ -654,10 +665,20 @@ local function UnpackQuestBinary(data)
 
     local modes = Addon.Constants.STEALTH_MODE
     local stealthMode = requireUndetected and modes.OPTIONAL or modes.DISABLED
+    local icon = nil
     if pos <= len then
-        local extFlags = BinaryCodec:ReadByte(data, pos, len)
-        if extFlags and (extFlags % 2) == 1 then
-            stealthMode = modes.REQUIRED
+        local extFlags, nextPos = BinaryCodec:ReadByte(data, pos, len)
+        pos = nextPos or (pos + 1)
+        if extFlags then
+            if (extFlags % 2) == 1 then
+                stealthMode = modes.REQUIRED
+            end
+            if math.floor(extFlags / 2) % 2 == 1 and pos <= len then
+                local rawIcon = BinaryCodec:ReadStr(data, pos, len)
+                if rawIcon then
+                    icon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(rawIcon) or (rawIcon ~= "" and rawIcon or nil)
+                end
+            end
         end
     end
 
@@ -689,6 +710,7 @@ local function UnpackQuestBinary(data)
         targetY = (#decodedTargets > 0) and (targetsResult.targetY or areaCenterY) or nil,
         recommendHideMapAreas = hideMapArea,
         stealthMode = stealthMode,
+        icon = icon,
         language = (sourceLanguage ~= "" and sourceLanguage) or nil,
         senderCharacterName = (senderCharacterName ~= "" and senderCharacterName) or nil,
         recipientCharacterName = (recipientCharacterName ~= "" and recipientCharacterName) or nil,

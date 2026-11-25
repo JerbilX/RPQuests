@@ -269,4 +269,11 @@ RPQuest.Locales["ru"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s принял(а) «%s».",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s отклонил(а) «%s».",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest: %s провалил(а) «%s».",
+
+    -- Quest Icons
+    LABEL_QUEST_ICON = "Значок задания:",
+    OPT_QUEST_ICON_NONE = "Нет (по умолчанию)",
+    QUEST_ICON_BLACK_HAND = "Черная рука",
+    QUEST_ICON_SEARCH = "Поиск",
+    QUEST_ICON_STEAL = "Кража",
 }

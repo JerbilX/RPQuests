@@ -30,11 +30,41 @@ function QuestDraftStore:NormalizeStealthMode(value, legacyBool)
     return disabled
 end
 
+function QuestDraftStore:GetQuestIconEntry(iconId)
+    if type(iconId) ~= "string" or iconId == "" then
+        return nil
+    end
+    local catalog = Addon.Constants and Addon.Constants.QUEST_ICONS
+    if type(catalog) ~= "table" then
+        return nil
+    end
+    for _, entry in ipairs(catalog) do
+        if entry.id == iconId then
+            return entry
+        end
+    end
+    return nil
+end
+
+function QuestDraftStore:NormalizeQuestIcon(value)
+    if type(value) ~= "string" or value == "" or value == "none" then
+        return nil
+    end
+    local entry = self:GetQuestIconEntry(value)
+    return entry and entry.id or nil
+end
+
+function QuestDraftStore:GetQuestIconTexture(iconId)
+    local entry = self:GetQuestIconEntry(iconId)
+    return entry and entry.texture or nil
+end
+
 function QuestDraftStore:CreateDefaultDraft()
     return {
         editingQuestId = nil,
         title = "",
         description = "",
+        icon = nil,
         recipientAccount = "",
         recipientCharacterName = "",
         clue = "",
@@ -76,6 +106,7 @@ function QuestDraftStore:EnsureDraft(draft)
     draft.hideMapArea = nil
     draft.stealthMode = self:NormalizeStealthMode(draft.stealthMode, draft.requireUndetected)
     draft.requireUndetected = nil
+    draft.icon = self:NormalizeQuestIcon(draft.icon)
     return draft
 end
 
@@ -441,6 +472,7 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         areaRadius = (quest.targets and quest.targets[1] and quest.targets[1].areaRadius) or quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM,
         recommendHideMapAreas = (quest.recommendHideMapAreas ~= nil) and (quest.recommendHideMapAreas == true) or (quest.hideMapArea == true),
         stealthMode = self:NormalizeStealthMode(quest.stealthMode, quest.requireUndetected),
+        icon = self:NormalizeQuestIcon(quest.icon),
     }
     repo:NotifyListeners("DRAFT_UPDATED", repo.savedVars.draft)
     return repo.savedVars.draft
@@ -452,6 +484,7 @@ function QuestDraftStore:UpdateDraftFields(repo, fields, silent)
 
     if fields.title ~= nil then draft.title = tostring(fields.title) end
     if fields.description ~= nil then draft.description = tostring(fields.description) end
+    if fields.icon ~= nil then draft.icon = self:NormalizeQuestIcon(fields.icon) end
     if fields.recipientAccount ~= nil then draft.recipientAccount = tostring(fields.recipientAccount) end
     if fields.recipientCharacterName ~= nil then draft.recipientCharacterName = tostring(fields.recipientCharacterName) end
     if fields.clue ~= nil then draft.clue = tostring(fields.clue) end
@@ -725,6 +758,7 @@ local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
     existing.recommendHideMapAreas = (draft.recommendHideMapAreas ~= false)
     local stealthMode = store:NormalizeStealthMode(draft.stealthMode)
     existing.stealthMode = stealthMode
+    existing.icon = store:NormalizeQuestIcon(draft.icon)
     existing.requireUndetected = nil
     if stealthMode == Addon.Constants.STEALTH_MODE.DISABLED then
         existing.wasDetected = false
@@ -815,6 +849,7 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
         worldZ = draft.worldZ,
         recommendHideMapAreas = (draft.recommendHideMapAreas ~= false),
         stealthMode = store:NormalizeStealthMode(draft.stealthMode),
+        icon = store:NormalizeQuestIcon(draft.icon),
     }
 
     local newQuest = repo:BuildQuestRecord(
