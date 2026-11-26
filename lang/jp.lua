@@ -54,6 +54,8 @@ RPQuest.Locales["jp"] = {
     LABEL_MISSION_DETAILS_HEADER = "ミッション詳細",
     LABEL_COMPLETION_MESSAGE_HEADER = "完了メッセージ",
     OBJECTIVE_KILL_FORMAT = "• %s を倒す: %d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• %s と決闘する: %d / %d",
+    LABEL_DUEL_TAG = "決闘",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(完了)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(任意)|r",
     STEALTH_STATUS_UNDETECTED = "隠密: |c33FF33未発見|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["jp"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest: レティクル下にターゲットがいません。",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest: プレイヤーをNPCターゲットとして選択することはできません。",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest: 自分自身を決闘ターゲットとして選択することはできません。",
     ALERT_INVALID_TARGET_DEAD = "RPQuest: ターゲットは既に死亡しています。",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: このターゲットは倒せません。",
     ALERT_TARGET_CAPTURED = "RPQuest: ターゲットを登録 -> %s (%s)",

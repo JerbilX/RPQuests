@@ -19,6 +19,7 @@ local mockState = {
     reticleExists = true,
     reticleName = "Capitán Pirata^m",
     reticleIsPlayer = false,
+    reticleIsSelf = false,
     reticleIsDead = false,
     reticleAttackable = true,
     reticleReaction = 2,
@@ -51,6 +52,9 @@ ACTION_RESULT_DIED_XP = 2262
 REGISTER_FILTER_COMBAT_RESULT = 2
 REGISTER_FILTER_IS_ERROR = 5
 EVENT_COMBAT_EVENT = 131103
+EVENT_DUEL_FINISHED = 131104
+DUEL_RESULT_FORFEIT = 0
+DUEL_RESULT_WON = 1
 EVENT_ZONE_CHANGED = 131072
 EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED = 131200
 EVENT_JUSTICE_INFAMY_UPDATED = 131201
@@ -191,6 +195,13 @@ end
 IsUnitPlayer = function(tag)
     if tag == "reticleover" then return mockState.reticleIsPlayer end
     return false
+end
+
+AreUnitsEqual = function(unitTagA, unitTagB)
+    if (unitTagA == "reticleover" and unitTagB == "player") or (unitTagA == "player" and unitTagB == "reticleover") then
+        return mockState.reticleIsSelf == true
+    end
+    return unitTagA == unitTagB
 end
 
 IsUnitDead = function(tag)

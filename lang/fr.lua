@@ -54,6 +54,8 @@ RPQuest.Locales["fr"] = {
     LABEL_MISSION_DETAILS_HEADER = "DÉTAILS DE LA MISSION",
     LABEL_COMPLETION_MESSAGE_HEADER = "MESSAGE DE FIN",
     OBJECTIVE_KILL_FORMAT = "• Éliminer %s : %d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• Défier %s en duel : %d / %d",
+    LABEL_DUEL_TAG = "Duel",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Terminé)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optionnel)|r",
     STEALTH_STATUS_UNDETECTED = "Furtivité : |c33FF33Non détecté|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["fr"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest : Aucune cible sous le réticule.",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest : Les joueurs ne peuvent pas être sélectionnés comme cibles PNJ.",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest : Vous ne pouvez pas vous sélectionner vous-même comme cible de duel.",
     ALERT_INVALID_TARGET_DEAD = "RPQuest : La cible est déjà morte.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest : Cette cible ne peut pas être éliminée.",
     ALERT_TARGET_CAPTURED = "RPQuest : Cible capturée -> %s (%s)",

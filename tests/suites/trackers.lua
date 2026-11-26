@@ -18,13 +18,15 @@ return function(T)
         local d1, _ = RPQuest.TargetCapture:CaptureFromReticle()
         AssertEqual(d1, nil, "Must reject empty reticle")
 
-        -- Objetivo es otro jugador
+        -- Objetivo es el propio jugador local
         mockState.reticleExists = true
         mockState.reticleIsPlayer = true
+        mockState.reticleIsSelf = true
         local d2, _ = RPQuest.TargetCapture:CaptureFromReticle()
-        AssertEqual(d2, nil, "Must reject player unit")
+        AssertEqual(d2, nil, "Must reject local player unit")
 
         -- Objetivo ya muerto
+        mockState.reticleIsSelf = false
         mockState.reticleIsPlayer = false
         mockState.reticleIsDead = true
         local d3, _ = RPQuest.TargetCapture:CaptureFromReticle()
@@ -1824,6 +1826,91 @@ return function(T)
         _G.GetNormalizedWorldPosition = origGetNormWorld
         _G.zo_callLater = origCallLater
         WORLD_MAP_MANAGER.SetMapById = origSetMapById
+    end)
+
+    RunTest("Player duel targets: reticle capture, EVENT_DUEL_FINISHED, ShareCodec RPQ3, and UI formatting", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize({})
+        RPQuest.CombatTracker:Initialize()
+
+        -- Another player (friendly, non-attackable) can be captured as a duel target
+        mockState.reticleExists = true
+        mockState.reticleIsPlayer = true
+        mockState.reticleIsSelf = false
+        mockState.reticleIsDead = false
+        mockState.reticleAttackable = false
+        mockState.reticleReaction = UNIT_REACTION_PLAYER_ALLY
+        mockState.reticleName = "Sirius Valen^m"
+        mockState.mapId = 32
+        mockState.zoneId = 381
+        mockState.mapName = "Auridon"
+        mockState.playerX = 0.42
+        mockState.playerY = 0.61
+
+        local draft = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertTrue(draft ~= nil, "Another player must be captured into draft")
+        AssertEqual(draft.targets[1].name, "Sirius Valen", "Duel target name normalized")
+        AssertEqual(draft.targets[1].isPlayer, true, "Duel target flagged with isPlayer = true")
+        AssertEqual(RPQuest.QuestRepository:FormatTargetEntry(draft.targets[1]), "Sirius Valen (Duel)", "FormatTargetEntry appends (Duel) tag")
+
+        -- Capture again to require 2 duel victories
+        local draft2 = RPQuest.TargetCapture:CaptureFromReticle()
+        AssertEqual(draft2.targets[1].requiredCount, 2, "Repeated duel target capture increments requiredCount")
+        AssertEqual(draft2.targets[1].isPlayer, true, "Repeated capture preserves isPlayer = true")
+        AssertEqual(RPQuest.QuestRepository:FormatTargetEntry(draft2.targets[1]), "Sirius Valen (Duel) x2", "FormatTargetEntry appends (Duel) x2")
+
+        local saved = RPQuest.QuestRepository:SaveDraft("Honor Duel", "Defeat Sirius Valen in two duels.")
+        AssertTrue(saved ~= nil, "Duel quest saved")
+        AssertEqual(saved.targets[1].isPlayer, true, "Saved quest preserves isPlayer = true")
+
+        -- ShareCodec RPQ3 round-trip preserves isPlayer = true
+        local code, encErr = RPQuest.ShareCodec:EncodeQuest(saved)
+        AssertTrue(type(code) == "string", "ShareCodec encodes duel quest: " .. tostring(encErr))
+        local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(type(decoded) == "table", "ShareCodec decodes duel quest: " .. tostring(decErr))
+        AssertEqual(decoded.targets[1].isPlayer, true, "Decoded RPQ3 target preserves isPlayer = true")
+
+        -- Activate quest and verify EVENT_DUEL_FINISHED registration
+        AssertEqual(RPQuest.CombatTracker._isDuelRegistered, false, "EVENT_DUEL_FINISHED not registered before quest activation")
+        local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Author")
+        RPQuest.QuestRepository:AcceptOfferedQuest(imported.id)
+        AssertEqual(RPQuest.CombatTracker._isDuelRegistered, true, "EVENT_DUEL_FINISHED registered for active duel quest")
+
+        -- Defeat / local forfeit / wrong opponent / NPC death must NOT count
+        EVENT_MANAGER:FireEvent(EVENT_DUEL_FINISHED, DUEL_RESULT_WON, false, "Sirius Valen")
+        AssertEqual(imported.targets[1].currentCount, 0, "Opponent winning duel does not count")
+
+        EVENT_MANAGER:FireEvent(EVENT_DUEL_FINISHED, DUEL_RESULT_FORFEIT, true, "Sirius Valen")
+        AssertEqual(imported.targets[1].currentCount, 0, "Local player forfeit does not count")
+
+        EVENT_MANAGER:FireEvent(EVENT_DUEL_FINISHED, DUEL_RESULT_WON, true, "Other Player")
+        AssertEqual(imported.targets[1].currentCount, 0, "Winning against wrong opponent does not count")
+
+        EVENT_MANAGER:FireEvent(
+            EVENT_COMBAT_EVENT,
+            ACTION_RESULT_DIED, false, "Attack", 0, 0,
+            "Player", COMBAT_UNIT_TYPE_PLAYER, "Sirius Valen", 2,
+            500, 0, 0, false, 1, 99, 100
+        )
+        AssertEqual(imported.targets[1].currentCount, 0, "ACTION_RESULT_DIED does not count for player duel target")
+
+        -- Victory 1: DUEL_RESULT_WON with wasLocalPlayersResult == true
+        EVENT_MANAGER:FireEvent(EVENT_DUEL_FINISHED, DUEL_RESULT_WON, true, "Sirius Valen^m")
+        AssertEqual(imported.targets[1].currentCount, 1, "Local duel win increments progress")
+        AssertEqual(imported.completed, false, "Quest remains active after 1/2 duel wins")
+
+        -- Victory 2: DUEL_RESULT_FORFEIT with wasLocalPlayersResult == false (opponent forfeited)
+        EVENT_MANAGER:FireEvent(EVENT_DUEL_FINISHED, DUEL_RESULT_FORFEIT, false, "sirius valen")
+        AssertEqual(imported.targets[1].currentCount, 2, "Opponent forfeit counts as local victory")
+        AssertEqual(imported.completed, true, "Quest completes after 2/2 duel victories")
+        AssertEqual(RPQuest.CombatTracker._isDuelRegistered, false, "EVENT_DUEL_FINISHED unregistered after quest completion")
+
+        -- Restore mockState defaults
+        mockState.reticleIsPlayer = false
+        mockState.reticleIsSelf = false
+        mockState.reticleAttackable = true
+        mockState.reticleReaction = UNIT_REACTION_NEUTRAL
     end)
 
 end

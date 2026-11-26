@@ -6,6 +6,7 @@
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 -- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
+-- Ref: docs/adr/0017-objetivos-duelo-jugadores-y-event-duel-finished.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -267,12 +268,14 @@ local function PackTargetsBlock(buf, quest, targets, defaultRad)
         local tMsg = type(t.customMessage) == "string" and t.customMessage or ""
         local tMsgInLoc = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or ""
         local hasArea = (t.areaCenterX ~= nil and t.areaCenterY ~= nil and t.areaRadius ~= nil and (tonumber(t.areaRadius) or 0) > 0)
+        local isPlayer = (t.isPlayer == true)
         local tFlags = (hasLoc and 1 or 0)
             + (reqLoc and 2 or 0)
             + (tMsg ~= "" and 4 or 0)
             + (isOpt and 8 or 0)
             + (hasArea and 16 or 0)
             + (tMsgInLoc ~= "" and 32 or 0)
+            + (isPlayer and 128 or 0)
         BinaryCodec:WriteByte(buf, tFlags)
         BinaryCodec:WriteStr(buf, t.name or "")
         BinaryCodec:WriteUVarint(buf, math.max(1, math.floor(tonumber(t.requiredCount) or 1)))
@@ -442,6 +445,7 @@ local function UnpackTargetsBlock(data, pos, len)
         local tHasArea = (floor(tFlags / 16) % 2) == 1
         local tHasMsgInLoc = (floor(tFlags / 32) % 2) == 1
         local tHasMsgOutLoc = (floor(tFlags / 64) % 2) == 1
+        local tIsPlayer = (floor(tFlags / 128) % 2) == 1
         local tName; tName, pos = BinaryCodec:ReadStr(data, pos, len)
         local tReq; tReq, pos = BinaryCodec:ReadUVarint(data, pos, len)
         if not tName or not tReq or tName == "" or tReq < 1 then
@@ -497,6 +501,7 @@ local function UnpackTargetsBlock(data, pos, len)
             radius = tHasLoc and math.max(100, floor(tRad)) or nil,
             locationRequired = tReqLoc,
             optional = tOptional,
+            isPlayer = tIsPlayer,
             customMessage = tMsg,
             customMessageInLocation = tMsgInLoc,
         })

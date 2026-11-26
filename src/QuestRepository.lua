@@ -66,10 +66,15 @@ function QuestRepository:FormatTargetEntry(target)
         return ""
     end
     local req = math.max(1, math.floor(tonumber(target.requiredCount) or 1))
-    if req > 1 then
-        return string.format("%s x%d", target.name, req)
+    local label = target.name
+    if target.isPlayer == true then
+        local duelTag = (Addon.Locale and Addon.Locale:Get("LABEL_DUEL_TAG")) or "Duel"
+        label = string.format("%s (%s)", label, duelTag)
     end
-    return target.name
+    if req > 1 then
+        return string.format("%s x%d", label, req)
+    end
+    return label
 end
 
 function QuestRepository:FormatTargetsSummary(targets)
@@ -524,6 +529,7 @@ function QuestRepository:NormalizeImportedTargets(rawTargets, targetX, targetY)
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
                 locationRequired = (t.locationRequired == true),
                 optional = (t.optional == true),
+                isPlayer = (t.isPlayer == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
                 customMessageInLocation = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or "",
             })
@@ -1199,7 +1205,7 @@ function QuestRepository:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneI
     return Addon.WorldMapArea:IsPlayerInsideQuestArea(quest, playerMapId, playerZoneId, playerX, playerY)
 end
 
-function QuestRepository:FindPendingTarget(rawTargetName)
+function QuestRepository:FindPendingTarget(rawTargetName, expectedIsPlayer)
     if type(rawTargetName) ~= "string" or rawTargetName == "" then
         return nil, nil
     end
@@ -1232,7 +1238,9 @@ function QuestRepository:FindPendingTarget(rawTargetName)
 
     local matched = cache.byLowerName[cleanKilled]
     if matched and (matched.currentCount or 0) < (matched.requiredCount or 1) then
-        return activeQuest, matched
+        if expectedIsPlayer == nil or (matched.isPlayer == true) == expectedIsPlayer then
+            return activeQuest, matched
+        end
     end
 
     return nil, nil
