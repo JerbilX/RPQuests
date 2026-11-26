@@ -879,7 +879,7 @@ local function FormatQuestRowText(tab, q, sectionKey, isCompleted, activeQuest)
     end
     local iconTex = Addon.QuestDraftStore and Addon.QuestDraftStore:GetQuestIconTexture(q.icon) or nil
     local iconMarkup = iconTex and string.format("|t18:18:%s|t ", iconTex) or ""
-    return prefix .. iconMarkup .. selColor .. (q.title or "") .. "|r" .. suffix
+    return prefix .. iconMarkup .. selColor .. (q.title or "") .. "|r", suffix
 end
 
 function JournalTab:EnsureAccordionRow(sectionKey, section, index)
@@ -887,16 +887,32 @@ function JournalTab:EnsureAccordionRow(sectionKey, section, index)
     if rowBtn then
         return rowBtn
     end
-    rowBtn = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_SectionRow_" .. sectionKey .. "_" .. index, section.childContainer, CT_BUTTON)
+    local rowName = PANEL_NAME .. "_SectionRow_" .. sectionKey .. "_" .. index
+    rowBtn = WINDOW_MANAGER:CreateControl(rowName, section.childContainer, CT_BUTTON)
     rowBtn:SetDimensions(LIST_WIDTH, ROW_HEIGHT)
     rowBtn:SetAnchor(TOPLEFT, section.childContainer, TOPLEFT, 0, (index - 1) * ROW_STEP)
-    if rowBtn.SetFont then rowBtn:SetFont("ZoFontHeader") end
-    if rowBtn.SetHorizontalAlignment then
-        rowBtn:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
-    end
-    if rowBtn.SetVerticalAlignment then
-        rowBtn:SetVerticalAlignment(TEXT_ALIGN_CENTER)
-    end
+
+    local statusLabel = WINDOW_MANAGER:CreateControl(rowName .. "_Status", rowBtn, CT_LABEL)
+    statusLabel:SetFont("ZoFontHeader")
+    statusLabel:SetHorizontalAlignment(TEXT_ALIGN_RIGHT)
+    statusLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+    statusLabel:SetMaxLineCount(1)
+    statusLabel:SetAnchor(TOPRIGHT, rowBtn, TOPRIGHT, 0, 0)
+    statusLabel:SetAnchor(BOTTOMRIGHT, rowBtn, BOTTOMRIGHT, 0, 0)
+    statusLabel:SetHidden(true)
+
+    local titleLabel = WINDOW_MANAGER:CreateControl(rowName .. "_Title", rowBtn, CT_LABEL)
+    titleLabel:SetFont("ZoFontHeader")
+    titleLabel:SetHorizontalAlignment(TEXT_ALIGN_LEFT)
+    titleLabel:SetVerticalAlignment(TEXT_ALIGN_CENTER)
+    titleLabel:SetMaxLineCount(1)
+    titleLabel:SetWrapMode(TEXT_WRAP_MODE_ELLIPSIS)
+    titleLabel:SetAnchor(TOPLEFT, rowBtn, TOPLEFT, 0, 0)
+    titleLabel:SetAnchor(BOTTOMRIGHT, rowBtn, BOTTOMRIGHT, 0, 0)
+
+    rowBtn._statusLabel = statusLabel
+    rowBtn._titleLabel = titleLabel
+
     rowBtn:SetHandler("OnClicked", function(ctrl)
         if ctrl._questId then
             PlaySound(SOUNDS.DEFAULT_CLICK)
@@ -1049,7 +1065,8 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
             end
 
             for idx, q in ipairs(quests) do
-                local rowText = FormatQuestRowText(self, q, sectionKey, def.isCompleted, activeQuest)
+                local titleText, suffixText = FormatQuestRowText(self, q, sectionKey, def.isCompleted, activeQuest)
+                local rowText = titleText .. (suffixText or "")
                 if not self.collapsedSections[sectionKey] then
                     table.insert(displayRows, {
                         isHeader = false,
@@ -1060,7 +1077,19 @@ function JournalTab:RefreshQuestList(allQuests, activeQuest)
                 if section then
                     local rowBtn = self:EnsureAccordionRow(sectionKey, section, idx)
                     rowBtn._questId = q.id
-                    rowBtn:SetText(rowText)
+                    rowBtn._titleLabel:SetText(titleText)
+                    local trimmedSuffix = suffixText and suffixText:gsub("^%s+", "") or ""
+                    rowBtn._titleLabel:ClearAnchors()
+                    rowBtn._titleLabel:SetAnchor(TOPLEFT, rowBtn, TOPLEFT, 0, 0)
+                    if trimmedSuffix ~= "" then
+                        rowBtn._statusLabel:SetText(trimmedSuffix)
+                        rowBtn._statusLabel:SetHidden(false)
+                        rowBtn._titleLabel:SetAnchor(BOTTOMRIGHT, rowBtn._statusLabel, BOTTOMLEFT, -6, 0)
+                    else
+                        rowBtn._statusLabel:SetText("")
+                        rowBtn._statusLabel:SetHidden(true)
+                        rowBtn._titleLabel:SetAnchor(BOTTOMRIGHT, rowBtn, BOTTOMRIGHT, 0, 0)
+                    end
                     rowBtn:SetMouseEnabled(true)
                     rowBtn:SetHidden(false)
                 end
