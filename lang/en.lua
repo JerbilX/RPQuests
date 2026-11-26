@@ -54,6 +54,8 @@ RPQuest.Locales["en"] = {
     LABEL_MISSION_DETAILS_HEADER = "MISSION DETAILS",
     LABEL_COMPLETION_MESSAGE_HEADER = "COMPLETION MESSAGE",
     OBJECTIVE_KILL_FORMAT = "• Eliminate %s: %d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• Duel %s: %d / %d",
+    LABEL_DUEL_TAG = "Duel",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completed)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optional)|r",
     STEALTH_STATUS_UNDETECTED = "Stealth: |c33FF33Undetected|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["en"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest: No target under reticle.",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest: Players cannot be selected as NPC quest targets.",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest: You cannot select yourself as a duel target.",
     ALERT_INVALID_TARGET_DEAD = "RPQuest: Target is already dead.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: Target cannot be eliminated.",
     ALERT_TARGET_CAPTURED = "RPQuest: Target captured -> %s (%s)",

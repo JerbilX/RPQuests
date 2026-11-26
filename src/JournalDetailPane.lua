@@ -491,8 +491,9 @@ local function AppendTargetObjectiveLines(objLines, selectedQuest, isMasterSumma
             currentCount = requiredCount
         end
 
+        local formatKey = (t.isPlayer == true) and "OBJECTIVE_DUEL_FORMAT" or "OBJECTIVE_KILL_FORMAT"
         local line = Addon.Locale:Get(
-            "OBJECTIVE_KILL_FORMAT",
+            formatKey,
             t.name or "",
             currentCount,
             requiredCount

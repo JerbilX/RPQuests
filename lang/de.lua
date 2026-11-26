@@ -54,6 +54,8 @@ RPQuest.Locales["de"] = {
     LABEL_MISSION_DETAILS_HEADER = "MISSIONSDETAILS",
     LABEL_COMPLETION_MESSAGE_HEADER = "ABSCHLUSSNACHRICHT",
     OBJECTIVE_KILL_FORMAT = "• Eliminiert %s: %d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• Duelliert %s: %d / %d",
+    LABEL_DUEL_TAG = "Duell",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Abgeschlossen)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optional)|r",
     STEALTH_STATUS_UNDETECTED = "Schleichen: |c33FF33Unentdeckt|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["de"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest: Kein Ziel im Fadenkreuz.",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest: Spieler können nicht als NSC-Questziele ausgewählt werden.",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest: Ihr könnt Euch nicht selbst als Duellziel auswählen.",
     ALERT_INVALID_TARGET_DEAD = "RPQuest: Ziel ist bereits tot.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: Ziel kann nicht eliminiert werden.",
     ALERT_TARGET_CAPTURED = "RPQuest: Ziel erfasst -> %s (%s)",

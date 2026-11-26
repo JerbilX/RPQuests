@@ -12,6 +12,8 @@ Manual Installation:
 
 Usage:
 - Open the Quest Journal (J) and select the RPQuests tab in the top-right icons.
+- Aim at any living NPC or another player and press your "Capture Target Under
+  Reticle (NPC)" keybind to add NPC elimination or player duel objectives.
 - Click "+ New" to create a quest (optionally assigning a Quest Icon: Black Hand,
   Search, or Steal), or use "Test Quest" / "Reset" on prepared quests.
 - Assign a recipient (@AccountName) and optionally choose a From (Character)

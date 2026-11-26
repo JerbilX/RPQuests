@@ -54,6 +54,8 @@ RPQuest.Locales["ru"] = {
     LABEL_MISSION_DETAILS_HEADER = "ДЕТАЛИ ЗАДАНИЯ",
     LABEL_COMPLETION_MESSAGE_HEADER = "СООБЩЕНИЕ О ЗАВЕРШЕНИИ",
     OBJECTIVE_KILL_FORMAT = "• Устранить %s: %d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• Победить в дуэли %s: %d / %d",
+    LABEL_DUEL_TAG = "Дуэль",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Выполнено)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Необязательно)|r",
     STEALTH_STATUS_UNDETECTED = "Скрытность: |c33FF33Не обнаружен|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["ru"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest: Нет цели под прицелом.",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest: Игроков нельзя выбирать в качестве целей-НИП.",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest: Нельзя выбрать себя в качестве цели для дуэли.",
     ALERT_INVALID_TARGET_DEAD = "RPQuest: Цель уже мертва.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: Эту цель нельзя устранить.",
     ALERT_TARGET_CAPTURED = "RPQuest: Цель захвачена -> %s (%s)",

@@ -54,6 +54,8 @@ RPQuest.Locales["es"] = {
     LABEL_MISSION_DETAILS_HEADER = "DETALLES DE LA MISIÓN",
     LABEL_COMPLETION_MESSAGE_HEADER = "MENSAJE DE FINALIZACIÓN",
     OBJECTIVE_KILL_FORMAT = "• Eliminar a %s: %d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• Batirse en duelo con %s: %d / %d",
+    LABEL_DUEL_TAG = "Duelo",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Completado)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Opcional)|r",
     STEALTH_STATUS_UNDETECTED = "Sigilo: |c33FF33No detectado|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["es"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest: No hay ningún objetivo bajo la retícula.",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest: No se puede seleccionar a otro jugador como objetivo.",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest: No puedes seleccionarte a ti mismo como objetivo de duelo.",
     ALERT_INVALID_TARGET_DEAD = "RPQuest: El objetivo bajo la retícula ya está muerto.",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest: El objetivo seleccionado no es atacable.",
     ALERT_TARGET_CAPTURED = "RPQuest: Objetivo capturado -> %s (%s)",

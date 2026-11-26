@@ -184,6 +184,7 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 radius = hasLoc and math.max(100, math.floor(tonumber(t.radius) or defaultRad)) or nil,
                 locationRequired = hasLoc and (t.locationRequired == true) or false,
                 optional = (t.optional == true),
+                isPlayer = (t.isPlayer == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
                 customMessageInLocation = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or "",
             })
@@ -571,6 +572,9 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
         matchedEntry.areaRadius = radius
         matchedEntry.areaCenterX = tAreaCenterX
         matchedEntry.areaCenterY = tAreaCenterY
+        if captureData.isPlayer ~= nil then
+            matchedEntry.isPlayer = (captureData.isPlayer == true)
+        end
     else
         local maxTargets = (Addon.Constants and Addon.Constants.TARGET and Addon.Constants.TARGET.MAX_TARGETS) or 4
         if #draft.targets >= maxTargets then
@@ -586,6 +590,7 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
             areaCenterY = tAreaCenterY,
             areaRadius = radius,
             optional = false,
+            isPlayer = (captureData.isPlayer == true),
             customMessage = "",
             customMessageInLocation = "",
         }

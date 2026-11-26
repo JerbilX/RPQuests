@@ -54,6 +54,8 @@ RPQuest.Locales["zh"] = {
     LABEL_MISSION_DETAILS_HEADER = "任务详情",
     LABEL_COMPLETION_MESSAGE_HEADER = "完成消息",
     OBJECTIVE_KILL_FORMAT = "• 消灭 %s：%d / %d",
+    OBJECTIVE_DUEL_FORMAT = "• 与 %s 决斗：%d / %d",
+    LABEL_DUEL_TAG = "决斗",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(已完成)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(可选)|r",
     STEALTH_STATUS_UNDETECTED = "潜行：|c33FF33未被发现|r",
@@ -160,7 +162,7 @@ RPQuest.Locales["zh"] = {
 
     -- Alerts & Announcements
     ALERT_NO_RETICLE_TARGET = "RPQuest：准星下没有目标。",
-    ALERT_INVALID_TARGET_PLAYER = "RPQuest：不能选择玩家作为 NPC 任务目标。",
+    ALERT_INVALID_TARGET_PLAYER = "RPQuest：不能选择自己作为决斗目标。",
     ALERT_INVALID_TARGET_DEAD = "RPQuest：目标已经死亡。",
     ALERT_INVALID_TARGET_FRIENDLY = "RPQuest：无法消灭该目标。",
     ALERT_TARGET_CAPTURED = "RPQuest：已捕获目标 -> %s (%s)",
