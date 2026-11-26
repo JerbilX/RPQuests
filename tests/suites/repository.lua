@@ -938,10 +938,10 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 5, "Quest 1 upgraded to current schema v5")
+        AssertEqual(q1.schemaVersion, 6, "Quest 1 upgraded to current schema v6")
         AssertEqual(q1.stealthMode, "optional", "requireUndetected = true migrated to stealthMode = optional")
         AssertEqual(q1.requireUndetected, nil, "Legacy requireUndetected cleared on q1")
-        AssertEqual(q2.schemaVersion, 5, "Quest 2 upgraded to current schema v5")
+        AssertEqual(q2.schemaVersion, 6, "Quest 2 upgraded to current schema v6")
         AssertEqual(q2.stealthMode, "disabled", "requireUndetected = false migrated to stealthMode = disabled")
         AssertEqual(q2.requireUndetected, nil, "Legacy requireUndetected cleared on q2")
 
@@ -950,14 +950,17 @@ return function(T)
         AssertEqual(draft.requireUndetected, nil, "Legacy draft requireUndetected cleared")
     end)
 
-    RunTest("Issue #270: SaveDraft allows objective-less drafts; send/export/activate reject with ERR_MISSING_TARGET; discovery-only works end-to-end", function()
+    RunTest("Issue #270 & #344: SaveDraft, activate, export, and send work for dialogue-only, pure free-form, and discovery-only quests", function()
         mockState.language = "en"
         RPQuest.Locale:Initialize("en")
         local repo = RPQuest.QuestRepository
         repo:Initialize({})
         RPQuest.MailTransport:Initialize()
 
-        -- 1. SaveDraft with 0 targets and 0 discoveries preserves all fields
+        AssertEqual(repo:HasPlayableObjectives(nil), false, "HasPlayableObjectives false for nil")
+        AssertEqual(repo:HasPlayableObjectives("invalid"), false, "HasPlayableObjectives false for non-table")
+
+        -- 1. SaveDraft with 0 targets and 0 discoveries (dialogue-only) preserves all fields
         repo:AddDraftDialogue("Informant", 381, "Bring the seal.", "Meet at the pier")
         local saved, saveErr = repo:SaveDraft(
             "Investigation Draft",
@@ -976,23 +979,21 @@ return function(T)
         AssertEqual(saved.recipientCharacterName, "Detective", "Recipient character preserved")
         AssertEqual(#saved.dialogues, 1, "Dialogues preserved")
         AssertEqual(saved.completed, false, "Objective-less draft stays completed=false")
+        AssertEqual(repo:HasPlayableObjectives(saved), true, "Dialogue-only quest passes HasPlayableObjectives")
 
-        -- 2. Export, activate/reset, and mail send reject objective-less draft with ERR_MISSING_TARGET
+        -- 2. Dialogue-only and pure free-form quests can be exported, activated, reset, and sent
         local code, exportErr = repo:ExportQuestToCode(saved.id)
-        AssertEqual(code, nil, "ExportQuestToCode rejects objective-less draft")
-        AssertEqual(exportErr, "ERR_MISSING_TARGET", "Export returns ERR_MISSING_TARGET")
+        AssertTrue(type(code) == "string" and code:sub(1, 5) == "RPQ3:", "ExportQuestToCode succeeds for dialogue-only quest: " .. tostring(exportErr))
 
         local actOk, actErr = repo:SetActiveQuest(saved.id)
-        AssertEqual(actOk, false, "SetActiveQuest rejects objective-less draft")
-        AssertEqual(actErr, "ERR_MISSING_TARGET", "SetActiveQuest returns ERR_MISSING_TARGET")
+        AssertEqual(actOk, true, "SetActiveQuest accepts dialogue-only quest: " .. tostring(actErr))
 
         local resetOk, resetErr = repo:ResetQuest(saved.id)
-        AssertEqual(resetOk, false, "ResetQuest(activate=true) rejects objective-less draft")
-        AssertEqual(resetErr, "ERR_MISSING_TARGET", "ResetQuest returns ERR_MISSING_TARGET")
+        AssertEqual(resetOk, true, "ResetQuest(activate=true) accepts dialogue-only quest: " .. tostring(resetErr))
 
         local sendOk, sendErr = RPQuest.MailTransport:SendQuestToRecipients(saved, "@Investigator", "Roleplay intro")
-        AssertEqual(sendOk, false, "SendQuestToRecipients rejects objective-less draft")
-        AssertEqual(sendErr, "ERR_MISSING_TARGET", "SendQuestToRecipients returns ERR_MISSING_TARGET instead of ERR_INVALID_CODE")
+        AssertEqual(sendOk, true, "SendQuestToRecipients accepts dialogue-only quest: " .. tostring(sendErr))
+        RPQuest.MailTransport:Initialize()
 
         -- 3. Adding a discovery point (still 0 NPC targets) enables test, export, send, and completion
         repo:LoadQuestIntoDraft(saved.id)
@@ -1072,7 +1073,7 @@ return function(T)
 
         local q1 = repo:GetQuestById(1)
         local q2 = repo:GetQuestById(2)
-        AssertEqual(q1.schemaVersion, 5, "v2 quest 1 migrated to schema v5")
+        AssertEqual(q1.schemaVersion, 6, "v2 quest 1 migrated to schema v6")
         AssertEqual(q1.recommendHideMapAreas, true, "v2 hideMapArea=true preserved in recommendHideMapAreas")
         AssertEqual(q1.hideMapArea, nil, "Legacy hideMapArea cleared on q1")
         AssertEqual(q1.areaCenterX, nil, "Legacy quest-level areaCenterX cleared on q1")
@@ -1084,9 +1085,9 @@ return function(T)
         AssertEqual(q1.targets[1].customMessageInLocation, "", "Target 1 initializes customMessageInLocation")
         AssertEqual(q1.targets[1].customMessageOutsideLocation, nil, "Target 1 clears legacy customMessageOutsideLocation")
 
-        AssertEqual(q2.schemaVersion, 5, "v2 quest 2 migrated to schema v5")
+        AssertEqual(q2.schemaVersion, 6, "v2 quest 2 migrated to schema v6")
 
-        -- v4 -> v5 migration: consolidate customMessageOutsideLocation into customMessage and clean legacy field
+        -- v4 -> v5 -> v6 migration: consolidate customMessageOutsideLocation into customMessage and clean legacy field
         local svV4 = {
             quests = {
                 {
@@ -1102,7 +1103,7 @@ return function(T)
         }
         repo:Initialize(svV4)
         local qV4 = repo:GetQuestById(10)
-        AssertEqual(qV4.schemaVersion, 5, "v4 quest migrated to schema v5")
+        AssertEqual(qV4.schemaVersion, 6, "v4 quest migrated to schema v6")
         AssertEqual(qV4.targets[1].customMessage, "Legacy outside", "Empty customMessage adopts customMessageOutsideLocation")
         AssertEqual(qV4.targets[1].customMessageInLocation, "In loc", "customMessageInLocation preserved")
         AssertEqual(qV4.targets[1].customMessageOutsideLocation, nil, "Target 1 legacy customMessageOutsideLocation removed")
@@ -1170,7 +1171,7 @@ return function(T)
         local q8 = repo:GetQuestById(8)
         local q9 = repo:GetQuestById(9)
 
-        AssertEqual(q1.schemaVersion, 5, "v3 quests migrated to v5")
+        AssertEqual(q1.schemaVersion, 6, "v3 quests migrated to v6")
         AssertEqual(repo:GetQuestLifecycle(q1), "draft", "q1 lifecycle=draft")
         AssertEqual(repo:GetQuestResolution(q1), nil, "q1 resolution=nil")
         AssertEqual(repo:GetQuestLifecycle(q2), "sent", "q2 lifecycle=sent")
@@ -1358,6 +1359,149 @@ return function(T)
         repo:UpdateDraftFields({ icon = "none" })
         local cleared = store:CommitDraftChanges(repo)
         AssertEqual(cleared.icon, nil, "Selecting none clears quest icon back to nil")
+    end)
+
+    RunTest("Issue #344: schema v6 migration, draft cloning, ResetQuest, DuplicateQuest, and pure free-form quests", function()
+        local repo = RPQuest.QuestRepository
+        local store = RPQuest.QuestDraftStore
+        RPQuest.MailTransport:Initialize()
+
+        -- 1. Non-destructive v4/v5 -> v6 migration preserves existing fields and initializes defaults
+        repo:Initialize({
+            nextId = 4,
+            quests = {
+                {
+                    id = 1,
+                    schemaVersion = 4,
+                    role = RPQuest.Constants.QUEST_ROLE.RECEIVED,
+                    status = RPQuest.Constants.QUEST_STATUS.ACTIVE,
+                    title = "Legacy v4 Investigation",
+                    description = "Keep existing progress",
+                    discoveries = {
+                        { zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "Clue 1", discovered = true },
+                    },
+                    dialogues = {
+                        { npcName = "Guard", zoneId = 381, clue = "Ask", response = "Answer" },
+                    },
+                },
+                {
+                    id = 2,
+                    schemaVersion = 5,
+                    role = RPQuest.Constants.QUEST_ROLE.PREPARED,
+                    title = "Legacy v5 Preconfigured",
+                    sequentialDiscoveries = true,
+                    discoveries = {
+                        { zoneId = 381, worldX = 300, worldY = 0, worldZ = 400, mapId = 32, x = 0.4, y = 0.6, radius = 800, message = "Clue A", required = true },
+                        { zoneId = 381, worldX = 500, worldY = 0, worldZ = 600, mapId = 32, x = 0.5, y = 0.7, radius = 800, message = "Clue B" },
+                    },
+                    dialogues = {
+                        { npcName = "Elder", zoneId = 381, clue = "Speak", response = "Go north", required = true, executed = true },
+                        { npcName = "Bard", zoneId = 381, clue = "Sing", response = "La la" },
+                    },
+                },
+            },
+            draft = {
+                title = "Legacy Draft",
+                discoveries = {
+                    { zoneId = 381, worldX = 10, worldY = 0, worldZ = 20, radius = 800, message = "Draft clue" },
+                },
+                dialogues = {
+                    { npcName = "Merchant", zoneId = 381, clue = "Buy", response = "Sold", executed = true },
+                },
+            },
+        })
+
+        local q1 = repo:GetQuestById(1)
+        AssertEqual(q1.schemaVersion, 6, "v4 quest upgraded to v6")
+        AssertEqual(q1.sequentialDiscoveries, false, "v4 quest sequentialDiscoveries defaults to false")
+        AssertEqual(q1.discoveries[1].discovered, true, "v4 discovery discovered=true preserved")
+        AssertEqual(q1.discoveries[1].required, false, "v4 discovery required initialized to false")
+        AssertEqual(q1.dialogues[1].required, false, "v4 dialogue required initialized to false")
+        AssertEqual(q1.dialogues[1].executed, false, "v4 dialogue executed initialized to false")
+
+        local q2 = repo:GetQuestById(2)
+        AssertEqual(q2.schemaVersion, 6, "v5 quest upgraded to v6")
+        AssertEqual(q2.sequentialDiscoveries, true, "v5 sequentialDiscoveries=true preserved")
+        AssertEqual(q2.discoveries[1].required, true, "v5 discovery[1].required=true preserved")
+        AssertEqual(q2.discoveries[2].required, false, "v5 discovery[2].required initialized to false")
+        AssertEqual(q2.dialogues[1].required, true, "v5 dialogue[1].required=true preserved")
+        AssertEqual(q2.dialogues[1].executed, true, "v5 dialogue[1].executed=true preserved on migration")
+        AssertEqual(q2.dialogues[2].required, false, "v5 dialogue[2].required initialized to false")
+        AssertEqual(q2.dialogues[2].executed, false, "v5 dialogue[2].executed initialized to false")
+
+        local migratedDraft = repo:GetDraft()
+        AssertEqual(migratedDraft.sequentialDiscoveries, false, "EnsureDraft initializes sequentialDiscoveries=false")
+        AssertEqual(migratedDraft.discoveries[1].required, false, "EnsureDraft initializes discovery.required=false")
+        AssertEqual(migratedDraft.dialogues[1].required, false, "EnsureDraft initializes dialogue.required=false")
+        AssertEqual(migratedDraft.dialogues[1].executed, false, "EnsureDraft resets dialogue.executed=false on draft")
+
+        -- 2. ResetQuest preserves sequentialDiscoveries and required while resetting dialogue.executed and discovery.discovered
+        q2.discoveries[1].discovered = true
+        q2.dialogues[1].executed = true
+        q2.dialogues[2].executed = true
+        AssertEqual(repo:ResetQuest(q2.id), true, "ResetQuest succeeds on v6 quest")
+        AssertEqual(q2.sequentialDiscoveries, true, "ResetQuest preserves sequentialDiscoveries=true")
+        AssertEqual(q2.discoveries[1].required, true, "ResetQuest preserves discovery.required=true")
+        AssertEqual(q2.discoveries[1].discovered, false, "ResetQuest resets discovery.discovered=false")
+        AssertEqual(q2.dialogues[1].required, true, "ResetQuest preserves dialogue.required=true")
+        AssertEqual(q2.dialogues[1].executed, false, "ResetQuest resets dialogue[1].executed=false")
+        AssertEqual(q2.dialogues[2].executed, false, "ResetQuest resets dialogue[2].executed=false")
+
+        -- 3. DuplicateQuest and LoadQuestIntoDraft + SaveDraft preserve sequentialDiscoveries and required, resetting executed
+        q2.dialogues[1].executed = true
+        local dup = repo:DuplicateQuest(q2.id)
+        AssertTrue(dup ~= nil, "DuplicateQuest succeeds")
+        AssertEqual(dup.sequentialDiscoveries, true, "DuplicateQuest preserves sequentialDiscoveries")
+        AssertEqual(dup.discoveries[1].required, true, "DuplicateQuest preserves discovery[1].required")
+        AssertEqual(dup.discoveries[2].required, false, "DuplicateQuest preserves discovery[2].required=false")
+        AssertEqual(dup.dialogues[1].required, true, "DuplicateQuest preserves dialogue[1].required")
+        AssertEqual(dup.dialogues[1].executed, false, "DuplicateQuest resets dialogue[1].executed=false")
+
+        local loadedDraft = store:LoadQuestIntoDraft(repo, q2.id)
+        AssertEqual(loadedDraft.sequentialDiscoveries, true, "LoadQuestIntoDraft loads sequentialDiscoveries=true")
+        AssertEqual(loadedDraft.discoveries[1].required, true, "LoadQuestIntoDraft loads discovery[1].required=true")
+        AssertEqual(loadedDraft.dialogues[1].required, true, "LoadQuestIntoDraft loads dialogue[1].required=true")
+        AssertEqual(loadedDraft.dialogues[1].executed, false, "LoadQuestIntoDraft resets dialogue.executed=false")
+
+        repo:UpdateDraftDiscoveryPoint(2, { required = true })
+        repo:UpdateDraftDialogue(2, { required = true })
+        repo:UpdateDraftFields({ sequentialDiscoveries = false })
+        local updatedQ2 = repo:SaveDraft()
+        AssertEqual(updatedQ2.sequentialDiscoveries, false, "SaveDraft updates sequentialDiscoveries=false")
+        AssertEqual(updatedQ2.discoveries[2].required, true, "SaveDraft persists updated discovery[2].required=true")
+        AssertEqual(updatedQ2.dialogues[2].required, true, "SaveDraft persists updated dialogue[2].required=true")
+        AssertEqual(updatedQ2.dialogues[1].executed, false, "SaveDraft resets dialogue[1].executed=false")
+
+        -- 4. Pure free-form quest (0 targets, 0 discoveries, 0 dialogues) passes HasPlayableObjectives, activates, exports, imports, and sends
+        repo:ResetDraft()
+        local freeform = repo:SaveDraft("Pure Free-Form Contract", "Roleplay agreement at the tavern.", nil, "Well played!", nil, "@Partner")
+        AssertTrue(freeform ~= nil, "Pure free-form quest saved")
+        AssertEqual(#freeform.targets, 0, "0 targets")
+        AssertEqual(#freeform.discoveries, 0, "0 discoveries")
+        AssertEqual(#freeform.dialogues, 0, "0 dialogues")
+        AssertEqual(freeform.sequentialDiscoveries, false, "Default sequentialDiscoveries=false")
+        AssertEqual(repo:HasPlayableObjectives(freeform), true, "Pure free-form quest passes HasPlayableObjectives")
+        AssertEqual(repo:SetActiveQuest(freeform.id), true, "Pure free-form quest activates")
+        AssertEqual(repo:GetActiveQuest().id, freeform.id, "Pure free-form quest is active")
+
+        local ffCode, ffErr = repo:ExportQuestToCode(freeform.id)
+        AssertTrue(type(ffCode) == "string" and ffCode:sub(1, 5) == "RPQ3:", "Pure free-form quest exports to RPQ3: " .. tostring(ffErr))
+        local ffImported, ffImpErr = repo:ImportQuestFromCode(ffCode, "@QuestMaster")
+        AssertTrue(ffImported ~= nil, "Pure free-form quest imports cleanly: " .. tostring(ffImpErr))
+        AssertEqual(ffImported.title, "Pure Free-Form Contract", "Imported free-form title preserved")
+        AssertEqual(#ffImported.targets, 0, "Imported free-form has 0 targets")
+        AssertEqual(#ffImported.discoveries, 0, "Imported free-form has 0 discoveries")
+        AssertEqual(#ffImported.dialogues, 0, "Imported free-form has 0 dialogues")
+
+        ffImported.completed = true
+        local ffCompCode, ffCompErr = repo:ExportCompletionCode(ffImported.id)
+        AssertTrue(type(ffCompCode) == "string" and ffCompCode:sub(1, 6) == "RPQC1:", "Free-form quest generates RPQC1 completion code: " .. tostring(ffCompErr))
+        local ffValOk = repo:ValidateResultCode(freeform.id, ffCompCode)
+        AssertEqual(ffValOk, true, "Master validates RPQC1 completion code for pure free-form quest")
+
+        local ffSendOk, ffSendErr = RPQuest.MailTransport:SendQuestToRecipients(freeform, "@Partner", "Meet at eight.")
+        AssertEqual(ffSendOk, true, "SendQuestToRecipients accepts pure free-form quest: " .. tostring(ffSendErr))
+        RPQuest.MailTransport:Initialize()
     end)
 
 end

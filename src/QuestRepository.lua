@@ -8,6 +8,7 @@
 -- Ref: docs/adr/0012-savedvars-account-wide-y-migracion-por-personaje.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -248,6 +249,7 @@ local function ResolveRecommendHideMapAreas(data)
 end
 
 function QuestRepository:BuildQuestRecord(id, title, description, targets, data, role)
+    data = type(data) == "table" and data or {}
     local schemaVersion = (Addon.QuestMigration and Addon.QuestMigration:GetCurrentSchemaVersion()) or 1
     local roles = Addon.Constants.QUEST_ROLE
     local statuses = Addon.Constants.QUEST_STATUS
@@ -287,6 +289,14 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         end
     end
 
+    local discoveries = type(data.discoveries) == "table" and data.discoveries or {}
+    for _, d in ipairs(discoveries) do
+        if type(d) == "table" then
+            d.required = (d.required == true)
+            d.discovered = (d.discovered == true)
+        end
+    end
+
     return {
         id = id,
         schemaVersion = schemaVersion,
@@ -295,8 +305,9 @@ function QuestRepository:BuildQuestRecord(id, title, description, targets, data,
         clue = type(data.clue) == "string" and data.clue or "",
         completionMessage = data.completionMessage or "",
         targets = targets,
-        discoveries = data.discoveries or {},
+        discoveries = discoveries,
         dialogues = Addon.QuestDraftStore:CloneDialoguesList(data.dialogues, data.clue),
+        sequentialDiscoveries = (data.sequentialDiscoveries == true),
         completed = false,
         role = resolvedRole,
         lifecycle = lifecycle,
@@ -992,12 +1003,7 @@ function QuestRepository:GetActiveQuest()
 end
 
 function QuestRepository:HasPlayableObjectives(quest)
-    if type(quest) ~= "table" then
-        return false
-    end
-    local hasTargets = type(quest.targets) == "table" and #quest.targets > 0
-    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
-    return hasTargets or hasDiscoveries
+    return type(quest) == "table"
 end
 
 function QuestRepository:HasMissingDiscoveryMessage(quest)
@@ -1058,6 +1064,9 @@ function QuestRepository:ResetQuest(questId, options)
     for _, d in ipairs(q.discoveries or {}) do
         d.discovered = false
     end
+    for _, dlg in ipairs(q.dialogues or {}) do
+        dlg.executed = false
+    end
     q.completed = false
     q.failed = false
     q.wasDetected = false
@@ -1107,6 +1116,7 @@ local function ClonePreparedQuestRecord(repo, source)
         completionMessage = source.completionMessage,
         discoveries = Addon.QuestDraftStore:CloneDiscoveriesList(source.discoveries, false),
         dialogues = Addon.QuestDraftStore:CloneDialoguesList(source.dialogues, source.clue),
+        sequentialDiscoveries = (source.sequentialDiscoveries == true),
         mapId = source.mapId,
         zoneId = source.zoneId,
         mapName = source.mapName,

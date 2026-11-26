@@ -7,6 +7,7 @@
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 -- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 -- Ref: docs/adr/0017-objetivos-duelo-jugadores-y-event-duel-finished.md
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -137,6 +138,9 @@ local function EncodeDiscoveriesList(discoveries)
                 tostring(math.max(100, math.floor(tonumber(d.radius) or defaultRad))),
                 EscapeField(d.message or ""),
             }
+            if d.required == true then
+                table.insert(parts, "1")
+            end
             table.insert(items, table.concat(parts, "~"))
         end
     end
@@ -158,6 +162,9 @@ local function EncodeDialoguesList(dialogues)
                 EscapeField(d.response or ""),
                 EscapeField(d.clue or ""),
             }
+            if d.required == true then
+                table.insert(parts, "1")
+            end
             table.insert(items, table.concat(parts, "~"))
         end
     end
@@ -211,15 +218,14 @@ local function BuildQuestPayloadString(quest)
     local discoveries = quest.discoveries or {}
     local encodedTargets = EncodeTargetsList(targets)
     local encodedDiscoveries = EncodeDiscoveriesList(discoveries)
-
-    if encodedTargets == "" and encodedDiscoveries == "" then
-        return nil, "Invalid quest table"
-    end
+    local hasTargets = (#targets > 0 and encodedTargets ~= "")
 
     local firstTarget = targets[1]
-    local areaCX = (firstTarget and firstTarget.areaCenterX) or quest.areaCenterX or 0.5
-    local areaCY = (firstTarget and firstTarget.areaCenterY) or quest.areaCenterY or 0.5
-    local areaRad = (firstTarget and firstTarget.areaRadius) or quest.areaRadius or Addon.Constants.AREA_RADIUS.MEDIUM
+    local areaCX = hasTargets and ((firstTarget and firstTarget.areaCenterX) or quest.areaCenterX) or 0.5
+    local areaCY = hasTargets and ((firstTarget and firstTarget.areaCenterY) or quest.areaCenterY) or 0.5
+    local areaRad = hasTargets and ((firstTarget and firstTarget.areaRadius) or quest.areaRadius) or Addon.Constants.AREA_RADIUS.MEDIUM
+    local targetX = hasTargets and (quest.targetX or (firstTarget and firstTarget.targetX)) or 0.5
+    local targetY = hasTargets and (quest.targetY or (firstTarget and firstTarget.targetY)) or 0.5
     local recommendHide = (quest.recommendHideMapAreas ~= nil) and (quest.recommendHideMapAreas == true) or (quest.hideMapArea == true)
     local stealthMode = ResolveStealthMode(quest)
     local modes = Addon.Constants.STEALTH_MODE
@@ -230,8 +236,8 @@ local function BuildQuestPayloadString(quest)
         tostring(math.floor(tonumber(quest.mapId) or 0)),
         tostring(math.floor(tonumber(quest.zoneId) or 0)),
         EscapeField(quest.mapName or ""),
-        string.format("%.4f", tonumber(quest.targetX) or 0.5),
-        string.format("%.4f", tonumber(quest.targetY) or 0.5),
+        string.format("%.4f", tonumber(targetX) or 0.5),
+        string.format("%.4f", tonumber(targetY) or 0.5),
         string.format("%.4f", tonumber(areaCX) or 0.5),
         string.format("%.4f", tonumber(areaCY) or 0.5),
         string.format("%.4f", tonumber(areaRad) or Addon.Constants.AREA_RADIUS.MEDIUM),
@@ -246,8 +252,12 @@ local function BuildQuestPayloadString(quest)
     }
 
     local questIcon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(quest.icon) or nil
-    if questIcon then
-        table.insert(fields, EscapeField(questIcon))
+    local seqDisc = (quest.sequentialDiscoveries == true)
+    if questIcon or seqDisc then
+        table.insert(fields, questIcon and EscapeField(questIcon) or "")
+    end
+    if seqDisc then
+        table.insert(fields, "1")
     end
 
     return table.concat(fields, "|")
@@ -345,15 +355,34 @@ local function PackDialogueCluesBlock(buf, dialogues, forceWrite)
     end
 end
 
+local function CollectValidDialogues(dialogues)
+    local valid = {}
+    if type(dialogues) ~= "table" then return valid end
+    local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
+    for _, dlg in ipairs(dialogues) do
+        if #valid >= maxNpcs then break end
+        if type(dlg) == "table" and type(dlg.npcName) == "string" and dlg.npcName ~= "" then
+            table.insert(valid, dlg)
+        end
+    end
+    return valid
+end
+
+local function HasAnyFlagTrue(items, field)
+    if type(items) ~= "table" then return false end
+    for i = 1, #items do
+        if type(items[i]) == "table" and items[i][field] == true then
+            return true
+        end
+    end
+    return false
+end
+
 local function PackQuestBinary(quest)
     if type(quest) ~= "table" then return nil, "ERR_INVALID_CODE" end
     local targets = quest.targets or {}
     local discoveries = quest.discoveries or {}
-    if #targets == 0 and #discoveries == 0 then
-        return nil, "ERR_MISSING_TARGET"
-    end
-
-    local dialogues = quest.dialogues or {}
+    local dialogues = CollectValidDialogues(quest.dialogues)
     local compMsg = type(quest.completionMessage) == "string" and quest.completionMessage or ""
     local clue = type(quest.clue) == "string" and quest.clue or ""
     local lang = (type(quest.language) == "string" and quest.language ~= "" and quest.language:lower()) or GetClientLanguage()
@@ -400,7 +429,11 @@ local function PackQuestBinary(quest)
     local isStealthRequired = (stealthMode == modes.REQUIRED)
     local questIcon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(quest.icon) or nil
     local hasIcon = (questIcon ~= nil)
-    local hasTrailing = hasCharNames or isStealthRequired or hasIcon
+    local seqDisc = (quest.sequentialDiscoveries == true)
+    local hasDiscReq = HasAnyFlagTrue(discoveries, "required")
+    local hasDlgReq = HasAnyFlagTrue(dialogues, "required")
+    local hasExtFlags = isStealthRequired or hasIcon or seqDisc or hasDiscReq or hasDlgReq
+    local hasTrailing = hasCharNames or hasExtFlags
 
     if #dialogues > 0 then
         PackDialogueCluesBlock(buf, dialogues, hasTrailing)
@@ -411,11 +444,21 @@ local function PackQuestBinary(quest)
         BinaryCodec:WriteStr(buf, recipientChar)
     end
 
-    if isStealthRequired or hasIcon then
-        local extFlags = (isStealthRequired and 1 or 0) + (hasIcon and 2 or 0)
+    if hasExtFlags then
+        local extFlags = (isStealthRequired and 1 or 0)
+            + (hasIcon and 2 or 0)
+            + (seqDisc and 4 or 0)
+            + (hasDiscReq and 8 or 0)
+            + (hasDlgReq and 16 or 0)
         BinaryCodec:WriteByte(buf, extFlags)
         if hasIcon then
             BinaryCodec:WriteStr(buf, questIcon)
+        end
+        if hasDiscReq then
+            BinaryCodec:WriteBitset(buf, discoveries, #discoveries, "required")
+        end
+        if hasDlgReq then
+            BinaryCodec:WriteBitset(buf, dialogues, #dialogues, "required")
         end
     end
 
@@ -544,6 +587,7 @@ local function UnpackDiscoveriesBlock(data, pos, len, defaultRad)
             y = dy,
             radius = math.max(100, math.floor(drad or defaultRad)),
             message = dmsg,
+            required = false,
             discovered = false,
         })
     end
@@ -566,6 +610,8 @@ local function UnpackDialoguesBlock(data, pos, len)
                 npcName = npc,
                 zoneId = math.floor(dz),
                 response = resp,
+                required = false,
+                executed = false,
             })
         end
     end
@@ -671,6 +717,7 @@ local function UnpackQuestBinary(data)
     local modes = Addon.Constants.STEALTH_MODE
     local stealthMode = requireUndetected and modes.OPTIONAL or modes.DISABLED
     local icon = nil
+    local sequentialDiscoveries = false
     if pos <= len then
         local extFlags, nextPos = BinaryCodec:ReadByte(data, pos, len)
         pos = nextPos or (pos + 1)
@@ -678,10 +725,34 @@ local function UnpackQuestBinary(data)
             if (extFlags % 2) == 1 then
                 stealthMode = modes.REQUIRED
             end
-            if math.floor(extFlags / 2) % 2 == 1 and pos <= len then
-                local rawIcon = BinaryCodec:ReadStr(data, pos, len)
-                if rawIcon then
-                    icon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(rawIcon) or (rawIcon ~= "" and rawIcon or nil)
+            if floor(extFlags / 2) % 2 == 1 then
+                local rawIcon
+                rawIcon, pos = BinaryCodec:ReadStr(data, pos, len)
+                if not rawIcon then
+                    return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+                end
+                icon = Addon.QuestDraftStore and Addon.QuestDraftStore:NormalizeQuestIcon(rawIcon) or (rawIcon ~= "" and rawIcon or nil)
+            end
+            if floor(extFlags / 4) % 2 == 1 then
+                sequentialDiscoveries = true
+            end
+            if floor(extFlags / 8) % 2 == 1 and #decodedDiscoveries > 0 then
+                local discReqBits
+                discReqBits, pos = BinaryCodec:ReadBitset(data, pos, len, #decodedDiscoveries)
+                if not discReqBits then
+                    return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+                end
+                for i = 1, #decodedDiscoveries do
+                    decodedDiscoveries[i].required = (discReqBits[i] == true)
+                end
+            end
+            if floor(extFlags / 16) % 2 == 1 and #decodedDialogues > 0 then
+                local dlgReqBits = BinaryCodec:ReadBitset(data, pos, len, #decodedDialogues)
+                if not dlgReqBits then
+                    return nil, "ERR_IMPORT_INCOMPLETE_DATA"
+                end
+                for i = 1, #decodedDialogues do
+                    decodedDialogues[i].required = (dlgReqBits[i] == true)
                 end
             end
         end
@@ -689,9 +760,6 @@ local function UnpackQuestBinary(data)
 
     if sourceLanguage ~= "" and sourceLanguage ~= GetClientLanguage() then
         return nil, "ERR_IMPORT_LANGUAGE_MISMATCH"
-    end
-    if #decodedTargets == 0 and #decodedDiscoveries == 0 then
-        return nil, "ERR_IMPORT_INCOMPLETE_DATA"
     end
     local areaCenterX = targetsResult and targetsResult.areaCenterX or nil
     local areaCenterY = targetsResult and targetsResult.areaCenterY or nil
@@ -708,6 +776,7 @@ local function UnpackQuestBinary(data)
         targets = decodedTargets,
         discoveries = decodedDiscoveries,
         dialogues = decodedDialogues,
+        sequentialDiscoveries = sequentialDiscoveries,
         mapId = floor(mapId or 0),
         zoneId = floor(zoneId or 0),
         mapName = mapName,

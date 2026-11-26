@@ -6,6 +6,7 @@
 -- Ref: docs/adr/0007-dialogos-inyectados-en-npcs-nativos.md
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -73,6 +74,7 @@ function QuestDraftStore:CreateDefaultDraft()
         targets = {},
         discoveries = {},
         dialogues = {},
+        sequentialDiscoveries = false,
         discoveryRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM,
         discoveryMessage = "",
         lastCapturedDisplay = nil,
@@ -97,6 +99,18 @@ function QuestDraftStore:EnsureDraft(draft)
     draft.targets = draft.targets or {}
     draft.discoveries = draft.discoveries or {}
     draft.dialogues = draft.dialogues or {}
+    draft.sequentialDiscoveries = (draft.sequentialDiscoveries == true)
+    for _, d in ipairs(draft.discoveries) do
+        if type(d) == "table" then
+            d.required = (d.required == true)
+        end
+    end
+    for _, dlg in ipairs(draft.dialogues) do
+        if type(dlg) == "table" then
+            dlg.required = (dlg.required == true)
+            dlg.executed = false
+        end
+    end
     if draft.recommendHideMapAreas == nil then
         if draft.hideMapArea ~= nil then
             draft.recommendHideMapAreas = (draft.hideMapArea == true)
@@ -111,7 +125,7 @@ function QuestDraftStore:EnsureDraft(draft)
     return draft
 end
 
-function QuestDraftStore:CloneDialoguesList(dialogues, fallbackClue)
+function QuestDraftStore:CloneDialoguesList(dialogues, fallbackClue, preserveExecuted)
     local out = {}
     if type(dialogues) ~= "table" then return out end
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
@@ -126,6 +140,8 @@ function QuestDraftStore:CloneDialoguesList(dialogues, fallbackClue)
                     zoneId = math.floor(tonumber(d.zoneId) or 0),
                     clue = type(d.clue) == "string" and d.clue or fallback,
                     response = type(d.response) == "string" and d.response or "",
+                    required = (d.required == true),
+                    executed = preserveExecuted and (d.executed == true) or false,
                 })
             end
         end
@@ -149,6 +165,7 @@ function QuestDraftStore:CloneDiscoveriesList(discoveries, preserveDiscovered)
                 y = tonumber(d.y),
                 radius = math.max(100, math.floor(tonumber(d.radius) or defaultRad)),
                 message = type(d.message) == "string" and d.message or "",
+                required = (d.required == true),
                 discovered = preserveDiscovered and (d.discovered == true) or false,
             })
         end
@@ -299,6 +316,7 @@ function QuestDraftStore:AddDraftDiscoveryPoint(repo, data)
         y = tonumber(data.y),
         radius = math.max(100, math.floor(tonumber(data.radius) or defaultRad)),
         message = type(data.message) == "string" and data.message or "",
+        required = (data.required == true),
         discovered = false,
     }
     table.insert(draft.discoveries, point)
@@ -342,6 +360,9 @@ function QuestDraftStore:UpdateDraftDiscoveryPoint(repo, index, fields, silent)
             point.radius = math.floor(r)
         end
     end
+    if fields.required ~= nil then
+        point.required = (fields.required == true)
+    end
     if not silent then
         repo:NotifyListeners("DRAFT_UPDATED", draft)
     end
@@ -363,7 +384,7 @@ function QuestDraftStore:RemoveDraftDiscoveryPoint(repo, index)
     return draft
 end
 
-function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, clueText)
+function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, clueText, required)
     local draft = self:GetDraft(repo)
     draft.dialogues = draft.dialogues or {}
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
@@ -389,17 +410,19 @@ function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, c
         zoneId = z,
         clue = type(clueText) == "string" and clueText or "",
         response = type(responseText) == "string" and responseText or "",
+        required = (required == true),
+        executed = false,
     })
     repo:NotifyListeners("DRAFT_UPDATED", draft)
     return draft, #draft.dialogues
 end
 
-function QuestDraftStore:AddDraftDialogueFromLastNpc(repo, responseText, clueText)
+function QuestDraftStore:AddDraftDialogueFromLastNpc(repo, responseText, clueText, required)
     local lastNpc = repo:GetLastInteractedNpc()
     if not lastNpc or not lastNpc.name or lastNpc.name == "" then
         return nil, Addon.Locale:Get("ALERT_DIALOGUE_NO_LAST_NPC")
     end
-    return self:AddDraftDialogue(repo, lastNpc.name, lastNpc.zoneId, responseText, clueText)
+    return self:AddDraftDialogue(repo, lastNpc.name, lastNpc.zoneId, responseText, clueText, required)
 end
 
 function QuestDraftStore:UpdateDraftDialogue(repo, index, fields, silent)
@@ -413,6 +436,9 @@ function QuestDraftStore:UpdateDraftDialogue(repo, index, fields, silent)
     end
     if fields.response ~= nil then
         entry.response = tostring(fields.response)
+    end
+    if fields.required ~= nil then
+        entry.required = (fields.required == true)
     end
     if not silent then
         repo:NotifyListeners("DRAFT_UPDATED", draft)
@@ -461,6 +487,7 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         targets = self:CloneTargetsList(quest.targets),
         discoveries = self:CloneDiscoveriesList(quest.discoveries, false),
         dialogues = self:CloneDialoguesList(quest.dialogues, quest.clue),
+        sequentialDiscoveries = (quest.sequentialDiscoveries == true),
         discoveryRadius = Addon.Constants.DISCOVERY_RADIUS.MEDIUM,
         discoveryMessage = "",
         lastCapturedDisplay = nil,
@@ -503,6 +530,9 @@ function QuestDraftStore:UpdateDraftFields(repo, fields, silent)
         draft.recommendHideMapAreas = (fields.hideMapArea == true)
     end
     if fields.discoveryMessage ~= nil then draft.discoveryMessage = tostring(fields.discoveryMessage) end
+    if fields.sequentialDiscoveries ~= nil then
+        draft.sequentialDiscoveries = (fields.sequentialDiscoveries == true)
+    end
     if fields.discoveryRadius ~= nil then
         local newDiscRadius = tonumber(fields.discoveryRadius)
         if newDiscRadius and newDiscRadius >= 100 then
@@ -762,6 +792,7 @@ local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
     existing.targets = store:CloneTargetsList(draft.targets, prevProgress)
     existing.discoveries = store:CloneDiscoveriesList(draft.discoveries, false)
     existing.dialogues = store:CloneDialoguesList(draft.dialogues, fields.clue)
+    existing.sequentialDiscoveries = (draft.sequentialDiscoveries == true)
     existing.mapId = draft.mapId or 0
     existing.zoneId = draft.zoneId or 0
     existing.mapName = draft.mapName or ""
@@ -860,6 +891,7 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
         completionMessage = draft.completionMessage,
         discoveries = store:CloneDiscoveriesList(draft.discoveries, false),
         dialogues = store:CloneDialoguesList(draft.dialogues),
+        sequentialDiscoveries = (draft.sequentialDiscoveries == true),
         mapId = draft.mapId,
         zoneId = draft.zoneId,
         mapName = draft.mapName,
