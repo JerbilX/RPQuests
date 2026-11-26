@@ -36,6 +36,7 @@ AI Disclosure & Credits:
 - AI Assistance Disclosure: AI coding assistants were used during development for
   code drafting, refactoring, localization, documentation, and unit tests. All
   design, in-game testing, and final reviews were directed and verified by the author.
+- Support: https://ko-fi.com/Q7W02BAKN7
 
 Full documentation: see README.md (English) or https://github.com/JerbilX/RPQuests
 License: GNU General Public License v3.0 (see LICENSE)
