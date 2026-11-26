@@ -1270,7 +1270,7 @@ return function(T)
         AssertEqual(qEs.title, "Nueva Misión", "ES default title is 'Nueva Misión' without numeric suffix")
     end)
 
-    RunTest("Issue #270: JournalTab allows OnSaveDraftClicked without objectives and alerts on Test/Send", function()
+    RunTest("Issue #270 & #344: JournalTab allows OnSaveDraftClicked, Test Quest, and Send Quest for pure free-form drafts", function()
         mockState.language = "en"
         RPQuest.Locale:Initialize("en")
         local repo = RPQuest.QuestRepository
@@ -1299,13 +1299,12 @@ return function(T)
         tab:SelectQuest(q.id)
         mockState.alerts = {}
         tab:OnToggleActiveClicked()
-        AssertEqual(repo:GetActiveQuest(), nil, "Test Quest does not activate objective-less draft")
-        AssertTrue(#(mockState.alerts or {}) > 0, "Test Quest shows localized alert for missing objective")
+        AssertEqual(repo:GetActiveQuest() and repo:GetActiveQuest().id, q.id, "Test Quest activates pure free-form draft")
 
         mockState.alerts = {}
         local sent = tab:SendSelectedPreparedQuest()
-        AssertEqual(sent, false, "SendSelectedPreparedQuest rejects objective-less draft")
-        AssertTrue(#(mockState.alerts or {}) > 0, "Send shows localized alert for missing objective")
+        AssertEqual(sent, true, "SendSelectedPreparedQuest dispatches pure free-form draft")
+        RPQuest.MailTransport:Initialize()
     end)
 
     RunTest("Issue #275: JournalTab always keeps one visible accordion section with quests expanded", function()

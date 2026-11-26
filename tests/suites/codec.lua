@@ -469,7 +469,7 @@ return function(T)
 
         local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
         AssertTrue(decoded ~= nil, "v3 quest decoded cleanly: " .. tostring(decErr))
-        AssertEqual(decoded.schemaVersion, 5, "Decoded quest has schemaVersion = 5")
+        AssertEqual(decoded.schemaVersion, 6, "Decoded quest has schemaVersion = 6")
         AssertEqual(decoded.recommendHideMapAreas, false, "recommendHideMapAreas = false preserved")
         AssertEqual(decoded.showSearchAreas, nil, "Local preference showSearchAreas never serialized")
         AssertEqual(decoded.showLocationAreas, nil, "Local preference showLocationAreas never serialized")
@@ -514,7 +514,7 @@ return function(T)
         local legacyCode = RPQuest.ShareCodec:EncodeQuest(legacyV2Payload)
         local legacyDecoded = RPQuest.ShareCodec:DecodeQuest(legacyCode)
         AssertTrue(legacyDecoded ~= nil, "Older RPQ3-style payload decodes cleanly")
-        AssertEqual(legacyDecoded.schemaVersion, 5, "Decoded older RPQ3 payload upgraded to schema v5")
+        AssertEqual(legacyDecoded.schemaVersion, 6, "Decoded older RPQ3 payload upgraded to schema v6")
         AssertEqual(legacyDecoded.recommendHideMapAreas, true, "Older hideMapArea bit mapped to recommendHideMapAreas")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterX - 0.42) < 0.001, "Target inherits header areaCenterX")
         AssertTrue(math.abs(legacyDecoded.targets[1].areaCenterY - 0.58) < 0.001, "Target inherits header areaCenterY")
@@ -676,6 +676,151 @@ return function(T)
         local noIconDecoded = RPQuest.ShareCodec:DecodeQuest(noIconCode)
         AssertTrue(noIconDecoded ~= nil, "No-icon quest decodes cleanly")
         AssertEqual(noIconDecoded.icon, nil, "No-icon quest decodes icon as nil")
+    end)
+
+    RunTest("Issue #344: ShareCodec & BinaryCodec round-trip sequentialDiscoveries, required flags, free-form/dialogue-only quests, and backward compatibility", function()
+        -- 1. BinaryCodec:WriteBitset / ReadBitset round-trip for 0, 4, and 10 booleans
+        local buf = {}
+        local tenFlags = { true, false, true, false, false, false, false, true, false, true }
+        RPQuest.BinaryCodec:WriteBitset(buf, tenFlags, 10)
+        local rawBits = table.concat(buf)
+        AssertEqual(#rawBits, 2, "10 booleans pack into exactly 2 bytes")
+        local unpackedBits, nextPos = RPQuest.BinaryCodec:ReadBitset(rawBits, 1, #rawBits, 10)
+        AssertEqual(nextPos, 3, "ReadBitset advances position past 2 bytes")
+        for i = 1, 10 do
+            AssertEqual(unpackedBits[i], tenFlags[i], "Bitset index " .. tostring(i) .. " matches")
+        end
+
+        -- 2. Full 10-discovery + 4-dialogue quest with mixed required flags, sequentialDiscoveries, icon, and executed=true (must decode executed=false)
+        local discoveries = {}
+        for i = 1, 10 do
+            discoveries[i] = {
+                zoneId = 381,
+                worldX = 1000 * i,
+                worldY = 50,
+                worldZ = 2000 * i,
+                mapId = 32,
+                x = 0.1 + i * 0.05,
+                y = 0.2 + i * 0.05,
+                radius = 1500,
+                message = "Step " .. tostring(i),
+                required = (i == 1 or i == 5 or i == 10),
+                discovered = true,
+            }
+        end
+        local dialogues = {
+            { npcName = "Informant One", zoneId = 381, clue = "Clue 1", response = "Resp 1", required = true, executed = true },
+            { npcName = "Informant Two", zoneId = 381, clue = "Clue 2", response = "Resp 2", required = false, executed = true },
+            { npcName = "Informant Three", zoneId = 381, clue = "", response = "Resp 3", required = true, executed = false },
+            { npcName = "Informant Four", zoneId = 381, clue = "Clue 4", response = "Resp 4", required = false, executed = false },
+        }
+        local v6Quest = {
+            title = "Guided Investigation",
+            description = "Follow the trail in order and speak to the key witnesses.",
+            icon = "search",
+            stealthMode = RPQuest.Constants.STEALTH_MODE.REQUIRED,
+            sequentialDiscoveries = true,
+            senderCharacterName = "MasterChar",
+            recipientCharacterName = "AgentChar",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targets = {},
+            discoveries = discoveries,
+            dialogues = dialogues,
+        }
+
+        local code, encErr = RPQuest.ShareCodec:EncodeQuest(v6Quest)
+        AssertTrue(code ~= nil and code:sub(1, 5) == "RPQ3:", "v6 quest encodes to RPQ3: " .. tostring(encErr))
+        local decoded, decErr = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertTrue(decoded ~= nil, "v6 quest decodes cleanly: " .. tostring(decErr))
+        AssertEqual(decoded.schemaVersion, 6, "Decoded quest is schema v6")
+        AssertEqual(decoded.icon, "search", "Icon preserved alongside extended flags")
+        AssertEqual(decoded.stealthMode, RPQuest.Constants.STEALTH_MODE.REQUIRED, "Stealth required preserved")
+        AssertEqual(decoded.sequentialDiscoveries, true, "sequentialDiscoveries=true preserved")
+        AssertEqual(#decoded.discoveries, 10, "10 discoveries decoded")
+        for i = 1, 10 do
+            local expectedReq = (i == 1 or i == 5 or i == 10)
+            AssertEqual(decoded.discoveries[i].required, expectedReq, "Discovery " .. tostring(i) .. " required matches")
+            AssertEqual(decoded.discoveries[i].discovered, false, "Discovery " .. tostring(i) .. " resets discovered=false on decode")
+        end
+        AssertEqual(#decoded.dialogues, 4, "4 dialogues decoded")
+        AssertEqual(decoded.dialogues[1].required, true, "Dialogue 1 required=true preserved")
+        AssertEqual(decoded.dialogues[2].required, false, "Dialogue 2 required=false preserved")
+        AssertEqual(decoded.dialogues[3].required, true, "Dialogue 3 required=true preserved")
+        AssertEqual(decoded.dialogues[4].required, false, "Dialogue 4 required=false preserved")
+        for i = 1, 4 do
+            AssertEqual(decoded.dialogues[i].executed, false, "Dialogue " .. tostring(i) .. " resets executed=false on decode")
+        end
+
+        local sigOrig = RPQuest.ShareCodec:ComputeQuestSignature(v6Quest)
+        local sigDec = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
+        AssertEqual(sigOrig, sigDec, "Canonical signature matches between original (with executed=true) and decoded quest")
+
+        -- 3. Canonical signature differentiates sequentialDiscoveries and required flags while preserving historical signatures when false
+        local baseDefault = {
+            title = "Compat Sig",
+            description = "Desc",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targets = { { name = "Bandit", requiredCount = 1, areaCenterX = 0.5, areaCenterY = 0.5, areaRadius = 0.039 } },
+            discoveries = { { zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "M" } },
+            dialogues = { { npcName = "Guard", zoneId = 381, clue = "C", response = "R" } },
+        }
+        local sigHistorical = RPQuest.ShareCodec:ComputeQuestSignature(baseDefault)
+        baseDefault.sequentialDiscoveries = false
+        baseDefault.discoveries[1].required = false
+        baseDefault.dialogues[1].required = false
+        baseDefault.dialogues[1].executed = true
+        AssertEqual(RPQuest.ShareCodec:ComputeQuestSignature(baseDefault), sigHistorical, "Explicit false flags and executed=true preserve exact historical signature")
+
+        baseDefault.sequentialDiscoveries = true
+        local sigSeq = RPQuest.ShareCodec:ComputeQuestSignature(baseDefault)
+        AssertTrue(sigSeq ~= sigHistorical, "sequentialDiscoveries=true alters canonical signature")
+
+        baseDefault.sequentialDiscoveries = false
+        baseDefault.discoveries[1].required = true
+        local sigDiscReq = RPQuest.ShareCodec:ComputeQuestSignature(baseDefault)
+        AssertTrue(sigDiscReq ~= sigHistorical and sigDiscReq ~= sigSeq, "discovery.required=true alters canonical signature")
+
+        baseDefault.discoveries[1].required = false
+        baseDefault.dialogues[1].required = true
+        local sigDlgReq = RPQuest.ShareCodec:ComputeQuestSignature(baseDefault)
+        AssertTrue(sigDlgReq ~= sigHistorical and sigDlgReq ~= sigDiscReq, "dialogue.required=true alters canonical signature")
+
+        -- 4. Dialogue-only and pure free-form RPQ3 round-trip + RPQC1 validation
+        local dlgOnly = {
+            title = "Talk Only",
+            description = "Interrogate the witness",
+            dialogues = {
+                { npcName = "Witness", zoneId = 381, clue = "Where were you?", response = "At the inn.", required = true, executed = true },
+            },
+        }
+        local dlgCode, dlgErr = RPQuest.ShareCodec:EncodeQuest(dlgOnly)
+        AssertTrue(dlgCode ~= nil, "Dialogue-only quest encodes cleanly: " .. tostring(dlgErr))
+        local dlgDec, dlgDecErr = RPQuest.ShareCodec:DecodeQuest(dlgCode)
+        AssertTrue(dlgDec ~= nil, "Dialogue-only quest decodes cleanly: " .. tostring(dlgDecErr))
+        AssertEqual(#dlgDec.targets, 0, "Dialogue-only has 0 targets")
+        AssertEqual(#dlgDec.discoveries, 0, "Dialogue-only has 0 discoveries")
+        AssertEqual(#dlgDec.dialogues, 1, "Dialogue-only preserves 1 dialogue")
+        AssertEqual(dlgDec.dialogues[1].required, true, "Dialogue-only preserves required=true")
+        AssertEqual(dlgDec.dialogues[1].executed, false, "Dialogue-only resets executed=false")
+        AssertEqual(RPQuest.ShareCodec:ComputeQuestSignature(dlgOnly), RPQuest.ShareCodec:ComputeQuestSignature(dlgDec), "Dialogue-only signature matches")
+
+        local freeForm = {
+            title = "Tavern Oath",
+            description = "Keep the tavern peace for the evening.",
+        }
+        local ffCode, ffErr = RPQuest.ShareCodec:EncodeQuest(freeForm)
+        AssertTrue(ffCode ~= nil, "Free-form quest encodes cleanly: " .. tostring(ffErr))
+        local ffDec, ffDecErr = RPQuest.ShareCodec:DecodeQuest(ffCode)
+        AssertTrue(ffDec ~= nil, "Free-form quest decodes cleanly: " .. tostring(ffDecErr))
+        AssertEqual(ffDec.title, "Tavern Oath", "Free-form title preserved")
+        AssertEqual(ffDec.sequentialDiscoveries, false, "Free-form sequentialDiscoveries=false")
+        ffDec.completed = true
+        local ffComp = RPQuest.ShareCodec:EncodeCompletion(ffDec, "Roleplayer", 1700009999)
+        AssertTrue(RPQuest.ShareCodec:ValidateCompletionForQuest(freeForm, ffComp), "Free-form RPQC1 completion validates against original")
     end)
 
 end

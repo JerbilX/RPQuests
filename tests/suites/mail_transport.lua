@@ -559,6 +559,7 @@ return function(T)
                 y = 0.61 + i * 0.05,
                 radius = RPQuest.Constants.DISCOVERY_RADIUS.LARGE,
                 message = RandomAscii(limits.SHORT_MESSAGE),
+                required = true,
             }
         end
 
@@ -569,6 +570,7 @@ return function(T)
                 zoneId = 381,
                 clue = RandomAscii(limits.DIALOGUE_OPTION),
                 response = RandomAscii(limits.DIALOGUE_RESPONSE),
+                required = true,
             }
         end
 
@@ -583,6 +585,8 @@ return function(T)
             mapName = RandomAscii(32),
             targetX = 0.4321,
             targetY = 0.6789,
+            icon = "black_hand",
+            sequentialDiscoveries = true,
             stealthMode = RPQuest.Constants.STEALTH_MODE.REQUIRED,
             recommendHideMapAreas = true,
             targets = targets,

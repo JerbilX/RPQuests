@@ -5,6 +5,7 @@
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 -- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -17,7 +18,7 @@ Addon.Constants = {
         AUTHOR = "JerbilX",
     },
     QUEST_SCHEMA = {
-        CURRENT_VERSION = 5,
+        CURRENT_VERSION = 6,
     },
     STEALTH_MODE = {
         DISABLED = "disabled",
