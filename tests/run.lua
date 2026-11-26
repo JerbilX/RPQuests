@@ -27,6 +27,9 @@ local mockState = {
     chatMessages = {},
     soundsPlayed = {},
     isGrouped = false,
+    shiftKeyDown = false,
+    scrollInViewFn = nil,
+    scrollCalls = {},
 }
 
 _G.RPQuestTestState = mockState
@@ -406,6 +409,25 @@ end
 ZO_WorldMap_PanToNormalizedPosition = function(x, y)
     mockState.lastPannedX = x
     mockState.lastPannedY = y
+end
+
+IsShiftKeyDown = function()
+    return mockState.shiftKeyDown == true
+end
+
+ZO_Scroll_IsControlFullyInView = function(scrollContainer, control)
+    if mockState.scrollInViewFn then
+        return mockState.scrollInViewFn(scrollContainer, control)
+    end
+    return true
+end
+
+ZO_Scroll_ScrollControlIntoCentralView = function(scrollContainer, control, scrollInstantly)
+    table.insert(mockState.scrollCalls, {
+        scrollContainer = scrollContainer,
+        control = control,
+        scrollInstantly = scrollInstantly,
+    })
 end
 
 CENTER_SCREEN_ANNOUNCE = {

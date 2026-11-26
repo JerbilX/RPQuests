@@ -2553,4 +2553,113 @@ return function(T)
         AssertTrue(draftRow._statusLabel:IsHidden(), "Preparing row hides status label")
     end)
 
+    RunTest("JournalWidgets.RegisterTabChain navigates forward, backward, wraps around, skips hidden/disabled, and scrolls", function()
+        local parent = WINDOW_MANAGER:CreateControl("TestTabChainParent", GuiRoot, CT_CONTROL)
+        local scroll = WINDOW_MANAGER:CreateControl("TestTabChainScroll", parent, CT_SCROLL)
+        local bg1, e1 = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE1", parent, 100, 24, 50, false)
+        local _, e2Hidden = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE2Hidden", parent, 100, 24, 50, false)
+        local bg3, e3Disabled = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE3Disabled", parent, 100, 24, 50, false)
+        local bg4, e4 = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE4", parent, 100, 24, 50, true)
+
+        e2Hidden:SetHidden(true)
+        RPQuest.JournalWidgets.SetEditBoxEnabled(bg3, e3Disabled, false)
+
+        mockState.shiftKeyDown = false
+        mockState.scrollCalls = {}
+        mockState.scrollInViewFn = function() return false end
+
+        RPQuest.JournalWidgets.RegisterTabChain({ e1, e2Hidden, e3Disabled, e4 }, scroll)
+
+        -- Forward Tab from e1 skips hidden e2 and disabled e3, focuses e4 and scrolls its backdrop into view
+        e1._focused = true
+        e1:FireHandler("OnTab")
+        AssertTrue(e4._focused == true, "Tab from e1 focuses e4 (skipping hidden and disabled)")
+        AssertEqual(#mockState.scrollCalls, 1, "Scroll helper invoked when target is not in view")
+        AssertEqual(mockState.scrollCalls[1].scrollContainer, scroll, "Scroll helper receives scrollContainer")
+        AssertEqual(mockState.scrollCalls[1].control, bg4, "Scroll helper receives target backdrop")
+        AssertEqual(mockState.scrollCalls[1].scrollInstantly, false, "Scroll helper passes scrollInstantly = false")
+
+        -- Forward Tab from e4 wraps around to e1; when already in view, scroll helper is not invoked
+        mockState.scrollInViewFn = function() return true end
+        e1._focused = false
+        e4:FireHandler("OnTab")
+        AssertTrue(e1._focused == true, "Tab from last wraps around to first")
+        AssertEqual(#mockState.scrollCalls, 1, "Scroll helper not invoked when target is already in view")
+
+        -- Backward Shift+Tab from e1 wraps around to e4 (skipping disabled e3 and hidden e2)
+        mockState.shiftKeyDown = true
+        e4._focused = false
+        e1:FireHandler("OnTab")
+        AssertTrue(e4._focused == true, "Shift+Tab from first wraps around to last focusable")
+
+        -- Backward Shift+Tab from e4 skips e3 and e2 and lands on e1
+        e1._focused = false
+        e4:FireHandler("OnTab")
+        AssertTrue(e1._focused == true, "Shift+Tab from e4 focuses e1")
+
+        mockState.shiftKeyDown = false
+        mockState.scrollInViewFn = nil
+        mockState.scrollCalls = {}
+        bg1:SetHidden(true)
+    end)
+
+    RunTest("EditorPane and MailSendPane wire Tab / Shift+Tab navigation across visible enabled fields", function()
+        RPQuest.QuestRepository:Initialize({})
+        RPQuest.JournalTab:OpenTab()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        local tab = RPQuest.JournalTab
+        mockState.shiftKeyDown = false
+        mockState.scrollCalls = {}
+        mockState.scrollInViewFn = function() return false end
+
+        -- In default create editor, header section is open (titleEdit, descEdit, recipientEdit, recipientCharEdit)
+        -- while other accordion sections are collapsed (IsHidden() == true via parent body)
+        tab.titleEdit._focused = true
+        tab.descEdit._focused = false
+        tab.titleEdit:FireHandler("OnTab")
+        AssertTrue(tab.descEdit._focused == true, "Editor Tab moves from titleEdit to descEdit")
+        AssertEqual(#mockState.scrollCalls, 1, "Editor Tab scrolls editorScroll when target is out of view")
+        AssertEqual(mockState.scrollCalls[1].scrollContainer, tab.editorScroll, "Editor Tab scrolls tab.editorScroll")
+
+        tab.recipientEdit._focused = false
+        tab.descEdit:FireHandler("OnTab")
+        AssertTrue(tab.recipientEdit._focused == true, "Editor Tab moves from descEdit to recipientEdit")
+
+        tab.recipientCharEdit._focused = false
+        tab.recipientEdit:FireHandler("OnTab")
+        AssertTrue(tab.recipientCharEdit._focused == true, "Editor Tab moves from recipientEdit to recipientCharEdit")
+
+        -- Tab from recipientCharEdit skips collapsed sections and wraps back to titleEdit
+        tab.titleEdit._focused = false
+        tab.recipientCharEdit:FireHandler("OnTab")
+        AssertTrue(tab.titleEdit._focused == true, "Editor Tab skips collapsed accordion fields and wraps to titleEdit")
+
+        -- Shift+Tab from titleEdit wraps back to recipientCharEdit
+        mockState.shiftKeyDown = true
+        tab.recipientCharEdit._focused = false
+        tab.titleEdit:FireHandler("OnTab")
+        AssertTrue(tab.recipientCharEdit._focused == true, "Editor Shift+Tab wraps from titleEdit to recipientCharEdit")
+
+        -- MailSendPane Tab / Shift+Tab between mailRecEdit and mailRoleEdit without scroll
+        tab.editorPane:SetHidden(true)
+        tab.mailSendPane:SetHidden(false)
+        mockState.shiftKeyDown = false
+        mockState.scrollCalls = {}
+        tab.mailRecEdit._focused = true
+        tab.mailRoleEdit._focused = false
+        tab.mailRecEdit:FireHandler("OnTab")
+        AssertTrue(tab.mailRoleEdit._focused == true, "MailSend Tab moves from mailRecEdit to mailRoleEdit")
+        AssertEqual(#mockState.scrollCalls, 0, "MailSend Tab does not invoke scroll helper")
+
+        mockState.shiftKeyDown = true
+        tab.mailRecEdit._focused = false
+        tab.mailRoleEdit:FireHandler("OnTab")
+        AssertTrue(tab.mailRecEdit._focused == true, "MailSend Shift+Tab moves from mailRoleEdit to mailRecEdit")
+
+        mockState.shiftKeyDown = false
+        mockState.scrollInViewFn = nil
+        mockState.scrollCalls = {}
+    end)
+
 end
