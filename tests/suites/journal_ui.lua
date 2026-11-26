@@ -2691,4 +2691,108 @@ return function(T)
         RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", prevSetting)
     end)
 
+    RunTest("JournalDetailPane displays completionMessage only when completed and non-empty (Issue #341)", function()
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+
+        local prevScrollChild = tab.detailScrollChild
+        local scrollH = 0
+        tab.detailScrollChild = {
+            SetDimensions = function(_, _, h) scrollH = h end,
+            GetHeight = function() return scrollH end,
+        }
+
+        -- 1. Received quest: non-completed (pending/offered then available) hides section even if completionMessage is set
+        local code = RPQuest.ShareCodec:EncodeQuest({
+            id = "rx_comp_341",
+            title = "Completion Detail Test",
+            description = "Test desc",
+            completionMessage = "  You have returned safely.\nReport to the guildmaster!  ",
+            targets = { { name = "Bandit", requiredCount = 1, currentCount = 0 } },
+        })
+        local rxQuest = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", { pendingOffer = true })
+        local rxId = rxQuest.id
+        tab:SelectQuest(rxId)
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden when received quest is pending")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden when received quest is pending")
+
+        RPQuest.QuestRepository:AcceptOfferedQuest(rxId)
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden when received quest is available")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden when received quest is available")
+        AssertEqual(tab.detailCompletionText:GetText(), "", "Completion text cleared when hidden")
+        local baselineScrollH = tab.detailScrollChild:GetHeight()
+
+        -- 2. Received quest: failed hides section
+        rxQuest = RPQuest.QuestRepository:GetQuestById(rxId)
+        rxQuest.failed = true
+        rxQuest.resolution = "failed"
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden when quest is failed")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden when quest is failed")
+
+        -- 3. Received quest: completed with non-empty message shows trimmed text, grows height & chains settings anchor
+        rxQuest.failed = false
+        rxQuest.completed = true
+        rxQuest.resolution = "completed"
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), false, "Completion header visible when received quest is completed")
+        AssertEqual(tab.detailCompletionText:IsHidden(), false, "Completion text visible when received quest is completed")
+        AssertEqual(
+            tab.detailCompletionText:GetText(),
+            "You have returned safely.\nReport to the guildmaster!",
+            "Completion text is trimmed before display"
+        )
+        local _, compH = tab.detailCompletionText:GetDimensions()
+        AssertTrue(compH >= 48, "Completion text height expands dynamically for multi-line message")
+        local completedScrollH = tab.detailScrollChild:GetHeight()
+        AssertTrue(completedScrollH > baselineScrollH, "detailScrollChild height increases when completion section is shown")
+        local _, _, mapRelTo = tab.detailMapMarkersHeader:GetAnchor(1)
+        AssertTrue(mapRelTo == tab.detailCompletionText, "Downstream map markers header anchors below completion text")
+        local _, _, settingsRelTo = tab.detailSettingsHeader:GetAnchor(1)
+        AssertTrue(settingsRelTo == tab.mapMarkerSearchRow, "Downstream settings header anchors below map marker row when action buttons are hidden")
+
+        -- 4. Received quest: completed with whitespace-only completionMessage hides section
+        rxQuest.completionMessage = "   \n\t  "
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden for whitespace-only completionMessage")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden for whitespace-only completionMessage")
+
+        -- 5. Sender view (SENT quest): hidden when resolution == "sent", visible when resolution == "completed"
+        local sentQuest = RPQuest.QuestRepository:CreateNewPreparedDraft()
+        tab:SelectQuest(sentQuest.id)
+        sentQuest.title = "Sent Completion Test"
+        sentQuest.completionMessage = "Contract fulfilled by your agent."
+        sentQuest.lifecycle = RPQuest.Constants.QUEST_LIFECYCLE.SENT
+        sentQuest.resolution = "sent"
+        sentQuest.targets = { { name = "Target", requiredCount = 1, currentCount = 0 } }
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden on SENT quest before completion")
+
+        sentQuest.resolution = "completed"
+        sentQuest.lastResult = { senderDisplayName = "@Agent", characterName = "Agent One" }
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), false, "Completion header visible on SENT completed quest")
+        AssertEqual(tab.detailCompletionText:IsHidden(), false, "Completion text visible on SENT completed quest")
+        AssertEqual(tab.detailCompletionText:GetText(), "Contract fulfilled by your agent.", "Sender view displays completionMessage")
+        local _, _, btnRelTo = tab.btnActivate:GetAnchor(1)
+        AssertTrue(btnRelTo == tab.detailCompletionText, "Action buttons anchor below completion text in sender view")
+
+        -- 6. Local test quest (prepared + active + completed) shows completionMessage
+        RPQuest.QuestRepository:SetActiveQuest(sentQuest.id)
+        sentQuest.completed = true
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), false, "Completion header visible on completed local test quest")
+        AssertEqual(tab.detailCompletionText:IsHidden(), false, "Completion text visible on completed local test quest")
+
+        -- 7. Empty detail pane hides completion section
+        RPQuest.QuestRepository:SetActiveQuest(nil)
+        tab.selectedQuestId = nil
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden in empty detail pane")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden in empty detail pane")
+        tab.detailScrollChild = prevScrollChild
+    end)
+
 end
