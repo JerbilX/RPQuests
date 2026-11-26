@@ -169,22 +169,30 @@ function MailInbox:UpsertReceivedEntry(entry)
         if not self._notifiedMailIds[entry.idKey] then
             self._notifiedMailIds[entry.idKey] = true
             local imported, _, _, isDuplicate = self:IngestReceivedMail(entry.idKey)
-            if imported and not isDuplicate and Addon.Announcements then
-                if Addon.QuestRepository:GetSetting("autoAcceptMail") then
-                    Addon.QuestRepository:NotifyListeners("QUEST_ACCEPTED", imported)
-                    if Addon.Announcements.AnnounceQuestAccepted then
-                        Addon.Announcements:AnnounceQuestAccepted(imported)
+            if imported and not isDuplicate then
+                if Addon.Announcements then
+                    if Addon.QuestRepository:GetSetting("autoAcceptMail") then
+                        Addon.QuestRepository:NotifyListeners("QUEST_ACCEPTED", imported)
+                        if Addon.Announcements.AnnounceQuestAccepted then
+                            Addon.Announcements:AnnounceQuestAccepted(imported)
+                        end
+                    else
+                        if Addon.Announcements.AnnounceQuestReceived then
+                            Addon.Announcements:AnnounceQuestReceived(imported)
+                        end
+                        if Addon.Announcements.ShowAlert then
+                            local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
+                                and entry.senderDisplayName
+                                or entry.senderCharacterName or ""
+                            Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_OFFERED", imported.title or entry.title or "", who), false)
+                        end
                     end
-                else
-                    if Addon.Announcements.AnnounceQuestReceived then
-                        Addon.Announcements:AnnounceQuestReceived(imported)
-                    end
-                    if Addon.Announcements.ShowAlert then
-                        local who = (type(entry.senderDisplayName) == "string" and entry.senderDisplayName ~= "")
-                            and entry.senderDisplayName
-                            or entry.senderCharacterName or ""
-                        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_MAIL_QUEST_OFFERED", imported.title or entry.title or "", who), false)
-                    end
+                end
+                if Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoOpenJournalOnReceive")
+                    and not IsUnitInCombat("player")
+                    and Addon.JournalTab then
+                    Addon.JournalTab:OpenTab()
+                    Addon.JournalTab:SelectQuest(imported.id)
                 end
             end
         end

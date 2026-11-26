@@ -277,4 +277,8 @@ RPQuest.Locales["ru"] = {
     QUEST_ICON_BLACK_HAND = "Черная рука",
     QUEST_ICON_SEARCH = "Поиск",
     QUEST_ICON_STEAL = "Кража",
+
+    -- Journal Settings
+    LABEL_JOURNAL_SETTINGS_HEADER = "НАСТРОЙКИ ЖУРНАЛА",
+    CHK_AUTO_OPEN_ON_RECEIVE = "Автоматически открывать журнал RPQuests при получении нового задания",
 }

@@ -227,6 +227,27 @@ local function BuildDetailActionButtons(tab, contentParent, panelName)
     tab.btnRejectOffered:SetHidden(true)
 end
 
+local function BuildDetailSettingsControls(tab, contentParent, panelName)
+    local settingsHeader = CreateDetailLabel(contentParent, panelName .. "_DetailSettingsHeader", 500, 24, "ZoFontWinH3", tab.detailStatus, BOTTOMLEFT, 0, 24)
+    if settingsHeader.SetColor then settingsHeader:SetColor(1, 1, 1, 1) end
+    if settingsHeader.SetModifyTextType then settingsHeader:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE) end
+    settingsHeader:SetText(Addon.Locale:Get("LABEL_JOURNAL_SETTINGS_HEADER"))
+    tab.detailSettingsHeader = settingsHeader
+
+    local chkAutoOpen = Addon.JournalWidgets.CreateCheckButton(
+        panelName .. "_ChkAutoOpenOnReceive",
+        contentParent,
+        Addon.Locale:Get("CHK_AUTO_OPEN_ON_RECEIVE"),
+        function(isChecked)
+            if Addon.QuestRepository then
+                Addon.QuestRepository:SetSetting("autoOpenJournalOnReceive", isChecked)
+            end
+        end
+    )
+    chkAutoOpen:SetAnchor(TOPLEFT, settingsHeader, BOTTOMLEFT, 25, 8)
+    tab.chkAutoOpenJournalOnReceive = chkAutoOpen
+end
+
 local function ResolveShowOnMapTarget(tab, detailMode, editorMode)
     if tab.viewMode == editorMode then
         local draft = Addon.QuestRepository:GetDraft()
@@ -335,6 +356,7 @@ function DetailPane.Build(tab, parent)
     local contentParent = BuildDetailHeaderAndBody(tab, pane, panelName)
     BuildDetailMapControls(tab, contentParent, panelName)
     BuildDetailActionButtons(tab, contentParent, panelName)
+    BuildDetailSettingsControls(tab, contentParent, panelName)
     RegisterAbandonDialogAndKeybinds(tab, pane, parent, panelName)
 end
 
@@ -691,6 +713,40 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
     end
 end
 
+local function UpdateDetailSettingsControls(tab, anchorControl, offsetX, offsetY)
+    if not tab.detailSettingsHeader or not tab.chkAutoOpenJournalOnReceive then
+        return
+    end
+    tab.detailSettingsHeader:ClearAnchors()
+    tab.detailSettingsHeader:SetAnchor(TOPLEFT, anchorControl, BOTTOMLEFT, offsetX, offsetY)
+    tab.detailSettingsHeader:SetHidden(false)
+
+    tab.chkAutoOpenJournalOnReceive:ClearAnchors()
+    tab.chkAutoOpenJournalOnReceive:SetAnchor(TOPLEFT, tab.detailSettingsHeader, BOTTOMLEFT, 25, 8)
+    ZO_CheckButton_SetCheckState(
+        tab.chkAutoOpenJournalOnReceive,
+        Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoOpenJournalOnReceive") == true
+    )
+    tab.chkAutoOpenJournalOnReceive:SetHidden(false)
+end
+
+local function ResolveBottomActionAnchor(tab, fallbackControl, fallbackOffsetX, fallbackOffsetY)
+    local candidates = {
+        tab.btnCopy,
+        tab.btnReset,
+        tab.btnSendDirect,
+        tab.btnActivate,
+        tab.btnAcceptOffered,
+        tab.btnMigrate,
+    }
+    for _, btn in ipairs(candidates) do
+        if btn and btn.IsHidden and not btn:IsHidden() then
+            return btn, 0, 20
+        end
+    end
+    return fallbackControl, fallbackOffsetX, fallbackOffsetY + 12
+end
+
 local function RenderEmptyDetailPane(tab)
     if tab.detailIcon then
         tab.detailIcon:SetHidden(true)
@@ -728,6 +784,7 @@ local function RenderEmptyDetailPane(tab)
     if tab.btnSendDirect then tab.btnSendDirect:SetHidden(true) end
     if tab.btnCopy then tab.btnCopy:SetHidden(true) end
     if tab.btnMigrate then tab.btnMigrate:SetHidden(true) end
+    UpdateDetailSettingsControls(tab, tab.detailStatus, 0, 24)
     if tab.keybindStripDescriptor then
         KEYBIND_STRIP:UpdateKeybindButtonGroup(tab.keybindStripDescriptor)
     end
@@ -846,9 +903,10 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local objHeight = textHeight and (textHeight + 16) or (#objLines * 24)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
     local anchorControl, offsetX, offsetY, extraMapHeight = UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
-    if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 645 + missionHeight + objHeight + math.max(0, statusHeight - 24) + extraMapHeight))
-    end
-
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared, anchorControl, offsetX, offsetY)
+    local settingsAnchor, settingsOffsetX, settingsOffsetY = ResolveBottomActionAnchor(tab, anchorControl, offsetX, offsetY)
+    UpdateDetailSettingsControls(tab, settingsAnchor, settingsOffsetX, settingsOffsetY)
+    if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 715 + missionHeight + objHeight + math.max(0, statusHeight - 24) + extraMapHeight))
+    end
 end

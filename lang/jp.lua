@@ -277,4 +277,8 @@ RPQuest.Locales["jp"] = {
     QUEST_ICON_BLACK_HAND = "黒い手",
     QUEST_ICON_SEARCH = "調査",
     QUEST_ICON_STEAL = "盗み",
+
+    -- Journal Settings
+    LABEL_JOURNAL_SETTINGS_HEADER = "ジャーナル設定",
+    CHK_AUTO_OPEN_ON_RECEIVE = "新しいクエストを受信したときにRPQuestsジャーナルを自動で開く",
 }

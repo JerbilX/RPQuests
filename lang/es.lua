@@ -277,4 +277,8 @@ RPQuest.Locales["es"] = {
     QUEST_ICON_BLACK_HAND = "Mano Negra",
     QUEST_ICON_SEARCH = "Buscar",
     QUEST_ICON_STEAL = "Robar",
+
+    -- Journal Settings
+    LABEL_JOURNAL_SETTINGS_HEADER = "AJUSTES DEL DIARIO",
+    CHK_AUTO_OPEN_ON_RECEIVE = "Abrir automáticamente el diario RPQuests al recibir una misión nueva",
 }

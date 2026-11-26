@@ -2662,4 +2662,33 @@ return function(T)
         mockState.scrollCalls = {}
     end)
 
+    RunTest("JournalDetailPane exposes autoOpenJournalOnReceive toggle in empty and quest detail views (Issue #340)", function()
+        local prevSetting = RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive")
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", false)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+        tab.selectedQuestId = nil
+        tab:Refresh()
+
+        AssertTrue(tab.detailSettingsHeader ~= nil, "detailSettingsHeader exists")
+        AssertTrue(tab.chkAutoOpenJournalOnReceive ~= nil, "chkAutoOpenJournalOnReceive exists")
+        AssertEqual(tab.detailSettingsHeader:IsHidden(), false, "Settings header visible in empty detail pane")
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in empty detail pane")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), false, "Checkbox reflects default false setting")
+
+        -- Toggle checkbox ON and verify SavedVars setting updates
+        ZO_CheckButton_OnClicked(tab.chkAutoOpenJournalOnReceive)
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), true, "Toggling checkbox enables autoOpenJournalOnReceive")
+
+        -- Create a quest and select it; settings remain visible and synced
+        local q = RPQuest.QuestRepository:CreateNewPreparedDraft()
+        tab:SelectQuest(q.id)
+        AssertEqual(tab.detailSettingsHeader:IsHidden(), false, "Settings header visible when quest selected")
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible when quest selected")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), true, "Checkbox remains checked when quest selected")
+
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", prevSetting)
+    end)
+
 end
