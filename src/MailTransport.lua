@@ -307,7 +307,7 @@ function MailTransport:ScheduleSendTimeout(delayMs, gen, doneCount)
     end, delayMs)
 end
 
-function MailTransport:FormatSendFailureMessage(to, reason)
+function MailTransport:FormatSendFailureMessage(to, reason, partialInfo)
     local detail
     if reason == MAIL_SEND_RESULT_CANT_SEND_TO_SELF or reason == "ERR_MAIL_SELF_RECIPIENT" then
         detail = Addon.Locale:Get("ERR_MAIL_SELF_RECIPIENT")
@@ -326,14 +326,24 @@ function MailTransport:FormatSendFailureMessage(to, reason)
         detail = Addon.Locale:Get("ERR_MAIL_API_UNAVAILABLE")
     end
     local target = (type(to) == "string" and to ~= "") and to or "?"
+    if type(partialInfo) == "table" then
+        return Addon.Locale:Get(
+            "ALERT_MAIL_SEND_PARTIAL_FAILED",
+            partialInfo.failedPart,
+            partialInfo.totalParts,
+            target,
+            partialInfo.delivered,
+            detail
+        )
+    end
     return Addon.Locale:Get("ALERT_MAIL_SEND_FAILED", target, detail)
 end
 
-function MailTransport:NotifySendError(to, reason)
+function MailTransport:NotifySendError(to, reason, partialInfo)
     if reason == MAIL_SEND_RESULT_CANCELED then
         return
     end
-    local message = self:FormatSendFailureMessage(to, reason)
+    local message = self:FormatSendFailureMessage(to, reason, partialInfo)
     if Addon.Announcements and Addon.Announcements.ShowAlert then
         Addon.Announcements:ShowAlert(message, true)
     end
@@ -341,6 +351,7 @@ function MailTransport:NotifySendError(to, reason)
         to = to,
         reason = reason,
         message = message,
+        partialInfo = partialInfo,
     })
 end
 
@@ -599,7 +610,7 @@ function MailTransport:OnMailSendSuccess(_playerName)
             questId = self._currentSendItem.failureQuestId,
             to = self._currentSendItem.to,
         })
-    elseif self._currentSendItem and self._currentSendItem.sentQuestId then
+    elseif self._currentSendItem and self._currentSendItem.sentQuestId and (self._sendFailCount or 0) == 0 then
         Addon.QuestRepository:MarkPreparedQuestSent(self._currentSendItem.sentQuestId, self._currentSendItem.to)
     end
     self._currentSendItem = nil
@@ -619,10 +630,18 @@ function MailTransport:OnMailSendFailed(reason)
         return
     end
     local target = (self._currentSendItem and self._currentSendItem.to) or self._currentSendTarget
+    local partialInfo = nil
+    if (self._sendTotal or 0) > 1 and (self._sendSuccessCount or 0) > 0 then
+        partialInfo = {
+            failedPart = (self._sendDone or 0) + 1,
+            totalParts = self._sendTotal,
+            delivered = self._sendSuccessCount,
+        }
+    end
     self._currentSendItem = nil
     self._sendDone = self._sendDone + 1
     self._sendFailCount = self._sendFailCount + 1
-    self:NotifySendError(target, reason)
+    self:NotifySendError(target, reason, partialInfo)
     self:DispatchNextQueuedMail()
 end
 

@@ -263,6 +263,7 @@ RPQuest.Locales["zh"] = {
     ERR_MAIL_MAILBOX_CLOSED = "在邮件发送完成前邮箱已关闭。",
     ERR_MAIL_SEND_TIMEOUT = "等待服务器确认邮件发送超时。",
     ALERT_MAIL_SEND_FAILED = "RPQuest：向 %s 发送邮件失败 (%s)。",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest：第 %d/%d 部分发送至 %s 失败（已送达 %d 封；%s）。请让收件人清理邮箱空间后重新发送。",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest：已完成报告已发送给 %s。",
     ALERT_MAIL_FAILURE_SENT = "RPQuest：失败报告已发送给 %s。",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest：已验证来自 %s 的“%s”交付！",

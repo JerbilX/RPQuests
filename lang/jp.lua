@@ -263,6 +263,7 @@ RPQuest.Locales["jp"] = {
     ERR_MAIL_MAILBOX_CLOSED = "送信完了前にメールボックスが閉じられました。",
     ERR_MAIL_SEND_TIMEOUT = "サーバーからの送信確認がタイムアウトしました。",
     ALERT_MAIL_SEND_FAILED = "RPQuest: %s へのメール送信に失敗しました (%s)。",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest: パート %d/%d（宛先 %s）の送信に失敗しました（%d 件配信済み; %s）。受信者にメールボックスの空きを作ってもらい、再送信してください。",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: %s に完了報告を送信しました。",
     ALERT_MAIL_FAILURE_SENT = "RPQuest: %s に失敗報告を送信しました。",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: %s からの「%s」の完了を確認しました！",

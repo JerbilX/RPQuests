@@ -263,6 +263,7 @@ RPQuest.Locales["fr"] = {
     ERR_MAIL_MAILBOX_CLOSED = "La boîte aux lettres a été fermée avant l'envoi du courrier.",
     ERR_MAIL_SEND_TIMEOUT = "Délai d'attente dépassé lors de la confirmation d'envoi du serveur.",
     ALERT_MAIL_SEND_FAILED = "RPQuest : Échec de l'envoi du courrier à %s (%s).",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest : Échec de la partie %d/%d pour %s (%d livrées ; %s). Demandez au destinataire de libérer de l'espace et renvoyez.",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest : Rapport de fin envoyé à %s.",
     ALERT_MAIL_FAILURE_SENT = "RPQuest : Rapport d'échec envoyé à %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest : Remise vérifiée de %s pour « %s » !",

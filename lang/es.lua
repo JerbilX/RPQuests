@@ -263,6 +263,7 @@ RPQuest.Locales["es"] = {
     ERR_MAIL_MAILBOX_CLOSED = "El buzón se cerró antes de completar el envío.",
     ERR_MAIL_SEND_TIMEOUT = "El envío de correo agotó el tiempo de espera del servidor.",
     ALERT_MAIL_SEND_FAILED = "RPQuest: Error al enviar correo a %s (%s).",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest: Falló la parte %d/%d para %s (%d entregadas; %s). Pide al destinatario que libere espacio en el buzón y reenvía.",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Reporte de finalización enviado a %s.",
     ALERT_MAIL_FAILURE_SENT = "RPQuest: Reporte de fallo enviado a %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: ¡Entrega verificada de %s para '%s'!",
