@@ -704,4 +704,96 @@ return function(T)
         _G.DeleteMail = origDeleteMail
     end)
 
+    RunTest("MailInbox: autoOpenJournalOnReceive opens and selects new quest when enabled and out of combat (Issue #340)", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), false, "autoOpenJournalOnReceive defaults to false")
+
+        local openCalls = 0
+        local selectedIds = {}
+        local origOpenTab = RPQuest.JournalTab.OpenTab
+        local origSelectQuest = RPQuest.JournalTab.SelectQuest
+        RPQuest.JournalTab.OpenTab = function()
+            openCalls = openCalls + 1
+        end
+        RPQuest.JournalTab.SelectQuest = function(_, questId)
+            table.insert(selectedIds, questId)
+        end
+
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+        local origAnnounceReceived = RPQuest.Announcements.AnnounceQuestReceived
+        local origAnnounceAccepted = RPQuest.Announcements.AnnounceQuestAccepted
+        RPQuest.Announcements.ShowAlert = function() end
+        RPQuest.Announcements.AnnounceQuestReceived = function() end
+        RPQuest.Announcements.AnnounceQuestAccepted = function() end
+
+        local code = RPQuest.ShareCodec:EncodeQuest({
+            title = "Auto Open Quest",
+            description = "Test auto open on receive.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Bandit" } },
+        })
+
+        local function MakeEntry(idNum, sender)
+            return {
+                mailId = idNum,
+                idKey = tostring(idNum),
+                senderDisplayName = sender or "@Sender",
+                senderCharacterName = "SenderChar",
+                subject = "[RPQuest] Auto Open Quest",
+                questCode = code,
+                title = "Auto Open Quest",
+                isIncomplete = false,
+            }
+        end
+
+        local origPlayerInCombat = mockState.playerInCombat
+        mockState.playerInCombat = false
+
+        -- 1. Setting disabled (default): does not open journal
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(961, "@SenderOne"))
+        AssertEqual(openCalls, 0, "OpenTab not called when autoOpenJournalOnReceive is false")
+        AssertEqual(#selectedIds, 0, "SelectQuest not called when autoOpenJournalOnReceive is false")
+
+        -- 2. Setting enabled, out of combat, pending mode (autoAcceptMail = false)
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", true)
+        RPQuest.QuestRepository:SetSetting("autoAcceptMail", false)
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(962, "@SenderTwo"))
+        AssertEqual(openCalls, 1, "OpenTab called for new pending quest when setting enabled")
+        AssertEqual(#selectedIds, 1, "SelectQuest called once for new pending quest")
+        local pendingQuest = RPQuest.QuestRepository:GetQuestById(selectedIds[1])
+        AssertTrue(pendingQuest ~= nil and RPQuest.QuestRepository:IsOfferedQuest(pendingQuest), "Selected quest is the newly imported pending quest")
+
+        -- 3. Duplicate quest (same sourceMailId re-ingested) does NOT open journal again
+        RPQuest.MailInbox._notifiedMailIds["962"] = nil
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(962, "@SenderTwo"))
+        AssertEqual(openCalls, 1, "OpenTab not called for duplicate quest")
+        AssertEqual(#selectedIds, 1, "SelectQuest not called for duplicate quest")
+
+        -- 4. Setting enabled, out of combat, autoAcceptMail = true
+        RPQuest.QuestRepository:SetSetting("autoAcceptMail", true)
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(964, "@SenderThree"))
+        AssertEqual(openCalls, 2, "OpenTab called for new auto-accepted quest when setting enabled")
+        AssertEqual(#selectedIds, 2, "SelectQuest called for new auto-accepted quest")
+        local acceptedQuest = RPQuest.QuestRepository:GetQuestById(selectedIds[2])
+        AssertTrue(acceptedQuest ~= nil and not RPQuest.QuestRepository:IsOfferedQuest(acceptedQuest), "Selected quest is the newly auto-accepted quest")
+
+        -- 5. Player in combat: does NOT open journal even when setting enabled
+        mockState.playerInCombat = true
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(965, "@SenderFour"))
+        AssertEqual(openCalls, 2, "OpenTab not called while player is in combat")
+        AssertEqual(#selectedIds, 2, "SelectQuest not called while player is in combat")
+
+        mockState.playerInCombat = origPlayerInCombat
+        RPQuest.JournalTab.OpenTab = origOpenTab
+        RPQuest.JournalTab.SelectQuest = origSelectQuest
+        RPQuest.Announcements.ShowAlert = origShowAlert
+        RPQuest.Announcements.AnnounceQuestReceived = origAnnounceReceived
+        RPQuest.Announcements.AnnounceQuestAccepted = origAnnounceAccepted
+    end)
+
 end

@@ -277,4 +277,8 @@ RPQuest.Locales["en"] = {
     QUEST_ICON_BLACK_HAND = "Black Hand",
     QUEST_ICON_SEARCH = "Search",
     QUEST_ICON_STEAL = "Steal",
+
+    -- Journal Settings
+    LABEL_JOURNAL_SETTINGS_HEADER = "JOURNAL SETTINGS",
+    CHK_AUTO_OPEN_ON_RECEIVE = "Auto-open RPQuests journal when receiving a new quest",
 }

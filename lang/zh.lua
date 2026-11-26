@@ -277,4 +277,8 @@ RPQuest.Locales["zh"] = {
     QUEST_ICON_BLACK_HAND = "黑手",
     QUEST_ICON_SEARCH = "搜寻",
     QUEST_ICON_STEAL = "偷窃",
+
+    -- Journal Settings
+    LABEL_JOURNAL_SETTINGS_HEADER = "日志设置",
+    CHK_AUTO_OPEN_ON_RECEIVE = "收到新任务时自动打开 RPQuests 日志",
 }

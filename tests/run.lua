@@ -187,6 +187,11 @@ IsUnitDead = function(tag)
     return false
 end
 
+IsUnitInCombat = function(tag)
+    if tag == "player" then return mockState.playerInCombat == true end
+    return false
+end
+
 IsUnitAttackable = function(tag)
     if tag == "reticleover" then return mockState.reticleAttackable end
     return true

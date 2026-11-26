@@ -82,6 +82,7 @@ read_globals = {
     "IsUnitAttackable",
     "IsUnitDead",
     "IsUnitGrouped",
+    "IsUnitInCombat",
     "IsUnitPlayer",
     "PlaySound",
     "ReadMail",
