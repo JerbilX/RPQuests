@@ -152,6 +152,7 @@ function MailInbox:IngestReceivedMail(mailId)
     end
 
     self:DisposeEntryMails(entry)
+    self:CleanupOrphanPartGroups(entry)
     return imported, nil, entry, isDuplicate
 end
 
@@ -516,5 +517,53 @@ function MailInbox:DisposeEntryMails(entry)
     self:DisposeMailIds(ids)
     if self._partGroups and entry.idKey then
         self._partGroups[entry.idKey] = nil
+    end
+end
+
+function MailInbox:CleanupOrphanPartGroups(entry)
+    if not self._partGroups or not entry then return end
+    if not (Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoDeleteMail")) then
+        return
+    end
+
+    local senderLower = (type(entry.senderDisplayName) == "string") and entry.senderDisplayName:lower() or ""
+    if senderLower == "" then return end
+
+    local entryTitle = (type(entry.title) == "string" and entry.title ~= "")
+        and entry.title
+        or ((entry.subject or ""):gsub("^%[RPQuest %d+/%d+%]%s*", ""):gsub("^%[RPQuest%]%s*", ""))
+    if entryTitle == "" then return end
+
+    local orphanKeys = {}
+    for groupKey, group in pairs(self._partGroups) do
+        if groupKey ~= entry.idKey then
+            local groupSenderLower = (type(group.senderDisplayName) == "string") and group.senderDisplayName:lower() or ""
+            local groupTitle = (group.subject or ""):gsub("^%[RPQuest %d+/%d+%]%s*", "")
+            if groupSenderLower == senderLower and groupTitle == entryTitle then
+                local receivedCount = self:CountReceivedParts(group)
+                if receivedCount < (group.total or 0) then
+                    table.insert(orphanKeys, groupKey)
+                end
+            end
+        end
+    end
+
+    for _, groupKey in ipairs(orphanKeys) do
+        local group = self._partGroups[groupKey]
+        if group then
+            local ids = {}
+            for _, mid in pairs(group.mailIds or {}) do
+                table.insert(ids, mid)
+            end
+            self:DisposeMailIds(ids)
+            self._partGroups[groupKey] = nil
+            if self._reportedErrorMailIds then
+                self._reportedErrorMailIds[groupKey] = nil
+            end
+            if self._notifiedMailIds then
+                self._notifiedMailIds[groupKey] = nil
+            end
+            self:RemoveEntryById(groupKey)
+        end
     end
 end

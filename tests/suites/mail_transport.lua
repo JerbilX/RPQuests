@@ -528,4 +528,96 @@ return function(T)
         AssertTrue(plan.totalLen <= 4104, "Worst-case totalLen <= 4104, got " .. tostring(plan.totalLen))
     end)
 
+    RunTest("43. Multi-part send partial failure surfaces actionable alert and skips MarkPreparedQuestSent (Issue #334)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+
+        local origScene = _G.SCENE_MANAGER
+        local origSendMail = _G.SendMail
+        local origGetString = _G.GetString
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        local sentMails = {}
+        local alerts = {}
+        local mailErrors = {}
+
+        _G.SCENE_MANAGER = {
+            IsShowing = function(_, sceneName)
+                return sceneName == "mailSend"
+            end,
+        }
+        _G.SendMail = function(to, subject, body)
+            table.insert(sentMails, { to = to, subject = subject, body = body })
+        end
+        _G.GetString = function(prefix, code)
+            if prefix == "SI_SENDMAILRESULT" and code == 14 then
+                return "Recipient inbox is full"
+            end
+            return origGetString and origGetString(prefix, code) or ""
+        end
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+        RPQuest.MailTransport:RegisterListener(function(evType, payload)
+            if evType == "MAIL_SEND_ERROR" then
+                table.insert(mailErrors, payload)
+            end
+        end)
+
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        local q = RPQuest.QuestRepository:SaveDraft("Multi-part Failure Test", "Quest description for multi-part splitting.")
+        local roleMessage = string.rep("Roleplay intro text for multi-part splitting. ", 35)
+        local ok = RPQuest.MailTransport:SendQuestToRecipients(q, "@Recipient", roleMessage)
+        AssertEqual(ok, true, "SendQuestToRecipients starts multi-part send")
+        local totalParts = RPQuest.MailTransport._sendTotal
+        AssertTrue(totalParts > 1, "Quest splits into multiple parts (" .. tostring(totalParts) .. ")")
+
+        for _ = 1, totalParts - 1 do
+            RPQuest.MailTransport:OnMailSendSuccess("@Recipient")
+        end
+        AssertEqual(#sentMails, totalParts, "Final part dispatched before failure")
+
+        RPQuest.MailTransport:OnMailSendFailed(14)
+
+        AssertEqual(#mailErrors, 1, "MAIL_SEND_ERROR emitted on partial failure")
+        AssertTrue(type(mailErrors[1].partialInfo) == "table", "MAIL_SEND_ERROR includes partialInfo")
+        AssertEqual(mailErrors[1].partialInfo.failedPart, totalParts, "failedPart matches failed final part")
+        AssertEqual(mailErrors[1].partialInfo.totalParts, totalParts, "totalParts matches total")
+        AssertEqual(mailErrors[1].partialInfo.delivered, totalParts - 1, "delivered count matches succeeded parts")
+
+        local expectedMsg = RPQuest.Locale:Get(
+            "ALERT_MAIL_SEND_PARTIAL_FAILED",
+            totalParts,
+            totalParts,
+            "@Recipient",
+            totalParts - 1,
+            "Recipient inbox is full"
+        )
+        AssertEqual(mailErrors[1].message, expectedMsg, "MAIL_SEND_ERROR message uses ALERT_MAIL_SEND_PARTIAL_FAILED")
+        local foundPartialAlert = false
+        for _, alert in ipairs(alerts) do
+            if alert.isErr == true and alert.msg == expectedMsg then
+                foundPartialAlert = true
+                break
+            end
+        end
+        AssertTrue(foundPartialAlert, "Master receives actionable partial-failure alert")
+        AssertEqual(q.sentRecipients and q.sentRecipients["@recipient"], nil, "MarkPreparedQuestSent is NOT called on partial failure")
+
+        RPQuest.Announcements.ShowAlert = origShowAlert
+        _G.GetString = origGetString
+        _G.SendMail = origSendMail
+        _G.SCENE_MANAGER = origScene
+    end)
+
 end

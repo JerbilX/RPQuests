@@ -263,6 +263,7 @@ RPQuest.Locales["ru"] = {
     ERR_MAIL_MAILBOX_CLOSED = "Почтовый ящик был закрыт до завершения отправки.",
     ERR_MAIL_SEND_TIMEOUT = "Истекло время ожидания ответа сервера при отправке письма.",
     ALERT_MAIL_SEND_FAILED = "RPQuest: Не удалось отправить письмо %s (%s).",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest: Ошибка при отправке части %d/%d для %s (доставлено: %d; %s). Попросите получателя освободить почту и отправьте снова.",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Отчет о завершении отправлен %s.",
     ALERT_MAIL_FAILURE_SENT = "RPQuest: Отчет о провале отправлен %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: Доставка от %s для «%s» подтверждена!",

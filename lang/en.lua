@@ -263,6 +263,7 @@ RPQuest.Locales["en"] = {
     ERR_MAIL_MAILBOX_CLOSED = "Mailbox was closed before the mail could be sent.",
     ERR_MAIL_SEND_TIMEOUT = "Mail send timed out waiting for server confirmation.",
     ALERT_MAIL_SEND_FAILED = "RPQuest: Failed to send mail to %s (%s).",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest: Failed on part %d/%d to %s (%d delivered; %s). Ask the recipient to free mailbox space and resend.",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Completion report sent to %s.",
     ALERT_MAIL_FAILURE_SENT = "RPQuest: Failure report sent to %s.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: Delivery verified from %s for '%s'!",

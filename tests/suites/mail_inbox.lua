@@ -435,4 +435,137 @@ return function(T)
         RPQuest.Locale:Initialize(mockState.language)
     end)
 
+    RunTest("MailInbox cleans up orphan incomplete parts on successful resend without incomplete alerts (Issue #334)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+
+        local questCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Orphan Cleanup Quest",
+            description = string.rep("Detailed lore for multi-part delivery. ", 25),
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = {
+                { name = "Guard", requiredCount = 2, customMessage = string.rep("Note ", 20) },
+            },
+        })
+        local plan = RPQuest.MailTransport:BuildQuestMailPackets(string.rep("RP intro for multi-part test. ", 35), questCode, "Orphan Cleanup Quest")
+        AssertTrue(plan.fits and plan.partCount >= 2, "Test quest splits into at least 2 parts")
+
+        local otherCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Unrelated Quest",
+            description = "Other lore.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Wolf" } },
+        })
+        local otherPlan = RPQuest.MailTransport:BuildQuestMailPackets(string.rep("Other intro for multi-part test. ", 35), otherCode, "Unrelated Quest")
+        AssertTrue(otherPlan.fits and otherPlan.partCount >= 2, "Unrelated quest splits into at least 2 parts")
+
+        local inbox = {}
+        local deletedIds = {}
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        local alerts = {}
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+
+        _G.GetNextMailId = function(cur)
+            local keys = {}
+            for k in pairs(inbox) do table.insert(keys, k) end
+            table.sort(keys)
+            if cur == nil then return keys[1] end
+            for i, k in ipairs(keys) do
+                if k == cur then return keys[i + 1] end
+            end
+            return nil
+        end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        _G.DeleteMail = function(id)
+            table.insert(deletedIds, id)
+            inbox[id] = nil
+        end
+
+        -- 1. Deliver incomplete parts (1..N-1) from @Master for "Orphan Cleanup Quest" (txId=AAAA)
+        --    plus unrelated incomplete parts from @OtherMaster and for "Unrelated Quest".
+        for i = 1, plan.partCount - 1 do
+            local body = plan.packets[i].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:AAAA:")
+            inbox[100 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = body,
+                secs = 10,
+            }
+        end
+        inbox[201] = {
+            sender = "@OtherMaster",
+            charName = "OtherChar",
+            subject = plan.packets[1].subject,
+            body = plan.packets[1].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:BBBB:"),
+            secs = 10,
+        }
+        inbox[202] = {
+            sender = "@Master",
+            charName = "MasterChar",
+            subject = otherPlan.packets[1].subject,
+            body = otherPlan.packets[1].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:CCCC:"),
+            secs = 10,
+        }
+
+        RPQuest.MailTransport:ScanInbox(false)
+
+        AssertEqual(#alerts, 0, "No alerts triggered for incomplete in-flight parts")
+        AssertEqual(#deletedIds, 0, "No mails deleted while parts are incomplete")
+        AssertTrue(RPQuest.MailInbox._partGroups["part:@master:AAAA:" .. plan.partCount] ~= nil, "Orphan group tracked")
+
+        -- 2. Deliver complete resend (txId=DDDD) from @Master for "Orphan Cleanup Quest"
+        for i = 1, plan.partCount do
+            local body = plan.packets[i].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:DDDD:")
+            inbox[300 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = body,
+                secs = 1,
+            }
+        end
+
+        RPQuest.MailTransport:ScanInbox(false)
+
+        local received = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        AssertEqual(#received, 1, "Complete resend imported")
+        AssertEqual(received[1].title, "Orphan Cleanup Quest", "Imported quest title matches")
+
+        for i = 1, plan.partCount - 1 do
+            AssertEqual(inbox[100 + i], nil, "Orphan incomplete part " .. i .. " deleted from inbox")
+        end
+        for i = 1, plan.partCount do
+            AssertEqual(inbox[300 + i], nil, "Resent complete part " .. i .. " deleted from inbox")
+        end
+        AssertEqual(RPQuest.MailInbox._partGroups["part:@master:AAAA:" .. plan.partCount], nil, "Orphan group removed from _partGroups")
+        AssertTrue(inbox[201] ~= nil, "Incomplete part from different sender preserved")
+        AssertTrue(inbox[202] ~= nil, "Incomplete part for different quest title preserved")
+
+        RPQuest.Announcements.ShowAlert = origShowAlert
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+    end)
+
 end

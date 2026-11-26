@@ -263,6 +263,7 @@ RPQuest.Locales["de"] = {
     ERR_MAIL_MAILBOX_CLOSED = "Der Posteingang wurde geschlossen, bevor die Post gesendet werden konnte.",
     ERR_MAIL_SEND_TIMEOUT = "Zeitüberschreitung beim Warten auf Serverbestätigung für den Postversand.",
     ALERT_MAIL_SEND_FAILED = "RPQuest: Postversand an %s fehlgeschlagen (%s).",
+    ALERT_MAIL_SEND_PARTIAL_FAILED = "RPQuest: Teil %d/%d an %s fehlgeschlagen (%d zugestellt; %s). Bitte den Empfänger, Postfachplatz freizugeben, und sende erneut.",
     ALERT_MAIL_COMPLETION_SENT = "RPQuest: Abschlussbericht an %s gesendet.",
     ALERT_MAIL_FAILURE_SENT = "RPQuest: Fehlerbericht an %s gesendet.",
     ALERT_MAIL_DELIVERY_VALIDATED = "RPQuest: Übergabe von %s für '%s' verifiziert!",
