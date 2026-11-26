@@ -384,6 +384,23 @@ function QuestDraftStore:RemoveDraftDiscoveryPoint(repo, index)
     return draft
 end
 
+function QuestDraftStore:MoveDraftDiscoveryPoint(repo, index, delta, silent)
+    local draft = self:GetDraft(repo)
+    local discoveries = draft.discoveries
+    if type(discoveries) ~= "table" or type(index) ~= "number" or type(delta) ~= "number" then
+        return nil, nil
+    end
+    local targetIndex = index + delta
+    if index < 1 or index > #discoveries or targetIndex < 1 or targetIndex > #discoveries or targetIndex == index then
+        return nil, nil
+    end
+    discoveries[index], discoveries[targetIndex] = discoveries[targetIndex], discoveries[index]
+    if not silent then
+        repo:NotifyListeners("DRAFT_UPDATED", draft)
+    end
+    return draft, targetIndex
+end
+
 function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, clueText, required)
     local draft = self:GetDraft(repo)
     draft.dialogues = draft.dialogues or {}
@@ -814,7 +831,7 @@ local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
         existing.wasDetected = false
     end
     existing.failed = false
-    existing.completed = repo:AreAllObjectivesCompleted(existing.targets, existing.discoveries)
+    existing.completed = repo:AreAllObjectivesCompleted(existing)
 
     if repo._shareCodeCache then
         repo._shareCodeCache[existing.id] = nil

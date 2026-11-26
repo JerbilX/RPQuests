@@ -1913,4 +1913,110 @@ return function(T)
         mockState.reticleReaction = UNIT_REACTION_NEUTRAL
     end)
 
+    RunTest("Issue #345: DiscoveryTracker sequential gating and WorldMapArea locked discovery pin hiding", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.DiscoveryTracker:Initialize()
+        RPQuest.WorldMapArea:Initialize()
+
+        local origGetMapId = _G.GetCurrentMapId
+        local origGetMapType = _G.GetMapType
+        local origGetNormWorld = _G.GetNormalizedWorldPosition
+
+        mockState.mapId = 45
+        mockState.mapType = MAPTYPE_ZONE
+        mockState.zoneId = 104
+        _G.GetCurrentMapId = function() return mockState.mapId end
+        _G.GetMapType = function() return mockState.mapType end
+        _G.GetNormalizedWorldPosition = function(_zoneId, wx, _wy, wz)
+            return wx / 100000, wz / 100000
+        end
+
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:UpdateDraftFields({
+            mapId = 45,
+            zoneId = 104,
+            sequentialDiscoveries = true,
+        })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104, worldX = 10000, worldY = 0, worldZ = 10000,
+            mapId = 45, x = 0.10, y = 0.10, radius = 1000, message = "First clue",
+        })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104, worldX = 50000, worldY = 0, worldZ = 50000,
+            mapId = 45, x = 0.50, y = 0.50, radius = 1000, message = "Second clue",
+        })
+        RPQuest.QuestRepository:AddDraftDiscoveryPoint({
+            zoneId = 104, worldX = 80000, worldY = 0, worldZ = 80000,
+            mapId = 45, x = 0.80, y = 0.80, radius = 1000, message = "Third clue",
+        })
+
+        -- 1. Creator mode (Editor draft) shows all 3 pins even when sequentialDiscoveries = true
+        RPQuest.WorldMapArea:RefreshPins()
+        local draftPins = {}
+        for _, p in ipairs(mockPinManager._createdPins) do
+            if p.pinTypeId == RPQuest.WorldMapArea.discoveryPinTypeId then
+                table.insert(draftPins, p)
+            end
+        end
+        AssertEqual(#draftPins, 3, "Editor draft creator mode renders all 3 sequential discovery pins")
+
+        local prepared = RPQuest.QuestRepository:SaveDraft("Sequential Hunt", "Follow the trail.")
+        AssertEqual(prepared.sequentialDiscoveries, true, "Prepared quest persists sequentialDiscoveries=true")
+
+        -- Prepared preview (outside Test Quest) also shows all 3 pins
+        RPQuest.WorldMapArea:ShowQuestOnMap(prepared)
+        AssertEqual(#mockPinManager._createdPins, 3, "Prepared creator preview renders all 3 sequential discovery pins")
+        RPQuest.WorldMapArea.previewQuestId = nil
+
+        -- 2. Received quest (Player mode) with showDiscoveryAreas=true only shows unlocked point #1
+        local code = RPQuest.ShareCodec:EncodeQuest(prepared)
+        local received = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master")
+        AssertEqual(received.sequentialDiscoveries, true, "Imported quest preserves sequentialDiscoveries=true")
+        RPQuest.QuestRepository:SetActiveQuest(received.id)
+        RPQuest.QuestRepository:SetQuestMapVisibility(received.id, "showDiscoveryAreas", true)
+
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Player mode hides locked sequential points #2 and #3")
+        AssertEqual(mockPinManager._createdPins[1].pinTag.discoveryIndex, 1, "Only discovery #1 is visible initially")
+
+        -- 3. DiscoveryTracker prevents out-of-order triggering at point #2 and #3
+        AssertEqual(RPQuest.DiscoveryTracker:EvaluatePlayerPosition(104, 50000, 0, 50000), false, "Point #2 blocked while #1 undiscovered")
+        AssertEqual(received.discoveries[2].discovered, false, "Point #2 remains undiscovered")
+        AssertEqual(RPQuest.DiscoveryTracker:EvaluatePlayerPosition(104, 80000, 0, 80000), false, "Point #3 blocked while #1 undiscovered")
+        AssertEqual(received.discoveries[3].discovered, false, "Point #3 remains undiscovered")
+
+        -- Trigger point #1 while world map is open -> map refreshes to show only point #2
+        local origIsShowing = SCENE_MANAGER.IsShowing
+        SCENE_MANAGER.IsShowing = function(_, name)
+            return name == "worldMap"
+        end
+        AssertEqual(RPQuest.DiscoveryTracker:EvaluatePlayerPosition(104, 10000, 0, 10000), true, "Point #1 triggers in order")
+        SCENE_MANAGER.IsShowing = origIsShowing
+        AssertEqual(received.discoveries[1].discovered, true, "Point #1 marked discovered")
+        AssertEqual(#mockPinManager._createdPins, 1, "Map refreshes on DISCOVERY_TRIGGERED to show next unlocked point")
+        AssertEqual(mockPinManager._createdPins[1].pinTag.discoveryIndex, 2, "Only discovery #2 is now visible on map")
+
+        -- Point #3 is still blocked until #2 is discovered
+        AssertEqual(RPQuest.DiscoveryTracker:EvaluatePlayerPosition(104, 80000, 0, 80000), false, "Point #3 blocked while #2 undiscovered")
+        AssertEqual(RPQuest.DiscoveryTracker:EvaluatePlayerPosition(104, 50000, 0, 50000), true, "Point #2 triggers once #1 is discovered")
+        AssertEqual(received.discoveries[2].discovered, true, "Point #2 marked discovered")
+        AssertEqual(RPQuest.DiscoveryTracker:EvaluatePlayerPosition(104, 80000, 0, 80000), true, "Point #3 triggers once #2 is discovered")
+        AssertEqual(received.discoveries[3].discovered, true, "Point #3 marked discovered")
+        AssertEqual(received.completed, true, "Sequential discovery quest completes after #3")
+
+        -- 4. Test Quest mode on prepared quest also hides locked sequential discovery points
+        RPQuest.QuestRepository:ResetQuest(prepared.id)
+        RPQuest.QuestRepository:SetQuestMapVisibility(prepared.id, "showDiscoveryAreas", true)
+        RPQuest.WorldMapArea:RefreshPins()
+        AssertEqual(#mockPinManager._createdPins, 1, "Test Quest hides locked sequential points #2 and #3")
+        AssertEqual(mockPinManager._createdPins[1].pinTag.discoveryIndex, 1, "Test Quest shows only unlocked point #1")
+
+        _G.GetCurrentMapId = origGetMapId
+        _G.GetMapType = origGetMapType
+        _G.GetNormalizedWorldPosition = origGetNormWorld
+    end)
+
 end

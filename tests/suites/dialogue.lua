@@ -13,10 +13,11 @@ return function(T)
         RPQuest.QuestRepository:SetActiveQuest(nil)
 
         -- 1. Session capture via EVENT_CHATTER_BEGIN (OnChatterBegin)
+        local origUnitNameTest1 = _G.GetUnitName
         local currentInteractName = "Mercader Sospechoso^m"
         _G.GetUnitName = function(unitTag)
             if unitTag == "interact" then return currentInteractName end
-            return "Jugador"
+            return origUnitNameTest1(unitTag)
         end
         mockState.worldX = 12000
         mockState.worldZ = 22000
@@ -182,6 +183,7 @@ return function(T)
         local okComp, errComp = RPQuest.ShareCodec:DecodeCompletion(code)
         AssertEqual(okComp, nil, "DecodeCompletion rejects RPQ3 code")
         AssertEqual(errComp, "VALIDATE_ERR_NOT_COMPLETION_CODE", "RPQ3 rejected with VALIDATE_ERR_NOT_COMPLETION_CODE")
+        _G.GetUnitName = origUnitNameTest1
     end)
 
     RunTest("30. Per-NPC player dialogue option, ShareCodec RPQ3 roundtrip, and JournalTab selected NPC indicator", function()
@@ -332,6 +334,150 @@ return function(T)
         fakeInteraction:PopulateChatterOptions(0)
         AssertEqual(#injectedOptions, 2, "DialogueInjector injects clue + goodbye immediately without /reloadui")
         AssertEqual(injectedOptions[1].text, "¿Qué sabes del bandido?", "Injected option has expected clue text")
+        _G.GetUnitName = origUnitName
+    end)
+
+    RunTest("Issue #345: MarkDialogueTriggered persistence, idempotency, dialogue-only auto-completion, and mixed/free-form rules", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.DialogueInjector:Initialize()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+
+        local events = {}
+        RPQuest.QuestRepository:RegisterListener(function(evType, payload)
+            table.insert(events, { evType = evType, questId = type(payload) == "table" and payload.id or nil })
+        end)
+
+        -- 1. Dialogue-only quest (0 targets, 0 discoveries, 2 dialogues)
+        RPQuest.QuestRepository:ResetDraft()
+        local _, dIdx1 = RPQuest.QuestRepository:AddDraftDialogue("Scholar Alin", 381, "Check the northern docks.", "Heard anything about the docks?")
+        local _, dIdx2 = RPQuest.QuestRepository:AddDraftDialogue("Captain Vera", 381, "The crate is already aboard.", "Any suspicious cargo?")
+        AssertEqual(dIdx1, 1, "Added first dialogue")
+        AssertEqual(dIdx2, 2, "Added second dialogue")
+        local dlgQuest = RPQuest.QuestRepository:SaveDraft("Harbor Rumors", "Question the locals.")
+        AssertTrue(dlgQuest ~= nil, "Dialogue-only quest saved")
+        AssertEqual(#dlgQuest.targets, 0, "0 targets")
+        AssertEqual(#dlgQuest.discoveries, 0, "0 discoveries")
+        AssertEqual(#dlgQuest.dialogues, 2, "2 dialogues")
+        AssertEqual(RPQuest.QuestRepository:AreAllObjectivesCompleted(dlgQuest), false, "Dialogue-only quest incomplete initially")
+
+        -- Export/Import and activate
+        local code = RPQuest.QuestRepository:ExportQuestToCode(dlgQuest.id)
+        local rxDlgQuest = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master")
+        RPQuest.QuestRepository:SetActiveQuest(rxDlgQuest.id)
+
+        -- Hook mock interaction to test DialogueInjector end-to-end
+        local origUnitName = _G.GetUnitName
+        local currentNpc = "Scholar Alin"
+        _G.GetUnitName = function(tag)
+            if tag == "interact" then return currentNpc end
+            return origUnitName(tag)
+        end
+        mockState.zoneId = 381
+
+        local bodyTextValue = ""
+        local populatedOptions = {}
+        local mockBodyLabel = { SetText = function(_, txt) bodyTextValue = txt end }
+        local MockInteraction = {
+            optionControls = {},
+            control = { GetNamedChild = function(_, name) if name == "TargetAreaBodyText" then return mockBodyLabel end end },
+            PopulateChatterOption = function(selfObj, controlID, optionIndex, optionText, optionType, _optArg, _imp, chosenBefore)
+                selfObj.optionControls[controlID] = {
+                    chosenBefore = chosenBefore,
+                    SetColor = function(c, r, g, b, a) c._color = { r, g, b, a } end,
+                }
+                table.insert(populatedOptions, {
+                    controlID = controlID,
+                    optionIndex = optionIndex,
+                    optionText = optionText,
+                    optionType = optionType,
+                    chosenBefore = chosenBefore,
+                })
+            end,
+            FinalizeChatterOptions = function(_, optionCount) return optionCount end,
+            PopulateChatterOptions = function(selfObj, optionCount)
+                selfObj:PopulateChatterOption(1, function() end, "Goodbye", CHATTER_GOODBYE)
+                selfObj:FinalizeChatterOptions(1)
+                return 1, {}
+            end,
+        }
+        _G.ZO_Interaction = MockInteraction
+        RPQuest.DialogueInjector:InstallHooks()
+
+        -- Execute dialogue #1 via injected callback
+        events = {}
+        mockState.csaMessages = {}
+        populatedOptions = {}
+        MockInteraction:PopulateChatterOptions(0)
+        AssertEqual(populatedOptions[1].chosenBefore, false, "Dialogue #1 starts unseen")
+        populatedOptions[1].optionIndex()
+        AssertEqual(bodyTextValue, "Check the northern docks.", "Dialogue #1 response shown")
+        AssertEqual(rxDlgQuest.dialogues[1].executed, true, "Dialogue #1 persisted executed=true in SavedVariables")
+        AssertEqual(rxDlgQuest.completed, false, "Quest not yet completed after 1/2 dialogues")
+        AssertEqual(#events, 1, "Exactly 1 event fired on first dialogue")
+        AssertEqual(events[1].evType, "QUEST_PROGRESS", "QUEST_PROGRESS fired after 1/2 dialogues")
+        AssertEqual(#mockState.csaMessages, 1, "1 progress CSA banner emitted")
+
+        -- Re-clicking dialogue #1 is idempotent (shows response, zero duplicate events/CSA)
+        events = {}
+        mockState.csaMessages = {}
+        bodyTextValue = ""
+        populatedOptions[1].optionIndex()
+        AssertEqual(bodyTextValue, "Check the northern docks.", "Re-clicking still shows NPC response")
+        AssertEqual(#events, 0, "Re-clicking already executed dialogue fires no duplicate events")
+        AssertEqual(#mockState.csaMessages, 0, "Re-clicking emits no duplicate CSA")
+
+        -- Direct MarkDialogueTriggered is also idempotent
+        local dupOk = RPQuest.QuestRepository:MarkDialogueTriggered(rxDlgQuest.id, 1)
+        AssertEqual(dupOk, false, "MarkDialogueTriggered returns false when already executed")
+
+        -- Simulating /reloadui (clearing volatile seenDialogues) still marks option chosenBefore=true from SavedVars
+        RPQuest.DialogueInjector:ClearSeenDialoguesForQuest(rxDlgQuest.id)
+        populatedOptions = {}
+        MockInteraction:PopulateChatterOptions(0)
+        AssertEqual(populatedOptions[1].chosenBefore, true, "SavedVars executed=true preserves chosenBefore=true after seen cache cleared")
+
+        -- Execute dialogue #2 -> auto-completes dialogue-only quest!
+        currentNpc = "Captain Vera"
+        events = {}
+        mockState.csaMessages = {}
+        populatedOptions = {}
+        MockInteraction:PopulateChatterOptions(0)
+        populatedOptions[1].optionIndex()
+        AssertEqual(bodyTextValue, "The crate is already aboard.", "Dialogue #2 response shown")
+        AssertEqual(rxDlgQuest.dialogues[2].executed, true, "Dialogue #2 persisted executed=true")
+        AssertEqual(rxDlgQuest.completed, true, "Dialogue-only quest auto-completes after all dialogues executed")
+        AssertEqual(#events, 1, "Exactly 1 completion event fired")
+        AssertEqual(events[1].evType, "QUEST_COMPLETED", "QUEST_COMPLETED fired when final dialogue executed")
+        AssertEqual(#mockState.csaMessages, 1, "Completion CSA banner emitted")
+        AssertEqual(mockState.csaMessages[1].sound, SOUNDS.QUEST_COMPLETED, "Played QUEST_COMPLETED sound")
+
+        -- 2. Mixed quest (1 target + 1 non-required dialogue): dialogues do not auto-complete while targets remain,
+        --    and targets complete the quest without blocking on optional dialogues
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:AddDraftDialogue("Informant", 381, "Target is near the gate.", "Where is he?")
+        mockState.reticleExists = true
+        mockState.reticleName = "Smuggler"
+        RPQuest.TargetCapture:CaptureFromReticle()
+        local mixedQuest = RPQuest.QuestRepository:SaveDraft("Mixed Contract", "Talk or fight.")
+        RPQuest.QuestRepository:SetActiveQuest(mixedQuest.id)
+
+        local okMixDlg = RPQuest.QuestRepository:MarkDialogueTriggered(mixedQuest.id, 1)
+        AssertEqual(okMixDlg, true, "Mixed quest dialogue triggered")
+        AssertEqual(mixedQuest.completed, false, "Mixed quest does not auto-complete while target remains")
+
+        -- Reset and test completing target directly without executing optional dialogue
+        RPQuest.QuestRepository:ResetQuest(mixedQuest.id)
+        AssertEqual(mixedQuest.dialogues[1].executed, false, "ResetQuest resets dialogue.executed")
+        local recOk, _, justComp = RPQuest.QuestRepository:RecordTargetEliminated("Smuggler")
+        AssertEqual(recOk, true, "Target elimination recorded")
+        AssertEqual(justComp, true, "Mixed quest completes when target is eliminated even if non-required dialogue unexecuted")
+
+        -- 3. Pure free-form quest (0 targets, 0 discoveries, 0 dialogues) never auto-completes
+        local freeform = RPQuest.QuestRepository:BuildQuestRecord(999, "Free-form", "RP", {}, {}, RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        AssertEqual(RPQuest.QuestRepository:AreAllObjectivesCompleted(freeform), false, "Pure free-form quest does not auto-complete")
+
         _G.GetUnitName = origUnitName
     end)
 

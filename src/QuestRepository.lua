@@ -150,10 +150,49 @@ local function AreAllDiscoveriesCompleted(discoveries)
     return true
 end
 
-function QuestRepository:AreAllObjectivesCompleted(targets, discoveries)
+local function AreAllDialoguesExecuted(dialogues)
+    if type(dialogues) ~= "table" or #dialogues == 0 then
+        return false
+    end
+    for _, dlg in ipairs(dialogues) do
+        if not dlg.executed then
+            return false
+        end
+    end
+    return true
+end
+
+local function IsQuestTable(arg)
+    return type(arg) == "table" and (
+        arg.targets ~= nil
+        or arg.discoveries ~= nil
+        or arg.dialogues ~= nil
+        or arg.id ~= nil
+        or arg.title ~= nil
+    )
+end
+
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+function QuestRepository:AreAllObjectivesCompleted(questOrTargets, discoveriesArg, dialoguesArg)
+    local targets, discoveries, dialogues
+    if discoveriesArg == nil and dialoguesArg == nil and IsQuestTable(questOrTargets) then
+        targets = questOrTargets.targets
+        discoveries = questOrTargets.discoveries
+        dialogues = questOrTargets.dialogues
+    else
+        targets = questOrTargets
+        discoveries = discoveriesArg
+        dialogues = dialoguesArg
+    end
+
     local hasTargets = type(targets) == "table" and #targets > 0
     local hasDiscoveries = type(discoveries) == "table" and #discoveries > 0
+    local hasDialogues = type(dialogues) == "table" and #dialogues > 0
+
     if not hasTargets and not hasDiscoveries then
+        if hasDialogues then
+            return AreAllDialoguesExecuted(dialogues)
+        end
         return false
     end
     if hasTargets and not AreAllTargetsCompleted(targets) then
@@ -172,7 +211,7 @@ function QuestRepository:CanManuallyCompleteQuest(quest)
     if not HasOptionalTargets(quest.targets) then
         return false
     end
-    if self:AreAllObjectivesCompleted(quest.targets, quest.discoveries) then
+    if self:AreAllObjectivesCompleted(quest) then
         return false
     end
     local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
@@ -448,7 +487,7 @@ end
 
 local DRAFT_DELEGATES = {
     "GetDraft", "ResetDraft", "ClearDraftTargets", "AddDraftDiscoveryPoint",
-    "ClearDraftDiscoveries", "UpdateDraftDiscoveryPoint", "RemoveDraftDiscoveryPoint",
+    "ClearDraftDiscoveries", "UpdateDraftDiscoveryPoint", "RemoveDraftDiscoveryPoint", "MoveDraftDiscoveryPoint",
     "AddDraftDialogue", "AddDraftDialogueFromLastNpc", "UpdateDraftDialogue",
     "RemoveDraftDialogue", "ClearDraftDialogues", "LoadQuestIntoDraft",
     "UpdateDraftFields", "SetDraftCapturedTarget", "SaveDraft",
@@ -1303,7 +1342,7 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
 
     matchedTarget.currentCount = math.min(matchedTarget.requiredCount or 1, (matchedTarget.currentCount or 0) + 1)
 
-    if self:AreAllObjectivesCompleted(activeQuest.targets, activeQuest.discoveries) then
+    if self:AreAllObjectivesCompleted(activeQuest) then
         FinalizeCompletedQuest(self, activeQuest)
         self:NotifyListeners("QUEST_COMPLETED", activeQuest)
     else
@@ -1337,7 +1376,7 @@ function QuestRepository:MarkDiscoveryTriggered(questId, discoveryIndex)
 
     point.discovered = true
 
-    if self:AreAllObjectivesCompleted(quest.targets, quest.discoveries) then
+    if self:AreAllObjectivesCompleted(quest) then
         FinalizeCompletedQuest(self, quest)
         self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
         self:NotifyListeners("QUEST_COMPLETED", quest)
@@ -1346,6 +1385,29 @@ function QuestRepository:MarkDiscoveryTriggered(questId, discoveryIndex)
     end
 
     return true, quest, quest.completed, point
+end
+
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+function QuestRepository:MarkDialogueTriggered(questId, dialogueIndex)
+    local quest = self:GetQuestById(questId)
+    if not quest or quest.completed or quest.failed or type(quest.dialogues) ~= "table" then
+        return false, nil, false, nil
+    end
+    local dialogue = quest.dialogues[dialogueIndex]
+    if not dialogue or dialogue.executed then
+        return false, nil, false, nil
+    end
+
+    dialogue.executed = true
+
+    if self:AreAllObjectivesCompleted(quest) then
+        FinalizeCompletedQuest(self, quest)
+        self:NotifyListeners("QUEST_COMPLETED", quest)
+    else
+        self:NotifyListeners("QUEST_PROGRESS", quest)
+    end
+
+    return true, quest, quest.completed, dialogue
 end
 
 function QuestRepository:RecordPlayerDetected(playerContext)
@@ -1403,7 +1465,7 @@ function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)
     local lowerNpc = cleanNpc:lower()
     local z = math.floor(tonumber(zoneId) or 0)
 
-    for _, entry in ipairs(dialogues) do
+    for idx, entry in ipairs(dialogues) do
         if type(entry) == "table" and type(entry.npcName) == "string" and entry.npcName ~= "" then
             local entryName = self:NormalizeName(entry.npcName):lower()
             local entryZone = math.floor(tonumber(entry.zoneId) or 0)
@@ -1415,10 +1477,12 @@ function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)
                 end
                 return {
                     questId = activeQuest.id,
+                    dialogueIndex = idx,
                     clue = resolvedClue,
                     npcName = entry.npcName,
                     zoneId = entryZone,
                     response = type(entry.response) == "string" and entry.response or "",
+                    executed = (entry.executed == true),
                 }
             end
         end

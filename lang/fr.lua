@@ -285,4 +285,15 @@ RPQuest.Locales["fr"] = {
     -- Journal Settings
     LABEL_JOURNAL_SETTINGS_HEADER = "PARAMÈTRES DU JOURNAL",
     CHK_AUTO_OPEN_ON_RECEIVE = "Ouvrir automatiquement le journal RPQuests à la réception d'une nouvelle quête",
+
+    -- Sequential Discoveries, Required Objectives & Dialogue Progress
+    CHK_OBJECTIVE_REQUIRED = "Requis",
+    CHK_DISCOVERY_SEQUENTIAL = "Ordre séquentiel (débloquer les points un par un)",
+    TAG_REQUIRED_SHORT = "[Req]",
+    TOOLTIP_MOVE_DISCOVERY_UP = "Monter le point de découverte sélectionné",
+    TOOLTIP_MOVE_DISCOVERY_DOWN = "Descendre le point de découverte sélectionné",
+    DISCOVERY_SEQUENTIAL_SUFFIX = " (Séquentiel)",
+    DIALOGUE_PROGRESS_FORMAT = "• Dialogues PNJ : %d / %d",
+    DIALOGUE_SPOKEN_FORMAT = "• Parlé avec %s",
+    CSA_DIALOGUE_PROGRESS = "Dialogue (%s) : %d / %d",
 }

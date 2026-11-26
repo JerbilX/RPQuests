@@ -285,4 +285,15 @@ RPQuest.Locales["de"] = {
     -- Journal Settings
     LABEL_JOURNAL_SETTINGS_HEADER = "TAGEBUCH-EINSTELLUNGEN",
     CHK_AUTO_OPEN_ON_RECEIVE = "RPQuests-Tagebuch beim Empfang einer neuen Quest automatisch öffnen",
+
+    -- Sequential Discoveries, Required Objectives & Dialogue Progress
+    CHK_OBJECTIVE_REQUIRED = "Erforderlich",
+    CHK_DISCOVERY_SEQUENTIAL = "Sequenzielle Reihenfolge (Punkte nacheinander freischalten)",
+    TAG_REQUIRED_SHORT = "[Req]",
+    TOOLTIP_MOVE_DISCOVERY_UP = "Ausgewählten Entdeckungspunkt nach oben verschieben",
+    TOOLTIP_MOVE_DISCOVERY_DOWN = "Ausgewählten Entdeckungspunkt nach unten verschieben",
+    DISCOVERY_SEQUENTIAL_SUFFIX = " (Sequenziell)",
+    DIALOGUE_PROGRESS_FORMAT = "• NPC-Dialoge: %d / %d",
+    DIALOGUE_SPOKEN_FORMAT = "• Mit %s gesprochen",
+    CSA_DIALOGUE_PROGRESS = "Dialog (%s): %d / %d",
 }
