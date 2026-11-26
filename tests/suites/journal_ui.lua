@@ -2435,4 +2435,34 @@ return function(T)
         AssertTrue(tab.detailIcon:IsHidden(), "detailIcon is hidden for quest without icon")
     end)
 
+    RunTest("JournalWidgets: multiline textarea scrollbar is inset inside backdrop border", function()
+        local parent = WINDOW_MANAGER:CreateControl("RPQ_TestScrollParent", nil, CT_CONTROL)
+        local bg, edit = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop(
+            "RPQ_TestMultiEdit", parent, 300, 120, 500, true
+        )
+        AssertTrue(edit._scrollbar ~= nil, "Multiline editbox creates vertical scrollbar")
+        AssertEqual(edit._scrollbar:GetNumAnchors(), 2, "Scrollbar has top and bottom right anchors")
+
+        local ok1, p1, rel1, rp1, x1, y1 = edit._scrollbar:GetAnchor(1)
+        AssertTrue(ok1, "First anchor exists")
+        AssertEqual(p1, TOPRIGHT, "Top anchor point is TOPRIGHT")
+        AssertEqual(rel1, bg, "Top anchor relativeTo is backdrop")
+        AssertEqual(rp1, TOPRIGHT, "Top anchor relativePoint is TOPRIGHT")
+        AssertEqual(x1, -4, "Top anchor offsetX is -4")
+        AssertEqual(y1, 20, "Top anchor offsetY is 20 (4px padding + 16px Up arrow)")
+
+        local ok2, p2, rel2, rp2, x2, y2 = edit._scrollbar:GetAnchor(2)
+        AssertTrue(ok2, "Second anchor exists")
+        AssertEqual(p2, BOTTOMRIGHT, "Bottom anchor point is BOTTOMRIGHT")
+        AssertEqual(rel2, bg, "Bottom anchor relativeTo is backdrop")
+        AssertEqual(rp2, BOTTOMRIGHT, "Bottom anchor relativePoint is BOTTOMRIGHT")
+        AssertEqual(x2, -4, "Bottom anchor offsetX is -4")
+        AssertEqual(y2, -20, "Bottom anchor offsetY is -20 (-4px padding - 16px Down arrow)")
+
+        local _, singleEdit = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop(
+            "RPQ_TestSingleEdit", parent, 300, 32, 100, false
+        )
+        AssertEqual(singleEdit._scrollbar, nil, "Single-line editbox does not create scrollbar")
+    end)
+
 end
