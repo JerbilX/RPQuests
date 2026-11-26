@@ -106,6 +106,8 @@ d = d or function(...) end
 TEXT_ALIGN_LEFT = TEXT_ALIGN_LEFT or 0
 TEXT_ALIGN_CENTER = TEXT_ALIGN_CENTER or 1
 TEXT_ALIGN_RIGHT = TEXT_ALIGN_RIGHT or 2
+TEXT_WRAP_MODE_TRUNCATE = TEXT_WRAP_MODE_TRUNCATE or 0
+TEXT_WRAP_MODE_ELLIPSIS = TEXT_WRAP_MODE_ELLIPSIS or 1
 KEYBIND_STRIP_ALIGN_CENTER = KEYBIND_STRIP_ALIGN_CENTER or 1
 DL_BACKGROUND = DL_BACKGROUND or 0
 DL_CONTROLS = DL_CONTROLS or 1
@@ -172,6 +174,14 @@ local function CreateControlMock(name, parent, controlType)
     function ctrl:GetText() return self._text end
     function ctrl:SetFont(f) self._font = f end
     function ctrl:GetFont() return self._font end
+    function ctrl:SetHorizontalAlignment(align) self._horizontalAlignment = align end
+    function ctrl:GetHorizontalAlignment() return self._horizontalAlignment end
+    function ctrl:SetVerticalAlignment(align) self._verticalAlignment = align end
+    function ctrl:GetVerticalAlignment() return self._verticalAlignment end
+    function ctrl:SetMaxLineCount(maxLines) self._maxLineCount = maxLines end
+    function ctrl:GetMaxLineCount() return self._maxLineCount end
+    function ctrl:SetWrapMode(mode) self._wrapMode = mode end
+    function ctrl:GetWrapMode() return self._wrapMode end
     function ctrl:SetTexture(tex) self._texture = tex end
     function ctrl:GetTextureFileName() return self._texture end
     function ctrl:SetAnchor(point, relTo, relPoint, x, y)

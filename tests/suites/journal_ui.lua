@@ -2419,7 +2419,7 @@ return function(T)
         for _, sec in pairs(tab.accordionSections or {}) do
             for _, rowBtn in ipairs(sec.rowPool or {}) do
                 if not rowBtn:IsHidden() and rowBtn._questId == saved.id then
-                    local rowText = rowBtn:GetText()
+                    local rowText = rowBtn._titleLabel and rowBtn._titleLabel:GetText() or rowBtn:GetText()
                     if rowText and rowText:find("/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds", 1, true) then
                         foundRowWithIcon = true
                     end
@@ -2463,6 +2463,94 @@ return function(T)
             "RPQ_TestSingleEdit", parent, 300, 32, 100, false
         )
         AssertEqual(singleEdit._scrollbar, nil, "Single-line editbox does not create scrollbar")
+    end)
+
+    RunTest("Issue #336: JournalTab anchors quest row status tag on right and truncates long titles", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local roles = RPQuest.Constants.QUEST_ROLE
+        local longTitle = string.rep("A", 80)
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({
+            quests = {
+                { id = 301, title = longTitle, description = "D", role = roles.RECEIVED, completed = false },
+                { id = 302, title = longTitle, description = "D", role = roles.RECEIVED, completed = false, resolution = "failed" },
+                { id = 303, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@A", completed = false },
+                { id = 304, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@B", completed = false, resolution = "accepted" },
+                { id = 305, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@C", completed = false, resolution = "completed" },
+                { id = 306, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@D", completed = false, resolution = "rejected" },
+                { id = 307, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@E", completed = false, resolution = "failed" },
+                { id = 308, title = longTitle, description = "D", role = roles.PREPARED, completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        local tab = RPQuest.JournalTab
+        tab.panel:SetHidden(false)
+        tab:Refresh()
+
+        local function FindRow(sectionKey, questId)
+            local sec = tab.accordionSections[sectionKey]
+            for _, rowBtn in ipairs(sec.rowPool or {}) do
+                if not rowBtn:IsHidden() and rowBtn._questId == questId then
+                    return rowBtn
+                end
+            end
+            return nil
+        end
+
+        -- Row without suffix (normal mission 301 & preparing draft 308) uses full LIST_WIDTH
+        local normalRow = FindRow("missions", 301)
+        AssertTrue(normalRow ~= nil, "Mission row 301 rendered")
+        AssertTrue(normalRow._statusLabel:IsHidden(), "Status label hidden when row has no suffix")
+        AssertEqual(normalRow._statusLabel:GetText(), "", "Status label text cleared when hidden")
+        AssertEqual(normalRow._titleLabel:GetMaxLineCount(), 1, "Title label limited to 1 line")
+        AssertEqual(normalRow._titleLabel:GetWrapMode(), TEXT_WRAP_MODE_ELLIPSIS, "Title label uses ellipsis wrap mode")
+        AssertEqual(normalRow._titleLabel:GetHorizontalAlignment(), TEXT_ALIGN_LEFT, "Title label left-aligned")
+        AssertEqual(normalRow._titleLabel:GetVerticalAlignment(), TEXT_ALIGN_CENTER, "Title label vertically centered")
+        local okT2, pt2, relT2, rpT2, xT2 = normalRow._titleLabel:GetAnchor(2)
+        AssertTrue(okT2, "Title label has right anchor")
+        AssertEqual(pt2, BOTTOMRIGHT, "Title right anchor point is BOTTOMRIGHT")
+        AssertEqual(relT2, normalRow, "Title without suffix anchors to rowBtn")
+        AssertEqual(rpT2, BOTTOMRIGHT, "Title without suffix anchors to rowBtn BOTTOMRIGHT")
+        AssertEqual(xT2, 0, "Title without suffix has 0 right offset")
+
+        -- Mission with [Failed] suffix (302)
+        local failedMissionRow = FindRow("missions", 302)
+        AssertTrue(failedMissionRow ~= nil, "Failed mission row 302 rendered")
+        AssertEqual(failedMissionRow._statusLabel:IsHidden(), false, "Status label visible for failed mission")
+        AssertEqual(failedMissionRow._statusLabel:GetHorizontalAlignment(), TEXT_ALIGN_RIGHT, "Status label right-aligned")
+        AssertEqual(failedMissionRow._statusLabel:GetMaxLineCount(), 1, "Status label limited to 1 line")
+        AssertTrue(failedMissionRow._statusLabel:GetText():find("[Failed]", 1, true) ~= nil, "Failed mission status label shows [Failed]")
+        AssertEqual(failedMissionRow._statusLabel:GetText():sub(1, 1) ~= " ", true, "Status label trims leading whitespace")
+        AssertEqual(failedMissionRow._titleLabel:GetText():find("[Failed]", 1, true), nil, "Title label does not include status suffix")
+        local okF2, pf2, relF2, rpF2, xF2 = failedMissionRow._titleLabel:GetAnchor(2)
+        AssertTrue(okF2, "Failed mission title has right anchor")
+        AssertEqual(pf2, BOTTOMRIGHT, "Title right anchor is BOTTOMRIGHT")
+        AssertEqual(relF2, failedMissionRow._statusLabel, "Title right-anchors to statusLabel")
+        AssertEqual(rpF2, BOTTOMLEFT, "Title anchors to statusLabel BOTTOMLEFT")
+        AssertEqual(xF2, -6, "Title has -6px gap before statusLabel")
+
+        -- Sent rows: [Sent], [Accepted], [Completed], [Rejected], [Failed]
+        local expectedTags = {
+            [303] = "[Sent]",
+            [304] = "[Accepted]",
+            [305] = "[Completed]",
+            [306] = "[Rejected]",
+            [307] = "[Failed]",
+        }
+        for qid, tag in pairs(expectedTags) do
+            local row = FindRow("sent", qid)
+            AssertTrue(row ~= nil, "Sent row " .. qid .. " rendered")
+            AssertEqual(row._statusLabel:IsHidden(), false, "Status label visible for " .. tag)
+            AssertTrue(row._statusLabel:GetText():find(tag, 1, true) ~= nil, "Status label renders " .. tag)
+            AssertTrue(row._titleLabel:GetText():find(longTitle, 1, true) ~= nil, "Title label retains 80-char title for " .. tag)
+            AssertEqual(row._titleLabel:GetText():find(tag, 1, true), nil, "Title label excludes " .. tag)
+        end
+
+        -- Switching pooled row from suffixed to unsuffixed hides status label and restores full width
+        local draftRow = FindRow("preparing", 308)
+        AssertTrue(draftRow ~= nil, "Preparing row 308 rendered")
+        AssertTrue(draftRow._statusLabel:IsHidden(), "Preparing row hides status label")
     end)
 
 end

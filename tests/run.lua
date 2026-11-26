@@ -431,7 +431,6 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
         function c:TakeFocus() self._focused = true end
         function c:LoseFocus() self._focused = false end
         function c:SelectAll() self._selectedAll = true end
-        function c:SetHorizontalAlignment() end
         function c:SetNormalFontColor() end
         function c:SetMouseOverFontColor() end
         function c:SetCenterColor() end

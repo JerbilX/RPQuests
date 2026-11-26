@@ -179,6 +179,7 @@ read_globals = {
     "TEXT_ALIGN_LEFT",
     "TEXT_ALIGN_RIGHT",
     "TEXT_ALIGN_TOP",
+    "TEXT_WRAP_MODE_ELLIPSIS",
     "TOP",
     "LEFT",
     "RIGHT",
