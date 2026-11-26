@@ -66,6 +66,18 @@ function EditorPane.Build(tab, parent)
 
     EditorPane.LayoutSections(tab)
     EditorSections.BuildFooterButtons(tab, pane, panelName)
+
+    Addon.JournalWidgets.RegisterTabChain({
+        tab.titleEdit,
+        tab.descEdit,
+        tab.recipientEdit,
+        tab.recipientCharEdit,
+        tab.completionEdit,
+        tab.targetCustomEdit,
+        tab.discoveryMsgEdit,
+        tab.clueEdit,
+        tab.dlgResponseEdit,
+    }, tab.editorScroll)
 end
 
 local function GetSectionBadge(draft, key)
