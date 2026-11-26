@@ -283,7 +283,6 @@ RPQuest.Locales["fr"] = {
     QUEST_ICON_STEAL = "Voler",
 
     -- Journal Settings
-    LABEL_JOURNAL_SETTINGS_HEADER = "PARAMÈTRES DU JOURNAL",
     CHK_AUTO_OPEN_ON_RECEIVE = "Ouvrir automatiquement le journal RPQuests à la réception d'une nouvelle quête",
 
     -- Sequential Discoveries, Required Objectives & Dialogue Progress

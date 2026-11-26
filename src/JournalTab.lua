@@ -339,6 +339,27 @@ function JournalTab:BuildLeftColumn(panel)
     end)
     self.btnListNext:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 250, 554)
     self.btnListNext:SetHidden(true)
+
+    local chkAutoOpen = Addon.JournalWidgets.CreateCheckButton(
+        PANEL_NAME .. "_ChkAutoOpenOnReceive",
+        leftCol,
+        Addon.Locale:Get("CHK_AUTO_OPEN_ON_RECEIVE"),
+        function(isChecked)
+            if Addon.QuestRepository then
+                Addon.QuestRepository:SetSetting("autoOpenJournalOnReceive", isChecked)
+            end
+        end
+    )
+    chkAutoOpen:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 590)
+    local chkLabel = chkAutoOpen.GetNamedChild and chkAutoOpen:GetNamedChild("Label")
+    if chkLabel and chkLabel.SetWidth then
+        chkLabel:SetWidth(295)
+    end
+    ZO_CheckButton_SetCheckState(
+        chkAutoOpen,
+        Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoOpenJournalOnReceive") == true
+    )
+    self.chkAutoOpenJournalOnReceive = chkAutoOpen
 end
 
 function JournalTab:ScrollQuestList(step)
@@ -1197,6 +1218,12 @@ function JournalTab:Refresh()
 
     -- 1. Actualizar columna izquierda
     self:RefreshQuestList(allQuests, activeQuest)
+    if self.chkAutoOpenJournalOnReceive then
+        ZO_CheckButton_SetCheckState(
+            self.chkAutoOpenJournalOnReceive,
+            Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoOpenJournalOnReceive") == true
+        )
+    end
 
     -- 2. Actualizar columna derecha según el modo de vista
     self.detailPane:SetHidden(true)

@@ -2661,7 +2661,7 @@ return function(T)
         mockState.scrollCalls = {}
     end)
 
-    RunTest("JournalDetailPane exposes autoOpenJournalOnReceive toggle in empty and quest detail views (Issue #340)", function()
+    RunTest("JournalTab exposes autoOpenJournalOnReceive toggle in leftCol footer across all views (Issue #363)", function()
         local prevSetting = RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive")
         RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", false)
         local tab = RPQuest.JournalTab
@@ -2670,9 +2670,11 @@ return function(T)
         tab.selectedQuestId = nil
         tab:Refresh()
 
-        AssertTrue(tab.detailSettingsHeader ~= nil, "detailSettingsHeader exists")
+        AssertTrue(tab.detailSettingsHeader == nil, "detailSettingsHeader removed from JournalDetailPane")
         AssertTrue(tab.chkAutoOpenJournalOnReceive ~= nil, "chkAutoOpenJournalOnReceive exists")
-        AssertEqual(tab.detailSettingsHeader:IsHidden(), false, "Settings header visible in empty detail pane")
+        local _, _, chkRelTo, _, _, chkOffsetY = tab.chkAutoOpenJournalOnReceive:GetAnchor(1)
+        AssertTrue(chkRelTo == tab.leftCol, "chkAutoOpenJournalOnReceive anchors to leftCol")
+        AssertTrue(chkOffsetY >= 584, "chkAutoOpenJournalOnReceive sits below pagination controls without overlap")
         AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in empty detail pane")
         AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), false, "Checkbox reflects default false setting")
 
@@ -2680,14 +2682,24 @@ return function(T)
         ZO_CheckButton_OnClicked(tab.chkAutoOpenJournalOnReceive)
         AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), true, "Toggling checkbox enables autoOpenJournalOnReceive")
 
-        -- Create a quest and select it; settings remain visible and synced
+        -- Create a quest and select it; checkbox remains visible and synced
         local q = RPQuest.QuestRepository:CreateNewPreparedDraft()
         tab:SelectQuest(q.id)
-        AssertEqual(tab.detailSettingsHeader:IsHidden(), false, "Settings header visible when quest selected")
         AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible when quest selected")
         AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), true, "Checkbox remains checked when quest selected")
 
+        -- Visible in editor and mail send views too
+        tab.viewMode = tab.VIEW_MODE.EDITOR
+        tab:Refresh()
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in editor view")
+        tab.viewMode = tab.VIEW_MODE.MAIL_SEND
+        tab:Refresh()
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in mail send view")
+
+        tab.viewMode = tab.VIEW_MODE.DETAIL
         RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", prevSetting)
+        tab:Refresh()
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), prevSetting == true, "Refresh syncs checkbox back to SavedVars")
     end)
 
     RunTest("JournalDetailPane displays completionMessage only when completed and non-empty (Issue #341)", function()
@@ -2749,8 +2761,6 @@ return function(T)
         AssertTrue(completedScrollH > baselineScrollH, "detailScrollChild height increases when completion section is shown")
         local _, _, mapRelTo = tab.detailMapMarkersHeader:GetAnchor(1)
         AssertTrue(mapRelTo == tab.detailCompletionText, "Downstream map markers header anchors below completion text")
-        local _, _, settingsRelTo = tab.detailSettingsHeader:GetAnchor(1)
-        AssertTrue(settingsRelTo == tab.mapMarkerSearchRow, "Downstream settings header anchors below map marker row when action buttons are hidden")
 
         -- 4. Received quest: completed with whitespace-only completionMessage hides section
         rxQuest.completionMessage = "   \n\t  "
@@ -2946,8 +2956,6 @@ return function(T)
         repo:AcceptOfferedQuest(ffRx.id)
         tab:Refresh()
         AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible on accepted free-form quest")
-        local _, _, settingsRelTo = tab.detailSettingsHeader:GetAnchor(1)
-        AssertTrue(settingsRelTo == tab.btnActivate, "Settings header anchors below action button row cleanly")
 
         tab:OnCompleteQuestClicked()
         AssertEqual(ffRx.completed, true, "Clicking Complete completes received pure free-form quest")

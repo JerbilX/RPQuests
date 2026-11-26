@@ -283,7 +283,6 @@ RPQuest.Locales["jp"] = {
     QUEST_ICON_STEAL = "盗み",
 
     -- Journal Settings
-    LABEL_JOURNAL_SETTINGS_HEADER = "ジャーナル設定",
     CHK_AUTO_OPEN_ON_RECEIVE = "新しいクエストを受信したときにRPQuestsジャーナルを自動で開く",
 
     -- Sequential Discoveries, Required Objectives & Dialogue Progress
