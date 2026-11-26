@@ -242,6 +242,39 @@ local function RefreshEditorBaseAndArea(tab, draft)
     SyncUnfocusedEdit(tab.recipientEdit, draft.recipientAccount or "")
     SyncUnfocusedEdit(tab.recipientCharEdit, draft.recipientCharacterName or "")
     SyncUnfocusedEdit(tab.completionEdit, draft.completionMessage or "")
+    if tab.senderCharComboBox then
+        local targetSender = Addon.QuestRepository:NormalizeCharacterName(draft.senderCharacterName)
+        if targetSender == "" then
+            targetSender = Addon.QuestRepository:GetPlayerCharacterName()
+        end
+        local charNames = Addon.QuestRepository:GetAccountCharacterNames()
+        local hasTarget = false
+        for _, name in ipairs(charNames) do
+            if name == targetSender then
+                hasTarget = true
+                break
+            end
+        end
+        if targetSender ~= "" and not hasTarget then
+            table.insert(charNames, 1, targetSender)
+        end
+
+        local combo = tab.senderCharComboBox
+        combo:ClearItems()
+        for _, charName in ipairs(charNames) do
+            local entry = combo:CreateItemEntry(charName, function()
+                Addon.QuestRepository:UpdateDraftFields({ senderCharacterName = charName })
+            end)
+            entry.senderCharacterName = charName
+            combo:AddItem(entry)
+        end
+        combo:SetEnabled(#charNames > 0)
+        if targetSender ~= "" then
+            combo:SetSelectedItemByEval(function(item)
+                return item.senderCharacterName == targetSender
+            end, true)
+        end
+    end
     if tab.questIconComboBox then
         local targetIcon = Addon.QuestDraftStore:NormalizeQuestIcon(draft.icon) or ""
         local selected = tab.questIconComboBox:GetSelectedItemData()

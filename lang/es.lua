@@ -76,6 +76,7 @@ RPQuest.Locales["es"] = {
     LABEL_INPUT_DESCRIPTION = "Descripción / Trasfondo:",
     LABEL_INPUT_RECIPIENT = "Destinatario (@Cuenta):",
     LABEL_INPUT_RECIPIENT_CHAR = "Para (Personaje):",
+    LABEL_INPUT_SENDER_CHAR = "De (Personaje):",
     BTN_SEND_QUEST = "Enviar Misión",
     LABEL_NO_RECIPIENT = "Sin asignar",
     PREPARED_STATUS_DRAFT = "Estado: |cE8D5A0Borrador|r (Destinatario: %s)",

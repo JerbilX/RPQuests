@@ -76,6 +76,7 @@ RPQuest.Locales["de"] = {
     LABEL_INPUT_DESCRIPTION = "Beschreibung / Hintergrund:",
     LABEL_INPUT_RECIPIENT = "Empfänger (@Konto):",
     LABEL_INPUT_RECIPIENT_CHAR = "An (Charakter):",
+    LABEL_INPUT_SENDER_CHAR = "Von (Charakter):",
     BTN_SEND_QUEST = "Quest senden",
     LABEL_NO_RECIPIENT = "Nicht zugewiesen",
     PREPARED_STATUS_DRAFT = "Status: |cE8D5A0Entwurf|r (Empfänger: %s)",

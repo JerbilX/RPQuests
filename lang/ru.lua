@@ -76,6 +76,7 @@ RPQuest.Locales["ru"] = {
     LABEL_INPUT_DESCRIPTION = "Описание / История:",
     LABEL_INPUT_RECIPIENT = "Получатель (@Аккаунт):",
     LABEL_INPUT_RECIPIENT_CHAR = "Кому (Персонаж):",
+    LABEL_INPUT_SENDER_CHAR = "От (Персонаж):",
     BTN_SEND_QUEST = "Отправить",
     LABEL_NO_RECIPIENT = "Не назначен",
     PREPARED_STATUS_DRAFT = "Статус: |cE8D5A0Черновик|r (Получатель: %s)",

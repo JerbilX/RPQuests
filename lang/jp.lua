@@ -76,6 +76,7 @@ RPQuest.Locales["jp"] = {
     LABEL_INPUT_DESCRIPTION = "説明 / ストーリー:",
     LABEL_INPUT_RECIPIENT = "宛先 (@アカウント名):",
     LABEL_INPUT_RECIPIENT_CHAR = "宛先 (キャラクター):",
+    LABEL_INPUT_SENDER_CHAR = "差出人 (キャラクター):",
     BTN_SEND_QUEST = "クエスト送信",
     LABEL_NO_RECIPIENT = "未指定",
     PREPARED_STATUS_DRAFT = "状態: |cE8D5A0下書き|r (宛先: %s)",

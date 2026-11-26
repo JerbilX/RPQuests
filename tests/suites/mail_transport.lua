@@ -423,22 +423,94 @@ return function(T)
         local sigAfter = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
         AssertEqual(sigAfter, sigBefore, "Quest signature unchanged when character names are encoded")
 
-        -- 4. Offered mail quest displays From: <CharacterName> and To: <CharacterName> below Status: without inline From in Status:
+        -- 4. Offered mail quest preserves payload senderCharacterName when present, falling back to mail metadata only when absent
         local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@MasterAcct", {
             status = RPQuest.Constants.QUEST_STATUS.OFFERED,
             senderCharacterName = "Sotha Sil^Mx",
         })
         AssertEqual(imported.senderDisplayName, "@MasterAcct", "Imported quest keeps senderDisplayName")
-        AssertEqual(imported.senderCharacterName, "Sotha Sil", "Imported quest prefers normalized mail metadata senderCharacterName")
+        AssertEqual(imported.senderCharacterName, "Nerevar", "Imported quest preserves payload senderCharacterName over mail metadata")
         AssertEqual(imported.recipientCharacterName, "Lord Vivec", "Imported quest keeps recipientCharacterName")
+
+        local fallbackDecoded = { senderDisplayName = "@MasterAcct" }
+        RPQuest.QuestRepository:ApplyImportedSenderMetadata(fallbackDecoded, "@MasterAcct", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            senderCharacterName = "Sotha Sil^Mx",
+        })
+        AssertEqual(fallbackDecoded.senderCharacterName, "Sotha Sil", "ApplyImportedSenderMetadata falls back to normalized mail metadata when payload omits senderCharacterName")
 
         RPQuest.JournalTab:SelectQuest(imported.id)
         RPQuest.JournalTab:Refresh()
         AssertEqual(RPQuest.JournalTab.detailStatus:GetText():find("From:", 1, true), nil, "Offered status no longer embeds inline From:")
-        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Sotha Sil", "Offered detail From shows sender character name")
+        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Nerevar", "Offered detail From shows payload sender character name")
         AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Offered detail To shows recipient character name")
 
         _G.GetUnitName = origUnitName
+    end)
+
+    RunTest("Issue #342: editor sender character dropdown lists account characters, persists selection, and restores on reopen", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        local origUnitName = _G.GetUnitName
+        local origGetNumChars = _G.GetNumCharacters
+        local origGetCharInfo = _G.GetCharacterInfo
+
+        local accountChars = { "Nerevar^Mx", "Almalexia^Fx", "Vivec^Mx" }
+        _G.GetUnitName = function(tag)
+            if tag == "player" then return "Nerevar^Mx" end
+            return origUnitName(tag)
+        end
+        _G.GetNumCharacters = function()
+            return #accountChars
+        end
+        _G.GetCharacterInfo = function(index)
+            return accountChars[index], 1, 50, 1, 1, 1, tostring(index), 1
+        end
+
+        RPQuest.JournalTab:OpenCreateEditor()
+        local combo = RPQuest.JournalTab.senderCharComboBox
+        AssertTrue(combo ~= nil, "senderCharComboBox exists in editor")
+        AssertEqual(#combo.m_sortedItems, 3, "senderCharComboBox lists all 3 account characters")
+        local initialSelected = combo:GetSelectedItemData()
+        AssertEqual(initialSelected and initialSelected.senderCharacterName, "Nerevar", "Active character preselected for new quest")
+
+        -- Select alternate character Almalexia
+        local altItem = nil
+        for _, item in ipairs(combo.m_sortedItems) do
+            if item.senderCharacterName == "Almalexia" then
+                altItem = item
+                break
+            end
+        end
+        AssertTrue(altItem ~= nil, "Almalexia entry present in senderCharComboBox")
+        combo:SelectItem(altItem)
+
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Sotha Sil",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Clockwork City",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.JournalTab.titleEdit:SetText("Clockwork Message")
+        RPQuest.JournalTab:OnSaveDraftClicked()
+
+        local prepared = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)[1]
+        AssertEqual(prepared.senderCharacterName, "Almalexia", "Selected senderCharacterName persisted in prepared quest")
+
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertEqual(decoded.senderCharacterName, "Almalexia", "Encoded payload preserves selected senderCharacterName")
+
+        -- Reopen prepared quest in editor and verify dropdown reflects saved senderCharacterName
+        RPQuest.JournalTab:OpenEditEditor(prepared.id)
+        local reopenedSelected = combo:GetSelectedItemData()
+        AssertEqual(reopenedSelected and reopenedSelected.senderCharacterName, "Almalexia", "Reopened editor preselects saved senderCharacterName")
+
+        _G.GetUnitName = origUnitName
+        _G.GetNumCharacters = origGetNumChars
+        _G.GetCharacterInfo = origGetCharInfo
     end)
 
     RunTest("Issue #295 & #311: worst-case uncompressible 4/10/4 quest + max MAIL_ROLE_MESSAGE fits within 6 mails (<= 4104 chars)", function()
