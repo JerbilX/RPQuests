@@ -75,8 +75,8 @@ function Widgets.CreateEditBoxWithBackdrop(name, parent, width, height, maxChars
     if isMultiLine then
         scrollbar = WINDOW_MANAGER:CreateControlFromVirtual(name .. "_ScrollBar", bg, "ZO_VerticalScrollbarBase")
         if scrollbar then
-            scrollbar:SetAnchor(TOPRIGHT, bg, TOPRIGHT, -4, 4)
-            scrollbar:SetAnchor(BOTTOMRIGHT, bg, BOTTOMRIGHT, -4, -4)
+            scrollbar:SetAnchor(TOPRIGHT, bg, TOPRIGHT, -4, 20)
+            scrollbar:SetAnchor(BOTTOMRIGHT, bg, BOTTOMRIGHT, -4, -20)
             scrollbar:SetHidden(true)
             scrollbar:SetHandler("OnValueChanged", function(_, value)
                 if syncingScroll then return end
