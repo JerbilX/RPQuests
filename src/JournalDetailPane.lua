@@ -738,10 +738,12 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
     end
     tab.btnReset:ClearAnchors()
     local needsMigration = isPrepared and (selectedQuest.needsMigration == true)
+    local isTutorial = (selectedQuest.isTutorial == true)
+    local canCopy = (isPrepared and not needsMigration) or isTutorial
     if tab.btnAcceptOffered then tab.btnAcceptOffered:SetHidden(not isOffered) end
     if tab.btnRejectOffered then tab.btnRejectOffered:SetHidden(not isOffered) end
     if tab.btnSendDirect then tab.btnSendDirect:SetHidden((not isPrepared) or needsMigration) end
-    if tab.btnCopy then tab.btnCopy:SetHidden((not isPrepared) or needsMigration) end
+    if tab.btnCopy then tab.btnCopy:SetHidden(not canCopy) end
     if tab.btnMigrate then tab.btnMigrate:SetHidden(not needsMigration) end
 
     if isOffered then
@@ -749,6 +751,10 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
         if tab.btnComplete then tab.btnComplete:SetHidden(true) end
         tab.btnEdit:SetHidden(true)
         tab.btnReset:SetHidden(true)
+        if tab.btnCopy and canCopy then
+            tab.btnCopy:ClearAnchors()
+            tab.btnCopy:SetAnchor(TOPLEFT, tab.btnAcceptOffered, BOTTOMLEFT, 0, 10)
+        end
     elseif needsMigration then
         tab.btnActivate:SetHidden(true)
         if tab.btnComplete then tab.btnComplete:SetHidden(true) end
@@ -763,6 +769,10 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
         tab.btnEdit:SetHidden(canManualComplete)
         tab.btnReset:SetAnchor(TOPLEFT, tab.btnActivate, BOTTOMLEFT, 0, 10)
         tab.btnReset:SetHidden(false)
+        if tab.btnCopy then
+            tab.btnCopy:ClearAnchors()
+            tab.btnCopy:SetAnchor(TOPLEFT, tab.btnReset, BOTTOMLEFT, 0, 10)
+        end
     else
         local showCompletion = selectedQuest.completed and true or false
         local showFailed = selectedQuest.failed and true or false
@@ -773,6 +783,16 @@ local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepar
         tab.btnReset:SetHidden(not showFailed)
         if showFailed then
             tab.btnReset:SetAnchor(TOPLEFT, anchorControl, BOTTOMLEFT, offsetX, offsetY)
+        end
+        if tab.btnCopy and canCopy then
+            tab.btnCopy:ClearAnchors()
+            if showFailed then
+                tab.btnCopy:SetAnchor(TOPLEFT, tab.btnReset, BOTTOMLEFT, 0, 10)
+            elseif showCompletion then
+                tab.btnCopy:SetAnchor(TOPLEFT, anchorControl, BOTTOMLEFT, offsetX, offsetY)
+            else
+                tab.btnCopy:SetAnchor(TOPLEFT, tab.btnActivate, BOTTOMLEFT, 0, 10)
+            end
         end
     end
 

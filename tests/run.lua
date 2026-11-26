@@ -540,6 +540,7 @@ dofile("src/ShareCodec.lua")
 dofile("src/QuestDraftStore.lua")
 dofile("src/QuestMigration.lua")
 dofile("src/QuestRepository.lua")
+dofile("src/TutorialQuest.lua")
 dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
 dofile("src/CombatTracker.lua")
@@ -603,7 +604,17 @@ local suitePaths = {
     "tests/suites/mail_transport.lua",
     "tests/suites/mail_inbox.lua",
     "tests/suites/mail_lifecycle.lua",
+    "tests/suites/tutorial.lua",
 }
+
+local origTutorialInit = RPQuest.TutorialQuest.InitializeForRepository
+RPQuest.TutorialQuest.InitializeForRepository = function(self, repo)
+    if mockState.skipTutorialSeed then
+        return
+    end
+    return origTutorialInit(self, repo)
+end
+mockState.skipTutorialSeed = true
 
 for _, suitePath in ipairs(suitePaths) do
     local registerSuite = dofile(suitePath)
