@@ -23,6 +23,9 @@ function MailInbox:Initialize()
     self._dismissedMailIds = {}
     self._reportedErrorMailIds = {}
     self._notifiedMailIds = {}
+    self._deleteQueue = {}
+    self._deleteQueuedKeys = {}
+    self._deletingMailId = nil
     self.isInitialized = true
 end
 
@@ -114,11 +117,7 @@ function MailInbox:ProcessCompletionMail(mailId, senderDisplayName, _subject, bo
                 end
                 Addon.Announcements:ShowAlert(Addon.Locale:Get(alertKey, who, q.title or ""), false)
             end
-            if Addon.QuestRepository:GetSetting("autoDeleteMail") then
-                DeleteMail(mailId)
-            else
-                self._dismissedMailIds[idKey] = true
-            end
+            self:DisposeMailIds({ mailId })
             return true
         end
     end
@@ -415,6 +414,12 @@ function MailInbox:OnMailReadable(mailId)
     self:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, false)
 end
 
+function MailInbox:OnMailboxClosed()
+    self._deleteQueue = {}
+    self._deleteQueuedKeys = {}
+    self._deletingMailId = nil
+end
+
 function MailInbox:OnMailRemoved(mailId)
     if not mailId then return end
     local idKey = tostring(mailId)
@@ -428,11 +433,24 @@ function MailInbox:OnMailRemoved(mailId)
     if idx then
         table.remove(self._receivedMails, idx)
         self:RebuildReceivedIndex()
-        return
+    elseif self._partGroups then
+        self:RemovePartFromGroup(idKey)
     end
 
-    if self._partGroups then
-        self:RemovePartFromGroup(idKey)
+    if self._deleteQueuedKeys and self._deleteQueuedKeys[idKey] then
+        self._deleteQueuedKeys[idKey] = nil
+        if self._deleteQueue then
+            for i = #self._deleteQueue, 1, -1 do
+                if tostring(self._deleteQueue[i]) == idKey then
+                    table.remove(self._deleteQueue, i)
+                end
+            end
+        end
+    end
+
+    if self._deletingMailId ~= nil and tostring(self._deletingMailId) == idKey then
+        self._deletingMailId = nil
+        self:ProcessDeleteQueue()
     end
 end
 
@@ -486,15 +504,55 @@ function MailInbox:RemoveEntryById(mailId)
     return entry
 end
 
-function MailInbox:DisposeMailIds(ids)
-    local shouldDelete = Addon.QuestRepository:GetSetting("autoDeleteMail")
-    for _, mid in ipairs(ids) do
-        if shouldDelete then
-            DeleteMail(mid)
+function MailInbox:ProcessDeleteQueue()
+    if self._deletingMailId ~= nil then
+        if GetMailItemInfo(self._deletingMailId) == nil then
+            self._deletingMailId = nil
         else
-            self._dismissedMailIds[tostring(mid)] = true
+            return
         end
     end
+
+    while self._deleteQueue and #self._deleteQueue > 0 do
+        local mid = table.remove(self._deleteQueue, 1)
+        local idKey = tostring(mid)
+        if self._deleteQueuedKeys then
+            self._deleteQueuedKeys[idKey] = nil
+        end
+        if GetMailItemInfo(mid) ~= nil then
+            self._deletingMailId = mid
+            DeleteMail(mid)
+            if GetMailItemInfo(mid) == nil then
+                self._deletingMailId = nil
+            else
+                return
+            end
+        end
+    end
+end
+
+function MailInbox:DisposeMailIds(ids)
+    if type(ids) ~= "table" then return end
+    local shouldDelete = Addon.QuestRepository:GetSetting("autoDeleteMail")
+    if not shouldDelete then
+        for _, mid in ipairs(ids) do
+            self._dismissedMailIds[tostring(mid)] = true
+        end
+        return
+    end
+
+    self._deleteQueue = self._deleteQueue or {}
+    self._deleteQueuedKeys = self._deleteQueuedKeys or {}
+    for _, mid in ipairs(ids) do
+        if mid ~= nil then
+            local idKey = tostring(mid)
+            if tostring(self._deletingMailId) ~= idKey and not self._deleteQueuedKeys[idKey] then
+                self._deleteQueuedKeys[idKey] = true
+                table.insert(self._deleteQueue, mid)
+            end
+        end
+    end
+    self:ProcessDeleteQueue()
 end
 
 function MailInbox:CleanupFailedQuestMail(mailId, errorKey)
