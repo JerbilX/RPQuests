@@ -635,6 +635,14 @@ local function BuildObjectiveLines(selectedQuest, isPrepared, isCurrentActive)
     AppendTargetObjectiveLines(objLines, selectedQuest, isMasterSummary, pInfo, isSentCompleted, bullet)
     AppendExtraObjectiveLines(objLines, selectedQuest, isMasterSummary, pInfo, isSentCompleted, isSentFailed, bullet)
 
+    local hasTargets = type(selectedQuest.targets) == "table" and #selectedQuest.targets > 0
+    local hasDiscoveries = type(selectedQuest.discoveries) == "table" and #selectedQuest.discoveries > 0
+    local hasDialogues = type(selectedQuest.dialogues) == "table" and #selectedQuest.dialogues > 0
+    if not hasTargets and not hasDiscoveries and not hasDialogues then
+        local freeformLine = Addon.Locale:Get("OBJECTIVE_FREEFORM"):gsub("^•%s*", bullet)
+        table.insert(objLines, 1, freeformLine)
+    end
+
     return objLines
 end
 

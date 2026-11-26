@@ -296,4 +296,7 @@ RPQuest.Locales["fr"] = {
     DIALOGUE_PROGRESS_FORMAT = "• Dialogues PNJ : %d / %d",
     DIALOGUE_SPOKEN_FORMAT = "• Parlé avec %s",
     CSA_DIALOGUE_PROGRESS = "Dialogue (%s) : %d / %d",
+    OBJECTIVE_FREEFORM = "• Quête de jeu de rôle libre (à terminer manuellement une fois achevée)",
+    ALERT_QUEST_FAILED_REQUIRED_DISCOVERY = "Un point de découverte requis a été manqué.",
+    ALERT_QUEST_FAILED_REQUIRED_DIALOGUE = "Un dialogue PNJ requis a été manqué (%s).",
 }

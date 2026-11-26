@@ -296,4 +296,7 @@ RPQuest.Locales["de"] = {
     DIALOGUE_PROGRESS_FORMAT = "• NPC-Dialoge: %d / %d",
     DIALOGUE_SPOKEN_FORMAT = "• Mit %s gesprochen",
     CSA_DIALOGUE_PROGRESS = "Dialog (%s): %d / %d",
+    OBJECTIVE_FREEFORM = "• Freie Rollenspiel-Quest (bei Abschluss manuell abschließen)",
+    ALERT_QUEST_FAILED_REQUIRED_DISCOVERY = "Ein erforderlicher Entdeckungspunkt wurde verpasst.",
+    ALERT_QUEST_FAILED_REQUIRED_DIALOGUE = "Ein erforderlicher NSC-Dialog wurde verpasst (%s).",
 }

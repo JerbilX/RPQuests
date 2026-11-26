@@ -296,4 +296,7 @@ RPQuest.Locales["es"] = {
     DIALOGUE_PROGRESS_FORMAT = "• Diálogos con NPCs: %d / %d",
     DIALOGUE_SPOKEN_FORMAT = "• Hablaste con %s",
     CSA_DIALOGUE_PROGRESS = "Diálogo (%s): %d / %d",
+    OBJECTIVE_FREEFORM = "• Misión free-form de rol (complétala manualmente al terminar)",
+    ALERT_QUEST_FAILED_REQUIRED_DISCOVERY = "Faltó un punto de descubrimiento obligatorio.",
+    ALERT_QUEST_FAILED_REQUIRED_DIALOGUE = "Faltó un diálogo obligatorio con NPC (%s).",
 }

@@ -2914,4 +2914,72 @@ return function(T)
         AssertTrue(text2:find("Spoke with Hidden Courier", 1, true) ~= nil, "Second executed NPC appears in detail pane")
     end)
 
+    RunTest("Issue #346: JournalDetailPane free-form objective display, Complete button visibility, and failure alert", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        -- 1. Pure free-form prepared quest shows Complete only while testing (active), hiding Edit without overlap
+        repo:ResetDraft()
+        local ffPrep = repo:SaveDraft("Tavern Council", "Agree on terms.")
+        tab:SelectQuest(ffPrep.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden on prepared free-form quest when not testing")
+        AssertEqual(tab.btnEdit:IsHidden(), false, "btnEdit visible on prepared free-form quest when not testing")
+        AssertTrue(tab.detailObjText:GetText():find("Free-form roleplay quest", 1, true) ~= nil, "Master summary displays free-form objective note")
+
+        repo:SetActiveQuest(ffPrep.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible on prepared free-form quest during Test Quest")
+        AssertEqual(tab.btnEdit:IsHidden(), true, "btnEdit hidden while btnComplete is visible")
+        AssertTrue(tab.detailObjText:GetText():find("Free-form roleplay quest", 1, true) ~= nil, "Test Quest player view displays free-form objective note")
+
+        -- 2. Received pure free-form quest: hidden when offered, visible when accepted, completes cleanly on click
+        local ffRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(ffPrep.id), "@Master", { status = RPQuest.Constants.QUEST_STATUS.OFFERED })
+        tab:SelectQuest(ffRx.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden on offered free-form quest")
+
+        repo:AcceptOfferedQuest(ffRx.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible on accepted free-form quest")
+        local _, _, settingsRelTo = tab.detailSettingsHeader:GetAnchor(1)
+        AssertTrue(settingsRelTo == tab.btnActivate, "Settings header anchors below action button row cleanly")
+
+        tab:OnCompleteQuestClicked()
+        AssertEqual(ffRx.completed, true, "Clicking Complete completes received pure free-form quest")
+        AssertEqual(ffRx.failed, false, "Pure free-form completion does not fail")
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden after free-form quest completes")
+
+        -- 3. OnCompleteQuestClicked announces failure when required discovery is missed
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({ targetName = "Guard", mapId = 1, zoneId = 381, mapName = "Auridon", targetX = 0.5, targetY = 0.5 })
+        repo:SetDraftCapturedTarget({ targetName = "OptionalGuard", mapId = 1, zoneId = 381, mapName = "Auridon", targetX = 0.5, targetY = 0.5 })
+        repo:UpdateDraftTarget(2, { optional = true })
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "Secret cache", required = true })
+        local reqPrep = repo:SaveDraft("Missing Clue Test", "Find clue first")
+        local reqRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(reqPrep.id), "@Master")
+        repo:SetActiveQuest(reqRx.id)
+        repo:RecordTargetEliminated("Guard")
+        tab:SelectQuest(reqRx.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible once mandatory target is done")
+
+        local origAnnounceFail = RPQuest.Announcements.AnnounceQuestFailed
+        local uiFailReason = nil
+        RPQuest.Announcements.AnnounceQuestFailed = function(_, _, _, reasonText)
+            uiFailReason = reasonText
+        end
+        tab:OnCompleteQuestClicked()
+        AssertEqual(reqRx.failed, true, "OnCompleteQuestClicked fails quest when required discovery is missed")
+        AssertEqual(reqRx.completed, false, "Quest not marked completed on missed required discovery")
+        AssertEqual(uiFailReason, RPQuest.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DISCOVERY"), "AnnounceQuestFailed invoked with required discovery reason")
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden after quest fails")
+        AssertEqual(tab.btnReset:IsHidden(), false, "btnReset shown after quest fails")
+        RPQuest.Announcements.AnnounceQuestFailed = origAnnounceFail
+    end)
+
 end

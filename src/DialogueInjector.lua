@@ -81,9 +81,11 @@ local function HookInteractionClass(cls)
             DisplayDialogueResponse(interactionSelf, responseText)
             ApplySeenOptionColor(interactionSelf, controlID)
             if questId and dialogueIndex then
-                local ok, quest, isCompleted, triggeredDialogue = Addon.QuestRepository:MarkDialogueTriggered(questId, dialogueIndex)
+                local ok, quest, isCompleted, triggeredDialogue, questFailed, failReason = Addon.QuestRepository:MarkDialogueTriggered(questId, dialogueIndex)
                 if ok and quest then
-                    if isCompleted then
+                    if questFailed then
+                        Addon.Announcements:AnnounceQuestFailed(quest, nil, failReason)
+                    elseif isCompleted then
                         Addon.Announcements:AnnounceQuestCompleted(quest)
                     else
                         Addon.Announcements:AnnounceDialogueProgress(quest, triggeredDialogue)
