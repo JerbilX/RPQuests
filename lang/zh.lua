@@ -76,6 +76,7 @@ RPQuest.Locales["zh"] = {
     LABEL_INPUT_DESCRIPTION = "描述 / 故事背景：",
     LABEL_INPUT_RECIPIENT = "接收人 (@账号名)：",
     LABEL_INPUT_RECIPIENT_CHAR = "致（角色名）：",
+    LABEL_INPUT_SENDER_CHAR = "来自（角色名）：",
     BTN_SEND_QUEST = "发送任务",
     LABEL_NO_RECIPIENT = "未分配",
     PREPARED_STATUS_DRAFT = "状态：|cE8D5A0草稿|r（接收人：%s）",

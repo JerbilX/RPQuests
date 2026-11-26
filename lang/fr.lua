@@ -76,6 +76,7 @@ RPQuest.Locales["fr"] = {
     LABEL_INPUT_DESCRIPTION = "Description / Histoire :",
     LABEL_INPUT_RECIPIENT = "Destinataire (@Compte) :",
     LABEL_INPUT_RECIPIENT_CHAR = "Pour (Personnage) :",
+    LABEL_INPUT_SENDER_CHAR = "De (Personnage) :",
     BTN_SEND_QUEST = "Envoyer la quête",
     LABEL_NO_RECIPIENT = "Non assigné",
     PREPARED_STATUS_DRAFT = "Statut : |cE8D5A0Brouillon|r (Destinataire : %s)",

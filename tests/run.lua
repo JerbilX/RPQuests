@@ -177,6 +177,17 @@ GetUnitName = function(tag)
     return "Jugador"
 end
 
+GetNumCharacters = function()
+    return 1
+end
+
+GetCharacterInfo = function(index)
+    if index == 1 then
+        return GetUnitName("player"), 1, 50, 1, 1, 1, "1", 1
+    end
+    return nil
+end
+
 IsUnitPlayer = function(tag)
     if tag == "reticleover" then return mockState.reticleIsPlayer end
     return false

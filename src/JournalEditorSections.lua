@@ -148,15 +148,32 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
     tab.recipientCharBg = recipientCharBg
     tab.recipientCharEdit = recipientCharEdit
 
+    local lblSenderChar = WINDOW_MANAGER:CreateControl(panelName .. "_LblInputSenderChar", formParent, CT_LABEL)
+    lblSenderChar:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 228)
+    if lblSenderChar.SetFont then lblSenderChar:SetFont("ZoFontGameBold") end
+    lblSenderChar:SetText(Addon.Locale:Get("LABEL_INPUT_SENDER_CHAR"))
+    tab.lblInputSenderChar = lblSenderChar
+
+    local senderCharDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_SenderCharDropdown", formParent, "ZO_ComboBox")
+    senderCharDropdown:SetDimensions(250, 28)
+    senderCharDropdown:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 250)
+    tab.senderCharDropdown = senderCharDropdown
+
+    local senderCharCombo = ZO_ComboBox_ObjectFromContainer(senderCharDropdown)
+    if senderCharCombo then
+        senderCharCombo:SetSortsItems(false)
+        tab.senderCharComboBox = senderCharCombo
+    end
+
     local lblQuestIcon = WINDOW_MANAGER:CreateControl(panelName .. "_LblQuestIcon", formParent, CT_LABEL)
-    lblQuestIcon:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 228)
+    lblQuestIcon:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 228)
     if lblQuestIcon.SetFont then lblQuestIcon:SetFont("ZoFontGameBold") end
     lblQuestIcon:SetText(Addon.Locale:Get("LABEL_QUEST_ICON"))
     tab.lblQuestIcon = lblQuestIcon
 
     local iconDropdown = WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_QuestIconDropdown", formParent, "ZO_ComboBox")
-    iconDropdown:SetDimensions(510, 28)
-    iconDropdown:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 250)
+    iconDropdown:SetDimensions(250, 28)
+    iconDropdown:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 250)
     tab.questIconDropdown = iconDropdown
 
     local iconCombo = ZO_ComboBox_ObjectFromContainer(iconDropdown)

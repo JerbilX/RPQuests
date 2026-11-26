@@ -67,6 +67,7 @@ function QuestDraftStore:CreateDefaultDraft()
         icon = nil,
         recipientAccount = "",
         recipientCharacterName = "",
+        senderCharacterName = "",
         clue = "",
         completionMessage = "",
         targets = {},
@@ -451,6 +452,9 @@ function QuestDraftStore:LoadQuestIntoDraft(repo, questId)
         description = quest.description or "",
         recipientAccount = quest.recipientAccount or "",
         recipientCharacterName = quest.recipientCharacterName or "",
+        senderCharacterName = (type(quest.senderCharacterName) == "string" and quest.senderCharacterName ~= "")
+            and repo:NormalizeCharacterName(quest.senderCharacterName)
+            or repo:GetPlayerCharacterName(),
         clue = quest.clue or "",
         completionMessage = quest.completionMessage or "",
         targets = self:CloneTargetsList(quest.targets),
@@ -487,6 +491,9 @@ function QuestDraftStore:UpdateDraftFields(repo, fields, silent)
     if fields.icon ~= nil then draft.icon = self:NormalizeQuestIcon(fields.icon) end
     if fields.recipientAccount ~= nil then draft.recipientAccount = tostring(fields.recipientAccount) end
     if fields.recipientCharacterName ~= nil then draft.recipientCharacterName = tostring(fields.recipientCharacterName) end
+    if fields.senderCharacterName ~= nil then
+        draft.senderCharacterName = repo:NormalizeCharacterName(tostring(fields.senderCharacterName))
+    end
     if fields.clue ~= nil then draft.clue = tostring(fields.clue) end
     if fields.completionMessage ~= nil then draft.completionMessage = tostring(fields.completionMessage) end
     if fields.recommendHideMapAreas ~= nil then
@@ -702,6 +709,11 @@ local function BuildNormalizedDraftFields(repo, draft, fallbackTitle)
         cleanTitle = fallbackTitle
     end
 
+    local cleanSenderChar = repo:NormalizeCharacterName(draft.senderCharacterName)
+    if cleanSenderChar == "" then
+        cleanSenderChar = repo:GetPlayerCharacterName()
+    end
+
     local fields = {
         title = cleanTitle,
         description = (draft.description or ""):gsub("^%s+", ""):gsub("%s+$", ""),
@@ -709,11 +721,13 @@ local function BuildNormalizedDraftFields(repo, draft, fallbackTitle)
         completionMessage = (draft.completionMessage or ""):gsub("^%s+", ""):gsub("%s+$", ""),
         recipientAccount = repo:NormalizeAccountName(draft.recipientAccount),
         recipientCharacterName = repo:NormalizeCharacterName(draft.recipientCharacterName),
+        senderCharacterName = cleanSenderChar,
     }
     draft.clue = fields.clue
     draft.completionMessage = fields.completionMessage
     draft.recipientAccount = fields.recipientAccount
     draft.recipientCharacterName = fields.recipientCharacterName
+    draft.senderCharacterName = fields.senderCharacterName
     return fields
 end
 
@@ -727,9 +741,9 @@ local function ApplyDraftFieldsToQuest(store, repo, existing, draft, fields)
     existing.description = fields.description
     existing.recipientAccount = fields.recipientAccount
     existing.recipientCharacterName = (fields.recipientCharacterName ~= "") and fields.recipientCharacterName or nil
-    if type(existing.senderCharacterName) ~= "string" or existing.senderCharacterName == "" then
-        existing.senderCharacterName = repo:GetPlayerCharacterName()
-    end
+    existing.senderCharacterName = (fields.senderCharacterName ~= "")
+        and fields.senderCharacterName
+        or repo:GetPlayerCharacterName()
     if existing.sentTo and existing.sentTo:lower() ~= fields.recipientAccount:lower() then
         existing.sentTo = nil
         existing.sentAt = nil
@@ -832,7 +846,9 @@ local function CreateQuestFromDraft(store, repo, targetId, draft, fields)
     repo.savedVars.nextId = targetId + 1
 
     local questData = {
-        senderCharacterName = repo:GetPlayerCharacterName(),
+        senderCharacterName = (fields.senderCharacterName ~= "")
+            and fields.senderCharacterName
+            or repo:GetPlayerCharacterName(),
         recipientAccount = fields.recipientAccount,
         recipientCharacterName = fields.recipientCharacterName,
         clue = fields.clue,

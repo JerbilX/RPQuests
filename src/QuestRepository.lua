@@ -42,6 +42,25 @@ function QuestRepository:GetPlayerCharacterName()
     return self:NormalizeCharacterName(GetUnitName("player"))
 end
 
+function QuestRepository:GetAccountCharacterNames()
+    local names = {}
+    local seen = {}
+    local count = tonumber(GetNumCharacters()) or 0
+    for i = 1, count do
+        local rawName = GetCharacterInfo(i)
+        local clean = self:NormalizeCharacterName(rawName)
+        if clean ~= "" and not seen[clean] then
+            seen[clean] = true
+            table.insert(names, clean)
+        end
+    end
+    local playerChar = self:GetPlayerCharacterName()
+    if playerChar ~= "" and not seen[playerChar] then
+        table.insert(names, 1, playerChar)
+    end
+    return names
+end
+
 function QuestRepository:FormatTargetEntry(target)
     if type(target) ~= "table" or not target.name or target.name == "" then
         return ""
@@ -518,11 +537,16 @@ function QuestRepository:ApplyImportedSenderMetadata(decoded, senderDisplayName,
     if cleanSender ~= "" then
         decoded.senderDisplayName = cleanSender
     end
-    local cleanSenderChar = self:NormalizeCharacterName(options.senderCharacterName)
-    if cleanSenderChar ~= "" then
-        decoded.senderCharacterName = cleanSenderChar
-    elseif type(decoded.senderCharacterName) == "string" then
-        decoded.senderCharacterName = self:NormalizeCharacterName(decoded.senderCharacterName)
+    local cleanPayloadChar = self:NormalizeCharacterName(decoded.senderCharacterName)
+    if cleanPayloadChar ~= "" then
+        decoded.senderCharacterName = cleanPayloadChar
+    else
+        local cleanMailChar = self:NormalizeCharacterName(options.senderCharacterName)
+        if cleanMailChar ~= "" then
+            decoded.senderCharacterName = cleanMailChar
+        else
+            decoded.senderCharacterName = nil
+        end
     end
     if type(decoded.recipientCharacterName) == "string" then
         decoded.recipientCharacterName = self:NormalizeCharacterName(decoded.recipientCharacterName)
