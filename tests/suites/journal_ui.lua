@@ -2794,4 +2794,124 @@ return function(T)
         tab.detailScrollChild = prevScrollChild
     end)
 
+    RunTest("Issue #345: Editor Required/Sequential/Reorder controls and JournalDetailPane dialogue progress", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenCreateEditor()
+
+        local draft = repo:GetDraft()
+        -- Verify new editor controls exist and layout fits bounds
+        AssertTrue(tab.chkDiscoveryRequired ~= nil, "chkDiscoveryRequired exists")
+        AssertTrue(tab.chkDiscoverySequential ~= nil, "chkDiscoverySequential exists")
+        AssertTrue(tab.btnMoveDiscoveryUp ~= nil, "btnMoveDiscoveryUp exists")
+        AssertTrue(tab.btnMoveDiscoveryDown ~= nil, "btnMoveDiscoveryDown exists")
+        AssertTrue(tab.chkDialogueRequired ~= nil, "chkDialogueRequired exists")
+        AssertTrue(tab.editorSectionsByKey["discovery"].bodyHeight >= 184, "discovery section bodyHeight accommodates sequential checkbox")
+        AssertTrue(tab.editorSectionsByKey["dialogue"].bodyHeight >= 300, "dialogue section bodyHeight accommodates required checkbox")
+
+        -- Disabled state when empty
+        AssertEqual(tab.btnMoveDiscoveryUp:IsEnabled(), false, "btnMoveDiscoveryUp disabled when no discoveries")
+        AssertEqual(tab.btnMoveDiscoveryDown:IsEnabled(), false, "btnMoveDiscoveryDown disabled when no discoveries")
+        AssertEqual(tab.chkDialogueRequired:IsEnabled(), false, "chkDialogueRequired disabled when no dialogues")
+
+        -- Add 2 discovery points
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.2, y = 0.2, radius = 800, message = "First Spot" })
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 300, worldY = 0, worldZ = 400, mapId = 32, x = 0.4, y = 0.4, radius = 1500, message = "Second Spot" })
+        tab.selectedDiscoveryIndex = 2
+        tab:RefreshEditorPane()
+
+        -- Boundary checks for reorder buttons
+        AssertEqual(tab.btnMoveDiscoveryUp:IsEnabled(), true, "btnMoveDiscoveryUp enabled when point #2 selected")
+        AssertEqual(tab.btnMoveDiscoveryDown:IsEnabled(), false, "btnMoveDiscoveryDown disabled when last point selected")
+
+        -- Mark point #2 as Required -> dropdown shows [Req]
+        ZO_CheckButton_OnClicked(tab.chkDiscoveryRequired)
+        AssertEqual(draft.discoveries[2].required, true, "chkDiscoveryRequired sets discovery[2].required=true")
+        local discItems = tab.discoveryComboBox:GetItems()
+        AssertTrue(discItems[2].name:find("[Req]", 1, true) ~= nil, "Discovery dropdown shows [Req] indicator")
+        AssertEqual(discItems[1].name:find("[Req]", 1, true), nil, "Optional discovery omits [Req]")
+
+        -- Reorder point #2 up -> becomes #1, selection follows to 1, button states flip
+        tab.btnMoveDiscoveryUp:GetHandler("OnClicked")()
+        AssertEqual(tab.selectedDiscoveryIndex, 1, "Moving point #2 up updates selectedDiscoveryIndex to 1")
+        AssertEqual(draft.discoveries[1].message, "Second Spot", "Moved point is now #1")
+        AssertEqual(draft.discoveries[1].required, true, "Moved point preserves required=true")
+        AssertEqual(draft.discoveries[2].message, "First Spot", "Previous #1 is now #2")
+        AssertEqual(tab.btnMoveDiscoveryUp:IsEnabled(), false, "btnMoveDiscoveryUp disabled at index 1")
+        AssertEqual(tab.btnMoveDiscoveryDown:IsEnabled(), true, "btnMoveDiscoveryDown enabled at index 1")
+
+        -- Out-of-bounds MoveDraftDiscoveryPoint returns nil safely
+        local badMove = repo:MoveDraftDiscoveryPoint(1, -1)
+        AssertEqual(badMove, nil, "MoveDraftDiscoveryPoint rejects move before index 1")
+        local badMove2 = repo:MoveDraftDiscoveryPoint(2, 1)
+        AssertEqual(badMove2, nil, "MoveDraftDiscoveryPoint rejects move past end")
+
+        -- Move #1 back down -> becomes #2
+        tab.btnMoveDiscoveryDown:GetHandler("OnClicked")()
+        AssertEqual(tab.selectedDiscoveryIndex, 2, "Moving point #1 down updates selectedDiscoveryIndex to 2")
+        AssertEqual(draft.discoveries[2].message, "Second Spot", "Restored point to #2")
+
+        -- Toggle Sequential order checkbox
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkDiscoverySequential), false, "Sequential order unchecked initially")
+        ZO_CheckButton_OnClicked(tab.chkDiscoverySequential)
+        AssertEqual(draft.sequentialDiscoveries, true, "chkDiscoverySequential sets draft.sequentialDiscoveries=true")
+
+        -- Add 2 dialogues and toggle Required on dialogue #1
+        repo:AddDraftDialogue("NPC Alpha", 381, "Reply A", "Ask A")
+        repo:AddDraftDialogue("NPC Beta", 381, "Reply B", "Ask B")
+        tab.selectedDialogueIndex = 1
+        tab:RefreshEditorPane()
+        AssertEqual(tab.chkDialogueRequired:IsEnabled(), true, "chkDialogueRequired enabled when dialogue selected")
+        ZO_CheckButton_OnClicked(tab.chkDialogueRequired)
+        AssertEqual(draft.dialogues[1].required, true, "chkDialogueRequired sets dialogue[1].required=true")
+        AssertTrue(tab.lblSelectedNpc:GetText():find("[Req]", 1, true) ~= nil, "lblSelectedNpc shows [Req] for required dialogue")
+        AssertTrue(tab.lblCapturedDialogues:GetText():find("NPC Alpha [Req]", 1, true) ~= nil, "lblCapturedDialogues shows [Req] tag")
+
+        -- Save draft and reopen in editor to verify persistence
+        local saved = repo:SaveDraft("Seq & Req Quest", "Test persistence")
+        AssertEqual(saved.sequentialDiscoveries, true, "Saved quest persists sequentialDiscoveries=true")
+        AssertEqual(saved.discoveries[2].required, true, "Saved quest persists discovery[2].required=true")
+        AssertEqual(saved.dialogues[1].required, true, "Saved quest persists dialogue[1].required=true")
+
+        -- Master summary detail view shows Sequential indicator
+        tab:SelectQuest(saved.id)
+        AssertTrue(tab.detailObjText:GetText():find("(Sequential)", 1, true) ~= nil, "Master summary shows (Sequential) discovery note")
+
+        tab:OpenEditEditor(saved.id)
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkDiscoverySequential), true, "Reopened editor syncs chkDiscoverySequential=true")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkDialogueRequired), true, "Reopened editor syncs chkDialogueRequired=true for dialogue #1")
+
+        -- Player view dialogue progress in JournalDetailPane (spoiler-free before execution, reveals spoken NPCs as executed)
+        repo:ResetDraft()
+        repo:AddDraftDialogue("Secret Witness", 381, "Secret reply", "Ask secret")
+        repo:AddDraftDialogue("Hidden Courier", 381, "Another reply", "Ask courier")
+        local dlgOnly = repo:SaveDraft("Dialogue Journal Test", "Talk to contacts.")
+        local code = repo:ExportQuestToCode(dlgOnly.id)
+        local rxDlg = repo:ImportQuestFromCode(code, "@Master")
+        repo:SetActiveQuest(rxDlg.id)
+        tab:SelectQuest(rxDlg.id)
+
+        local text0 = tab.detailObjText:GetText()
+        AssertTrue(text0:find("NPC Dialogues: 0 / 2", 1, true) ~= nil, "Detail pane shows 0 / 2 dialogue progress")
+        AssertEqual(text0:find("Secret Witness", 1, true), nil, "Spoiler-free: unexecuted NPC name hidden in received quest details")
+        AssertEqual(text0:find("Secret reply", 1, true), nil, "Spoiler-free: NPC response hidden in quest details")
+
+        repo:MarkDialogueTriggered(rxDlg.id, 1)
+        tab:Refresh()
+        local text1 = tab.detailObjText:GetText()
+        AssertTrue(text1:find("NPC Dialogues: 1 / 2", 1, true) ~= nil, "Detail pane updates to 1 / 2 dialogue progress")
+        AssertTrue(text1:find("Spoke with Secret Witness", 1, true) ~= nil, "Executed NPC appears in detail pane")
+        AssertEqual(text1:find("Hidden Courier", 1, true), nil, "Unexecuted NPC #2 remains hidden")
+
+        repo:MarkDialogueTriggered(rxDlg.id, 2)
+        tab:Refresh()
+        local text2 = tab.detailObjText:GetText()
+        AssertTrue(text2:find("NPC Dialogues: 2 / 2", 1, true) ~= nil, "Detail pane shows 2 / 2 upon completion")
+        AssertTrue(text2:find("Spoke with Hidden Courier", 1, true) ~= nil, "Second executed NPC appears in detail pane")
+    end)
+
 end

@@ -285,4 +285,15 @@ RPQuest.Locales["ru"] = {
     -- Journal Settings
     LABEL_JOURNAL_SETTINGS_HEADER = "НАСТРОЙКИ ЖУРНАЛА",
     CHK_AUTO_OPEN_ON_RECEIVE = "Автоматически открывать журнал RPQuests при получении нового задания",
+
+    -- Sequential Discoveries, Required Objectives & Dialogue Progress
+    CHK_OBJECTIVE_REQUIRED = "Обязательно",
+    CHK_DISCOVERY_SEQUENTIAL = "Последовательный порядок (открывать точки по очереди)",
+    TAG_REQUIRED_SHORT = "[Req]",
+    TOOLTIP_MOVE_DISCOVERY_UP = "Переместить выбранную точку вверх",
+    TOOLTIP_MOVE_DISCOVERY_DOWN = "Переместить выбранную точку вниз",
+    DISCOVERY_SEQUENTIAL_SUFFIX = " (Последовательно)",
+    DIALOGUE_PROGRESS_FORMAT = "• Диалоги с НИП: %d / %d",
+    DIALOGUE_SPOKEN_FORMAT = "• Разговор с %s",
+    CSA_DIALOGUE_PROGRESS = "Диалог (%s): %d / %d",
 }

@@ -553,6 +553,9 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isMasterSummar
     if #discoveries > 0 then
         if isMasterSummary then
             local sumLine = Addon.Locale:Get("DISCOVERY_PREPARED_SUMMARY", #discoveries):gsub("^•%s*", bullet)
+            if selectedQuest.sequentialDiscoveries == true then
+                sumLine = sumLine .. Addon.Locale:Get("DISCOVERY_SEQUENTIAL_SUFFIX")
+            end
             table.insert(objLines, sumLine)
         else
             for _, d in ipairs(discoveries) do
@@ -560,6 +563,28 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isMasterSummar
                     local clueLine = Addon.Locale:Get("DISCOVERY_CLUE_FORMAT", d.message or ""):gsub("^•%s*", bullet)
                     table.insert(objLines, clueLine)
                 end
+            end
+        end
+    end
+
+    local dialogues = selectedQuest.dialogues or {}
+    if not isMasterSummary and #dialogues > 0 then
+        local executedCount = 0
+        for _, dlg in ipairs(dialogues) do
+            if dlg.executed == true then
+                executedCount = executedCount + 1
+            end
+        end
+        local progressLine = Addon.Locale:Get("DIALOGUE_PROGRESS_FORMAT", executedCount, #dialogues):gsub("^•%s*", bullet)
+        if executedCount == #dialogues then
+            progressLine = progressLine .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+        end
+        table.insert(objLines, progressLine)
+        for _, dlg in ipairs(dialogues) do
+            if dlg.executed == true then
+                local spokenLine = Addon.Locale:Get("DIALOGUE_SPOKEN_FORMAT", dlg.npcName or ""):gsub("^•%s*", bullet)
+                    .. Addon.Locale:Get("OBJECTIVE_COMPLETED_SUFFIX")
+                table.insert(objLines, spokenLine)
             end
         end
     end
@@ -583,7 +608,6 @@ local function AppendExtraObjectiveLines(objLines, selectedQuest, isMasterSummar
             local clueLine = Addon.Locale:Get("DIALOGUE_DETAIL_CLUE_FORMAT", selectedQuest.clue):gsub("^•%s*", bullet)
             table.insert(objLines, clueLine)
         end
-        local dialogues = selectedQuest.dialogues or {}
         if #dialogues > 0 then
             local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
             local dlgLine = Addon.Locale:Get("DIALOGUE_DETAIL_NPCS_FORMAT", #dialogues, maxNpcs):gsub("^•%s*", bullet)

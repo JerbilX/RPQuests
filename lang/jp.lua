@@ -285,4 +285,15 @@ RPQuest.Locales["jp"] = {
     -- Journal Settings
     LABEL_JOURNAL_SETTINGS_HEADER = "ジャーナル設定",
     CHK_AUTO_OPEN_ON_RECEIVE = "新しいクエストを受信したときにRPQuestsジャーナルを自動で開く",
+
+    -- Sequential Discoveries, Required Objectives & Dialogue Progress
+    CHK_OBJECTIVE_REQUIRED = "必須",
+    CHK_DISCOVERY_SEQUENTIAL = "順番通り（ポイントを1つずつ解放）",
+    TAG_REQUIRED_SHORT = "[Req]",
+    TOOLTIP_MOVE_DISCOVERY_UP = "選択した発見ポイントを上に移動",
+    TOOLTIP_MOVE_DISCOVERY_DOWN = "選択した発見ポイントを下に移動",
+    DISCOVERY_SEQUENTIAL_SUFFIX = " (順番)",
+    DIALOGUE_PROGRESS_FORMAT = "• NPCとの会話: %d / %d",
+    DIALOGUE_SPOKEN_FORMAT = "• %s と会話済み",
+    CSA_DIALOGUE_PROGRESS = "会話 (%s): %d / %d",
 }

@@ -285,4 +285,15 @@ RPQuest.Locales["zh"] = {
     -- Journal Settings
     LABEL_JOURNAL_SETTINGS_HEADER = "日志设置",
     CHK_AUTO_OPEN_ON_RECEIVE = "收到新任务时自动打开 RPQuests 日志",
+
+    -- Sequential Discoveries, Required Objectives & Dialogue Progress
+    CHK_OBJECTIVE_REQUIRED = "必需",
+    CHK_DISCOVERY_SEQUENTIAL = "按顺序解锁（依次解锁发现点）",
+    TAG_REQUIRED_SHORT = "[Req]",
+    TOOLTIP_MOVE_DISCOVERY_UP = "上移选中的发现点",
+    TOOLTIP_MOVE_DISCOVERY_DOWN = "下移选中的发现点",
+    DISCOVERY_SEQUENTIAL_SUFFIX = " (按顺序)",
+    DIALOGUE_PROGRESS_FORMAT = "• NPC对话：%d / %d",
+    DIALOGUE_SPOKEN_FORMAT = "• 已与 %s 对话",
+    CSA_DIALOGUE_PROGRESS = "对话 (%s)：%d / %d",
 }

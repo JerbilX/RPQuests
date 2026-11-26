@@ -15,7 +15,10 @@ Usage:
 - Aim at any living NPC or another player and press your "Capture Target Under
   Reticle (NPC)" keybind to add NPC elimination or player duel objectives.
 - Click "+ New" to create a quest (optionally assigning a Quest Icon: Black Hand,
-  Search, or Steal), or use "Test Quest" / "Reset" on prepared quests.
+  Search, or Steal; configuring Required discovery points, Sequential order,
+  reordering discovery points, or Required NPC dialogues whose execution
+  persists across reloads and auto-completes dialogue-only quests), or use
+  "Test Quest" / "Reset" on prepared quests.
 - Assign a recipient (@AccountName) and optionally choose a From (Character)
   from your account characters in the editor, then click "Send Quest" in the
   quest details pane to send via in-game mail.
