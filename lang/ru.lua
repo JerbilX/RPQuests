@@ -52,6 +52,7 @@ RPQuest.Locales["ru"] = {
     LABEL_NO_DESCRIPTION = "Дополнительное описание отсутствует.",
     LABEL_OBJECTIVE_HEADER = "ЗАДАЧИ",
     LABEL_MISSION_DETAILS_HEADER = "ДЕТАЛИ ЗАДАНИЯ",
+    LABEL_COMPLETION_MESSAGE_HEADER = "СООБЩЕНИЕ О ЗАВЕРШЕНИИ",
     OBJECTIVE_KILL_FORMAT = "• Устранить %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Выполнено)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Необязательно)|r",

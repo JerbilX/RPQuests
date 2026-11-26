@@ -52,6 +52,7 @@ RPQuest.Locales["de"] = {
     LABEL_NO_DESCRIPTION = "Keine weitere Beschreibung angegeben.",
     LABEL_OBJECTIVE_HEADER = "AUFGABEN",
     LABEL_MISSION_DETAILS_HEADER = "MISSIONSDETAILS",
+    LABEL_COMPLETION_MESSAGE_HEADER = "ABSCHLUSSNACHRICHT",
     OBJECTIVE_KILL_FORMAT = "• Eliminiert %s: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(Abgeschlossen)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(Optional)|r",

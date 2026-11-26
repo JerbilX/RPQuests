@@ -52,6 +52,7 @@ RPQuest.Locales["jp"] = {
     LABEL_NO_DESCRIPTION = "追加の説明はありません。",
     LABEL_OBJECTIVE_HEADER = "目標",
     LABEL_MISSION_DETAILS_HEADER = "ミッション詳細",
+    LABEL_COMPLETION_MESSAGE_HEADER = "完了メッセージ",
     OBJECTIVE_KILL_FORMAT = "• %s を倒す: %d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(完了)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(任意)|r",

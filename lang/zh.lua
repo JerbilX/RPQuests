@@ -52,6 +52,7 @@ RPQuest.Locales["zh"] = {
     LABEL_NO_DESCRIPTION = "未提供额外描述。",
     LABEL_OBJECTIVE_HEADER = "任务目标",
     LABEL_MISSION_DETAILS_HEADER = "任务详情",
+    LABEL_COMPLETION_MESSAGE_HEADER = "完成消息",
     OBJECTIVE_KILL_FORMAT = "• 消灭 %s：%d / %d",
     OBJECTIVE_COMPLETED_SUFFIX = " |c33FF33(已完成)|r",
     OBJECTIVE_OPTIONAL_SUFFIX = " |cAAAAAA(可选)|r",

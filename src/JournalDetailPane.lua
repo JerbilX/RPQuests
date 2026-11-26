@@ -100,6 +100,18 @@ local function BuildDetailHeaderAndBody(tab, pane, panelName)
     if objText.SetColor then objText:SetColor(1, 1, 1, 1) end
     tab.detailObjText = objText
 
+    local completionHeader = CreateDetailLabel(contentParent, panelName .. "_DetailCompletionHeader", 500, 24, "ZoFontWinH3", objText, BOTTOMLEFT, -25, 14)
+    if completionHeader.SetColor then completionHeader:SetColor(1, 1, 1, 1) end
+    if completionHeader.SetModifyTextType then completionHeader:SetModifyTextType(MODIFY_TEXT_TYPE_UPPERCASE) end
+    completionHeader:SetText(Addon.Locale:Get("LABEL_COMPLETION_MESSAGE_HEADER"))
+    completionHeader:SetHidden(true)
+    tab.detailCompletionHeader = completionHeader
+
+    local completionText = CreateDetailLabel(contentParent, panelName .. "_DetailCompletionText", 495, 24, "ZoFontWinH4", completionHeader, BOTTOMLEFT, 25, 10)
+    if completionText.SetColor then completionText:SetColor(0.77, 0.76, 0.62, 1) end
+    completionText:SetHidden(true)
+    tab.detailCompletionText = completionText
+
     return contentParent
 end
 
@@ -601,7 +613,52 @@ local function BuildObjectiveLines(selectedQuest, isPrepared, isCurrentActive)
     return objLines
 end
 
-local function UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
+local function EstimateWrappedTextHeight(text)
+    local totalLines = 0
+    for line in (text .. "\n"):gmatch("(.-)\n") do
+        local len = #line
+        totalLines = totalLines + math.max(1, math.ceil(len / 55))
+    end
+    return math.max(24, totalLines * 24)
+end
+
+local function UpdateCompletionMessageSection(tab, selectedQuest)
+    if not tab.detailCompletionHeader or not tab.detailCompletionText then
+        return tab.detailObjText, -25, 14, 0
+    end
+    local resolution = Addon.QuestRepository:GetQuestResolution(selectedQuest)
+    local isCompleted = (resolution == "completed")
+        or (selectedQuest.completed == true and resolution ~= "failed" and resolution ~= "rejected" and not selectedQuest.failed)
+    local trimmedMsg = type(selectedQuest.completionMessage) == "string"
+        and selectedQuest.completionMessage:gsub("^%s+", ""):gsub("%s+$", "")
+        or ""
+
+    if not (isCompleted and trimmedMsg ~= "") then
+        tab.detailCompletionHeader:SetHidden(true)
+        tab.detailCompletionText:SetText("")
+        tab.detailCompletionText:SetHidden(true)
+        return tab.detailObjText, -25, 14, 0
+    end
+
+    tab.detailCompletionHeader:ClearAnchors()
+    tab.detailCompletionHeader:SetAnchor(TOPLEFT, tab.detailObjText, BOTTOMLEFT, -25, 14)
+    tab.detailCompletionHeader:SetHidden(false)
+
+    tab.detailCompletionText:SetDimensions(495, 0)
+    tab.detailCompletionText:SetText(trimmedMsg)
+    local textHeight = tab.detailCompletionText.GetTextHeight and tab.detailCompletionText:GetTextHeight()
+    local boxHeight = textHeight and (textHeight + 12) or EstimateWrappedTextHeight(trimmedMsg)
+    boxHeight = math.max(24, boxHeight)
+    tab.detailCompletionText:SetDimensions(495, boxHeight)
+    tab.detailCompletionText:SetHidden(false)
+
+    return tab.detailCompletionText, -25, 14, 38 + boxHeight
+end
+
+local function UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared, isCurrentActive, anchorControl, offsetX, offsetY)
+    local baseAnchor = anchorControl or tab.detailObjText
+    local baseOffsetX = offsetX or -25
+    local baseOffsetY = offsetY or 14
     local needsMigration = isPrepared and (selectedQuest.needsMigration == true)
     local showToggles = (not isOffered) and (not needsMigration) and ((not isPrepared) or isCurrentActive)
 
@@ -649,7 +706,7 @@ local function UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared
 
     if visibleCount > 0 and tab.detailMapMarkersHeader then
         tab.detailMapMarkersHeader:ClearAnchors()
-        tab.detailMapMarkersHeader:SetAnchor(TOPLEFT, tab.detailObjText, BOTTOMLEFT, -25, 14)
+        tab.detailMapMarkersHeader:SetAnchor(TOPLEFT, baseAnchor, BOTTOMLEFT, baseOffsetX, baseOffsetY)
         tab.detailMapMarkersHeader:SetHidden(false)
         return prevControl, -25, 14, 38 + (visibleCount * 30)
     end
@@ -657,7 +714,7 @@ local function UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared
     if tab.detailMapMarkersHeader then
         tab.detailMapMarkersHeader:SetHidden(true)
     end
-    return tab.detailObjText, -25, 16, 0
+    return baseAnchor, baseOffsetX, (baseAnchor == tab.detailObjText) and 16 or baseOffsetY, 0
 end
 
 local function UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared, anchorControl, offsetX, offsetY)
@@ -768,6 +825,11 @@ local function RenderEmptyDetailPane(tab)
     if tab.detailMissionText then
         tab.detailMissionText:SetText("")
         tab.detailMissionText:SetHidden(true)
+    end
+    if tab.detailCompletionHeader then tab.detailCompletionHeader:SetHidden(true) end
+    if tab.detailCompletionText then
+        tab.detailCompletionText:SetText("")
+        tab.detailCompletionText:SetHidden(true)
     end
     if tab.detailMapMarkersHeader then tab.detailMapMarkersHeader:SetHidden(true) end
     if tab.mapMarkerSearchRow then tab.mapMarkerSearchRow:SetHidden(true) end
@@ -902,11 +964,15 @@ function DetailPane.Refresh(tab, selectedQuest, activeQuest)
     local textHeight = tab.detailObjText.GetTextHeight and tab.detailObjText:GetTextHeight()
     local objHeight = textHeight and (textHeight + 16) or (#objLines * 24)
     tab.detailObjText:SetDimensions(495, math.max(32, objHeight))
-    local anchorControl, offsetX, offsetY, extraMapHeight = UpdateDetailMapControls(tab, selectedQuest, isOffered, isPrepared, isCurrentActive)
+    local completionAnchor, completionOffsetX, completionOffsetY, completionHeight = UpdateCompletionMessageSection(tab, selectedQuest)
+    local anchorControl, offsetX, offsetY, extraMapHeight = UpdateDetailMapControls(
+        tab, selectedQuest, isOffered, isPrepared, isCurrentActive,
+        completionAnchor, completionOffsetX, completionOffsetY
+    )
     UpdateDetailActionButtons(tab, selectedQuest, isOffered, isPrepared, anchorControl, offsetX, offsetY)
     local settingsAnchor, settingsOffsetX, settingsOffsetY = ResolveBottomActionAnchor(tab, anchorControl, offsetX, offsetY)
     UpdateDetailSettingsControls(tab, settingsAnchor, settingsOffsetX, settingsOffsetY)
     if tab.detailScrollChild and tab.detailScrollChild.SetDimensions then
-        tab.detailScrollChild:SetDimensions(526, math.max(650, 715 + missionHeight + objHeight + math.max(0, statusHeight - 24) + extraMapHeight))
+        tab.detailScrollChild:SetDimensions(526, math.max(650, 715 + missionHeight + objHeight + completionHeight + math.max(0, statusHeight - 24) + extraMapHeight))
     end
 end
