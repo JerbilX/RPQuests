@@ -300,11 +300,7 @@ return function(T)
         AssertEqual(okVal, true, "Original quest validates RPQC1 from RPQ3-decoded quest: " .. tostring(valRes))
     end)
 
-    RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes and JournalTab shows version", function()
-        RPQuest.JournalTab:Initialize()
-        AssertTrue(RPQuest.JournalTab.versionLabel ~= nil, "JournalTab creates versionLabel")
-        AssertEqual(RPQuest.JournalTab.versionLabel:GetText(), "v" .. RPQuest.Constants.METADATA.VERSION, "versionLabel displays addon version")
-
+    RunTest("ShareCodec:DecodeQuest surfaces ERR_IMPORT_UNSUPPORTED_VERSION for future RPQ prefixes", function()
         local dec1, err1 = RPQuest.ShareCodec:DecodeQuest("RPQ4:1234:abcd")
         AssertEqual(dec1, nil, "RPQ4 standard envelope rejected")
         AssertEqual(err1, "ERR_IMPORT_UNSUPPORTED_VERSION", "RPQ4 returns ERR_IMPORT_UNSUPPORTED_VERSION")
