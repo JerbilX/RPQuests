@@ -283,7 +283,6 @@ RPQuest.Locales["de"] = {
     QUEST_ICON_STEAL = "Stehlen",
 
     -- Journal Settings
-    LABEL_JOURNAL_SETTINGS_HEADER = "TAGEBUCH-EINSTELLUNGEN",
     CHK_AUTO_OPEN_ON_RECEIVE = "RPQuests-Tagebuch beim Empfang einer neuen Quest automatisch öffnen",
 
     -- Sequential Discoveries, Required Objectives & Dialogue Progress
