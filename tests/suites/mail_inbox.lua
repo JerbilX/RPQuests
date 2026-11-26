@@ -568,4 +568,140 @@ return function(T)
         _G.DeleteMail = origDeleteMail
     end)
 
+    RunTest("MailInbox: sequential async DeleteMail queue via EVENT_MAIL_REMOVED for multi-part RPQP mails (Issue #339)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+
+        local questCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Async Delete Quest",
+            description = string.rep("Detailed lore for async multi-part deletion. ", 45),
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = {
+                { name = "Guard", requiredCount = 3, customMessage = string.rep("Note ", 30) },
+            },
+        })
+        local plan = RPQuest.MailTransport:BuildQuestMailPackets(string.rep("RP intro for async delete test. ", 40), questCode, "Async Delete Quest")
+        AssertTrue(plan.fits and plan.partCount >= 3, "Test quest splits into at least 3 parts (got " .. tostring(plan.partCount) .. ")")
+
+        local inbox = {}
+        local deleteCalls = {}
+        local pendingDeleteId = nil
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+
+        _G.GetNextMailId = function(cur)
+            local keys = {}
+            for k in pairs(inbox) do table.insert(keys, k) end
+            table.sort(keys)
+            if cur == nil then return keys[1] end
+            for i, k in ipairs(keys) do
+                if k == cur then return keys[i + 1] end
+            end
+            return nil
+        end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        -- Simulate ESO's async DeleteMail: drops concurrent calls while one deletion is in flight
+        _G.DeleteMail = function(id)
+            table.insert(deleteCalls, id)
+            if pendingDeleteId ~= nil then
+                return
+            end
+            pendingDeleteId = id
+        end
+
+        local function fireMailRemoved(id)
+            inbox[id] = nil
+            if pendingDeleteId == id then
+                pendingDeleteId = nil
+            end
+            RPQuest.MailTransport:OnMailRemoved(id)
+        end
+
+        -- 1. Deliver all N parts and scan inbox
+        for i = 1, plan.partCount do
+            inbox[400 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = plan.packets[i].body,
+                secs = 1,
+            }
+        end
+        RPQuest.MailTransport:ScanInbox(false)
+
+        local received = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        AssertEqual(#received, 1, "Multi-part quest imported")
+        AssertEqual(#deleteCalls, 1, "Only 1 DeleteMail issued immediately while awaiting EVENT_MAIL_REMOVED")
+        AssertEqual(deleteCalls[1], 401, "First DeleteMail targets part 1")
+
+        -- Simulate an unrelated mail removal while 401 is still deleting: must not advance queue
+        RPQuest.MailTransport:OnMailRemoved(9999)
+        AssertEqual(#deleteCalls, 1, "Unrelated EVENT_MAIL_REMOVED does not advance delete queue")
+
+        -- Remove part 2 externally before part 1 finishes -> queue should skip missing part 2 and jump to part 3
+        inbox[402] = nil
+        fireMailRemoved(401)
+        AssertEqual(#deleteCalls, 2, "Advancing after part 1 skips missing part 2 and calls DeleteMail for part 3")
+        AssertEqual(deleteCalls[2], 403, "Second DeleteMail targets part 3")
+
+        -- Finish remaining parts sequentially
+        for i = 3, plan.partCount do
+            fireMailRemoved(400 + i)
+        end
+        AssertEqual(#deleteCalls, plan.partCount - 1, "All existing parts deleted sequentially")
+        for i = 1, plan.partCount do
+            AssertEqual(inbox[400 + i], nil, "No orphan part " .. i .. " left in inbox")
+        end
+        AssertEqual(RPQuest.MailInbox._deletingMailId, nil, "No active _deletingMailId after queue drains")
+
+        -- 2. Mailbox close clears pending delete queue safely
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+        inbox[501] = { sender = "@Master", charName = "M", subject = "[RPQuest 1/2] Q", body = "RPQP:AA11:1/2\nabc", secs = 1 }
+        inbox[502] = { sender = "@Master", charName = "M", subject = "[RPQuest 2/2] Q", body = "RPQP:AA11:2/2\ndef", secs = 1 }
+        RPQuest.MailInbox:DisposeMailIds({ 501, 502 })
+        AssertTrue(RPQuest.MailInbox._deletingMailId ~= nil, "Deletion in progress before mailbox close")
+        RPQuest.MailTransport:OnMailboxClosed()
+        AssertEqual(RPQuest.MailInbox._deletingMailId, nil, "OnMailboxClosed clears _deletingMailId")
+        AssertEqual(#(RPQuest.MailInbox._deleteQueue or {}), 0, "OnMailboxClosed clears _deleteQueue")
+        pendingDeleteId = nil
+
+        -- 3. autoDeleteMail = false records all part IDs in _dismissedMailIds without calling DeleteMail
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
+        local callsBefore = #deleteCalls
+        for i = 1, plan.partCount do
+            inbox[600 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = plan.packets[i].body,
+                secs = 1,
+            }
+        end
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#deleteCalls, callsBefore, "DeleteMail NOT called when autoDeleteMail = false")
+        for i = 1, plan.partCount do
+            AssertEqual(RPQuest.MailInbox._dismissedMailIds[tostring(600 + i)], true, "Part " .. i .. " recorded in _dismissedMailIds")
+        end
+
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+    end)
+
 end

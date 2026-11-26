@@ -390,6 +390,9 @@ function MailTransport:OnMailboxClosed()
     if self._isSending then
         self:AbortSendQueue("MAILBOX_CLOSED")
     end
+    if Addon.MailInbox and Addon.MailInbox.OnMailboxClosed then
+        Addon.MailInbox:OnMailboxClosed()
+    end
 end
 
 function MailTransport:AbortSendQueue(reason)
