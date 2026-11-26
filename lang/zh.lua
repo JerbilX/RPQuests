@@ -296,4 +296,7 @@ RPQuest.Locales["zh"] = {
     DIALOGUE_PROGRESS_FORMAT = "• NPC对话：%d / %d",
     DIALOGUE_SPOKEN_FORMAT = "• 已与 %s 对话",
     CSA_DIALOGUE_PROGRESS = "对话 (%s)：%d / %d",
+    OBJECTIVE_FREEFORM = "• 自由形式角色扮演任务（完成后手动完成）",
+    ALERT_QUEST_FAILED_REQUIRED_DISCOVERY = "遗漏了必需的探索点。",
+    ALERT_QUEST_FAILED_REQUIRED_DIALOGUE = "遗漏了必需的 NPC 对话（%s）。",
 }

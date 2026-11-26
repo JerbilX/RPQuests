@@ -64,7 +64,7 @@ function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, _worldY, worldZ
         self:UpdatePollingState()
         return false
     end
-    if not activeQuest or activeQuest.completed or type(activeQuest.discoveries) ~= "table" then
+    if not activeQuest or activeQuest.completed or activeQuest.failed or type(activeQuest.discoveries) ~= "table" then
         return false
     end
 
@@ -83,11 +83,14 @@ function DiscoveryTracker:EvaluatePlayerPosition(zoneId, worldX, _worldY, worldZ
                     local dz = worldZ - point.worldZ
                     local radius = point.radius or defaultRadius
                     if ((dx * dx) + (dz * dz)) <= (radius * radius) then
-                        local ok, quest, isCompleted, triggeredPoint = Addon.QuestRepository:MarkDiscoveryTriggered(activeQuest.id, idx)
+                        local ok, quest, isCompleted, triggeredPoint, questFailed, failReason = Addon.QuestRepository:MarkDiscoveryTriggered(activeQuest.id, idx)
                         if ok and triggeredPoint then
                             triggeredAny = true
                             Addon.Announcements:AnnounceDiscovery(quest, triggeredPoint)
-                            if isCompleted then
+                            if questFailed then
+                                Addon.Announcements:AnnounceQuestFailed(quest, nil, failReason)
+                                break
+                            elseif isCompleted then
                                 Addon.Announcements:AnnounceQuestCompleted(quest)
                                 break
                             end

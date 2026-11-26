@@ -730,9 +730,11 @@ function JournalTab:OnCompleteQuestClicked()
     local q = Addon.QuestRepository:GetQuestById(self.selectedQuestId)
     if not q then return end
 
-    local ok, completedQuest = Addon.QuestRepository:CompleteQuest(q.id)
-    if ok and completedQuest then
-        Addon.Announcements:AnnounceQuestCompleted(completedQuest)
+    local ok, resolvedQuest, questFailed, failReason = Addon.QuestRepository:CompleteQuest(q.id)
+    if questFailed and resolvedQuest then
+        Addon.Announcements:AnnounceQuestFailed(resolvedQuest, nil, failReason)
+    elseif ok and resolvedQuest then
+        Addon.Announcements:AnnounceQuestCompleted(resolvedQuest)
     end
 end
 

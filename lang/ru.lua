@@ -296,4 +296,7 @@ RPQuest.Locales["ru"] = {
     DIALOGUE_PROGRESS_FORMAT = "• Диалоги с НИП: %d / %d",
     DIALOGUE_SPOKEN_FORMAT = "• Разговор с %s",
     CSA_DIALOGUE_PROGRESS = "Диалог (%s): %d / %d",
+    OBJECTIVE_FREEFORM = "• Свободное ролевое задание (завершите вручную по окончании)",
+    ALERT_QUEST_FAILED_REQUIRED_DISCOVERY = "Пропущена обязательная точка исследования.",
+    ALERT_QUEST_FAILED_REQUIRED_DIALOGUE = "Пропущен обязательный диалог с НИП (%s).",
 }

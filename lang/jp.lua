@@ -296,4 +296,7 @@ RPQuest.Locales["jp"] = {
     DIALOGUE_PROGRESS_FORMAT = "• NPCとの会話: %d / %d",
     DIALOGUE_SPOKEN_FORMAT = "• %s と会話済み",
     CSA_DIALOGUE_PROGRESS = "会話 (%s): %d / %d",
+    OBJECTIVE_FREEFORM = "• フリーフォームのロールプレイクエスト（完了時に手動で完了）",
+    ALERT_QUEST_FAILED_REQUIRED_DISCOVERY = "必須の発見ポイントを見逃しました。",
+    ALERT_QUEST_FAILED_REQUIRED_DIALOGUE = "必須のNPC会話を見逃しました（%s）。",
 }

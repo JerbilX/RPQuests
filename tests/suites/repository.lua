@@ -1504,4 +1504,181 @@ return function(T)
         RPQuest.MailTransport:Initialize()
     end)
 
+    RunTest("Issue #346: Free-form manual completion and required discovery/dialogue failure rules", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        repo:Initialize(repo:GetDefaults())
+        RPQuest.DiscoveryTracker:Initialize()
+        RPQuest.MailTransport:Initialize()
+
+        local sentMails = {}
+        local origSendMail = _G.SendMail
+        local origReqOpen = _G.RequestOpenMailbox
+        local origClose = _G.CloseMailbox
+        _G.SendMail = function(recipient, subject, body)
+            table.insert(sentMails, { recipient = recipient, subject = subject, body = body })
+        end
+        _G.RequestOpenMailbox = function() end
+        _G.CloseMailbox = function() end
+        local function flushMailQueue()
+            for _ = 1, 10 do
+                if not RPQuest.MailTransport._isSending then break end
+                RPQuest.MailTransport:OnMailboxOpened()
+                RPQuest.MailTransport:OnMailSendSuccess("@Master")
+            end
+        end
+
+        local events = {}
+        repo:RegisterListener(function(evType, payload)
+            if type(payload) == "table" and payload.id then
+                table.insert(events, { evType = evType, questId = payload.id, resolution = payload.resolution })
+            end
+        end)
+
+        -- 1. Pure free-form quest (0/0/0): cannot complete while offered, completes manually once accepted
+        repo:ResetDraft()
+        local ffPrep = repo:SaveDraft("Tavern Deal", "Pure RP agreement")
+        local ffCode = repo:ExportQuestToCode(ffPrep.id)
+        local ffOffered = repo:ImportQuestFromCode(ffCode, "@Master", { status = RPQuest.Constants.QUEST_STATUS.OFFERED })
+        AssertEqual(repo:CanManuallyCompleteQuest(ffOffered), false, "Offered free-form quest cannot be completed manually")
+        local blkOk, blkQ, blkFailed = repo:CompleteQuest(ffOffered.id)
+        AssertEqual(blkOk, false, "CompleteQuest rejects offered free-form quest")
+        AssertEqual(blkQ, nil, "CompleteQuest returns nil when blocked")
+        AssertEqual(blkFailed, false, "Blocked CompleteQuest does not fail quest")
+
+        repo:AcceptOfferedQuest(ffOffered.id)
+        AssertEqual(repo:CanManuallyCompleteQuest(ffOffered), true, "Accepted pure free-form quest can be completed manually")
+        events = {}
+        local ffOk, ffRes, ffFailed = repo:CompleteQuest(ffOffered.id)
+        AssertEqual(ffOk, true, "Pure free-form CompleteQuest succeeds")
+        AssertEqual(ffFailed, false, "Pure free-form CompleteQuest does not fail")
+        AssertEqual(ffRes.completed, true, "Pure free-form quest marked completed")
+        AssertEqual(ffRes.failed, false, "Pure free-form quest not failed")
+        AssertEqual(repo:GetQuestResolution(ffRes), "completed", "Pure free-form resolution is completed")
+        AssertEqual(repo:CanManuallyCompleteQuest(ffRes), false, "Completed free-form quest cannot be completed again")
+
+        -- 2. Non-required discovery & dialogue do NOT block or fail manual completion
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({ targetName = "Boss", mapId = 1, zoneId = 381, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        repo:SetDraftCapturedTarget({ targetName = "Bonus", mapId = 1, zoneId = 381, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        repo:UpdateDraftTarget(2, { optional = true })
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "Optional clue", required = false })
+        repo:AddDraftDialogue("Informer", 381, "Optional tip", "Any news?", false)
+        local optPrep = repo:SaveDraft("Optional Extras", "Skip optional bits")
+        local optRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(optPrep.id), "@Master")
+        repo:SetActiveQuest(optRx.id)
+        repo:RecordTargetEliminated("Boss")
+        AssertEqual(repo:CanManuallyCompleteQuest(optRx), true, "Non-required discovery/dialogue allow manual completion")
+        local optOk, optRes, optFailed = repo:CompleteQuest(optRx.id)
+        AssertEqual(optOk, true, "Manual completion succeeds when discovery and dialogue are non-required")
+        AssertEqual(optFailed, false, "Does not fail on missed non-required discovery/dialogue")
+        AssertEqual(optRes.completed, true, "Quest marked completed")
+
+        -- 3. Missed required discovery at manual completion -> FAILS and sends RPQC1 failure report
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({ targetName = "Boss", mapId = 1, zoneId = 381, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        repo:SetDraftCapturedTarget({ targetName = "Bonus", mapId = 1, zoneId = 381, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        repo:UpdateDraftTarget(2, { optional = true })
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "Must inspect", required = true })
+        local reqDiscPrep = repo:SaveDraft("Required Clue Contract", "Inspect before finishing")
+        local reqDiscRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(reqDiscPrep.id), "@Master")
+        repo:SetActiveQuest(reqDiscRx.id)
+        repo:RecordTargetEliminated("Boss")
+        AssertEqual(repo:CanManuallyCompleteQuest(reqDiscRx), true, "Manual complete button remains available to trigger resolution")
+
+        flushMailQueue()
+        sentMails = {}
+        events = {}
+        local rdOk, rdRes, rdFailed, rdReason = repo:CompleteQuest(reqDiscRx.id)
+        flushMailQueue()
+        AssertEqual(rdOk, false, "CompleteQuest returns false when required discovery missed")
+        AssertEqual(rdFailed, true, "CompleteQuest signals questFailed=true")
+        AssertEqual(rdReason, RPQuest.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DISCOVERY"), "Returns localized missed discovery reason")
+        AssertEqual(rdRes.completed, false, "Quest is NOT completed")
+        AssertEqual(rdRes.failed, true, "Quest is marked failed")
+        AssertEqual(repo:GetQuestResolution(rdRes), "failed", "Resolution transitions to failed")
+        AssertEqual(repo:GetActiveQuest(), nil, "Active quest cleared after failure")
+        AssertEqual(#events, 2, "QUEST_FAILED and FAILURE_REPORTED emitted on failure + mail flush")
+        AssertEqual(events[1].evType, "QUEST_FAILED", "QUEST_FAILED event emitted")
+        AssertEqual(events[2].evType, "FAILURE_REPORTED", "FAILURE_REPORTED event emitted after RPQC1 mail sent")
+        AssertTrue(#sentMails >= 1 and sentMails[#sentMails].subject:find("[RPQuest:Failed]", 1, true) ~= nil, "MailTransport sends [RPQuest:Failed] RPQC1 mail")
+        local valFailOk, valFailRes = repo:ValidateResultCode(reqDiscPrep.id, sentMails[#sentMails].body)
+        AssertEqual(valFailOk, true, "Quest Master validates RPQC1 failure report")
+        AssertEqual(valFailRes.failed, true, "Decoded RPQC1 report has failed=true")
+
+        -- 4. Auto-resolution via target elimination with missed required dialogue -> FAILS
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({ targetName = "Assassin", mapId = 1, zoneId = 381, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        repo:AddDraftDialogue("Spymaster", 381, "Confirm identity first.", "Who is the target?", true)
+        local reqDlgPrep = repo:SaveDraft("Required Dialogue Hunt", "Speak before striking")
+        local reqDlgRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(reqDlgPrep.id), "@Master")
+        repo:SetActiveQuest(reqDlgRx.id)
+
+        flushMailQueue()
+        sentMails = {}
+        events = {}
+        local recOk, recQ, justComp, _, recFailed, recReason = repo:RecordTargetEliminated("Assassin")
+        flushMailQueue()
+        AssertEqual(recOk, true, "Target elimination recorded")
+        AssertEqual(justComp, false, "Quest does not complete when required dialogue missed")
+        AssertEqual(recFailed, true, "RecordTargetEliminated signals questFailed=true")
+        AssertEqual(recReason, RPQuest.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DIALOGUE", "Spymaster"), "Returns localized missed dialogue reason")
+        AssertEqual(recQ.failed, true, "Quest marked failed")
+        AssertEqual(repo:GetQuestResolution(recQ), "failed", "Resolution is failed")
+        AssertEqual(events[1].evType, "QUEST_FAILED", "QUEST_FAILED emitted on target auto-resolution failure")
+        AssertTrue(#sentMails >= 1 and sentMails[#sentMails].subject:find("[RPQuest:Failed]", 1, true) ~= nil, "RPQC1 failure mail sent")
+
+        -- Reset, execute required dialogue first, then eliminate target -> COMPLETES
+        repo:ResetQuest(reqDlgRx.id)
+        repo:SetActiveQuest(reqDlgRx.id)
+        repo:MarkDialogueTriggered(reqDlgRx.id, 1)
+        AssertEqual(reqDlgRx.completed, false, "Quest not completed on dialogue alone while target remains")
+        local ok2, q2, justComp2, _, failed2 = repo:RecordTargetEliminated("Assassin")
+        AssertEqual(ok2, true, "Target eliminated after required dialogue")
+        AssertEqual(justComp2, true, "Quest completes once required dialogue was executed")
+        AssertEqual(failed2, false, "Quest does not fail when required dialogue was executed")
+        AssertEqual(q2.completed, true, "Quest marked completed")
+
+        -- 5. Auto-resolution via discovery trigger with missed required dialogue -> FAILS via DiscoveryTracker
+        repo:ResetDraft()
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 10000, worldY = 0, worldZ = 20000, mapId = 32, x = 0.5, y = 0.5, radius = 1000, message = "Found tracks", required = false })
+        repo:AddDraftDialogue("Ranger", 381, "Check the east trail.", "Any tracks?", true)
+        local discDlgPrep = repo:SaveDraft("Discovery + Required Dialogue", "Talk to Ranger first")
+        local discDlgRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(discDlgPrep.id), "@Master")
+        repo:SetActiveQuest(discDlgRx.id)
+
+        local origAnnounceFail = RPQuest.Announcements.AnnounceQuestFailed
+        local failAnnounces = {}
+        RPQuest.Announcements.AnnounceQuestFailed = function(_, quest, target, reasonText)
+            table.insert(failAnnounces, { questId = quest and quest.id, reasonText = reasonText })
+            origAnnounceFail(RPQuest.Announcements, quest, target, reasonText)
+        end
+
+        local trigOk = RPQuest.DiscoveryTracker:EvaluatePlayerPosition(381, 10000, 0, 20000)
+        AssertEqual(trigOk, true, "Discovery triggered in DiscoveryTracker")
+        AssertEqual(discDlgRx.failed, true, "Quest fails when discovery finishes with missed required dialogue")
+        AssertEqual(discDlgRx.completed, false, "Quest not completed on missed required dialogue")
+        AssertEqual(#failAnnounces, 1, "AnnounceQuestFailed called once")
+        AssertEqual(failAnnounces[1].reasonText, RPQuest.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DIALOGUE", "Ranger"), "Failure announcement includes NPC name")
+
+        -- 6. Non-required dialogue in mixed target quest does NOT fail
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({ targetName = "Wolf", mapId = 1, zoneId = 381, mapName = "Zone", targetX = 0.5, targetY = 0.5 })
+        repo:AddDraftDialogue("Villager", 381, "Be careful!", "Any advice?", false)
+        local optDlgPrep = repo:SaveDraft("Optional Dialogue Hunt", "Hunt wolf")
+        local optDlgRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(optDlgPrep.id), "@Master")
+        repo:SetActiveQuest(optDlgRx.id)
+        local okOptDlg, qOptDlg, compOptDlg, _, failOptDlg = repo:RecordTargetEliminated("Wolf")
+        AssertEqual(okOptDlg, true, "Wolf eliminated")
+        AssertEqual(compOptDlg, true, "Quest completes without optional dialogue")
+        AssertEqual(failOptDlg, false, "Optional dialogue does not fail quest")
+        AssertEqual(qOptDlg.completed, true, "Quest marked completed")
+
+        RPQuest.Announcements.AnnounceQuestFailed = origAnnounceFail
+        _G.SendMail = origSendMail
+        _G.RequestOpenMailbox = origReqOpen
+        _G.CloseMailbox = origClose
+    end)
+
 end

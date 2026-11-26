@@ -204,9 +204,16 @@ function QuestRepository:AreAllObjectivesCompleted(questOrTargets, discoveriesAr
     return true
 end
 
+-- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
 function QuestRepository:CanManuallyCompleteQuest(quest)
     if not quest or quest.completed or quest.failed or self:IsOfferedQuest(quest) then
         return false
+    end
+    local hasTargets = type(quest.targets) == "table" and #quest.targets > 0
+    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
+    local hasDialogues = type(quest.dialogues) == "table" and #quest.dialogues > 0
+    if not hasTargets and not hasDiscoveries and not hasDialogues then
+        return true
     end
     if not HasOptionalTargets(quest.targets) then
         return false
@@ -214,15 +221,12 @@ function QuestRepository:CanManuallyCompleteQuest(quest)
     if self:AreAllObjectivesCompleted(quest) then
         return false
     end
-    local hasDiscoveries = type(quest.discoveries) == "table" and #quest.discoveries > 0
-    if hasDiscoveries and not AreAllDiscoveriesCompleted(quest.discoveries) then
-        return false
-    end
     local mandatoryDone, hasMandatory, anyOptionalDone = AreMandatoryTargetsCompleted(quest.targets)
     if not mandatoryDone then
         return false
     end
-    if not hasMandatory and not hasDiscoveries and not anyOptionalDone then
+    local allDiscoveriesDone = hasDiscoveries and AreAllDiscoveriesCompleted(quest.discoveries)
+    if not hasMandatory and not allDiscoveriesDone and not anyOptionalDone then
         return false
     end
     return true
@@ -264,14 +268,49 @@ local function FinalizeFailedQuest(self, quest)
     self:NotifyListeners("QUEST_FAILED", quest)
 end
 
-function QuestRepository:CompleteQuest(questId)
-    local quest = self:GetQuestById(questId)
-    if not self:CanManuallyCompleteQuest(quest) then
-        return false, nil
+local function FindMissedRequiredObjective(quest)
+    if type(quest) ~= "table" then
+        return nil, nil
+    end
+    if type(quest.discoveries) == "table" then
+        for _, d in ipairs(quest.discoveries) do
+            if type(d) == "table" and d.required == true and not d.discovered then
+                return "discovery", Addon.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DISCOVERY")
+            end
+        end
+    end
+    if type(quest.dialogues) == "table" then
+        for _, dlg in ipairs(quest.dialogues) do
+            if type(dlg) == "table" and dlg.required == true and not dlg.executed then
+                local npcLabel = (type(dlg.npcName) == "string" and dlg.npcName ~= "") and dlg.npcName or "NPC"
+                return "dialogue", Addon.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DIALOGUE", npcLabel)
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function ResolveQuestCompletion(self, quest, preNotifyEvent)
+    if preNotifyEvent then
+        self:NotifyListeners(preNotifyEvent, quest)
+    end
+    local missedKind, failReason = FindMissedRequiredObjective(quest)
+    if missedKind then
+        FinalizeFailedQuest(self, quest)
+        return false, true, failReason
     end
     FinalizeCompletedQuest(self, quest)
     self:NotifyListeners("QUEST_COMPLETED", quest)
-    return true, quest
+    return true, false, nil
+end
+
+function QuestRepository:CompleteQuest(questId)
+    local quest = self:GetQuestById(questId)
+    if not self:CanManuallyCompleteQuest(quest) then
+        return false, nil, false, nil
+    end
+    local completedOk, questFailed, failReason = ResolveQuestCompletion(self, quest)
+    return completedOk, quest, questFailed, failReason
 end
 
 local function ResolveRecommendHideMapAreas(data)
@@ -1343,13 +1382,15 @@ function QuestRepository:RecordTargetEliminated(rawTargetName, playerContext, pr
     matchedTarget.currentCount = math.min(matchedTarget.requiredCount or 1, (matchedTarget.currentCount or 0) + 1)
 
     if self:AreAllObjectivesCompleted(activeQuest) then
-        FinalizeCompletedQuest(self, activeQuest)
-        self:NotifyListeners("QUEST_COMPLETED", activeQuest)
-    else
-        self:NotifyListeners("QUEST_PROGRESS", activeQuest)
+        local _, questFailed, failReason = ResolveQuestCompletion(self, activeQuest)
+        if questFailed then
+            return true, activeQuest, false, matchedTarget, true, failReason
+        end
+        return true, activeQuest, activeQuest.completed, matchedTarget, false, customMsgToShow
     end
 
-    return true, activeQuest, activeQuest.completed, matchedTarget, false, customMsgToShow
+    self:NotifyListeners("QUEST_PROGRESS", activeQuest)
+    return true, activeQuest, false, matchedTarget, false, customMsgToShow
 end
 
 function QuestRepository:HasPendingDiscoveries(quest)
@@ -1367,47 +1408,44 @@ end
 function QuestRepository:MarkDiscoveryTriggered(questId, discoveryIndex)
     local quest = self:GetQuestById(questId)
     if not quest or quest.completed or quest.failed or type(quest.discoveries) ~= "table" then
-        return false, nil, false, nil
+        return false, nil, false, nil, false, nil
     end
     local point = quest.discoveries[discoveryIndex]
     if not point or point.discovered then
-        return false, nil, false, nil
+        return false, nil, false, nil, false, nil
     end
 
     point.discovered = true
 
     if self:AreAllObjectivesCompleted(quest) then
-        FinalizeCompletedQuest(self, quest)
-        self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
-        self:NotifyListeners("QUEST_COMPLETED", quest)
-    else
-        self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
+        local _, questFailed, failReason = ResolveQuestCompletion(self, quest, "DISCOVERY_TRIGGERED")
+        return true, quest, quest.completed, point, questFailed, failReason
     end
 
-    return true, quest, quest.completed, point
+    self:NotifyListeners("DISCOVERY_TRIGGERED", quest)
+    return true, quest, false, point, false, nil
 end
 
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
 function QuestRepository:MarkDialogueTriggered(questId, dialogueIndex)
     local quest = self:GetQuestById(questId)
     if not quest or quest.completed or quest.failed or type(quest.dialogues) ~= "table" then
-        return false, nil, false, nil
+        return false, nil, false, nil, false, nil
     end
     local dialogue = quest.dialogues[dialogueIndex]
     if not dialogue or dialogue.executed then
-        return false, nil, false, nil
+        return false, nil, false, nil, false, nil
     end
 
     dialogue.executed = true
 
     if self:AreAllObjectivesCompleted(quest) then
-        FinalizeCompletedQuest(self, quest)
-        self:NotifyListeners("QUEST_COMPLETED", quest)
-    else
-        self:NotifyListeners("QUEST_PROGRESS", quest)
+        local _, questFailed, failReason = ResolveQuestCompletion(self, quest)
+        return true, quest, quest.completed, dialogue, questFailed, failReason
     end
 
-    return true, quest, quest.completed, dialogue
+    self:NotifyListeners("QUEST_PROGRESS", quest)
+    return true, quest, false, dialogue, false, nil
 end
 
 function QuestRepository:RecordPlayerDetected(playerContext)
