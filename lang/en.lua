@@ -329,4 +329,13 @@ RPQuest.Locales["en"] = {
     TUTORIAL_3_TARGET_2_NAME = "Sheep",
     TUTORIAL_3_TARGET_2_MSG = "Optional target eliminated!",
     TUTORIAL_3_COMPLETION_MSG = "Tutorial Pack complete! You are ready to create your own quests in Preparing and share them via in-game mail.",
+    WORLD_PROFILE_STATUS_GREEN = "World Profile (%s): Compatible (DLC & phasing OK).",
+    WORLD_PROFILE_STATUS_RED_DLC = "World Profile (%s): Missing required DLC/Chapter access!",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "World Profile (%s): Different map phasing/POI state detected.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "World Profile: No POI snapshot cached for character %s.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "World Profile: No cached profile for %s yet.",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "RPQuest Warning: %s lacks DLC access for this zone.",
+    ALERT_CAPTURE_WARN_PHASING = "RPQuest Warning: %s has different map phasing at this POI.",
+    PREFLIGHT_WARN_MISSING_DLC = "Warning: Your account lacks DLC/Chapter access for a quest zone.",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "Warning: Active character has different map phasing from Master (consider switching characters).",
 }

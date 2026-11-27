@@ -329,4 +329,13 @@ RPQuest.Locales["es"] = {
     TUTORIAL_3_TARGET_2_NAME = "Oveja",
     TUTORIAL_3_TARGET_2_MSG = "¡Objetivo opcional eliminado!",
     TUTORIAL_3_COMPLETION_MSG = "¡Paquete tutorial completado! Ya estás listo para crear tus propias misiones en Preparando y enviarlas por correo.",
+    WORLD_PROFILE_STATUS_GREEN = "Perfil de Mundo (%s): Compatible (DLC y phasing OK).",
+    WORLD_PROFILE_STATUS_RED_DLC = "Perfil de Mundo (%s): ¡Sin acceso al DLC/Capítulo requerido!",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "Perfil de Mundo (%s): Phasing/estado de POI distinto detectado.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "Perfil de Mundo: Sin snapshot de POIs guardado para %s.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "Perfil de Mundo: Aún no hay ficha guardada para %s.",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "Aviso RPQuest: %s no tiene acceso al DLC de esta zona.",
+    ALERT_CAPTURE_WARN_PHASING = "Aviso RPQuest: %s tiene distinto phasing en este POI.",
+    PREFLIGHT_WARN_MISSING_DLC = "Advertencia: Tu cuenta no tiene acceso al DLC/Capítulo de una zona de la misión.",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "Advertencia: Tu personaje activo tiene distinto phasing que el Master (considera cambiar de personaje).",
 }

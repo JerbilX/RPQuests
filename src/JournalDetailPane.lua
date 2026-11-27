@@ -440,6 +440,19 @@ local function ApplyDetailStatusAndActivateLabel(tab, selectedQuest, isOffered, 
             tab.btnActivate:SetText(activateLabel)
         end
     end
+
+    if not isPrepared and Addon.WorldProfile and Addon.WorldProfile.ValidateQuestForLocalPlayer then
+        local resolution = Addon.QuestRepository:GetQuestResolution(selectedQuest)
+        local isPendingOrActive = isOffered or isCurrentActive or (not selectedQuest.completed and not selectedQuest.failed and resolution ~= "completed" and resolution ~= "failed")
+        if isPendingOrActive then
+            local preflight = Addon.WorldProfile:ValidateQuestForLocalPlayer(selectedQuest)
+            if preflight and preflight.status == "red" then
+                tab.detailStatus:SetText((tab.detailStatus:GetText() or "") .. "\n|cFF5555" .. Addon.Locale:Get("PREFLIGHT_WARN_MISSING_DLC") .. "|r")
+            elseif preflight and preflight.status == "yellow" and preflight.reason == "phasing_mismatch" then
+                tab.detailStatus:SetText((tab.detailStatus:GetText() or "") .. "\n|cFFD700" .. Addon.Locale:Get("PREFLIGHT_WARN_PHASING_MISMATCH") .. "|r")
+            end
+        end
+    end
 end
 
 local function AppendTargetObjectiveLines(objLines, selectedQuest, isMasterSummary, pInfo, isSentCompleted, bullet)

@@ -379,6 +379,57 @@ local function HasAnyFlagTrue(items, field)
     return false
 end
 
+local function HasAnyPoiFingerprint(items)
+    if type(items) ~= "table" then return false end
+    for i = 1, #items do
+        local pIdx = type(items[i]) == "table" and tonumber(items[i].poiIndex) or nil
+        if pIdx and pIdx > 0 then
+            return true
+        end
+    end
+    return false
+end
+
+local function PackPoiFingerprintBlock(buf, items)
+    if type(items) ~= "table" or #items == 0 then return end
+    local hasBits = {}
+    local compBits = {}
+    for i = 1, #items do
+        local item = items[i]
+        local pIdx = type(item) == "table" and math.floor(tonumber(item.poiIndex) or 0) or 0
+        hasBits[i] = (pIdx > 0)
+        compBits[i] = (pIdx > 0 and item.masterPoiCompleted == true)
+    end
+    BinaryCodec:WriteBitset(buf, hasBits, #items)
+    BinaryCodec:WriteBitset(buf, compBits, #items)
+    for i = 1, #items do
+        if hasBits[i] then
+            BinaryCodec:WriteUVarint(buf, math.floor(tonumber(items[i].poiIndex)))
+        end
+    end
+end
+
+local function UnpackPoiFingerprintBlock(data, pos, len, items)
+    if type(items) ~= "table" or #items == 0 then
+        return true, pos
+    end
+    local hasBits, nextPos = BinaryCodec:ReadBitset(data, pos, len, #items)
+    if not hasBits then return nil, nextPos end
+    local compBits
+    compBits, nextPos = BinaryCodec:ReadBitset(data, nextPos, len, #items)
+    if not compBits then return nil, nextPos end
+    for i = 1, #items do
+        if hasBits[i] then
+            local poiIdx
+            poiIdx, nextPos = BinaryCodec:ReadUVarint(data, nextPos, len)
+            if not poiIdx then return nil, "ERR_IMPORT_INCOMPLETE_DATA" end
+            items[i].poiIndex = math.floor(poiIdx)
+            items[i].masterPoiCompleted = (compBits[i] == true)
+        end
+    end
+    return true, nextPos
+end
+
 local function PackQuestBinary(quest)
     if type(quest) ~= "table" then return nil, "ERR_INVALID_CODE" end
     local targets = quest.targets or {}
@@ -433,7 +484,10 @@ local function PackQuestBinary(quest)
     local seqDisc = (quest.sequentialDiscoveries == true)
     local hasDiscReq = HasAnyFlagTrue(discoveries, "required")
     local hasDlgReq = HasAnyFlagTrue(dialogues, "required")
-    local hasExtFlags = isStealthRequired or hasIcon or seqDisc or hasDiscReq or hasDlgReq
+    local hasPoiFingerprints = HasAnyPoiFingerprint(targets)
+        or HasAnyPoiFingerprint(discoveries)
+        or HasAnyPoiFingerprint(dialogues)
+    local hasExtFlags = isStealthRequired or hasIcon or seqDisc or hasDiscReq or hasDlgReq or hasPoiFingerprints
     local hasTrailing = hasCharNames or hasExtFlags
 
     if #dialogues > 0 then
@@ -451,6 +505,7 @@ local function PackQuestBinary(quest)
             + (seqDisc and 4 or 0)
             + (hasDiscReq and 8 or 0)
             + (hasDlgReq and 16 or 0)
+            + (hasPoiFingerprints and 32 or 0)
         BinaryCodec:WriteByte(buf, extFlags)
         if hasIcon then
             BinaryCodec:WriteStr(buf, questIcon)
@@ -460,6 +515,11 @@ local function PackQuestBinary(quest)
         end
         if hasDlgReq then
             BinaryCodec:WriteBitset(buf, dialogues, #dialogues, "required")
+        end
+        if hasPoiFingerprints then
+            PackPoiFingerprintBlock(buf, targets)
+            PackPoiFingerprintBlock(buf, discoveries)
+            PackPoiFingerprintBlock(buf, dialogues)
         end
     end
 
@@ -748,13 +808,23 @@ local function UnpackQuestBinary(data)
                 end
             end
             if floor(extFlags / 16) % 2 == 1 and #decodedDialogues > 0 then
-                local dlgReqBits = BinaryCodec:ReadBitset(data, pos, len, #decodedDialogues)
+                local dlgReqBits
+                dlgReqBits, pos = BinaryCodec:ReadBitset(data, pos, len, #decodedDialogues)
                 if not dlgReqBits then
                     return nil, "ERR_IMPORT_INCOMPLETE_DATA"
                 end
                 for i = 1, #decodedDialogues do
                     decodedDialogues[i].required = (dlgReqBits[i] == true)
                 end
+            end
+            if floor(extFlags / 32) % 2 == 1 then
+                local okPoi
+                okPoi, pos = UnpackPoiFingerprintBlock(data, pos, len, decodedTargets)
+                if not okPoi then return nil, pos end
+                okPoi, pos = UnpackPoiFingerprintBlock(data, pos, len, decodedDiscoveries)
+                if not okPoi then return nil, pos end
+                okPoi, pos = UnpackPoiFingerprintBlock(data, pos, len, decodedDialogues)
+                if not okPoi then return nil, pos end
             end
         end
     end

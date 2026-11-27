@@ -329,4 +329,13 @@ RPQuest.Locales["zh"] = {
     TUTORIAL_3_TARGET_2_NAME = "Sheep",
     TUTORIAL_3_TARGET_2_MSG = "可选目标已消灭！",
     TUTORIAL_3_COMPLETION_MSG = "教程包全部完成！现在你可以创建自己的任务并通过游戏邮件分享了。",
+    WORLD_PROFILE_STATUS_GREEN = "世界档案 (%s)：兼容（DLC 与位面状态正常）。",
+    WORLD_PROFILE_STATUS_RED_DLC = "世界档案 (%s)：缺少所需 DLC/章节访问权限！",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "世界档案 (%s)：检测到地图位面/POI 状态不一致。",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "世界档案：尚未缓存角色 %s 的 POI 快照。",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "世界档案：尚未收到 %s 的档案。",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "RPQuest 警告：%s 缺少此区域的 DLC 访问权限。",
+    ALERT_CAPTURE_WARN_PHASING = "RPQuest 警告：%s 在此 POI 的位面状态不同。",
+    PREFLIGHT_WARN_MISSING_DLC = "警告：您的账号缺少任务所在区域的 DLC/章节访问权限。",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "警告：当前角色与主持人的位面状态不同（建议切换角色）。",
 }

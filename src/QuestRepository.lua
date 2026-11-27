@@ -557,14 +557,21 @@ for _, methodName in ipairs(DRAFT_DELEGATES) do
     end
 end
 
-function QuestRepository:SetLastInteractedNpc(npcName, zoneId)
+function QuestRepository:SetLastInteractedNpc(npcName, zoneId, poiIndex, masterPoiCompleted)
     local cleanName = self:NormalizeName(npcName)
     if cleanName == "" then
         return nil
     end
+    local pIdx = math.floor(tonumber(poiIndex) or 0)
+    local pDone = nil
+    if pIdx > 0 then
+        pDone = (masterPoiCompleted == true)
+    end
     self._lastInteractedNpc = {
         name = cleanName,
         zoneId = math.floor(tonumber(zoneId) or 0),
+        poiIndex = (pIdx > 0) and pIdx or nil,
+        masterPoiCompleted = pDone,
     }
     self:NotifyListeners("LAST_NPC_UPDATED", self._lastInteractedNpc)
     return self._lastInteractedNpc

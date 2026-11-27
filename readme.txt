@@ -42,9 +42,12 @@ Usage:
   whenever a map/area is defined. Entering a pending active target's search area
   or exact location also illuminates the compass border in gold/amber
   (independent of map toggles, excluding hidden discovery points).
-- Click "Share World Profile" at the bottom of the quest list to mail your
+- Click "Share World Profile" at the top of the quest list to mail your
   account DLC access and character discovered POI snapshot to a @Master
   (also piggybacked silently on Accepted and Done reports within 700 chars).
+  The Master editor displays live non-blocking DLC/phasing indicators and
+  capture alerts, and the player Journal warns on Pending/Active quests if
+  DLC access is missing or the active character has different map phasing.
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:

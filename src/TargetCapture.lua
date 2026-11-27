@@ -89,6 +89,7 @@ function TargetCapture:CaptureFromReticle()
     end
 
     local ctx = self:GetPlayerMapContext(true)
+    local poiIndex, masterPoiCompleted = Addon.WorldProfile:FindNearestZonePOI(ctx.zoneId, ctx.x, ctx.y)
     local draft, err = Addon.QuestRepository:SetDraftCapturedTarget({
         targetName = nameOrErr,
         isPlayer = (isPlayer == true),
@@ -101,6 +102,8 @@ function TargetCapture:CaptureFromReticle()
         worldX = ctx.worldX,
         worldY = ctx.worldY,
         worldZ = ctx.worldZ,
+        poiIndex = poiIndex,
+        masterPoiCompleted = masterPoiCompleted,
     })
 
     if draft then
@@ -108,11 +111,25 @@ function TargetCapture:CaptureFromReticle()
         local displayTarget = draft.lastCapturedDisplay or (draft.targets and draft.targets[1] and draft.targets[1].name) or ""
         local msg = Addon.Locale:Get("ALERT_TARGET_CAPTURED", displayTarget, locText)
         Addon.Announcements:ShowAlert(msg, false)
+        self:NotifyCaptureValidationWarning(draft)
     elseif type(err) == "string" then
         Addon.Announcements:ShowAlert(err, true)
     end
 
     return draft, err
+end
+
+function TargetCapture:NotifyCaptureValidationWarning(draft)
+    if not draft or not Addon.WorldProfile or not Addon.WorldProfile.ValidateQuestForMaster then
+        return
+    end
+    local res = Addon.WorldProfile:ValidateQuestForMaster(draft, draft.recipientAccount, draft.recipientCharacterName)
+    if not res then return end
+    if res.status == "red" and res.reason == "missing_dlc" then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_CAPTURE_WARN_MISSING_DLC", res.accountName or ""), true)
+    elseif res.status == "yellow" and res.reason == "phasing_mismatch" then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_CAPTURE_WARN_PHASING", res.characterName or res.accountName or ""), true)
+    end
 end
 
 function TargetCapture:CaptureDiscoveryPoint(customMessage, customRadius)
@@ -124,6 +141,7 @@ function TargetCapture:CaptureDiscoveryPoint(customMessage, customRadius)
     end
 
     local ctx = self:GetPlayerMapContext(true)
+    local poiIndex, masterPoiCompleted = Addon.WorldProfile:FindNearestZonePOI(zoneId, ctx.x, ctx.y)
     local draft = Addon.QuestRepository:GetDraft()
     local rawMsg = customMessage
     if type(rawMsg) ~= "string" or rawMsg == "" then
@@ -143,6 +161,8 @@ function TargetCapture:CaptureDiscoveryPoint(customMessage, customRadius)
         y = ctx.y,
         radius = radius,
         message = cleanMsg,
+        poiIndex = poiIndex,
+        masterPoiCompleted = masterPoiCompleted,
     })
 
     if updatedDraft then
@@ -150,6 +170,7 @@ function TargetCapture:CaptureDiscoveryPoint(customMessage, customRadius)
         local radiusMeters = math.floor(radius / 100)
         local alertMsg = Addon.Locale:Get("ALERT_DISCOVERY_CAPTURED", countOrErr or 1, locText, radiusMeters)
         Addon.Announcements:ShowAlert(alertMsg, false)
+        self:NotifyCaptureValidationWarning(updatedDraft)
     elseif type(countOrErr) == "string" then
         Addon.Announcements:ShowAlert(countOrErr, true)
     end

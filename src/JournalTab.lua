@@ -161,7 +161,7 @@ function JournalTab:RegisterRepositoryListener()
             if self.viewMode ~= VIEW_MODE.EDITOR then
                 self.viewMode = VIEW_MODE.EDITOR
             end
-        elseif eventType == "DRAFT_UPDATED" or eventType == "LAST_NPC_UPDATED" then
+        elseif eventType == "DRAFT_UPDATED" or eventType == "LAST_NPC_UPDATED" or eventType == "WORLD_PROFILE_UPDATED" then
             if self.viewMode == VIEW_MODE.EDITOR and not self.panel:IsHidden() then
                 self:RefreshEditorPane()
             else

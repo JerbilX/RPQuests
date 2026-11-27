@@ -14,6 +14,14 @@ local Addon = RPQuest
 Addon.QuestDraftStore = {}
 local QuestDraftStore = Addon.QuestDraftStore
 
+local function ResolvePoiFingerprint(poiIndex, masterPoiCompleted)
+    local pIdx = math.floor(tonumber(poiIndex) or 0)
+    if pIdx <= 0 then
+        return nil, nil
+    end
+    return pIdx, (masterPoiCompleted == true)
+end
+
 function QuestDraftStore:NormalizeStealthMode(value, legacyBool)
     local modes = Addon.Constants and Addon.Constants.STEALTH_MODE
     local disabled = (modes and modes.DISABLED) or "disabled"
@@ -135,6 +143,7 @@ function QuestDraftStore:CloneDialoguesList(dialogues, fallbackClue, preserveExe
         if type(d) == "table" and type(d.npcName) == "string" and d.npcName ~= "" then
             local cleanName = Addon.QuestRepository:NormalizeName(d.npcName)
             if cleanName ~= "" then
+                local dPoi, dPoiDone = ResolvePoiFingerprint(d.poiIndex, d.masterPoiCompleted)
                 table.insert(out, {
                     npcName = cleanName,
                     zoneId = math.floor(tonumber(d.zoneId) or 0),
@@ -142,6 +151,8 @@ function QuestDraftStore:CloneDialoguesList(dialogues, fallbackClue, preserveExe
                     response = type(d.response) == "string" and d.response or "",
                     required = (d.required == true),
                     executed = preserveExecuted and (d.executed == true) or false,
+                    poiIndex = dPoi,
+                    masterPoiCompleted = dPoiDone,
                 })
             end
         end
@@ -155,6 +166,7 @@ function QuestDraftStore:CloneDiscoveriesList(discoveries, preserveDiscovered)
     local defaultRad = Addon.Constants.DISCOVERY_RADIUS.MEDIUM
     for _, d in ipairs(discoveries) do
         if type(d) == "table" and d.worldX and d.worldZ then
+            local dPoi, dPoiDone = ResolvePoiFingerprint(d.poiIndex, d.masterPoiCompleted)
             table.insert(out, {
                 zoneId = math.floor(tonumber(d.zoneId) or 0),
                 worldX = tonumber(d.worldX) or 0,
@@ -167,6 +179,8 @@ function QuestDraftStore:CloneDiscoveriesList(discoveries, preserveDiscovered)
                 message = type(d.message) == "string" and d.message or "",
                 required = (d.required == true),
                 discovered = preserveDiscovered and (d.discovered == true) or false,
+                poiIndex = dPoi,
+                masterPoiCompleted = dPoiDone,
             })
         end
     end
@@ -186,6 +200,7 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
             end
             local hasLoc = (t.worldX ~= nil and t.worldZ ~= nil)
             local tAreaRad = tonumber(t.areaRadius)
+            local tPoi, tPoiDone = ResolvePoiFingerprint(t.poiIndex, t.masterPoiCompleted)
             table.insert(out, {
                 name = t.name,
                 currentCount = cur,
@@ -204,6 +219,8 @@ function QuestDraftStore:CloneTargetsList(targets, existingTargetsByName)
                 isPlayer = (t.isPlayer == true),
                 customMessage = type(t.customMessage) == "string" and t.customMessage or "",
                 customMessageInLocation = type(t.customMessageInLocation) == "string" and t.customMessageInLocation or "",
+                poiIndex = tPoi,
+                masterPoiCompleted = tPoiDone,
             })
         end
     end
@@ -306,6 +323,11 @@ function QuestDraftStore:AddDraftDiscoveryPoint(repo, data)
         return nil, Addon.Locale:Get("ALERT_DISCOVERY_LIMIT", maxPoints)
     end
     local defaultRad = draft.discoveryRadius or Addon.Constants.DISCOVERY_RADIUS.MEDIUM
+    local pIdx = math.floor(tonumber(data.poiIndex) or 0)
+    local pDone = nil
+    if pIdx > 0 then
+        pDone = (data.masterPoiCompleted == true)
+    end
     local point = {
         zoneId = math.floor(tonumber(data.zoneId) or 0),
         worldX = tonumber(data.worldX) or 0,
@@ -318,6 +340,8 @@ function QuestDraftStore:AddDraftDiscoveryPoint(repo, data)
         message = type(data.message) == "string" and data.message or "",
         required = (data.required == true),
         discovered = false,
+        poiIndex = (pIdx > 0) and pIdx or nil,
+        masterPoiCompleted = pDone,
     }
     table.insert(draft.discoveries, point)
     if (not draft.mapId or draft.mapId == 0) and point.mapId > 0 then
@@ -401,7 +425,7 @@ function QuestDraftStore:MoveDraftDiscoveryPoint(repo, index, delta, silent)
     return draft, targetIndex
 end
 
-function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, clueText, required)
+function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, clueText, required, poiIndex, masterPoiCompleted)
     local draft = self:GetDraft(repo)
     draft.dialogues = draft.dialogues or {}
     local maxNpcs = (Addon.Constants and Addon.Constants.DIALOGUE and Addon.Constants.DIALOGUE.MAX_NPCS) or 4
@@ -422,6 +446,7 @@ function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, c
         end
     end
 
+    local pIdx, pDone = ResolvePoiFingerprint(poiIndex, masterPoiCompleted)
     table.insert(draft.dialogues, {
         npcName = cleanName,
         zoneId = z,
@@ -429,6 +454,8 @@ function QuestDraftStore:AddDraftDialogue(repo, npcName, zoneId, responseText, c
         response = type(responseText) == "string" and responseText or "",
         required = (required == true),
         executed = false,
+        poiIndex = pIdx,
+        masterPoiCompleted = pDone,
     })
     repo:NotifyListeners("DRAFT_UPDATED", draft)
     return draft, #draft.dialogues
@@ -439,7 +466,7 @@ function QuestDraftStore:AddDraftDialogueFromLastNpc(repo, responseText, clueTex
     if not lastNpc or not lastNpc.name or lastNpc.name == "" then
         return nil, Addon.Locale:Get("ALERT_DIALOGUE_NO_LAST_NPC")
     end
-    return self:AddDraftDialogue(repo, lastNpc.name, lastNpc.zoneId, responseText, clueText, required)
+    return self:AddDraftDialogue(repo, lastNpc.name, lastNpc.zoneId, responseText, clueText, required, lastNpc.poiIndex, lastNpc.masterPoiCompleted)
 end
 
 function QuestDraftStore:UpdateDraftDialogue(repo, index, fields, silent)
@@ -612,6 +639,7 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
     local effectiveTargetRadius = Addon.WorldMapArea:GetEffectiveAreaRadius(radius, captureData.mapType or draft.mapType)
     local tAreaCenterX, tAreaCenterY = repo:ComputeOffsetCenter(tx, ty, effectiveTargetRadius)
 
+    local pIdx, pDone = ResolvePoiFingerprint(captureData.poiIndex, captureData.masterPoiCompleted)
     if matchedEntry then
         matchedEntry.requiredCount = math.min(999, (tonumber(matchedEntry.requiredCount) or 1) + 1)
         matchedEntry.targetX = tx
@@ -621,6 +649,10 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
         matchedEntry.areaCenterY = tAreaCenterY
         if captureData.isPlayer ~= nil then
             matchedEntry.isPlayer = (captureData.isPlayer == true)
+        end
+        if pIdx then
+            matchedEntry.poiIndex = pIdx
+            matchedEntry.masterPoiCompleted = pDone
         end
     else
         local maxTargets = (Addon.Constants and Addon.Constants.TARGET and Addon.Constants.TARGET.MAX_TARGETS) or 4
@@ -640,6 +672,8 @@ function QuestDraftStore:SetDraftCapturedTarget(repo, captureData)
             isPlayer = (captureData.isPlayer == true),
             customMessage = "",
             customMessageInLocation = "",
+            poiIndex = pIdx,
+            masterPoiCompleted = pDone,
         }
         table.insert(draft.targets, matchedEntry)
     end

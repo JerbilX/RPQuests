@@ -27,12 +27,19 @@ function EditorPane.Build(tab, parent)
     if header.SetColor then header:SetColor(0.95, 0.88, 0.65, 1) end
     tab.editorHeader = header
 
+    local worldProfileStatus = WINDOW_MANAGER:CreateControl(panelName .. "_WorldProfileStatus", pane, CT_LABEL)
+    worldProfileStatus:SetDimensions(526, 20)
+    worldProfileStatus:SetAnchor(TOPLEFT, header, BOTTOMLEFT, 0, 2)
+    if worldProfileStatus.SetFont then worldProfileStatus:SetFont("ZoFontGameSmall") end
+    worldProfileStatus:SetHidden(true)
+    tab.lblWorldProfileStatus = worldProfileStatus
+
     local formParent = pane
     local scrollContainer = WINDOW_MANAGER.CreateControlFromVirtual
         and WINDOW_MANAGER:CreateControlFromVirtual(panelName .. "_EditorScroll", pane, "ZO_ScrollContainer")
     if scrollContainer then
-        scrollContainer:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 32)
-        scrollContainer:SetDimensions(550, 474)
+        scrollContainer:SetAnchor(TOPLEFT, pane, TOPLEFT, 0, 52)
+        scrollContainer:SetDimensions(550, 454)
         local scrollChild = scrollContainer.GetNamedChild and scrollContainer:GetNamedChild("ScrollChild")
         if scrollChild then
             scrollChild:SetDimensions(526, 474)
@@ -592,9 +599,46 @@ local function RefreshEditorDialoguesAndOptions(tab, draft)
     end
 end
 
+function EditorPane.RefreshWorldProfileStatus(tab, draft)
+    if not tab or not tab.lblWorldProfileStatus then return end
+    if not Addon.WorldProfile or not Addon.WorldProfile.ValidateQuestForMaster then
+        tab.lblWorldProfileStatus:SetHidden(true)
+        return
+    end
+    draft = draft or (Addon.QuestRepository and Addon.QuestRepository:GetDraft())
+    if not draft then
+        tab.lblWorldProfileStatus:SetHidden(true)
+        return
+    end
+
+    local res = Addon.WorldProfile:ValidateQuestForMaster(draft, draft.recipientAccount, draft.recipientCharacterName)
+    if not res or res.status == "none" then
+        tab.lblWorldProfileStatus:SetText("")
+        tab.lblWorldProfileStatus:SetHidden(true)
+        return
+    end
+
+    local text
+    if res.status == "green" then
+        text = "|c33FF33" .. Addon.Locale:Get("WORLD_PROFILE_STATUS_GREEN", res.accountName or "") .. "|r"
+    elseif res.status == "red" then
+        text = "|cFF5555" .. Addon.Locale:Get("WORLD_PROFILE_STATUS_RED_DLC", res.accountName or "") .. "|r"
+    elseif res.reason == "phasing_mismatch" then
+        text = "|cFFD700" .. Addon.Locale:Get("WORLD_PROFILE_STATUS_YELLOW_PHASING", res.characterName or res.accountName or "") .. "|r"
+    elseif res.reason == "no_char_profile" then
+        text = "|cFFD700" .. Addon.Locale:Get("WORLD_PROFILE_STATUS_YELLOW_NO_CHAR", res.characterName or "") .. "|r"
+    else
+        text = "|cFFD700" .. Addon.Locale:Get("WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE", res.accountName or "") .. "|r"
+    end
+
+    tab.lblWorldProfileStatus:SetText(text)
+    tab.lblWorldProfileStatus:SetHidden(false)
+end
+
 function EditorPane.Refresh(tab)
     local draft = Addon.QuestRepository:GetDraft()
     RefreshEditorBaseAndArea(tab, draft)
+    EditorPane.RefreshWorldProfileStatus(tab, draft)
     RefreshEditorTargetConfig(tab, draft)
     RefreshEditorDiscoveries(tab, draft)
     RefreshEditorDialoguesAndOptions(tab, draft)
