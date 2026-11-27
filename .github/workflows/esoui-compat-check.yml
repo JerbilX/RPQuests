@@ -1,0 +1,81 @@
+name: ESOUI Compatibility Check
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compare manifest APIVersion with latest ESOUI interface
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ESOUI_API_TOKEN: ${{ secrets.ESOUI_API_TOKEN }}
+          ADDON_NAME: RPQuest
+          ADDON_SUBDIR: .
+        run: |
+          ADDON_DIR="${ADDON_SUBDIR:-.}"
+          if [ -f "${ADDON_DIR}/${ADDON_NAME}.txt" ]; then
+            MANIFEST_FILE="${ADDON_DIR}/${ADDON_NAME}.txt"
+          elif [ -f "${ADDON_DIR}/${ADDON_NAME}.addon" ]; then
+            MANIFEST_FILE="${ADDON_DIR}/${ADDON_NAME}.addon"
+          else
+            echo "Error: manifest ${ADDON_NAME}.txt/.addon not found in ${ADDON_DIR}" >&2
+            exit 1
+          fi
+
+          # APIVersion may list several values (e.g. "101050 101051"); use the highest.
+          API_VERSION=$(awk -F': *' '/^## APIVersion:/{print $2; exit}' "$MANIFEST_FILE" | tr -d '\r' | tr ' ' '\n' | grep -E '^[0-9]+$' | sort -n | tail -n 1)
+
+          HEADERS=()
+          if [ -n "$ESOUI_API_TOKEN" ]; then
+            HEADERS=(-H "x-api-token: ${ESOUI_API_TOKEN}")
+          fi
+          COMPATIBLE_JSON=$(curl -fsS "${HEADERS[@]}" "https://api.esoui.com/addons/compatible.json")
+
+          LATEST=$(printf '%s' "$COMPATIBLE_JSON" | jq -c \
+            'map(select((.interface | tostring) | test("^[0-9]+$"))) | sort_by((.interface | tonumber), (.id | split(".") | map(tonumber? // 0))) | last')
+          LATEST_INTERFACE=$(printf '%s' "$LATEST" | jq -r '.interface | tostring')
+          LATEST_ID=$(printf '%s' "$LATEST" | jq -r '.id')
+          LATEST_NAME=$(printf '%s' "$LATEST" | jq -r '.name // empty')
+
+          echo "Manifest APIVersion: ${API_VERSION:-<none>} | Latest ESOUI: ${LATEST_ID} (interface ${LATEST_INTERFACE})"
+
+          if [ -z "$LATEST_INTERFACE" ] || [ "$LATEST_INTERFACE" = "null" ]; then
+            echo "::warning::compatible.json returned no numeric interface entries; skipping check."
+            exit 0
+          fi
+
+          if [ -n "$API_VERSION" ] && [ "$API_VERSION" -ge "$LATEST_INTERFACE" ]; then
+            echo "APIVersion is up to date."
+            exit 0
+          fi
+
+          TITLE="chore(compat): ESO API ${LATEST_INTERFACE} (${LATEST_ID}) available"
+          EXISTING=$(gh issue list --state open --search "\"ESO API ${LATEST_INTERFACE}\" in:title" --json number --jq 'length')
+          if [ "$EXISTING" -gt 0 ]; then
+            echo "An open issue for ESO API ${LATEST_INTERFACE} already exists; skipping."
+            exit 0
+          fi
+
+          cat > issue_body.md <<EOF
+          ESOUI reports a newer game version: **${LATEST_ID}** ${LATEST_NAME:+(${LATEST_NAME})} with interface **${LATEST_INTERFACE}**.
+
+          \`${MANIFEST_FILE}\` declares \`## APIVersion: ${API_VERSION:-<none>}\`.
+
+          ### Before bumping APIVersion
+          - [ ] Run \`eso_validate_addon\` (MCP) on \`${ADDON_DIR}\` and fix removed/changed APIs.
+          - [ ] Run \`luajit tests/run.lua\` and \`./scripts/check-esoui.sh\`.
+          - [ ] Update \`## APIVersion:\` to include \`${LATEST_INTERFACE}\` and release.
+          EOF
+          sed -i 's/^          //' issue_body.md
+          gh issue create --title "$TITLE" --body-file issue_body.md
