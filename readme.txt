@@ -39,7 +39,9 @@ Usage:
   MAP MARKERS (all off by default for players, while creators see discovery
   areas in purple automatically and search/zoomed-out reference areas render
   in pulsing emerald green with deterministic offsets), or use "Show on Map"
-  whenever a map/area is defined.
+  whenever a map/area is defined. Entering a pending active target's search area
+  or exact location also illuminates the compass border in gold/amber
+  (independent of map toggles, excluding hidden discovery points).
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:

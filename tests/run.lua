@@ -56,6 +56,8 @@ EVENT_DUEL_FINISHED = 131104
 DUEL_RESULT_FORFEIT = 0
 DUEL_RESULT_WON = 1
 EVENT_ZONE_CHANGED = 131072
+EVENT_GAMEPAD_PREFERRED_MODE_CHANGED = 131073
+EVENT_SCREEN_RESIZED = 131074
 EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED = 131200
 EVENT_JUSTICE_INFAMY_UPDATED = 131201
 EVENT_JUSTICE_PICKPOCKET_FAILED = 131202
@@ -129,6 +131,8 @@ KEYBIND_STRIP = KEYBIND_STRIP or {
 }
 ApplyTemplateToControl = ApplyTemplateToControl or function() end
 ZO_QuestJournal = ZO_QuestJournal or CreateControl("ZO_QuestJournal", GuiRoot, CT_TOPLEVELCONTROL)
+ZO_Compass = ZO_Compass or CreateControl("ZO_Compass", GuiRoot, CT_CONTROL)
+ZO_Compass:SetDimensions(480, 40)
 
 GetCVar = function(name)
     if name == "language.2" or name == "Language.2" then
@@ -494,7 +498,19 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
         return CreateControl(name, GuiRoot, CT_TOPLEVELCONTROL)
     end,
     CreateControlFromVirtual = function(self, name, parent, templateName, optionalId)
-        return CreateControlFromVirtual(name, parent, templateName, optionalId)
+        local ctrl = CreateControlFromVirtual(name, parent, templateName, optionalId)
+        if templateName == "ZO_CompassAreaTexture" then
+            ctrl.left = WINDOW_MANAGER:CreateControl(name .. "Left", ctrl, CT_TEXTURE)
+            ctrl.right = WINDOW_MANAGER:CreateControl(name .. "Right", ctrl, CT_TEXTURE)
+            ctrl.center = WINDOW_MANAGER:CreateControl(name .. "Center", ctrl, CT_TEXTURE)
+            ctrl.GetNamedChild = function(_, childSuffix)
+                if childSuffix == "Left" then return ctrl.left end
+                if childSuffix == "Right" then return ctrl.right end
+                if childSuffix == "Center" then return ctrl.center end
+                return nil
+            end
+        end
+        return ctrl
     end,
 }
 
@@ -547,6 +563,7 @@ dofile("src/CombatTracker.lua")
 dofile("src/DiscoveryTracker.lua")
 dofile("src/DialogueInjector.lua")
 dofile("src/WorldMapArea.lua")
+dofile("src/CompassAreaGlow.lua")
 dofile("src/MailInbox.lua")
 dofile("src/MailTransport.lua")
 dofile("src/JournalWidgets.lua")
@@ -599,6 +616,7 @@ local suitePaths = {
     "tests/suites/journal_ui.lua",
     "tests/suites/repository.lua",
     "tests/suites/trackers.lua",
+    "tests/suites/compass_glow.lua",
     "tests/suites/codec.lua",
     "tests/suites/dialogue.lua",
     "tests/suites/mail_transport.lua",
