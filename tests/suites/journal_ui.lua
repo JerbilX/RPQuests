@@ -2676,7 +2676,7 @@ return function(T)
         AssertTrue(chkRelTo == tab.leftCol, "chkAutoOpenJournalOnReceive anchors to leftCol")
         AssertTrue(chkOffsetY >= 584, "chkAutoOpenJournalOnReceive sits below pagination controls without overlap")
         AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in empty detail pane")
-        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), false, "Checkbox reflects default false setting")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), false, "Checkbox reflects disabled autoOpenJournalOnReceive setting")
 
         -- Toggle checkbox ON and verify SavedVars setting updates
         ZO_CheckButton_OnClicked(tab.chkAutoOpenJournalOnReceive)

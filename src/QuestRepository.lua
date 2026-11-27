@@ -435,7 +435,7 @@ function QuestRepository:GetDefaults()
         settings = {
             autoDeleteMail = true,
             autoAcceptMail = false,
-            autoOpenJournalOnReceive = false,
+            autoOpenJournalOnReceive = true,
             autoSendCompletionMail = true,
             showSearchAreas = false,
             showLocationAreas = false,
@@ -466,7 +466,7 @@ function QuestRepository:Initialize(savedVars)
     local defaultSettings = {
         autoDeleteMail = true,
         autoAcceptMail = false,
-        autoOpenJournalOnReceive = false,
+        autoOpenJournalOnReceive = true,
         autoSendCompletionMail = true,
         showSearchAreas = false,
         showLocationAreas = false,

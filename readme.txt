@@ -31,8 +31,9 @@ Usage:
 - Incoming quests appear automatically in Pending (Accept or Reject), and
   Accepted, Rejected, Completed, and Failed results are reported back to the
   Quest Master automatically via mail (separately from Draft/Sent/Received
-  lifecycle). You can also enable "Auto-open RPQuests journal when receiving
-  a new quest" at the bottom of the quest list panel (skipped in combat).
+  lifecycle). "Auto-open RPQuests journal when receiving a new quest" is
+  enabled by default (skipped in combat) and can be toggled off at the
+  bottom of the quest list panel.
 - In the quest details pane, view any Master map-hiding recommendation notice,
   independently toggle "Search Areas", "Location", and "Discovery" in
   MAP MARKERS (all off by default for players, while creators see discovery
