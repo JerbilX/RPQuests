@@ -1,6 +1,7 @@
 -- Ref: docs/adr/0001-arquitectura-modular-zero-dependency-y-savedvars-por-personaje.md
 -- Ref: docs/adr/0009-transporte-correo-multiparte-rpqp.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -24,6 +25,7 @@ local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
 local REJECTION_SUBJECT_PREFIX = "[RPQuest:Rejected] "
 local ACCEPTANCE_SUBJECT_PREFIX = "[RPQuest:Accepted] "
 local FAILURE_SUBJECT_PREFIX = "[RPQuest:Failed] "
+local PROFILE_SUBJECT_PREFIX = "[RPQuest:Profile] "
 local MAILBOX_OPEN_TIMEOUT_MS = 10000
 local MAIL_SEND_TIMEOUT_MS = 15000
 
@@ -529,10 +531,23 @@ function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, resultType)
         kind = resultType and "rejected" or "completed"
     end
 
+    local body = code
+    if (kind == "accepted" or kind == "completed")
+        and Addon.WorldProfile
+        and Addon.WorldProfile.CaptureAndEncode then
+        local profileCode = Addon.WorldProfile:CaptureAndEncode()
+        if type(profileCode) == "string" and profileCode ~= "" then
+            local combined = code .. "\n" .. profileCode
+            if #combined <= self:GetMaxBodyLength() then
+                body = combined
+            end
+        end
+    end
+
     local item = {
         to = recipient,
         subject = subjectPrefix .. (quest.title or "RPQuest"),
-        body = code,
+        body = body,
         completionQuestId = (kind == "completed") and quest.id or nil,
         rejectionQuestId = (kind == "rejected") and quest.id or nil,
         acceptanceQuestId = (kind == "accepted") and quest.id or nil,
@@ -601,6 +616,53 @@ function MailTransport:SendFailureReport(quest)
     return self:EnqueueResultMail(quest, FAILURE_SUBJECT_PREFIX, rpqc1Code, "failed")
 end
 
+function MailTransport:SendWorldProfile(rawRecipient)
+    if self._isSending then
+        return false, "ERR_MAIL_SEND_IN_PROGRESS"
+    end
+    if not Addon.WorldProfile or not Addon.WorldProfile.CaptureAndEncode then
+        return false, "ERR_INVALID_CODE"
+    end
+
+    local recipients, recErr = self:ParseRecipients(rawRecipient)
+    if recErr then
+        return false, recErr
+    end
+    if self:IsSelfRecipient(recipients[1]) then
+        return false, "ERR_MAIL_SELF_RECIPIENT"
+    end
+
+    local profileCode, snapshotOrErr = Addon.WorldProfile:CaptureAndEncode()
+    if not profileCode or profileCode == "" then
+        return false, snapshotOrErr or "ERR_INVALID_CODE"
+    end
+    if #profileCode > self:GetMaxBodyLength() then
+        return false, "ERR_MAIL_BODY_TOO_LONG"
+    end
+
+    local charName = (type(snapshotOrErr) == "table" and snapshotOrErr.characterName ~= "")
+        and snapshotOrErr.characterName
+        or "WorldProfile"
+
+    self._sendQueue = {
+        {
+            to = recipients[1],
+            subject = PROFILE_SUBJECT_PREFIX .. charName,
+            body = profileCode,
+            isWorldProfile = true,
+        },
+    }
+    self._isSending = true
+    self._currentSendItem = nil
+    self._sendTotal = 1
+    self._sendDone = 0
+    self._sendSuccessCount = 0
+    self._sendFailCount = 0
+
+    self:StartSendQueue()
+    return true
+end
+
 function MailTransport:OnMailSendSuccess(_playerName)
     if not self._isSending then return end
     if self._currentSendItem and self._currentSendItem.completionQuestId then
@@ -613,6 +675,10 @@ function MailTransport:OnMailSendSuccess(_playerName)
         Addon.QuestRepository:MarkFailureReported(self._currentSendItem.failureQuestId)
         self:NotifyListeners("MAIL_FAILURE_SENT", {
             questId = self._currentSendItem.failureQuestId,
+            to = self._currentSendItem.to,
+        })
+    elseif self._currentSendItem and self._currentSendItem.isWorldProfile then
+        self:NotifyListeners("MAIL_WORLD_PROFILE_SENT", {
             to = self._currentSendItem.to,
         })
     elseif self._currentSendItem and self._currentSendItem.sentQuestId and (self._sendFailCount or 0) == 0 then
@@ -692,4 +758,16 @@ end
 
 function MailTransport:GetReceivedMailCount()
     return Addon.MailInbox:GetReceivedMailCount()
+end
+
+function MailTransport:IsProfileMailSubject(subject)
+    return Addon.MailInbox:IsProfileMailSubject(subject)
+end
+
+function MailTransport:ParseProfileMailBody(body)
+    return Addon.MailInbox:ParseProfileMailBody(body)
+end
+
+function MailTransport:ProcessProfileMail(mailId, senderDisplayName, subject, body)
+    return Addon.MailInbox:ProcessProfileMail(mailId, senderDisplayName, subject, body)
 end

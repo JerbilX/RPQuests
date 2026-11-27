@@ -182,7 +182,44 @@ end
 
 GetUnitName = function(tag)
     if tag == "reticleover" then return mockState.reticleName end
-    return "Jugador"
+    return mockState.playerName or "Jugador"
+end
+
+GetNumZones = function()
+    return mockState.numZones or 4
+end
+
+IsZoneCollectibleLocked = function(zoneIndex)
+    if type(mockState.lockedZones) == "table" then
+        return mockState.lockedZones[zoneIndex] == true
+    end
+    return false
+end
+
+IsESOPlusSubscriber = function()
+    return mockState.esoPlus == true
+end
+
+GetNumPOIs = function(zoneIndex)
+    if type(mockState.poisPerZone) == "table" then
+        return mockState.poisPerZone[zoneIndex] or 0
+    end
+    return mockState.defaultPoisPerZone or 5
+end
+
+GetPOIMapInfo = function(zoneIndex, poiIndex)
+    local discovered = false
+    if type(mockState.discoveredPois) == "table" then
+        local z = mockState.discoveredPois[zoneIndex]
+        if type(z) == "table" then
+            discovered = (z[poiIndex] == true)
+        end
+    end
+    return 0.5, 0.5, 0, "", true, false, discovered, false
+end
+
+ZO_Dialogs_GetEditBoxText = function(dialog)
+    return dialog and dialog._editText or ""
 end
 
 GetNumCharacters = function()
@@ -553,6 +590,7 @@ dofile("lang/zh.lua")
 dofile("src/Locale.lua")
 dofile("src/BinaryCodec.lua")
 dofile("src/ShareCodec.lua")
+dofile("src/WorldProfile.lua")
 dofile("src/QuestDraftStore.lua")
 dofile("src/QuestMigration.lua")
 dofile("src/QuestRepository.lua")
@@ -622,6 +660,7 @@ local suitePaths = {
     "tests/suites/mail_transport.lua",
     "tests/suites/mail_inbox.lua",
     "tests/suites/mail_lifecycle.lua",
+    "tests/suites/world_profile.lua",
     "tests/suites/tutorial.lua",
 }
 

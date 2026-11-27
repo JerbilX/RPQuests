@@ -2,6 +2,7 @@
 -- Ref: docs/adr/0009-transporte-correo-multiparte-rpqp.md
 -- Ref: docs/adr/0011-flujo-solo-correo-1-a-1-y-eliminacion-codigos-manuales.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -15,6 +16,7 @@ local COMPLETION_SUBJECT_PREFIX = "[RPQuest:Done] "
 local REJECTION_SUBJECT_PREFIX = "[RPQuest:Rejected] "
 local ACCEPTANCE_SUBJECT_PREFIX = "[RPQuest:Accepted] "
 local FAILURE_SUBJECT_PREFIX = "[RPQuest:Failed] "
+local PROFILE_SUBJECT_PREFIX = "[RPQuest:Profile] "
 
 function MailInbox:Initialize()
     self._receivedMails = {}
@@ -87,6 +89,52 @@ function MailInbox:ParseCompletionMailBody(body)
     return code
 end
 
+function MailInbox:IsProfileMailSubject(subject)
+    if type(subject) ~= "string" then return false end
+    return string.sub(subject, 1, #PROFILE_SUBJECT_PREFIX) == PROFILE_SUBJECT_PREFIX
+end
+
+function MailInbox:ParseProfileMailBody(body)
+    if type(body) ~= "string" or body == "" then
+        return nil
+    end
+    local _, _, code = string.find(body, "(RPQW1:[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]:[^%s]+)")
+    return code
+end
+
+function MailInbox:IngestProfileFromBody(senderDisplayName, body)
+    local rpqw1Code = self:ParseProfileMailBody(body)
+    if not rpqw1Code then
+        return nil
+    end
+    if not Addon.ShareCodec or not Addon.ShareCodec.DecodeWorldProfile then
+        return nil
+    end
+    local decoded = Addon.ShareCodec:DecodeWorldProfile(rpqw1Code)
+    if not decoded then
+        return nil
+    end
+    if Addon.QuestRepository and Addon.QuestRepository.SaveWorldProfile then
+        return Addon.QuestRepository:SaveWorldProfile(senderDisplayName, decoded)
+    end
+    return nil
+end
+
+function MailInbox:ProcessProfileMail(mailId, senderDisplayName, _subject, body)
+    local idKey = tostring(mailId)
+    if self._dismissedMailIds and self._dismissedMailIds[idKey] then
+        return false
+    end
+
+    local saved = self:IngestProfileFromBody(senderDisplayName, body)
+    if not saved then
+        return false
+    end
+
+    self:DisposeMailIds({ mailId })
+    return true
+end
+
 function MailInbox:ProcessCompletionMail(mailId, senderDisplayName, _subject, body)
     local idKey = tostring(mailId)
     if self._dismissedMailIds and self._dismissedMailIds[idKey] then
@@ -97,6 +145,8 @@ function MailInbox:ProcessCompletionMail(mailId, senderDisplayName, _subject, bo
     if not rpqc1Code then
         return false
     end
+
+    self:IngestProfileFromBody(senderDisplayName, body)
 
     local preparedQuests = Addon.QuestRepository:GetQuestsByRole(Addon.Constants.QUEST_ROLE.PREPARED)
     for _, q in ipairs(preparedQuests) do
@@ -382,7 +432,8 @@ end
 function MailInbox:ProcessMailItem(mailId, senderDisplayName, senderCharacterName, subject, secsSinceReceived, allowRequestRead)
     local isQuest = self:IsQuestMailSubject(subject)
     local isCompletion = (not isQuest) and self:IsCompletionMailSubject(subject)
-    if not (isQuest or isCompletion) then return end
+    local isProfile = (not isQuest) and (not isCompletion) and self:IsProfileMailSubject(subject)
+    if not (isQuest or isCompletion or isProfile) then return end
 
     local body = ReadMail(mailId) or ""
     if type(body) == "string" and body ~= "" then
@@ -392,8 +443,10 @@ function MailInbox:ProcessMailItem(mailId, senderDisplayName, senderCharacterNam
                 self:ReportDecodeError(errorKey or mailId, errKey, senderDisplayName)
                 self:CleanupFailedQuestMail(mailId, errorKey)
             end
-        else
+        elseif isCompletion then
             self:ProcessCompletionMail(mailId, senderDisplayName, subject, body)
+        else
+            self:ProcessProfileMail(mailId, senderDisplayName, subject, body)
         end
     elseif allowRequestRead then
         RequestReadMail(mailId)

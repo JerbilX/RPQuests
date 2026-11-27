@@ -22,6 +22,9 @@ RPQuest.Locales["fr"] = {
 
     -- Buttons
     BTN_NEW_QUEST = "+ Nouvelle",
+    BTN_SHARE_WORLD_PROFILE = "Partager le profil",
+    DLG_SHARE_WORLD_PROFILE_TITLE = "Partager le profil du monde",
+    DLG_SHARE_WORLD_PROFILE_TEXT = "Entrez le nom de compte @Master pour envoyer votre profil DLC et POI :",
     BTN_ACTIVATE = "Activer",
     BTN_COMPLETE_QUEST = "Terminer",
     BTN_DEACTIVATE = "Désactiver",
@@ -274,6 +277,7 @@ RPQuest.Locales["fr"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest : %s a accepté « %s ».",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest : %s a refusé « %s ».",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest : %s a échoué à « %s ».",
+    ALERT_WORLD_PROFILE_SENT = "RPQuest : Profil du monde envoyé à %s.",
 
     -- Quest Icons
     LABEL_QUEST_ICON = "Icône de quête :",

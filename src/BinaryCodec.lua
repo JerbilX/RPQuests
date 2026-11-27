@@ -1,5 +1,6 @@
 -- Ref: docs/adr/0008-codec-compacto-rpq3-lzss-base85.md
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -322,6 +323,22 @@ function BinaryCodec:ReadBitset(data, pos, len, count)
         end
     end
     return out, pos
+end
+
+--- Encodes an array of booleans into a compact Base85 string.
+function BinaryCodec:EncodeBitsetBase85(items, count)
+    local buf = {}
+    self:WriteBitset(buf, items, count)
+    return self:Base85Encode(table.concat(buf))
+end
+
+--- Decodes a Base85-encoded bitset back into an array of `count` booleans.
+function BinaryCodec:DecodeBitsetBase85(encoded, count)
+    if type(encoded) ~= "string" then return nil end
+    local raw = self:Base85Decode(encoded)
+    if not raw then return nil end
+    local bits = self:ReadBitset(raw, 1, #raw, count)
+    return bits
 end
 
 --- Compresses binary data using LZSS (with raw fallback if not smaller).
