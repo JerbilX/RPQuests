@@ -151,11 +151,15 @@ RPQuest/
 │   ├── WorldMapArea.lua         # Emerald search & zoom-out areas, soft-orange location & purple discovery circles on ZO_WorldMap
 │   ├── CompassAreaGlow.lua      # Gold/amber compass border glow inside active target areas
 │   ├── JournalWidgets.lua       # Reusable UI widget & formatting helpers for JournalTab
+│   ├── JournalModeBar.lua       # Native Quest Journal mode bar & scene integration
+│   ├── JournalAccordion.lua     # Left-column exclusive accordion controls, rows & animations
+│   ├── JournalQuestList.lua     # Left-column quest list bucketing, pagination & UI state
+│   ├── JournalActions.lua       # Quest lifecycle actions, listener & editor/draft sync
 │   ├── JournalDetailPane.lua    # Quest detail pane & action button builders/refresh
 │   ├── JournalEditorSections.lua# Accordion section & field builders for quest editor
 │   ├── JournalEditorPane.lua    # Multi-section quest editor pane layout/refresh
 │   ├── JournalMailSendPane.lua  # In-game mail send pane & transport event UI
-│   └── JournalTab.lua           # Native Quest Journal tab coordinator
+│   └── JournalTab.lua           # Native Quest Journal tab facade & refresh coordinator
 ├── scripts/
 │   ├── bump-version.sh          # Synchronized SemVer version bumper
 │   ├── check-esoui.sh           # ESOUI compliance & retired-term checker

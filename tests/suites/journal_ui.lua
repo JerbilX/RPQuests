@@ -2990,4 +2990,142 @@ return function(T)
         RPQuest.Announcements.AnnounceQuestFailed = origAnnounceFail
     end)
 
+    RunTest("Issue #366: JournalTab facade parity, submodule delegation, and receiver semantics", function()
+        AssertTrue(type(RPQuest.JournalModeBar) == "table", "JournalModeBar submodule registered")
+        AssertTrue(type(RPQuest.JournalAccordion) == "table", "JournalAccordion submodule registered")
+        AssertTrue(type(RPQuest.JournalQuestList) == "table", "JournalQuestList submodule registered")
+        AssertTrue(type(RPQuest.JournalActions) == "table", "JournalActions submodule registered")
+        AssertEqual(RPQuest.JournalTab.VIEW_MODE, RPQuest.JournalWidgets.VIEW_MODE, "JournalTab.VIEW_MODE shares canonical VIEW_MODE table")
+
+        local expectedMethods = {
+            "RegisterRepositoryListener", "RestoreUiState", "Initialize",
+            "BuildLeftColumn", "ScrollQuestList", "BuildRightColumn",
+            "BuildDetailPane", "BuildEditorPane", "BuildMailSendPane",
+            "OnMailTransportEvent", "AcceptSelectedOfferedQuest", "RejectSelectedOfferedQuest",
+            "SendSelectedPreparedQuest", "DuplicateSelectedQuest", "MigrateSelectedQuest",
+            "OpenMailSendView", "RefreshMailSendCounter", "OnConfirmSendMailClicked",
+            "IntegrateIntoQuestJournalModeBar", "SyncEditorInputsToDraft", "AutoPreserveDraft",
+            "SelectQuest", "OpenCreateEditor", "ToggleSection", "OpenEditEditor",
+            "ClearEditorInputs", "OnSaveDraftClicked", "OnToggleActiveClicked",
+            "OnCompleteQuestClicked", "ConfirmAbandonQuest", "OpenTab", "ToggleTab",
+            "EnsureAccordionRow", "UpdateAccordionLayout", "SetSectionOpenPercentage",
+            "AnimateSection", "RefreshQuestList", "UpdateShowOnMapVisibility",
+            "Refresh", "RefreshDetailPane", "ToggleEditorSection",
+            "LayoutEditorSections", "RefreshEditorPane",
+        }
+        for _, methodName in ipairs(expectedMethods) do
+            AssertTrue(type(RPQuest.JournalTab[methodName]) == "function", "JournalTab exposes method: " .. methodName)
+        end
+
+        -- Verify BindDelegates forwards custom self receiver cleanly
+        local customTab = setmetatable({
+            collapsedSections = { pending = true, missions = false, completed = true, preparing = true, sent = true },
+            listOffset = 4,
+            _maxListOffset = 6,
+            refreshListCalls = 0,
+            RefreshQuestList = function(self)
+                self.refreshListCalls = self.refreshListCalls + 1
+            end,
+        }, { __index = RPQuest.JournalTab })
+
+        customTab:ScrollQuestList(-2)
+        AssertEqual(customTab.listOffset, 2, "BindDelegates mutates custom receiver listOffset")
+        AssertEqual(customTab.refreshListCalls, 1, "BindDelegates invokes RefreshQuestList on custom receiver")
+
+        customTab:ToggleSection("sent")
+        AssertEqual(customTab.collapsedSections.sent, false, "BindDelegates updates custom receiver collapsedSections")
+        AssertEqual(customTab.collapsedSections.missions, true, "BindDelegates collapses previous section on custom receiver")
+        AssertEqual(customTab.listOffset, 0, "ToggleSection resets listOffset on custom receiver")
+        AssertEqual(customTab.refreshListCalls, 2, "ToggleSection refreshes list once on custom receiver")
+    end)
+
+    RunTest("Issue #366: JournalTab avoids duplicate Refresh calls across editor, selection, migration, and mode bar", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local repo = RPQuest.QuestRepository
+        local savedVars = repo:GetDefaults()
+        repo:Initialize(savedVars)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.panel:SetHidden(false)
+
+        local origRefresh = tab.Refresh
+        local origRefreshEditor = tab.RefreshEditorPane
+        local refreshCalls = 0
+        local editorRefreshCalls = 0
+        tab.Refresh = function(self, ...)
+            refreshCalls = refreshCalls + 1
+            return origRefresh(self, ...)
+        end
+        tab.RefreshEditorPane = function(self, ...)
+            editorRefreshCalls = editorRefreshCalls + 1
+            return origRefreshEditor(self, ...)
+        end
+
+        -- 1. OpenCreateEditor while visible triggers exactly 1 Refresh
+        refreshCalls = 0
+        editorRefreshCalls = 0
+        tab:OpenCreateEditor()
+        AssertEqual(refreshCalls, 1, "OpenCreateEditor triggers exactly 1 Refresh when panel is visible")
+        AssertEqual(editorRefreshCalls, 1, "OpenCreateEditor triggers exactly 1 RefreshEditorPane")
+        local q1Id = tab.selectedQuestId
+        tab.titleEdit:SetText("Submodule Draft One")
+
+        -- 2. Second OpenCreateEditor auto-preserves q1 and triggers exactly 1 Refresh
+        refreshCalls = 0
+        editorRefreshCalls = 0
+        tab:OpenCreateEditor()
+        AssertEqual(refreshCalls, 1, "Second OpenCreateEditor triggers exactly 1 Refresh")
+        AssertEqual(editorRefreshCalls, 1, "Second OpenCreateEditor triggers exactly 1 RefreshEditorPane")
+        AssertEqual(repo:GetQuestById(q1Id).title, "Submodule Draft One", "Draft auto-preserved across OpenCreateEditor")
+
+        -- 3. SelectQuest from EDITOR mode triggers 1 Refresh and 0 intermediate RefreshEditorPane calls
+        refreshCalls = 0
+        editorRefreshCalls = 0
+        tab:SelectQuest(q1Id)
+        AssertEqual(refreshCalls, 1, "SelectQuest from EDITOR mode triggers exactly 1 Refresh")
+        AssertEqual(editorRefreshCalls, 0, "SelectQuest from EDITOR mode avoids redundant RefreshEditorPane")
+        AssertEqual(repo:GetJournalUiState().lastSelectedQuestId, q1Id, "SelectQuest persists lastSelectedQuestId")
+
+        -- 4. OpenEditEditor triggers 1 Refresh and 1 RefreshEditorPane
+        refreshCalls = 0
+        editorRefreshCalls = 0
+        tab:OpenEditEditor(q1Id)
+        AssertEqual(refreshCalls, 1, "OpenEditEditor triggers exactly 1 Refresh")
+        AssertEqual(editorRefreshCalls, 1, "OpenEditEditor triggers exactly 1 RefreshEditorPane")
+
+        -- 5. MigrateSelectedQuest triggers exactly 1 Refresh and lands in EDITOR mode
+        local legacy = repo:BuildQuestRecord(99, "Legacy Outdated", "Desc", {
+            { name = "Imp", currentCount = 0, requiredCount = 1 },
+        }, { mapId = 1, zoneId = 2 }, RPQuest.Constants.QUEST_ROLE.PREPARED)
+        legacy.needsMigration = true
+        table.insert(repo.savedVars.quests, legacy)
+        repo._questById[legacy.id] = legacy
+        repo.savedVars.nextId = 100
+        tab:SelectQuest(legacy.id)
+
+        refreshCalls = 0
+        editorRefreshCalls = 0
+        local migrated = tab:MigrateSelectedQuest()
+        AssertTrue(migrated ~= nil, "MigrateSelectedQuest returns migrated quest")
+        AssertEqual(tab.viewMode, tab.VIEW_MODE.EDITOR, "MigrateSelectedQuest opens EDITOR mode")
+        AssertEqual(refreshCalls, 1, "MigrateSelectedQuest triggers exactly 1 Refresh")
+        AssertEqual(editorRefreshCalls, 1, "MigrateSelectedQuest triggers exactly 1 RefreshEditorPane")
+
+        -- 6. Hidden mutation marks _dirty without Refresh; OpenTab + OnShowing refreshes at most once
+        tab.panel:SetHidden(true)
+        refreshCalls = 0
+        repo:SetActiveQuest(q1Id)
+        AssertEqual(refreshCalls, 0, "Hidden panel skips immediate Refresh on repository event")
+        AssertEqual(tab._dirty, true, "Hidden panel marks _dirty = true")
+
+        tab:OpenTab()
+        QUEST_JOURNAL_KEYBOARD:OnShowing()
+        AssertEqual(refreshCalls, 1, "OpenTab + OnShowing refreshes dirty JournalTab at most once")
+        AssertEqual(tab._dirty, false, "_dirty cleared after OpenTab refresh")
+
+        tab.Refresh = origRefresh
+        tab.RefreshEditorPane = origRefreshEditor
+    end)
+
 end
