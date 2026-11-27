@@ -1270,7 +1270,7 @@ return function(T)
         AssertEqual(qEs.title, "Nueva Misión", "ES default title is 'Nueva Misión' without numeric suffix")
     end)
 
-    RunTest("Issue #270: JournalTab allows OnSaveDraftClicked without objectives and alerts on Test/Send", function()
+    RunTest("Issue #270 & #344: JournalTab allows OnSaveDraftClicked, Test Quest, and Send Quest for pure free-form drafts", function()
         mockState.language = "en"
         RPQuest.Locale:Initialize("en")
         local repo = RPQuest.QuestRepository
@@ -1299,13 +1299,12 @@ return function(T)
         tab:SelectQuest(q.id)
         mockState.alerts = {}
         tab:OnToggleActiveClicked()
-        AssertEqual(repo:GetActiveQuest(), nil, "Test Quest does not activate objective-less draft")
-        AssertTrue(#(mockState.alerts or {}) > 0, "Test Quest shows localized alert for missing objective")
+        AssertEqual(repo:GetActiveQuest() and repo:GetActiveQuest().id, q.id, "Test Quest activates pure free-form draft")
 
         mockState.alerts = {}
         local sent = tab:SendSelectedPreparedQuest()
-        AssertEqual(sent, false, "SendSelectedPreparedQuest rejects objective-less draft")
-        AssertTrue(#(mockState.alerts or {}) > 0, "Send shows localized alert for missing objective")
+        AssertEqual(sent, true, "SendSelectedPreparedQuest dispatches pure free-form draft")
+        RPQuest.MailTransport:Initialize()
     end)
 
     RunTest("Issue #275: JournalTab always keeps one visible accordion section with quests expanded", function()
@@ -2332,30 +2331,6 @@ return function(T)
         SCENE_MANAGER.IsShowing = origIsShowing
     end)
 
-    RunTest("Issue #320: versionLabel is rendered on DL_OVERLAY with high contrast under RPQuest tab icon", function()
-        RPQuest.QuestRepository:Initialize(nil)
-        local tab = RPQuest.JournalTab
-        tab:Initialize()
-
-        local label = tab.versionLabel
-        AssertTrue(label ~= nil, "versionLabel exists")
-        AssertEqual(label._parent, tab.panel, "versionLabel is parented to RPQuest panel so it only shows on RPQuest tab")
-
-        local ok, point, relTo, relPoint, x, y = label:GetAnchor(1)
-        AssertTrue(ok, "versionLabel has anchor")
-        AssertEqual(point, TOPRIGHT, "versionLabel anchor point is TOPRIGHT")
-        AssertEqual(relTo, tab.panel, "versionLabel anchored to panel")
-        AssertEqual(relPoint, TOPRIGHT, "versionLabel relPoint is TOPRIGHT")
-        AssertEqual(x, -33, "versionLabel X offset preserved")
-        AssertEqual(y, 38, "versionLabel Y offset preserved")
-
-        AssertEqual(label:GetDrawLayer(), DL_OVERLAY, "versionLabel uses DL_OVERLAY draw layer")
-        AssertTrue(label:GetDrawLevel() >= 10, "versionLabel uses elevated draw level above tab icon")
-
-        local r, g, b, a = label:GetColor()
-        AssertTrue(r >= 0.85 and g >= 0.85 and b >= 0.75 and a == 1, "versionLabel uses high-contrast legible color")
-    end)
-
     RunTest("Issue #330: RPQuest tab is added rightmost after Quests and Rumors on first OnShowing", function()
         RPQuest.QuestRepository:Initialize(nil)
         local tab = RPQuest.JournalTab
@@ -2443,7 +2418,7 @@ return function(T)
         for _, sec in pairs(tab.accordionSections or {}) do
             for _, rowBtn in ipairs(sec.rowPool or {}) do
                 if not rowBtn:IsHidden() and rowBtn._questId == saved.id then
-                    local rowText = rowBtn:GetText()
+                    local rowText = rowBtn._titleLabel and rowBtn._titleLabel:GetText() or rowBtn:GetText()
                     if rowText and rowText:find("/esoui/art/miscellaneous/gamepad/gp_icon_search_64.dds", 1, true) then
                         foundRowWithIcon = true
                     end
@@ -2457,6 +2432,562 @@ return function(T)
         local noIconQuest = repo:SaveDraft("No Icon", "Desc")
         tab:SelectQuest(noIconQuest.id)
         AssertTrue(tab.detailIcon:IsHidden(), "detailIcon is hidden for quest without icon")
+    end)
+
+    RunTest("JournalWidgets: multiline textarea scrollbar is inset inside backdrop border", function()
+        local parent = WINDOW_MANAGER:CreateControl("RPQ_TestScrollParent", nil, CT_CONTROL)
+        local bg, edit = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop(
+            "RPQ_TestMultiEdit", parent, 300, 120, 500, true
+        )
+        AssertTrue(edit._scrollbar ~= nil, "Multiline editbox creates vertical scrollbar")
+        AssertEqual(edit._scrollbar:GetNumAnchors(), 2, "Scrollbar has top and bottom right anchors")
+
+        local ok1, p1, rel1, rp1, x1, y1 = edit._scrollbar:GetAnchor(1)
+        AssertTrue(ok1, "First anchor exists")
+        AssertEqual(p1, TOPRIGHT, "Top anchor point is TOPRIGHT")
+        AssertEqual(rel1, bg, "Top anchor relativeTo is backdrop")
+        AssertEqual(rp1, TOPRIGHT, "Top anchor relativePoint is TOPRIGHT")
+        AssertEqual(x1, -4, "Top anchor offsetX is -4")
+        AssertEqual(y1, 20, "Top anchor offsetY is 20 (4px padding + 16px Up arrow)")
+
+        local ok2, p2, rel2, rp2, x2, y2 = edit._scrollbar:GetAnchor(2)
+        AssertTrue(ok2, "Second anchor exists")
+        AssertEqual(p2, BOTTOMRIGHT, "Bottom anchor point is BOTTOMRIGHT")
+        AssertEqual(rel2, bg, "Bottom anchor relativeTo is backdrop")
+        AssertEqual(rp2, BOTTOMRIGHT, "Bottom anchor relativePoint is BOTTOMRIGHT")
+        AssertEqual(x2, -4, "Bottom anchor offsetX is -4")
+        AssertEqual(y2, -20, "Bottom anchor offsetY is -20 (-4px padding - 16px Down arrow)")
+
+        local _, singleEdit = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop(
+            "RPQ_TestSingleEdit", parent, 300, 32, 100, false
+        )
+        AssertEqual(singleEdit._scrollbar, nil, "Single-line editbox does not create scrollbar")
+    end)
+
+    RunTest("Issue #336: JournalTab anchors quest row status tag on right and truncates long titles", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        local roles = RPQuest.Constants.QUEST_ROLE
+        local longTitle = string.rep("A", 80)
+        local repo = RPQuest.QuestRepository
+        repo:Initialize({
+            quests = {
+                { id = 301, title = longTitle, description = "D", role = roles.RECEIVED, completed = false },
+                { id = 302, title = longTitle, description = "D", role = roles.RECEIVED, completed = false, resolution = "failed" },
+                { id = 303, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@A", completed = false },
+                { id = 304, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@B", completed = false, resolution = "accepted" },
+                { id = 305, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@C", completed = false, resolution = "completed" },
+                { id = 306, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@D", completed = false, resolution = "rejected" },
+                { id = 307, title = longTitle, description = "D", role = roles.PREPARED, sentTo = "@E", completed = false, resolution = "failed" },
+                { id = 308, title = longTitle, description = "D", role = roles.PREPARED, completed = false },
+            },
+        })
+        RPQuest.JournalTab:Initialize()
+        local tab = RPQuest.JournalTab
+        tab.panel:SetHidden(false)
+        tab:Refresh()
+
+        local function FindRow(sectionKey, questId)
+            local sec = tab.accordionSections[sectionKey]
+            for _, rowBtn in ipairs(sec.rowPool or {}) do
+                if not rowBtn:IsHidden() and rowBtn._questId == questId then
+                    return rowBtn
+                end
+            end
+            return nil
+        end
+
+        -- Row without suffix (normal mission 301 & preparing draft 308) uses full LIST_WIDTH
+        local normalRow = FindRow("missions", 301)
+        AssertTrue(normalRow ~= nil, "Mission row 301 rendered")
+        AssertTrue(normalRow._statusLabel:IsHidden(), "Status label hidden when row has no suffix")
+        AssertEqual(normalRow._statusLabel:GetText(), "", "Status label text cleared when hidden")
+        AssertEqual(normalRow._titleLabel:GetMaxLineCount(), 1, "Title label limited to 1 line")
+        AssertEqual(normalRow._titleLabel:GetWrapMode(), TEXT_WRAP_MODE_ELLIPSIS, "Title label uses ellipsis wrap mode")
+        AssertEqual(normalRow._titleLabel:GetHorizontalAlignment(), TEXT_ALIGN_LEFT, "Title label left-aligned")
+        AssertEqual(normalRow._titleLabel:GetVerticalAlignment(), TEXT_ALIGN_CENTER, "Title label vertically centered")
+        local okT2, pt2, relT2, rpT2, xT2 = normalRow._titleLabel:GetAnchor(2)
+        AssertTrue(okT2, "Title label has right anchor")
+        AssertEqual(pt2, BOTTOMRIGHT, "Title right anchor point is BOTTOMRIGHT")
+        AssertEqual(relT2, normalRow, "Title without suffix anchors to rowBtn")
+        AssertEqual(rpT2, BOTTOMRIGHT, "Title without suffix anchors to rowBtn BOTTOMRIGHT")
+        AssertEqual(xT2, 0, "Title without suffix has 0 right offset")
+
+        -- Mission with [Failed] suffix (302)
+        local failedMissionRow = FindRow("missions", 302)
+        AssertTrue(failedMissionRow ~= nil, "Failed mission row 302 rendered")
+        AssertEqual(failedMissionRow._statusLabel:IsHidden(), false, "Status label visible for failed mission")
+        AssertEqual(failedMissionRow._statusLabel:GetHorizontalAlignment(), TEXT_ALIGN_RIGHT, "Status label right-aligned")
+        AssertEqual(failedMissionRow._statusLabel:GetMaxLineCount(), 1, "Status label limited to 1 line")
+        AssertTrue(failedMissionRow._statusLabel:GetText():find("[Failed]", 1, true) ~= nil, "Failed mission status label shows [Failed]")
+        AssertEqual(failedMissionRow._statusLabel:GetText():sub(1, 1) ~= " ", true, "Status label trims leading whitespace")
+        AssertEqual(failedMissionRow._titleLabel:GetText():find("[Failed]", 1, true), nil, "Title label does not include status suffix")
+        local okF2, pf2, relF2, rpF2, xF2 = failedMissionRow._titleLabel:GetAnchor(2)
+        AssertTrue(okF2, "Failed mission title has right anchor")
+        AssertEqual(pf2, BOTTOMRIGHT, "Title right anchor is BOTTOMRIGHT")
+        AssertEqual(relF2, failedMissionRow._statusLabel, "Title right-anchors to statusLabel")
+        AssertEqual(rpF2, BOTTOMLEFT, "Title anchors to statusLabel BOTTOMLEFT")
+        AssertEqual(xF2, -6, "Title has -6px gap before statusLabel")
+
+        -- Sent rows: [Sent], [Accepted], [Completed], [Rejected], [Failed]
+        local expectedTags = {
+            [303] = "[Sent]",
+            [304] = "[Accepted]",
+            [305] = "[Completed]",
+            [306] = "[Rejected]",
+            [307] = "[Failed]",
+        }
+        for qid, tag in pairs(expectedTags) do
+            local row = FindRow("sent", qid)
+            AssertTrue(row ~= nil, "Sent row " .. qid .. " rendered")
+            AssertEqual(row._statusLabel:IsHidden(), false, "Status label visible for " .. tag)
+            AssertTrue(row._statusLabel:GetText():find(tag, 1, true) ~= nil, "Status label renders " .. tag)
+            AssertTrue(row._titleLabel:GetText():find(longTitle, 1, true) ~= nil, "Title label retains 80-char title for " .. tag)
+            AssertEqual(row._titleLabel:GetText():find(tag, 1, true), nil, "Title label excludes " .. tag)
+        end
+
+        -- Switching pooled row from suffixed to unsuffixed hides status label and restores full width
+        local draftRow = FindRow("preparing", 308)
+        AssertTrue(draftRow ~= nil, "Preparing row 308 rendered")
+        AssertTrue(draftRow._statusLabel:IsHidden(), "Preparing row hides status label")
+    end)
+
+    RunTest("JournalWidgets.RegisterTabChain navigates forward, backward, wraps around, skips hidden/disabled, and scrolls", function()
+        local parent = WINDOW_MANAGER:CreateControl("TestTabChainParent", GuiRoot, CT_CONTROL)
+        local scroll = WINDOW_MANAGER:CreateControl("TestTabChainScroll", parent, CT_SCROLL)
+        local bg1, e1 = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE1", parent, 100, 24, 50, false)
+        local _, e2Hidden = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE2Hidden", parent, 100, 24, 50, false)
+        local bg3, e3Disabled = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE3Disabled", parent, 100, 24, 50, false)
+        local bg4, e4 = RPQuest.JournalWidgets.CreateEditBoxWithBackdrop("TestTabE4", parent, 100, 24, 50, true)
+
+        e2Hidden:SetHidden(true)
+        RPQuest.JournalWidgets.SetEditBoxEnabled(bg3, e3Disabled, false)
+
+        mockState.shiftKeyDown = false
+        mockState.scrollCalls = {}
+        mockState.scrollInViewFn = function() return false end
+
+        RPQuest.JournalWidgets.RegisterTabChain({ e1, e2Hidden, e3Disabled, e4 }, scroll)
+
+        -- Forward Tab from e1 skips hidden e2 and disabled e3, focuses e4 and scrolls its backdrop into view
+        e1._focused = true
+        e1:FireHandler("OnTab")
+        AssertTrue(e4._focused == true, "Tab from e1 focuses e4 (skipping hidden and disabled)")
+        AssertEqual(#mockState.scrollCalls, 1, "Scroll helper invoked when target is not in view")
+        AssertEqual(mockState.scrollCalls[1].scrollContainer, scroll, "Scroll helper receives scrollContainer")
+        AssertEqual(mockState.scrollCalls[1].control, bg4, "Scroll helper receives target backdrop")
+        AssertEqual(mockState.scrollCalls[1].scrollInstantly, false, "Scroll helper passes scrollInstantly = false")
+
+        -- Forward Tab from e4 wraps around to e1; when already in view, scroll helper is not invoked
+        mockState.scrollInViewFn = function() return true end
+        e1._focused = false
+        e4:FireHandler("OnTab")
+        AssertTrue(e1._focused == true, "Tab from last wraps around to first")
+        AssertEqual(#mockState.scrollCalls, 1, "Scroll helper not invoked when target is already in view")
+
+        -- Backward Shift+Tab from e1 wraps around to e4 (skipping disabled e3 and hidden e2)
+        mockState.shiftKeyDown = true
+        e4._focused = false
+        e1:FireHandler("OnTab")
+        AssertTrue(e4._focused == true, "Shift+Tab from first wraps around to last focusable")
+
+        -- Backward Shift+Tab from e4 skips e3 and e2 and lands on e1
+        e1._focused = false
+        e4:FireHandler("OnTab")
+        AssertTrue(e1._focused == true, "Shift+Tab from e4 focuses e1")
+
+        mockState.shiftKeyDown = false
+        mockState.scrollInViewFn = nil
+        mockState.scrollCalls = {}
+        bg1:SetHidden(true)
+    end)
+
+    RunTest("EditorPane and MailSendPane wire Tab / Shift+Tab navigation across visible enabled fields", function()
+        RPQuest.QuestRepository:Initialize({})
+        RPQuest.JournalTab:OpenTab()
+        RPQuest.JournalTab:OpenCreateEditor()
+
+        local tab = RPQuest.JournalTab
+        mockState.shiftKeyDown = false
+        mockState.scrollCalls = {}
+        mockState.scrollInViewFn = function() return false end
+
+        -- In default create editor, header section is open (titleEdit, descEdit, recipientEdit, recipientCharEdit)
+        -- while other accordion sections are collapsed (IsHidden() == true via parent body)
+        tab.titleEdit._focused = true
+        tab.descEdit._focused = false
+        tab.titleEdit:FireHandler("OnTab")
+        AssertTrue(tab.descEdit._focused == true, "Editor Tab moves from titleEdit to descEdit")
+        AssertEqual(#mockState.scrollCalls, 1, "Editor Tab scrolls editorScroll when target is out of view")
+        AssertEqual(mockState.scrollCalls[1].scrollContainer, tab.editorScroll, "Editor Tab scrolls tab.editorScroll")
+
+        tab.recipientEdit._focused = false
+        tab.descEdit:FireHandler("OnTab")
+        AssertTrue(tab.recipientEdit._focused == true, "Editor Tab moves from descEdit to recipientEdit")
+
+        tab.recipientCharEdit._focused = false
+        tab.recipientEdit:FireHandler("OnTab")
+        AssertTrue(tab.recipientCharEdit._focused == true, "Editor Tab moves from recipientEdit to recipientCharEdit")
+
+        -- Tab from recipientCharEdit skips collapsed sections and wraps back to titleEdit
+        tab.titleEdit._focused = false
+        tab.recipientCharEdit:FireHandler("OnTab")
+        AssertTrue(tab.titleEdit._focused == true, "Editor Tab skips collapsed accordion fields and wraps to titleEdit")
+
+        -- Shift+Tab from titleEdit wraps back to recipientCharEdit
+        mockState.shiftKeyDown = true
+        tab.recipientCharEdit._focused = false
+        tab.titleEdit:FireHandler("OnTab")
+        AssertTrue(tab.recipientCharEdit._focused == true, "Editor Shift+Tab wraps from titleEdit to recipientCharEdit")
+
+        -- MailSendPane Tab / Shift+Tab between mailRecEdit and mailRoleEdit without scroll
+        tab.editorPane:SetHidden(true)
+        tab.mailSendPane:SetHidden(false)
+        mockState.shiftKeyDown = false
+        mockState.scrollCalls = {}
+        tab.mailRecEdit._focused = true
+        tab.mailRoleEdit._focused = false
+        tab.mailRecEdit:FireHandler("OnTab")
+        AssertTrue(tab.mailRoleEdit._focused == true, "MailSend Tab moves from mailRecEdit to mailRoleEdit")
+        AssertEqual(#mockState.scrollCalls, 0, "MailSend Tab does not invoke scroll helper")
+
+        mockState.shiftKeyDown = true
+        tab.mailRecEdit._focused = false
+        tab.mailRoleEdit:FireHandler("OnTab")
+        AssertTrue(tab.mailRecEdit._focused == true, "MailSend Shift+Tab moves from mailRoleEdit to mailRecEdit")
+
+        mockState.shiftKeyDown = false
+        mockState.scrollInViewFn = nil
+        mockState.scrollCalls = {}
+    end)
+
+    RunTest("JournalTab exposes autoOpenJournalOnReceive toggle in leftCol footer across all views (Issue #363)", function()
+        local prevSetting = RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive")
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", false)
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+        tab.selectedQuestId = nil
+        tab:Refresh()
+
+        AssertTrue(tab.detailSettingsHeader == nil, "detailSettingsHeader removed from JournalDetailPane")
+        AssertTrue(tab.chkAutoOpenJournalOnReceive ~= nil, "chkAutoOpenJournalOnReceive exists")
+        local _, _, chkRelTo, _, _, chkOffsetY = tab.chkAutoOpenJournalOnReceive:GetAnchor(1)
+        AssertTrue(chkRelTo == tab.leftCol, "chkAutoOpenJournalOnReceive anchors to leftCol")
+        AssertTrue(chkOffsetY >= 584, "chkAutoOpenJournalOnReceive sits below pagination controls without overlap")
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in empty detail pane")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), false, "Checkbox reflects disabled autoOpenJournalOnReceive setting")
+
+        -- Toggle checkbox ON and verify SavedVars setting updates
+        ZO_CheckButton_OnClicked(tab.chkAutoOpenJournalOnReceive)
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), true, "Toggling checkbox enables autoOpenJournalOnReceive")
+
+        -- Create a quest and select it; checkbox remains visible and synced
+        local q = RPQuest.QuestRepository:CreateNewPreparedDraft()
+        tab:SelectQuest(q.id)
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible when quest selected")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), true, "Checkbox remains checked when quest selected")
+
+        -- Visible in editor and mail send views too
+        tab.viewMode = tab.VIEW_MODE.EDITOR
+        tab:Refresh()
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in editor view")
+        tab.viewMode = tab.VIEW_MODE.MAIL_SEND
+        tab:Refresh()
+        AssertEqual(tab.chkAutoOpenJournalOnReceive:IsHidden(), false, "Auto-open checkbox visible in mail send view")
+
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", prevSetting)
+        tab:Refresh()
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkAutoOpenJournalOnReceive), prevSetting == true, "Refresh syncs checkbox back to SavedVars")
+    end)
+
+    RunTest("JournalDetailPane displays completionMessage only when completed and non-empty (Issue #341)", function()
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab.viewMode = tab.VIEW_MODE.DETAIL
+
+        local prevScrollChild = tab.detailScrollChild
+        local scrollH = 0
+        tab.detailScrollChild = {
+            SetDimensions = function(_, _, h) scrollH = h end,
+            GetHeight = function() return scrollH end,
+        }
+
+        -- 1. Received quest: non-completed (pending/offered then available) hides section even if completionMessage is set
+        local code = RPQuest.ShareCodec:EncodeQuest({
+            id = "rx_comp_341",
+            title = "Completion Detail Test",
+            description = "Test desc",
+            completionMessage = "  You have returned safely.\nReport to the guildmaster!  ",
+            targets = { { name = "Bandit", requiredCount = 1, currentCount = 0 } },
+        })
+        local rxQuest = RPQuest.QuestRepository:ImportQuestFromCode(code, "@Master", { pendingOffer = true })
+        local rxId = rxQuest.id
+        tab:SelectQuest(rxId)
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden when received quest is pending")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden when received quest is pending")
+
+        RPQuest.QuestRepository:AcceptOfferedQuest(rxId)
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden when received quest is available")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden when received quest is available")
+        AssertEqual(tab.detailCompletionText:GetText(), "", "Completion text cleared when hidden")
+        local baselineScrollH = tab.detailScrollChild:GetHeight()
+
+        -- 2. Received quest: failed hides section
+        rxQuest = RPQuest.QuestRepository:GetQuestById(rxId)
+        rxQuest.failed = true
+        rxQuest.resolution = "failed"
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden when quest is failed")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden when quest is failed")
+
+        -- 3. Received quest: completed with non-empty message shows trimmed text, grows height & chains settings anchor
+        rxQuest.failed = false
+        rxQuest.completed = true
+        rxQuest.resolution = "completed"
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), false, "Completion header visible when received quest is completed")
+        AssertEqual(tab.detailCompletionText:IsHidden(), false, "Completion text visible when received quest is completed")
+        AssertEqual(
+            tab.detailCompletionText:GetText(),
+            "You have returned safely.\nReport to the guildmaster!",
+            "Completion text is trimmed before display"
+        )
+        local _, compH = tab.detailCompletionText:GetDimensions()
+        AssertTrue(compH >= 48, "Completion text height expands dynamically for multi-line message")
+        local completedScrollH = tab.detailScrollChild:GetHeight()
+        AssertTrue(completedScrollH > baselineScrollH, "detailScrollChild height increases when completion section is shown")
+        local _, _, mapRelTo = tab.detailMapMarkersHeader:GetAnchor(1)
+        AssertTrue(mapRelTo == tab.detailCompletionText, "Downstream map markers header anchors below completion text")
+
+        -- 4. Received quest: completed with whitespace-only completionMessage hides section
+        rxQuest.completionMessage = "   \n\t  "
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden for whitespace-only completionMessage")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden for whitespace-only completionMessage")
+
+        -- 5. Sender view (SENT quest): hidden when resolution == "sent", visible when resolution == "completed"
+        local sentQuest = RPQuest.QuestRepository:CreateNewPreparedDraft()
+        tab:SelectQuest(sentQuest.id)
+        sentQuest.title = "Sent Completion Test"
+        sentQuest.completionMessage = "Contract fulfilled by your agent."
+        sentQuest.lifecycle = RPQuest.Constants.QUEST_LIFECYCLE.SENT
+        sentQuest.resolution = "sent"
+        sentQuest.targets = { { name = "Target", requiredCount = 1, currentCount = 0 } }
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden on SENT quest before completion")
+
+        sentQuest.resolution = "completed"
+        sentQuest.lastResult = { senderDisplayName = "@Agent", characterName = "Agent One" }
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), false, "Completion header visible on SENT completed quest")
+        AssertEqual(tab.detailCompletionText:IsHidden(), false, "Completion text visible on SENT completed quest")
+        AssertEqual(tab.detailCompletionText:GetText(), "Contract fulfilled by your agent.", "Sender view displays completionMessage")
+        local _, _, btnRelTo = tab.btnActivate:GetAnchor(1)
+        AssertTrue(btnRelTo == tab.detailCompletionText, "Action buttons anchor below completion text in sender view")
+
+        -- 6. Local test quest (prepared + active + completed) shows completionMessage
+        RPQuest.QuestRepository:SetActiveQuest(sentQuest.id)
+        sentQuest.completed = true
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), false, "Completion header visible on completed local test quest")
+        AssertEqual(tab.detailCompletionText:IsHidden(), false, "Completion text visible on completed local test quest")
+
+        -- 7. Empty detail pane hides completion section
+        RPQuest.QuestRepository:SetActiveQuest(nil)
+        tab.selectedQuestId = nil
+        tab:Refresh()
+        AssertEqual(tab.detailCompletionHeader:IsHidden(), true, "Completion header hidden in empty detail pane")
+        AssertEqual(tab.detailCompletionText:IsHidden(), true, "Completion text hidden in empty detail pane")
+        tab.detailScrollChild = prevScrollChild
+    end)
+
+    RunTest("Issue #345: Editor Required/Sequential/Reorder controls and JournalDetailPane dialogue progress", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+        tab:OpenCreateEditor()
+
+        local draft = repo:GetDraft()
+        -- Verify new editor controls exist and layout fits bounds
+        AssertTrue(tab.chkDiscoveryRequired ~= nil, "chkDiscoveryRequired exists")
+        AssertTrue(tab.chkDiscoverySequential ~= nil, "chkDiscoverySequential exists")
+        AssertTrue(tab.btnMoveDiscoveryUp ~= nil, "btnMoveDiscoveryUp exists")
+        AssertTrue(tab.btnMoveDiscoveryDown ~= nil, "btnMoveDiscoveryDown exists")
+        AssertTrue(tab.chkDialogueRequired ~= nil, "chkDialogueRequired exists")
+        AssertTrue(tab.editorSectionsByKey["discovery"].bodyHeight >= 184, "discovery section bodyHeight accommodates sequential checkbox")
+        AssertTrue(tab.editorSectionsByKey["dialogue"].bodyHeight >= 300, "dialogue section bodyHeight accommodates required checkbox")
+
+        -- Disabled state when empty
+        AssertEqual(tab.btnMoveDiscoveryUp:IsEnabled(), false, "btnMoveDiscoveryUp disabled when no discoveries")
+        AssertEqual(tab.btnMoveDiscoveryDown:IsEnabled(), false, "btnMoveDiscoveryDown disabled when no discoveries")
+        AssertEqual(tab.chkDialogueRequired:IsEnabled(), false, "chkDialogueRequired disabled when no dialogues")
+
+        -- Add 2 discovery points
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.2, y = 0.2, radius = 800, message = "First Spot" })
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 300, worldY = 0, worldZ = 400, mapId = 32, x = 0.4, y = 0.4, radius = 1500, message = "Second Spot" })
+        tab.selectedDiscoveryIndex = 2
+        tab:RefreshEditorPane()
+
+        -- Boundary checks for reorder buttons
+        AssertEqual(tab.btnMoveDiscoveryUp:IsEnabled(), true, "btnMoveDiscoveryUp enabled when point #2 selected")
+        AssertEqual(tab.btnMoveDiscoveryDown:IsEnabled(), false, "btnMoveDiscoveryDown disabled when last point selected")
+
+        -- Mark point #2 as Required -> dropdown shows [Req]
+        ZO_CheckButton_OnClicked(tab.chkDiscoveryRequired)
+        AssertEqual(draft.discoveries[2].required, true, "chkDiscoveryRequired sets discovery[2].required=true")
+        local discItems = tab.discoveryComboBox:GetItems()
+        AssertTrue(discItems[2].name:find("[Req]", 1, true) ~= nil, "Discovery dropdown shows [Req] indicator")
+        AssertEqual(discItems[1].name:find("[Req]", 1, true), nil, "Optional discovery omits [Req]")
+
+        -- Reorder point #2 up -> becomes #1, selection follows to 1, button states flip
+        tab.btnMoveDiscoveryUp:GetHandler("OnClicked")()
+        AssertEqual(tab.selectedDiscoveryIndex, 1, "Moving point #2 up updates selectedDiscoveryIndex to 1")
+        AssertEqual(draft.discoveries[1].message, "Second Spot", "Moved point is now #1")
+        AssertEqual(draft.discoveries[1].required, true, "Moved point preserves required=true")
+        AssertEqual(draft.discoveries[2].message, "First Spot", "Previous #1 is now #2")
+        AssertEqual(tab.btnMoveDiscoveryUp:IsEnabled(), false, "btnMoveDiscoveryUp disabled at index 1")
+        AssertEqual(tab.btnMoveDiscoveryDown:IsEnabled(), true, "btnMoveDiscoveryDown enabled at index 1")
+
+        -- Out-of-bounds MoveDraftDiscoveryPoint returns nil safely
+        local badMove = repo:MoveDraftDiscoveryPoint(1, -1)
+        AssertEqual(badMove, nil, "MoveDraftDiscoveryPoint rejects move before index 1")
+        local badMove2 = repo:MoveDraftDiscoveryPoint(2, 1)
+        AssertEqual(badMove2, nil, "MoveDraftDiscoveryPoint rejects move past end")
+
+        -- Move #1 back down -> becomes #2
+        tab.btnMoveDiscoveryDown:GetHandler("OnClicked")()
+        AssertEqual(tab.selectedDiscoveryIndex, 2, "Moving point #1 down updates selectedDiscoveryIndex to 2")
+        AssertEqual(draft.discoveries[2].message, "Second Spot", "Restored point to #2")
+
+        -- Toggle Sequential order checkbox
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkDiscoverySequential), false, "Sequential order unchecked initially")
+        ZO_CheckButton_OnClicked(tab.chkDiscoverySequential)
+        AssertEqual(draft.sequentialDiscoveries, true, "chkDiscoverySequential sets draft.sequentialDiscoveries=true")
+
+        -- Add 2 dialogues and toggle Required on dialogue #1
+        repo:AddDraftDialogue("NPC Alpha", 381, "Reply A", "Ask A")
+        repo:AddDraftDialogue("NPC Beta", 381, "Reply B", "Ask B")
+        tab.selectedDialogueIndex = 1
+        tab:RefreshEditorPane()
+        AssertEqual(tab.chkDialogueRequired:IsEnabled(), true, "chkDialogueRequired enabled when dialogue selected")
+        ZO_CheckButton_OnClicked(tab.chkDialogueRequired)
+        AssertEqual(draft.dialogues[1].required, true, "chkDialogueRequired sets dialogue[1].required=true")
+        AssertTrue(tab.lblSelectedNpc:GetText():find("[Req]", 1, true) ~= nil, "lblSelectedNpc shows [Req] for required dialogue")
+        AssertTrue(tab.lblCapturedDialogues:GetText():find("NPC Alpha [Req]", 1, true) ~= nil, "lblCapturedDialogues shows [Req] tag")
+
+        -- Save draft and reopen in editor to verify persistence
+        local saved = repo:SaveDraft("Seq & Req Quest", "Test persistence")
+        AssertEqual(saved.sequentialDiscoveries, true, "Saved quest persists sequentialDiscoveries=true")
+        AssertEqual(saved.discoveries[2].required, true, "Saved quest persists discovery[2].required=true")
+        AssertEqual(saved.dialogues[1].required, true, "Saved quest persists dialogue[1].required=true")
+
+        -- Master summary detail view shows Sequential indicator
+        tab:SelectQuest(saved.id)
+        AssertTrue(tab.detailObjText:GetText():find("(Sequential)", 1, true) ~= nil, "Master summary shows (Sequential) discovery note")
+
+        tab:OpenEditEditor(saved.id)
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkDiscoverySequential), true, "Reopened editor syncs chkDiscoverySequential=true")
+        AssertEqual(ZO_CheckButton_IsChecked(tab.chkDialogueRequired), true, "Reopened editor syncs chkDialogueRequired=true for dialogue #1")
+
+        -- Player view dialogue progress in JournalDetailPane (spoiler-free before execution, reveals spoken NPCs as executed)
+        repo:ResetDraft()
+        repo:AddDraftDialogue("Secret Witness", 381, "Secret reply", "Ask secret")
+        repo:AddDraftDialogue("Hidden Courier", 381, "Another reply", "Ask courier")
+        local dlgOnly = repo:SaveDraft("Dialogue Journal Test", "Talk to contacts.")
+        local code = repo:ExportQuestToCode(dlgOnly.id)
+        local rxDlg = repo:ImportQuestFromCode(code, "@Master")
+        repo:SetActiveQuest(rxDlg.id)
+        tab:SelectQuest(rxDlg.id)
+
+        local text0 = tab.detailObjText:GetText()
+        AssertTrue(text0:find("NPC Dialogues: 0 / 2", 1, true) ~= nil, "Detail pane shows 0 / 2 dialogue progress")
+        AssertEqual(text0:find("Secret Witness", 1, true), nil, "Spoiler-free: unexecuted NPC name hidden in received quest details")
+        AssertEqual(text0:find("Secret reply", 1, true), nil, "Spoiler-free: NPC response hidden in quest details")
+
+        repo:MarkDialogueTriggered(rxDlg.id, 1)
+        tab:Refresh()
+        local text1 = tab.detailObjText:GetText()
+        AssertTrue(text1:find("NPC Dialogues: 1 / 2", 1, true) ~= nil, "Detail pane updates to 1 / 2 dialogue progress")
+        AssertTrue(text1:find("Spoke with Secret Witness", 1, true) ~= nil, "Executed NPC appears in detail pane")
+        AssertEqual(text1:find("Hidden Courier", 1, true), nil, "Unexecuted NPC #2 remains hidden")
+
+        repo:MarkDialogueTriggered(rxDlg.id, 2)
+        tab:Refresh()
+        local text2 = tab.detailObjText:GetText()
+        AssertTrue(text2:find("NPC Dialogues: 2 / 2", 1, true) ~= nil, "Detail pane shows 2 / 2 upon completion")
+        AssertTrue(text2:find("Spoke with Hidden Courier", 1, true) ~= nil, "Second executed NPC appears in detail pane")
+    end)
+
+    RunTest("Issue #346: JournalDetailPane free-form objective display, Complete button visibility, and failure alert", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize("en")
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        local repo = RPQuest.QuestRepository
+        local tab = RPQuest.JournalTab
+        tab:Initialize()
+
+        -- 1. Pure free-form prepared quest shows Complete only while testing (active), hiding Edit without overlap
+        repo:ResetDraft()
+        local ffPrep = repo:SaveDraft("Tavern Council", "Agree on terms.")
+        tab:SelectQuest(ffPrep.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden on prepared free-form quest when not testing")
+        AssertEqual(tab.btnEdit:IsHidden(), false, "btnEdit visible on prepared free-form quest when not testing")
+        AssertTrue(tab.detailObjText:GetText():find("Free-form roleplay quest", 1, true) ~= nil, "Master summary displays free-form objective note")
+
+        repo:SetActiveQuest(ffPrep.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible on prepared free-form quest during Test Quest")
+        AssertEqual(tab.btnEdit:IsHidden(), true, "btnEdit hidden while btnComplete is visible")
+        AssertTrue(tab.detailObjText:GetText():find("Free-form roleplay quest", 1, true) ~= nil, "Test Quest player view displays free-form objective note")
+
+        -- 2. Received pure free-form quest: hidden when offered, visible when accepted, completes cleanly on click
+        local ffRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(ffPrep.id), "@Master", { status = RPQuest.Constants.QUEST_STATUS.OFFERED })
+        tab:SelectQuest(ffRx.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden on offered free-form quest")
+
+        repo:AcceptOfferedQuest(ffRx.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible on accepted free-form quest")
+
+        tab:OnCompleteQuestClicked()
+        AssertEqual(ffRx.completed, true, "Clicking Complete completes received pure free-form quest")
+        AssertEqual(ffRx.failed, false, "Pure free-form completion does not fail")
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden after free-form quest completes")
+
+        -- 3. OnCompleteQuestClicked announces failure when required discovery is missed
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({ targetName = "Guard", mapId = 1, zoneId = 381, mapName = "Auridon", targetX = 0.5, targetY = 0.5 })
+        repo:SetDraftCapturedTarget({ targetName = "OptionalGuard", mapId = 1, zoneId = 381, mapName = "Auridon", targetX = 0.5, targetY = 0.5 })
+        repo:UpdateDraftTarget(2, { optional = true })
+        repo:AddDraftDiscoveryPoint({ zoneId = 381, worldX = 100, worldY = 0, worldZ = 200, mapId = 32, x = 0.5, y = 0.5, radius = 800, message = "Secret cache", required = true })
+        local reqPrep = repo:SaveDraft("Missing Clue Test", "Find clue first")
+        local reqRx = repo:ImportQuestFromCode(repo:ExportQuestToCode(reqPrep.id), "@Master")
+        repo:SetActiveQuest(reqRx.id)
+        repo:RecordTargetEliminated("Guard")
+        tab:SelectQuest(reqRx.id)
+        tab:Refresh()
+        AssertEqual(tab.btnComplete:IsHidden(), false, "btnComplete visible once mandatory target is done")
+
+        local origAnnounceFail = RPQuest.Announcements.AnnounceQuestFailed
+        local uiFailReason = nil
+        RPQuest.Announcements.AnnounceQuestFailed = function(_, _, _, reasonText)
+            uiFailReason = reasonText
+        end
+        tab:OnCompleteQuestClicked()
+        AssertEqual(reqRx.failed, true, "OnCompleteQuestClicked fails quest when required discovery is missed")
+        AssertEqual(reqRx.completed, false, "Quest not marked completed on missed required discovery")
+        AssertEqual(uiFailReason, RPQuest.Locale:Get("ALERT_QUEST_FAILED_REQUIRED_DISCOVERY"), "AnnounceQuestFailed invoked with required discovery reason")
+        AssertEqual(tab.btnComplete:IsHidden(), true, "btnComplete hidden after quest fails")
+        AssertEqual(tab.btnReset:IsHidden(), false, "btnReset shown after quest fails")
+        RPQuest.Announcements.AnnounceQuestFailed = origAnnounceFail
     end)
 
 end

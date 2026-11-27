@@ -54,3 +54,8 @@ Opción elegida: **"Opción 2: Utilizar `ZO_WorldMapPins_Manager:AddCustomPin` c
   * Cero riesgo de errores UV en la brújula ni círculos en mapas equivocados.
 * **Negativas / Trade-offs:**
   * Enfoque prioritario en la interfaz de Teclado (`QUEST_JOURNAL_KEYBOARD`), manteniendo seguridad ante modo Gamepad.
+
+### Enmienda: Brillo de Área en la Brújula (`src/CompassAreaGlow.lua`, Issue #367)
+* Se mantiene intacta la restricción de no intervenir ni mutar las estructuras internas de `COMPASS` (`COMPASS.playerIsInsidePins`, `areaAnimationPools`, `areaOverrideQueue`).
+* En su lugar, `Addon.CompassAreaGlow` crea un control HUD aislado (`RPQuestCompassAreaGlow`) anclado a `ZO_Compass` reutilizando los templates y líneas de tiempo nativas (`ZO_CompassAreaTexture`, `ZO_CompassAreaTexture_Keyboard_Template` / `ZO_CompassAreaTexture_Gamepad_Template`, `CompassAreaTextureAnimationIn` y `CompassAreaTextureAnimationOut`) con un tinte distintivo dorado/ámbar y sin `AreaOverride`.
+* Evalúa únicamente objetivos pendientes (`targets[]`) de la misión activa (`GetActiveQuest()`), excluyendo puntos de descubrimiento ocultos (`discoveries[]`) y activándose con independencia de los toggles del mapa (`showSearchAreas` / `showLocationAreas`).

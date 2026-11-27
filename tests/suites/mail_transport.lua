@@ -41,6 +41,7 @@ return function(T)
             IsShowing = function(_, name)
                 return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
             end,
+            Show = function() end,
         }
 
         -- Create a prepared quest
@@ -278,6 +279,7 @@ return function(T)
             IsShowing = function(_, name)
                 return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
             end,
+            Show = function() end,
         }
         _G.SendMail = function(to, subject, body)
             table.insert(sentMails, { to = to, subject = subject, body = body })
@@ -423,22 +425,94 @@ return function(T)
         local sigAfter = RPQuest.ShareCodec:ComputeQuestSignature(decoded)
         AssertEqual(sigAfter, sigBefore, "Quest signature unchanged when character names are encoded")
 
-        -- 4. Offered mail quest displays From: <CharacterName> and To: <CharacterName> below Status: without inline From in Status:
+        -- 4. Offered mail quest preserves payload senderCharacterName when present, falling back to mail metadata only when absent
         local imported = RPQuest.QuestRepository:ImportQuestFromCode(code, "@MasterAcct", {
             status = RPQuest.Constants.QUEST_STATUS.OFFERED,
             senderCharacterName = "Sotha Sil^Mx",
         })
         AssertEqual(imported.senderDisplayName, "@MasterAcct", "Imported quest keeps senderDisplayName")
-        AssertEqual(imported.senderCharacterName, "Sotha Sil", "Imported quest prefers normalized mail metadata senderCharacterName")
+        AssertEqual(imported.senderCharacterName, "Nerevar", "Imported quest preserves payload senderCharacterName over mail metadata")
         AssertEqual(imported.recipientCharacterName, "Lord Vivec", "Imported quest keeps recipientCharacterName")
+
+        local fallbackDecoded = { senderDisplayName = "@MasterAcct" }
+        RPQuest.QuestRepository:ApplyImportedSenderMetadata(fallbackDecoded, "@MasterAcct", {
+            status = RPQuest.Constants.QUEST_STATUS.OFFERED,
+            senderCharacterName = "Sotha Sil^Mx",
+        })
+        AssertEqual(fallbackDecoded.senderCharacterName, "Sotha Sil", "ApplyImportedSenderMetadata falls back to normalized mail metadata when payload omits senderCharacterName")
 
         RPQuest.JournalTab:SelectQuest(imported.id)
         RPQuest.JournalTab:Refresh()
         AssertEqual(RPQuest.JournalTab.detailStatus:GetText():find("From:", 1, true), nil, "Offered status no longer embeds inline From:")
-        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Sotha Sil", "Offered detail From shows sender character name")
+        AssertEqual(RPQuest.JournalTab.detailFrom:GetText(), "From: Nerevar", "Offered detail From shows payload sender character name")
         AssertEqual(RPQuest.JournalTab.detailTo:GetText(), "To: Lord Vivec", "Offered detail To shows recipient character name")
 
         _G.GetUnitName = origUnitName
+    end)
+
+    RunTest("Issue #342: editor sender character dropdown lists account characters, persists selection, and restores on reopen", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        local origUnitName = _G.GetUnitName
+        local origGetNumChars = _G.GetNumCharacters
+        local origGetCharInfo = _G.GetCharacterInfo
+
+        local accountChars = { "Nerevar^Mx", "Almalexia^Fx", "Vivec^Mx" }
+        _G.GetUnitName = function(tag)
+            if tag == "player" then return "Nerevar^Mx" end
+            return origUnitName(tag)
+        end
+        _G.GetNumCharacters = function()
+            return #accountChars
+        end
+        _G.GetCharacterInfo = function(index)
+            return accountChars[index], 1, 50, 1, 1, 1, tostring(index), 1
+        end
+
+        RPQuest.JournalTab:OpenCreateEditor()
+        local combo = RPQuest.JournalTab.senderCharComboBox
+        AssertTrue(combo ~= nil, "senderCharComboBox exists in editor")
+        AssertEqual(#combo.m_sortedItems, 3, "senderCharComboBox lists all 3 account characters")
+        local initialSelected = combo:GetSelectedItemData()
+        AssertEqual(initialSelected and initialSelected.senderCharacterName, "Nerevar", "Active character preselected for new quest")
+
+        -- Select alternate character Almalexia
+        local altItem = nil
+        for _, item in ipairs(combo.m_sortedItems) do
+            if item.senderCharacterName == "Almalexia" then
+                altItem = item
+                break
+            end
+        end
+        AssertTrue(altItem ~= nil, "Almalexia entry present in senderCharComboBox")
+        combo:SelectItem(altItem)
+
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Sotha Sil",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Clockwork City",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        RPQuest.JournalTab.titleEdit:SetText("Clockwork Message")
+        RPQuest.JournalTab:OnSaveDraftClicked()
+
+        local prepared = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.PREPARED)[1]
+        AssertEqual(prepared.senderCharacterName, "Almalexia", "Selected senderCharacterName persisted in prepared quest")
+
+        local code = RPQuest.QuestRepository:ExportQuestToCode(prepared.id)
+        local decoded = RPQuest.ShareCodec:DecodeQuest(code)
+        AssertEqual(decoded.senderCharacterName, "Almalexia", "Encoded payload preserves selected senderCharacterName")
+
+        -- Reopen prepared quest in editor and verify dropdown reflects saved senderCharacterName
+        RPQuest.JournalTab:OpenEditEditor(prepared.id)
+        local reopenedSelected = combo:GetSelectedItemData()
+        AssertEqual(reopenedSelected and reopenedSelected.senderCharacterName, "Almalexia", "Reopened editor preselects saved senderCharacterName")
+
+        _G.GetUnitName = origUnitName
+        _G.GetNumCharacters = origGetNumChars
+        _G.GetCharacterInfo = origGetCharInfo
     end)
 
     RunTest("Issue #295 & #311: worst-case uncompressible 4/10/4 quest + max MAIL_ROLE_MESSAGE fits within 6 mails (<= 4104 chars)", function()
@@ -487,6 +561,7 @@ return function(T)
                 y = 0.61 + i * 0.05,
                 radius = RPQuest.Constants.DISCOVERY_RADIUS.LARGE,
                 message = RandomAscii(limits.SHORT_MESSAGE),
+                required = true,
             }
         end
 
@@ -497,6 +572,7 @@ return function(T)
                 zoneId = 381,
                 clue = RandomAscii(limits.DIALOGUE_OPTION),
                 response = RandomAscii(limits.DIALOGUE_RESPONSE),
+                required = true,
             }
         end
 
@@ -511,6 +587,8 @@ return function(T)
             mapName = RandomAscii(32),
             targetX = 0.4321,
             targetY = 0.6789,
+            icon = "black_hand",
+            sequentialDiscoveries = true,
             stealthMode = RPQuest.Constants.STEALTH_MODE.REQUIRED,
             recommendHideMapAreas = true,
             targets = targets,
@@ -526,6 +604,99 @@ return function(T)
         AssertEqual(plan.fits, true, string.format("Worst-case uncompressible quest must fit in 6 mails (totalLen=%d, maxTotalChars=%d)", plan.totalLen, plan.maxTotalChars))
         AssertTrue(plan.partCount <= 6, "Worst-case partCount <= 6, got " .. tostring(plan.partCount))
         AssertTrue(plan.totalLen <= 4104, "Worst-case totalLen <= 4104, got " .. tostring(plan.totalLen))
+    end)
+
+    RunTest("43. Multi-part send partial failure surfaces actionable alert and skips MarkPreparedQuestSent (Issue #334)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+
+        local origScene = _G.SCENE_MANAGER
+        local origSendMail = _G.SendMail
+        local origGetString = _G.GetString
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        local sentMails = {}
+        local alerts = {}
+        local mailErrors = {}
+
+        _G.SCENE_MANAGER = {
+            IsShowing = function(_, sceneName)
+                return sceneName == "mailSend"
+            end,
+            Show = function() end,
+        }
+        _G.SendMail = function(to, subject, body)
+            table.insert(sentMails, { to = to, subject = subject, body = body })
+        end
+        _G.GetString = function(prefix, code)
+            if prefix == "SI_SENDMAILRESULT" and code == 14 then
+                return "Recipient inbox is full"
+            end
+            return origGetString and origGetString(prefix, code) or ""
+        end
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+        RPQuest.MailTransport:RegisterListener(function(evType, payload)
+            if evType == "MAIL_SEND_ERROR" then
+                table.insert(mailErrors, payload)
+            end
+        end)
+
+        RPQuest.QuestRepository:ResetDraft()
+        RPQuest.QuestRepository:SetDraftCapturedTarget({
+            targetName = "Bandit",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        local q = RPQuest.QuestRepository:SaveDraft("Multi-part Failure Test", "Quest description for multi-part splitting.")
+        local roleMessage = string.rep("Roleplay intro text for multi-part splitting. ", 35)
+        local ok = RPQuest.MailTransport:SendQuestToRecipients(q, "@Recipient", roleMessage)
+        AssertEqual(ok, true, "SendQuestToRecipients starts multi-part send")
+        local totalParts = RPQuest.MailTransport._sendTotal
+        AssertTrue(totalParts > 1, "Quest splits into multiple parts (" .. tostring(totalParts) .. ")")
+
+        for _ = 1, totalParts - 1 do
+            RPQuest.MailTransport:OnMailSendSuccess("@Recipient")
+        end
+        AssertEqual(#sentMails, totalParts, "Final part dispatched before failure")
+
+        RPQuest.MailTransport:OnMailSendFailed(14)
+
+        AssertEqual(#mailErrors, 1, "MAIL_SEND_ERROR emitted on partial failure")
+        AssertTrue(type(mailErrors[1].partialInfo) == "table", "MAIL_SEND_ERROR includes partialInfo")
+        AssertEqual(mailErrors[1].partialInfo.failedPart, totalParts, "failedPart matches failed final part")
+        AssertEqual(mailErrors[1].partialInfo.totalParts, totalParts, "totalParts matches total")
+        AssertEqual(mailErrors[1].partialInfo.delivered, totalParts - 1, "delivered count matches succeeded parts")
+
+        local expectedMsg = RPQuest.Locale:Get(
+            "ALERT_MAIL_SEND_PARTIAL_FAILED",
+            totalParts,
+            totalParts,
+            "@Recipient",
+            totalParts - 1,
+            "Recipient inbox is full"
+        )
+        AssertEqual(mailErrors[1].message, expectedMsg, "MAIL_SEND_ERROR message uses ALERT_MAIL_SEND_PARTIAL_FAILED")
+        local foundPartialAlert = false
+        for _, alert in ipairs(alerts) do
+            if alert.isErr == true and alert.msg == expectedMsg then
+                foundPartialAlert = true
+                break
+            end
+        end
+        AssertTrue(foundPartialAlert, "Master receives actionable partial-failure alert")
+        AssertEqual(q.sentRecipients and q.sentRecipients["@recipient"], nil, "MarkPreparedQuestSent is NOT called on partial failure")
+
+        RPQuest.Announcements.ShowAlert = origShowAlert
+        _G.GetString = origGetString
+        _G.SendMail = origSendMail
+        _G.SCENE_MANAGER = origScene
     end)
 
 end

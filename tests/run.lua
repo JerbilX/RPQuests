@@ -19,6 +19,7 @@ local mockState = {
     reticleExists = true,
     reticleName = "Capitán Pirata^m",
     reticleIsPlayer = false,
+    reticleIsSelf = false,
     reticleIsDead = false,
     reticleAttackable = true,
     reticleReaction = 2,
@@ -27,6 +28,9 @@ local mockState = {
     chatMessages = {},
     soundsPlayed = {},
     isGrouped = false,
+    shiftKeyDown = false,
+    scrollInViewFn = nil,
+    scrollCalls = {},
 }
 
 _G.RPQuestTestState = mockState
@@ -48,7 +52,12 @@ ACTION_RESULT_DIED_XP = 2262
 REGISTER_FILTER_COMBAT_RESULT = 2
 REGISTER_FILTER_IS_ERROR = 5
 EVENT_COMBAT_EVENT = 131103
+EVENT_DUEL_FINISHED = 131104
+DUEL_RESULT_FORFEIT = 0
+DUEL_RESULT_WON = 1
 EVENT_ZONE_CHANGED = 131072
+EVENT_GAMEPAD_PREFERRED_MODE_CHANGED = 131073
+EVENT_SCREEN_RESIZED = 131074
 EVENT_JUSTICE_BOUNTY_PAYOFF_AMOUNT_UPDATED = 131200
 EVENT_JUSTICE_INFAMY_UPDATED = 131201
 EVENT_JUSTICE_PICKPOCKET_FAILED = 131202
@@ -122,6 +131,8 @@ KEYBIND_STRIP = KEYBIND_STRIP or {
 }
 ApplyTemplateToControl = ApplyTemplateToControl or function() end
 ZO_QuestJournal = ZO_QuestJournal or CreateControl("ZO_QuestJournal", GuiRoot, CT_TOPLEVELCONTROL)
+ZO_Compass = ZO_Compass or CreateControl("ZO_Compass", GuiRoot, CT_CONTROL)
+ZO_Compass:SetDimensions(480, 40)
 
 GetCVar = function(name)
     if name == "language.2" or name == "Language.2" then
@@ -174,13 +185,36 @@ GetUnitName = function(tag)
     return "Jugador"
 end
 
+GetNumCharacters = function()
+    return 1
+end
+
+GetCharacterInfo = function(index)
+    if index == 1 then
+        return GetUnitName("player"), 1, 50, 1, 1, 1, "1", 1
+    end
+    return nil
+end
+
 IsUnitPlayer = function(tag)
     if tag == "reticleover" then return mockState.reticleIsPlayer end
     return false
 end
 
+AreUnitsEqual = function(unitTagA, unitTagB)
+    if (unitTagA == "reticleover" and unitTagB == "player") or (unitTagA == "player" and unitTagB == "reticleover") then
+        return mockState.reticleIsSelf == true
+    end
+    return unitTagA == unitTagB
+end
+
 IsUnitDead = function(tag)
     if tag == "reticleover" then return mockState.reticleIsDead end
+    return false
+end
+
+IsUnitInCombat = function(tag)
+    if tag == "player" then return mockState.playerInCombat == true end
     return false
 end
 
@@ -408,6 +442,25 @@ ZO_WorldMap_PanToNormalizedPosition = function(x, y)
     mockState.lastPannedY = y
 end
 
+IsShiftKeyDown = function()
+    return mockState.shiftKeyDown == true
+end
+
+ZO_Scroll_IsControlFullyInView = function(scrollContainer, control)
+    if mockState.scrollInViewFn then
+        return mockState.scrollInViewFn(scrollContainer, control)
+    end
+    return true
+end
+
+ZO_Scroll_ScrollControlIntoCentralView = function(scrollContainer, control, scrollInstantly)
+    table.insert(mockState.scrollCalls, {
+        scrollContainer = scrollContainer,
+        control = control,
+        scrollInstantly = scrollInstantly,
+    })
+end
+
 CENTER_SCREEN_ANNOUNCE = {
     CreateMessageParams = function(self, category, sound)
         local p = { category = category, sound = sound }
@@ -431,7 +484,6 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
         function c:TakeFocus() self._focused = true end
         function c:LoseFocus() self._focused = false end
         function c:SelectAll() self._selectedAll = true end
-        function c:SetHorizontalAlignment() end
         function c:SetNormalFontColor() end
         function c:SetMouseOverFontColor() end
         function c:SetCenterColor() end
@@ -446,7 +498,19 @@ WINDOW_MANAGER = WINDOW_MANAGER or {
         return CreateControl(name, GuiRoot, CT_TOPLEVELCONTROL)
     end,
     CreateControlFromVirtual = function(self, name, parent, templateName, optionalId)
-        return CreateControlFromVirtual(name, parent, templateName, optionalId)
+        local ctrl = CreateControlFromVirtual(name, parent, templateName, optionalId)
+        if templateName == "ZO_CompassAreaTexture" then
+            ctrl.left = WINDOW_MANAGER:CreateControl(name .. "Left", ctrl, CT_TEXTURE)
+            ctrl.right = WINDOW_MANAGER:CreateControl(name .. "Right", ctrl, CT_TEXTURE)
+            ctrl.center = WINDOW_MANAGER:CreateControl(name .. "Center", ctrl, CT_TEXTURE)
+            ctrl.GetNamedChild = function(_, childSuffix)
+                if childSuffix == "Left" then return ctrl.left end
+                if childSuffix == "Right" then return ctrl.right end
+                if childSuffix == "Center" then return ctrl.center end
+                return nil
+            end
+        end
+        return ctrl
     end,
 }
 
@@ -492,12 +556,14 @@ dofile("src/ShareCodec.lua")
 dofile("src/QuestDraftStore.lua")
 dofile("src/QuestMigration.lua")
 dofile("src/QuestRepository.lua")
+dofile("src/TutorialQuest.lua")
 dofile("src/Announcements.lua")
 dofile("src/TargetCapture.lua")
 dofile("src/CombatTracker.lua")
 dofile("src/DiscoveryTracker.lua")
 dofile("src/DialogueInjector.lua")
 dofile("src/WorldMapArea.lua")
+dofile("src/CompassAreaGlow.lua")
 dofile("src/MailInbox.lua")
 dofile("src/MailTransport.lua")
 dofile("src/JournalWidgets.lua")
@@ -550,12 +616,23 @@ local suitePaths = {
     "tests/suites/journal_ui.lua",
     "tests/suites/repository.lua",
     "tests/suites/trackers.lua",
+    "tests/suites/compass_glow.lua",
     "tests/suites/codec.lua",
     "tests/suites/dialogue.lua",
     "tests/suites/mail_transport.lua",
     "tests/suites/mail_inbox.lua",
     "tests/suites/mail_lifecycle.lua",
+    "tests/suites/tutorial.lua",
 }
+
+local origTutorialInit = RPQuest.TutorialQuest.InitializeForRepository
+RPQuest.TutorialQuest.InitializeForRepository = function(self, repo)
+    if mockState.skipTutorialSeed then
+        return
+    end
+    return origTutorialInit(self, repo)
+end
+mockState.skipTutorialSeed = true
 
 for _, suitePath in ipairs(suitePaths) do
     local registerSuite = dofile(suitePath)

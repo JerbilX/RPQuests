@@ -435,4 +435,371 @@ return function(T)
         RPQuest.Locale:Initialize(mockState.language)
     end)
 
+    RunTest("MailInbox cleans up orphan incomplete parts on successful resend without incomplete alerts (Issue #334)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+
+        local questCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Orphan Cleanup Quest",
+            description = string.rep("Detailed lore for multi-part delivery. ", 25),
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = {
+                { name = "Guard", requiredCount = 2, customMessage = string.rep("Note ", 20) },
+            },
+        })
+        local plan = RPQuest.MailTransport:BuildQuestMailPackets(string.rep("RP intro for multi-part test. ", 35), questCode, "Orphan Cleanup Quest")
+        AssertTrue(plan.fits and plan.partCount >= 2, "Test quest splits into at least 2 parts")
+
+        local otherCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Unrelated Quest",
+            description = "Other lore.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Wolf" } },
+        })
+        local otherPlan = RPQuest.MailTransport:BuildQuestMailPackets(string.rep("Other intro for multi-part test. ", 35), otherCode, "Unrelated Quest")
+        AssertTrue(otherPlan.fits and otherPlan.partCount >= 2, "Unrelated quest splits into at least 2 parts")
+
+        local inbox = {}
+        local deletedIds = {}
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+
+        local alerts = {}
+        RPQuest.Announcements.ShowAlert = function(_, msg, isErr)
+            table.insert(alerts, { msg = msg, isErr = isErr })
+        end
+
+        _G.GetNextMailId = function(cur)
+            local keys = {}
+            for k in pairs(inbox) do table.insert(keys, k) end
+            table.sort(keys)
+            if cur == nil then return keys[1] end
+            for i, k in ipairs(keys) do
+                if k == cur then return keys[i + 1] end
+            end
+            return nil
+        end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        _G.DeleteMail = function(id)
+            table.insert(deletedIds, id)
+            inbox[id] = nil
+        end
+
+        -- 1. Deliver incomplete parts (1..N-1) from @Master for "Orphan Cleanup Quest" (txId=AAAA)
+        --    plus unrelated incomplete parts from @OtherMaster and for "Unrelated Quest".
+        for i = 1, plan.partCount - 1 do
+            local body = plan.packets[i].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:AAAA:")
+            inbox[100 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = body,
+                secs = 10,
+            }
+        end
+        inbox[201] = {
+            sender = "@OtherMaster",
+            charName = "OtherChar",
+            subject = plan.packets[1].subject,
+            body = plan.packets[1].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:BBBB:"),
+            secs = 10,
+        }
+        inbox[202] = {
+            sender = "@Master",
+            charName = "MasterChar",
+            subject = otherPlan.packets[1].subject,
+            body = otherPlan.packets[1].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:CCCC:"),
+            secs = 10,
+        }
+
+        RPQuest.MailTransport:ScanInbox(false)
+
+        AssertEqual(#alerts, 0, "No alerts triggered for incomplete in-flight parts")
+        AssertEqual(#deletedIds, 0, "No mails deleted while parts are incomplete")
+        AssertTrue(RPQuest.MailInbox._partGroups["part:@master:AAAA:" .. plan.partCount] ~= nil, "Orphan group tracked")
+
+        -- 2. Deliver complete resend (txId=DDDD) from @Master for "Orphan Cleanup Quest"
+        for i = 1, plan.partCount do
+            local body = plan.packets[i].body:gsub("^RPQP:[0-9A-Fa-f]+:", "RPQP:DDDD:")
+            inbox[300 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = body,
+                secs = 1,
+            }
+        end
+
+        RPQuest.MailTransport:ScanInbox(false)
+
+        local received = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        AssertEqual(#received, 1, "Complete resend imported")
+        AssertEqual(received[1].title, "Orphan Cleanup Quest", "Imported quest title matches")
+
+        for i = 1, plan.partCount - 1 do
+            AssertEqual(inbox[100 + i], nil, "Orphan incomplete part " .. i .. " deleted from inbox")
+        end
+        for i = 1, plan.partCount do
+            AssertEqual(inbox[300 + i], nil, "Resent complete part " .. i .. " deleted from inbox")
+        end
+        AssertEqual(RPQuest.MailInbox._partGroups["part:@master:AAAA:" .. plan.partCount], nil, "Orphan group removed from _partGroups")
+        AssertTrue(inbox[201] ~= nil, "Incomplete part from different sender preserved")
+        AssertTrue(inbox[202] ~= nil, "Incomplete part for different quest title preserved")
+
+        RPQuest.Announcements.ShowAlert = origShowAlert
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+    end)
+
+    RunTest("MailInbox: sequential async DeleteMail queue via EVENT_MAIL_REMOVED for multi-part RPQP mails (Issue #339)", function()
+        mockState.language = "en"
+        RPQuest.Locale:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+
+        local questCode = RPQuest.ShareCodec:EncodeQuest({
+            title = "Async Delete Quest",
+            description = string.rep("Detailed lore for async multi-part deletion. ", 45),
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = {
+                { name = "Guard", requiredCount = 3, customMessage = string.rep("Note ", 30) },
+            },
+        })
+        local plan = RPQuest.MailTransport:BuildQuestMailPackets(string.rep("RP intro for async delete test. ", 40), questCode, "Async Delete Quest")
+        AssertTrue(plan.fits and plan.partCount >= 3, "Test quest splits into at least 3 parts (got " .. tostring(plan.partCount) .. ")")
+
+        local inbox = {}
+        local deleteCalls = {}
+        local pendingDeleteId = nil
+        local origGetNext = _G.GetNextMailId
+        local origGetInfo = _G.GetMailItemInfo
+        local origReadMail = _G.ReadMail
+        local origDeleteMail = _G.DeleteMail
+
+        _G.GetNextMailId = function(cur)
+            local keys = {}
+            for k in pairs(inbox) do table.insert(keys, k) end
+            table.sort(keys)
+            if cur == nil then return keys[1] end
+            for i, k in ipairs(keys) do
+                if k == cur then return keys[i + 1] end
+            end
+            return nil
+        end
+        _G.GetMailItemInfo = function(id)
+            local m = inbox[id]
+            if not m then return nil end
+            return m.sender, m.charName, m.subject, nil, false, false, true, false, 0, 0, 0, 0, m.secs
+        end
+        _G.ReadMail = function(id) return inbox[id] and inbox[id].body or "" end
+        -- Simulate ESO's async DeleteMail: drops concurrent calls while one deletion is in flight
+        _G.DeleteMail = function(id)
+            table.insert(deleteCalls, id)
+            if pendingDeleteId ~= nil then
+                return
+            end
+            pendingDeleteId = id
+        end
+
+        local function fireMailRemoved(id)
+            inbox[id] = nil
+            if pendingDeleteId == id then
+                pendingDeleteId = nil
+            end
+            RPQuest.MailTransport:OnMailRemoved(id)
+        end
+
+        -- 1. Deliver all N parts and scan inbox
+        for i = 1, plan.partCount do
+            inbox[400 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = plan.packets[i].body,
+                secs = 1,
+            }
+        end
+        RPQuest.MailTransport:ScanInbox(false)
+
+        local received = RPQuest.QuestRepository:GetQuestsByRole(RPQuest.Constants.QUEST_ROLE.RECEIVED)
+        AssertEqual(#received, 1, "Multi-part quest imported")
+        AssertEqual(#deleteCalls, 1, "Only 1 DeleteMail issued immediately while awaiting EVENT_MAIL_REMOVED")
+        AssertEqual(deleteCalls[1], 401, "First DeleteMail targets part 1")
+
+        -- Simulate an unrelated mail removal while 401 is still deleting: must not advance queue
+        RPQuest.MailTransport:OnMailRemoved(9999)
+        AssertEqual(#deleteCalls, 1, "Unrelated EVENT_MAIL_REMOVED does not advance delete queue")
+
+        -- Remove part 2 externally before part 1 finishes -> queue should skip missing part 2 and jump to part 3
+        inbox[402] = nil
+        fireMailRemoved(401)
+        AssertEqual(#deleteCalls, 2, "Advancing after part 1 skips missing part 2 and calls DeleteMail for part 3")
+        AssertEqual(deleteCalls[2], 403, "Second DeleteMail targets part 3")
+
+        -- Finish remaining parts sequentially
+        for i = 3, plan.partCount do
+            fireMailRemoved(400 + i)
+        end
+        AssertEqual(#deleteCalls, plan.partCount - 1, "All existing parts deleted sequentially")
+        for i = 1, plan.partCount do
+            AssertEqual(inbox[400 + i], nil, "No orphan part " .. i .. " left in inbox")
+        end
+        AssertEqual(RPQuest.MailInbox._deletingMailId, nil, "No active _deletingMailId after queue drains")
+
+        -- 2. Mailbox close clears pending delete queue safely
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", true)
+        inbox[501] = { sender = "@Master", charName = "M", subject = "[RPQuest 1/2] Q", body = "RPQP:AA11:1/2\nabc", secs = 1 }
+        inbox[502] = { sender = "@Master", charName = "M", subject = "[RPQuest 2/2] Q", body = "RPQP:AA11:2/2\ndef", secs = 1 }
+        RPQuest.MailInbox:DisposeMailIds({ 501, 502 })
+        AssertTrue(RPQuest.MailInbox._deletingMailId ~= nil, "Deletion in progress before mailbox close")
+        RPQuest.MailTransport:OnMailboxClosed()
+        AssertEqual(RPQuest.MailInbox._deletingMailId, nil, "OnMailboxClosed clears _deletingMailId")
+        AssertEqual(#(RPQuest.MailInbox._deleteQueue or {}), 0, "OnMailboxClosed clears _deleteQueue")
+        pendingDeleteId = nil
+
+        -- 3. autoDeleteMail = false records all part IDs in _dismissedMailIds without calling DeleteMail
+        RPQuest.MailTransport:Initialize()
+        RPQuest.QuestRepository:Initialize(RPQuest.QuestRepository:GetDefaults())
+        RPQuest.QuestRepository:SetSetting("autoDeleteMail", false)
+        local callsBefore = #deleteCalls
+        for i = 1, plan.partCount do
+            inbox[600 + i] = {
+                sender = "@Master",
+                charName = "MasterChar",
+                subject = plan.packets[i].subject,
+                body = plan.packets[i].body,
+                secs = 1,
+            }
+        end
+        RPQuest.MailTransport:ScanInbox(false)
+        AssertEqual(#deleteCalls, callsBefore, "DeleteMail NOT called when autoDeleteMail = false")
+        for i = 1, plan.partCount do
+            AssertEqual(RPQuest.MailInbox._dismissedMailIds[tostring(600 + i)], true, "Part " .. i .. " recorded in _dismissedMailIds")
+        end
+
+        _G.GetNextMailId = origGetNext
+        _G.GetMailItemInfo = origGetInfo
+        _G.ReadMail = origReadMail
+        _G.DeleteMail = origDeleteMail
+    end)
+
+    RunTest("MailInbox: autoOpenJournalOnReceive opens and selects new quest when enabled and out of combat (Issue #340)", function()
+        local sv = RPQuest.QuestRepository:GetDefaults()
+        RPQuest.QuestRepository:Initialize(sv)
+        RPQuest.MailTransport:Initialize()
+
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), true, "autoOpenJournalOnReceive defaults to true")
+
+        -- Preserve existing SavedVariables value when explicitly set to false
+        RPQuest.QuestRepository:Initialize({ settings = { autoOpenJournalOnReceive = false } })
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), false, "autoOpenJournalOnReceive preserves existing false SavedVariables value")
+        RPQuest.QuestRepository:Initialize(sv)
+
+        local openCalls = 0
+        local selectedIds = {}
+        local origOpenTab = RPQuest.JournalTab.OpenTab
+        local origSelectQuest = RPQuest.JournalTab.SelectQuest
+        RPQuest.JournalTab.OpenTab = function()
+            openCalls = openCalls + 1
+        end
+        RPQuest.JournalTab.SelectQuest = function(_, questId)
+            table.insert(selectedIds, questId)
+        end
+
+        local origShowAlert = RPQuest.Announcements.ShowAlert
+        local origAnnounceReceived = RPQuest.Announcements.AnnounceQuestReceived
+        local origAnnounceAccepted = RPQuest.Announcements.AnnounceQuestAccepted
+        RPQuest.Announcements.ShowAlert = function() end
+        RPQuest.Announcements.AnnounceQuestReceived = function() end
+        RPQuest.Announcements.AnnounceQuestAccepted = function() end
+
+        local code = RPQuest.ShareCodec:EncodeQuest({
+            title = "Auto Open Quest",
+            description = "Test auto open on receive.",
+            mapId = 1,
+            zoneId = 1,
+            mapName = "Auridon",
+            targets = { { name = "Bandit" } },
+        })
+
+        local function MakeEntry(idNum, sender)
+            return {
+                mailId = idNum,
+                idKey = tostring(idNum),
+                senderDisplayName = sender or "@Sender",
+                senderCharacterName = "SenderChar",
+                subject = "[RPQuest] Auto Open Quest",
+                questCode = code,
+                title = "Auto Open Quest",
+                isIncomplete = false,
+            }
+        end
+
+        local origPlayerInCombat = mockState.playerInCombat
+        mockState.playerInCombat = false
+
+        -- 1. Setting disabled explicitly: does not open journal
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", false)
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(961, "@SenderOne"))
+        AssertEqual(openCalls, 0, "OpenTab not called when autoOpenJournalOnReceive is false")
+        AssertEqual(#selectedIds, 0, "SelectQuest not called when autoOpenJournalOnReceive is false")
+
+        -- 2. Setting enabled, out of combat, pending mode (autoAcceptMail = false)
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", true)
+        RPQuest.QuestRepository:SetSetting("autoAcceptMail", false)
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(962, "@SenderTwo"))
+        AssertEqual(openCalls, 1, "OpenTab called for new pending quest when setting enabled")
+        AssertEqual(#selectedIds, 1, "SelectQuest called once for new pending quest")
+        local pendingQuest = RPQuest.QuestRepository:GetQuestById(selectedIds[1])
+        AssertTrue(pendingQuest ~= nil and RPQuest.QuestRepository:IsOfferedQuest(pendingQuest), "Selected quest is the newly imported pending quest")
+
+        -- 3. Duplicate quest (same sourceMailId re-ingested) does NOT open journal again
+        RPQuest.MailInbox._notifiedMailIds["962"] = nil
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(962, "@SenderTwo"))
+        AssertEqual(openCalls, 1, "OpenTab not called for duplicate quest")
+        AssertEqual(#selectedIds, 1, "SelectQuest not called for duplicate quest")
+
+        -- 4. Setting enabled, out of combat, autoAcceptMail = true
+        RPQuest.QuestRepository:SetSetting("autoAcceptMail", true)
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(964, "@SenderThree"))
+        AssertEqual(openCalls, 2, "OpenTab called for new auto-accepted quest when setting enabled")
+        AssertEqual(#selectedIds, 2, "SelectQuest called for new auto-accepted quest")
+        local acceptedQuest = RPQuest.QuestRepository:GetQuestById(selectedIds[2])
+        AssertTrue(acceptedQuest ~= nil and not RPQuest.QuestRepository:IsOfferedQuest(acceptedQuest), "Selected quest is the newly auto-accepted quest")
+
+        -- 5. Player in combat: does NOT open journal even when setting enabled
+        mockState.playerInCombat = true
+        RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(965, "@SenderFour"))
+        AssertEqual(openCalls, 2, "OpenTab not called while player is in combat")
+        AssertEqual(#selectedIds, 2, "SelectQuest not called while player is in combat")
+
+        mockState.playerInCombat = origPlayerInCombat
+        RPQuest.JournalTab.OpenTab = origOpenTab
+        RPQuest.JournalTab.SelectQuest = origSelectQuest
+        RPQuest.Announcements.ShowAlert = origShowAlert
+        RPQuest.Announcements.AnnounceQuestReceived = origAnnounceReceived
+        RPQuest.Announcements.AnnounceQuestAccepted = origAnnounceAccepted
+    end)
+
 end
