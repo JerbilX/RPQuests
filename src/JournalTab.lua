@@ -761,7 +761,7 @@ end
 
 function JournalTab:ConfirmAbandonQuest(questId)
     local q = Addon.QuestRepository:GetQuestById(questId)
-    if not q or Addon.QuestRepository:IsOfferedQuest(q) then return false end
+    if not q or (Addon.QuestRepository:IsOfferedQuest(q) and q.isTutorial ~= true) then return false end
 
     ZO_Dialogs_ShowDialog("RPQUEST_ABANDON_QUEST", { questId = questId }, { mainTextParams = { q.title or "" } })
     return true

@@ -15,6 +15,7 @@ src/ShareCodec.lua
 src/QuestDraftStore.lua
 src/QuestMigration.lua
 src/QuestRepository.lua
+src/TutorialQuest.lua
 src/Announcements.lua
 src/TargetCapture.lua
 src/CombatTracker.lua

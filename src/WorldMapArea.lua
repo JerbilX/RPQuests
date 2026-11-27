@@ -1145,12 +1145,8 @@ function WorldMapArea:HasMapLocation(quest)
         return true
     end
 
-    if mapId > 0 and type(quest.discoveries) == "table" then
-        for _, d in ipairs(quest.discoveries) do
-            if type(d) == "table" and ((d.x and d.y) or (d.worldX and d.worldZ)) then
-                return true
-            end
-        end
+    if mapId > 0 then
+        return true
     end
 
     return false

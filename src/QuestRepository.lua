@@ -254,6 +254,9 @@ local function FinalizeCompletedQuest(self, quest)
         self.savedVars.activeQuestId = nil
     end
     self:InvalidateActiveTargetCache()
+    if Addon.TutorialQuest then
+        Addon.TutorialQuest:OnQuestResolved(self, quest, Addon.Constants.QUEST_RESOLUTION.COMPLETED)
+    end
 end
 
 local function FinalizeFailedQuest(self, quest)
@@ -266,6 +269,9 @@ local function FinalizeFailedQuest(self, quest)
     end
     self:InvalidateActiveTargetCache()
     self:NotifyListeners("QUEST_FAILED", quest)
+    if Addon.TutorialQuest then
+        Addon.TutorialQuest:OnQuestResolved(self, quest, Addon.Constants.QUEST_RESOLUTION.FAILED)
+    end
 end
 
 local function FindMissedRequiredObjective(quest)
@@ -439,6 +445,9 @@ function QuestRepository:GetDefaults()
             lastSectionKey = nil,
             lastSelectedQuestId = nil,
         },
+        tutorialState = {
+            steps = {},
+        },
     }
 end
 
@@ -485,6 +494,9 @@ function QuestRepository:Initialize(savedVars)
         if q.id then
             self._questById[q.id] = q
         end
+    end
+    if Addon.TutorialQuest then
+        Addon.TutorialQuest:InitializeForRepository(self)
     end
     if self.savedVars.activeQuestId then
         local active = self._questById[self.savedVars.activeQuestId]
@@ -732,6 +744,9 @@ function QuestRepository:RejectOfferedQuest(questId)
         return false, nil
     end
     q.resolution = Addon.Constants.QUEST_RESOLUTION.REJECTED
+    if Addon.TutorialQuest then
+        Addon.TutorialQuest:OnQuestResolved(self, q, Addon.Constants.QUEST_RESOLUTION.REJECTED)
+    end
     self:DeleteQuest(q.id)
     self:NotifyListeners("QUEST_REJECTED", q)
     return true, q
@@ -1181,15 +1196,16 @@ local function ClonePreparedQuestRecord(repo, source)
         t.currentCount = 0
     end
 
-    local senderChar = (type(source.senderCharacterName) == "string" and source.senderCharacterName ~= "")
+    local isTutorialSource = (source.isTutorial == true)
+    local senderChar = (not isTutorialSource and type(source.senderCharacterName) == "string" and source.senderCharacterName ~= "")
         and source.senderCharacterName
         or repo:GetPlayerCharacterName()
 
     local questData = {
-        senderDisplayName = source.senderDisplayName,
+        senderDisplayName = isTutorialSource and nil or source.senderDisplayName,
         senderCharacterName = senderChar,
-        recipientAccount = source.recipientAccount,
-        recipientCharacterName = source.recipientCharacterName,
+        recipientAccount = isTutorialSource and "" or source.recipientAccount,
+        recipientCharacterName = isTutorialSource and nil or source.recipientCharacterName,
         clue = source.clue,
         completionMessage = source.completionMessage,
         discoveries = Addon.QuestDraftStore:CloneDiscoveriesList(source.discoveries, false),
@@ -1221,6 +1237,8 @@ local function ClonePreparedQuestRecord(repo, source)
     newQuest.deliveries = {}
     newQuest.needsMigration = nil
     newQuest.migrationReason = nil
+    newQuest.isTutorial = nil
+    newQuest.tutorialStep = nil
 
     table.insert(repo.savedVars.quests, newQuest)
     if repo._questById then
@@ -1235,7 +1253,7 @@ function QuestRepository:DuplicateQuest(questId)
     if not self.savedVars then return nil end
     local source = self:GetQuestById(questId)
     if not source then return nil end
-    if not self:IsPreparedQuest(source) then
+    if not self:IsPreparedQuest(source) and source.isTutorial ~= true then
         return nil, Addon.Locale:Get("ERR_CANNOT_COPY_RECEIVED")
     end
     return ClonePreparedQuestRecord(self, source)
@@ -1281,6 +1299,9 @@ function QuestRepository:DeleteQuest(questId)
                         break
                     end
                 end
+            end
+            if q.isTutorial == true and Addon.TutorialQuest then
+                Addon.TutorialQuest:OnQuestResolved(self, q, q.resolution or "deleted")
             end
             self:NotifyListeners("QUEST_DELETED", q)
             return true

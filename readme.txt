@@ -12,6 +12,10 @@ Manual Installation:
 
 Usage:
 - Open the Quest Journal (J) and select the RPQuests tab in the top-right icons.
+- New players start with a built-in 3-pill progressive Tutorial Pack in
+  Daggerfall (Tutorial I in Pending, unlocking II and III on completion;
+  optional, never re-seeded after rejection/deletion, and copyable into
+  Preparing as editable templates).
 - Aim at any living NPC or another player and press your "Capture Target Under
   Reticle (NPC)" keybind to add NPC elimination or player duel objectives.
 - Click "+ New" to create a quest (optionally assigning a Quest Icon: Black Hand,

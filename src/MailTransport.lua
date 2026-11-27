@@ -81,6 +81,7 @@ function MailTransport:Initialize()
             if evType == "QUEST_COMPLETED" and type(payload) == "table" then
                 if Addon.QuestRepository:GetSetting("autoSendCompletionMail")
                     and payload.role == Addon.Constants.QUEST_ROLE.RECEIVED
+                    and not payload.isTutorial
                     and not payload.completionReported then
                     local sender = self:NormalizeDisplayName(payload.senderDisplayName)
                     if sender ~= "" then
@@ -91,7 +92,7 @@ function MailTransport:Initialize()
                     end
                 end
             elseif evType == "QUEST_REJECTED" and type(payload) == "table" then
-                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED then
+                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED and not payload.isTutorial then
                     local sender = self:NormalizeDisplayName(payload.senderDisplayName)
                     if sender ~= "" then
                         local ok, errKey = self:SendRejectionReport(payload)
@@ -101,7 +102,7 @@ function MailTransport:Initialize()
                     end
                 end
             elseif evType == "QUEST_ACCEPTED" and type(payload) == "table" then
-                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED then
+                if payload.role == Addon.Constants.QUEST_ROLE.RECEIVED and not payload.isTutorial then
                     local sender = self:NormalizeDisplayName(payload.senderDisplayName)
                     if sender ~= "" then
                         local ok, errKey = self:SendAcceptanceReport(payload)
@@ -113,6 +114,7 @@ function MailTransport:Initialize()
             elseif evType == "QUEST_FAILED" and type(payload) == "table" then
                 if Addon.QuestRepository:GetSetting("autoSendCompletionMail")
                     and Addon.QuestRepository:GetQuestLifecycle(payload) == Addon.Constants.QUEST_LIFECYCLE.RECEIVED
+                    and not payload.isTutorial
                     and not payload.failureReported then
                     local sender = self:NormalizeDisplayName(payload.senderDisplayName)
                     if sender ~= "" then
@@ -556,7 +558,7 @@ function MailTransport:EnqueueResultMail(quest, subjectPrefix, code, resultType)
 end
 
 function MailTransport:SendCompletionReport(quest)
-    if type(quest) ~= "table" or not quest.completed then
+    if type(quest) ~= "table" or quest.isTutorial or not quest.completed then
         return false, "ERR_INVALID_CODE"
     end
     local rpqc1Code, err = Addon.QuestRepository:ExportCompletionCode(quest.id)
@@ -567,7 +569,7 @@ function MailTransport:SendCompletionReport(quest)
 end
 
 function MailTransport:SendRejectionReport(quest)
-    if type(quest) ~= "table" then
+    if type(quest) ~= "table" or quest.isTutorial then
         return false, "ERR_INVALID_CODE"
     end
     local rpqc1Code, err = Addon.QuestRepository:ExportRejectionCode(quest)
@@ -578,7 +580,7 @@ function MailTransport:SendRejectionReport(quest)
 end
 
 function MailTransport:SendAcceptanceReport(quest)
-    if type(quest) ~= "table" then
+    if type(quest) ~= "table" or quest.isTutorial then
         return false, "ERR_INVALID_CODE"
     end
     local rpqc1Code, err = Addon.QuestRepository:ExportAcceptanceCode(quest)
@@ -589,7 +591,7 @@ function MailTransport:SendAcceptanceReport(quest)
 end
 
 function MailTransport:SendFailureReport(quest)
-    if type(quest) ~= "table" or not quest.failed then
+    if type(quest) ~= "table" or quest.isTutorial or not quest.failed then
         return false, "ERR_INVALID_CODE"
     end
     local rpqc1Code, err = Addon.QuestRepository:ExportFailureCode(quest)
