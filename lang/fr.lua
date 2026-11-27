@@ -329,4 +329,13 @@ RPQuest.Locales["fr"] = {
     TUTORIAL_3_TARGET_2_NAME = "Mouton",
     TUTORIAL_3_TARGET_2_MSG = "Cible facultative éliminée !",
     TUTORIAL_3_COMPLETION_MSG = "Pack didacticiel terminé ! Vous êtes prêt à créer vos propres quêtes.",
+    WORLD_PROFILE_STATUS_GREEN = "Profil du monde (%s) : Compatible (DLC & phasing OK).",
+    WORLD_PROFILE_STATUS_RED_DLC = "Profil du monde (%s) : Accès au DLC/Chapitre manquant !",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "Profil du monde (%s) : Phasing/état de POI différent détecté.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "Profil du monde : Aucun instantané POI enregistré pour %s.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "Profil du monde : Aucun profil enregistré pour %s.",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "Alerte RPQuest : %s n'a pas accès au DLC de cette zone.",
+    ALERT_CAPTURE_WARN_PHASING = "Alerte RPQuest : %s a un phasing différent sur ce POI.",
+    PREFLIGHT_WARN_MISSING_DLC = "Attention : Votre compte n'a pas accès au DLC/Chapitre d'une zone de la quête.",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "Attention : Le personnage actif a un phasing différent du Maître (envisagez de changer de personnage).",
 }

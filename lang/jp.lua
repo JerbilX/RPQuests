@@ -329,4 +329,13 @@ RPQuest.Locales["jp"] = {
     TUTORIAL_3_TARGET_2_NAME = "Sheep",
     TUTORIAL_3_TARGET_2_MSG = "任意ターゲットを撃破しました！",
     TUTORIAL_3_COMPLETION_MSG = "チュートリアル完了！自分のクエストを作成してメールで共有してみましょう。",
+    WORLD_PROFILE_STATUS_GREEN = "ワールドプロファイル (%s): 互換性あり (DLC・フェージングOK)。",
+    WORLD_PROFILE_STATUS_RED_DLC = "ワールドプロファイル (%s): 必要なDLC/チャプターへのアクセスがありません！",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "ワールドプロファイル (%s): マップのフェージング/POI状態が異なります。",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "ワールドプロファイル: キャラクター %s のPOIスナップショットがありません。",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "ワールドプロファイル: %s のプロファイルがまだありません。",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "RPQuest 警告: %s はこのゾーンのDLCアクセス権がありません。",
+    ALERT_CAPTURE_WARN_PHASING = "RPQuest 警告: %s はこのPOIで異なるフェージング状態にあります。",
+    PREFLIGHT_WARN_MISSING_DLC = "警告: クエストゾーンに必要なDLC/チャプターへのアクセス権がありません。",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "警告: 現在のキャラクターはマスターとフェージングが異なります（キャラクター変更を検討してください）。",
 }

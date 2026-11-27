@@ -213,7 +213,9 @@ function DialogueInjector:OnChatterBegin()
         return nil
     end
     local zoneId = GetCurrentPlayerZoneId()
-    return Addon.QuestRepository:SetLastInteractedNpc(npcName, zoneId)
+    local px, py = GetMapPlayerPosition("player")
+    local poiIndex, masterPoiCompleted = Addon.WorldProfile:FindNearestZonePOI(zoneId, px, py)
+    return Addon.QuestRepository:SetLastInteractedNpc(npcName, zoneId, poiIndex, masterPoiCompleted)
 end
 
 function DialogueInjector:InstallHooks()

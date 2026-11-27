@@ -207,6 +207,16 @@ GetNumPOIs = function(zoneIndex)
     return mockState.defaultPoisPerZone or 5
 end
 
+GetZoneIndex = function(zoneId)
+    if type(mockState.zoneIdToIndex) == "table" and mockState.zoneIdToIndex[zoneId] then
+        return mockState.zoneIdToIndex[zoneId]
+    end
+    if type(zoneId) == "number" and zoneId >= 1 and zoneId <= (mockState.numZones or 4) then
+        return zoneId
+    end
+    return nil
+end
+
 GetPOIMapInfo = function(zoneIndex, poiIndex)
     local discovered = false
     if type(mockState.discoveredPois) == "table" then
@@ -215,7 +225,15 @@ GetPOIMapInfo = function(zoneIndex, poiIndex)
             discovered = (z[poiIndex] == true)
         end
     end
-    return 0.5, 0.5, 0, "", true, false, discovered, false
+    local nx, nz = 0.5, 0.5
+    if type(mockState.poiCoords) == "table" then
+        local zc = mockState.poiCoords[zoneIndex]
+        if type(zc) == "table" and type(zc[poiIndex]) == "table" then
+            nx = zc[poiIndex].x or 0.5
+            nz = zc[poiIndex].z or 0.5
+        end
+    end
+    return nx, nz, 0, "", true, false, discovered, false
 end
 
 ZO_Dialogs_GetEditBoxText = function(dialog)

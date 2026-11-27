@@ -83,6 +83,7 @@ read_globals = {
     "GetUnitWorldPosition",
     "GetUnitZoneIndex",
     "GetZoneId",
+    "GetZoneIndex",
     "IsInGamepadPreferredMode",
     "IsESOPlusSubscriber",
     "IsShiftKeyDown",

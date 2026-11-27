@@ -329,4 +329,13 @@ RPQuest.Locales["ru"] = {
     TUTORIAL_3_TARGET_2_NAME = "Овца",
     TUTORIAL_3_TARGET_2_MSG = "Дополнительная цель устранена!",
     TUTORIAL_3_COMPLETION_MSG = "Обучение завершено! Теперь вы можете создавать собственные задания и отправлять их по почте.",
+    WORLD_PROFILE_STATUS_GREEN = "Профиль мира (%s): Совместимо (DLC и фазирование ОК).",
+    WORLD_PROFILE_STATUS_RED_DLC = "Профиль мира (%s): Нет доступа к требуемому DLC/главе!",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "Профиль мира (%s): Обнаружено отличие фазирования/статуса POI.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "Профиль мира: Нет снимка POI для персонажа %s.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "Профиль мира: Профиль для %s ещё не сохранён.",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "Предупреждение RPQuest: у %s нет доступа к DLC этой зоны.",
+    ALERT_CAPTURE_WARN_PHASING = "Предупреждение RPQuest: у %s другое фазирование в этой точке POI.",
+    PREFLIGHT_WARN_MISSING_DLC = "Предупреждение: У вашей учётной записи нет доступа к DLC/главе зоны задания.",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "Предупреждение: У активного персонажа фазирование отличается от Мастера (рекомендуется сменить персонажа).",
 }

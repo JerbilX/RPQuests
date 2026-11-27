@@ -329,4 +329,13 @@ RPQuest.Locales["de"] = {
     TUTORIAL_3_TARGET_2_NAME = "Schaf",
     TUTORIAL_3_TARGET_2_MSG = "Optionales Ziel besiegt!",
     TUTORIAL_3_COMPLETION_MSG = "Tutorial-Paket abgeschlossen! Du kannst nun eigene Quests erstellen und per Post versenden.",
+    WORLD_PROFILE_STATUS_GREEN = "Weltprofil (%s): Kompatibel (DLC & Phasing OK).",
+    WORLD_PROFILE_STATUS_RED_DLC = "Weltprofil (%s): Fehlender DLC-/Kapitel-Zugang!",
+    WORLD_PROFILE_STATUS_YELLOW_PHASING = "Weltprofil (%s): Abweichendes Karten-Phasing/POI-Status erkannt.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_CHAR = "Weltprofil: Kein POI-Snapshot für Charakter %s gespeichert.",
+    WORLD_PROFILE_STATUS_YELLOW_NO_PROFILE = "Weltprofil: Noch kein Profil für %s gespeichert.",
+    ALERT_CAPTURE_WARN_MISSING_DLC = "RPQuest-Warnung: %s fehlt der DLC-Zugang für diese Zone.",
+    ALERT_CAPTURE_WARN_PHASING = "RPQuest-Warnung: %s hat an diesem POI ein anderes Phasing.",
+    PREFLIGHT_WARN_MISSING_DLC = "Warnung: Deinem Konto fehlt der DLC-/Kapitel-Zugang für eine Quest-Zone.",
+    PREFLIGHT_WARN_PHASING_MISMATCH = "Warnung: Aktiver Charakter hat ein anderes Phasing als der Master (Charakterwechsel erwägen).",
 }

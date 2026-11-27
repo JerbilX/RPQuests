@@ -128,7 +128,12 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
 
     local recipientBg, recipientEdit = CreateEditBox(
         panelName .. "_RecipientEdit", formParent, 250, 30, limits.ACCOUNT_NAME, false,
-        function(val) Addon.QuestRepository:UpdateDraftFields({ recipientAccount = val }, true) end
+        function(val)
+            Addon.QuestRepository:UpdateDraftFields({ recipientAccount = val }, true)
+            if Addon.JournalEditorPane and Addon.JournalEditorPane.RefreshWorldProfileStatus then
+                Addon.JournalEditorPane.RefreshWorldProfileStatus(tab)
+            end
+        end
     )
     recipientBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 0, 188)
     tab.recipientBg = recipientBg
@@ -142,7 +147,12 @@ function EditorSections.BuildBaseFields(tab, formParent, panelName)
 
     local recipientCharBg, recipientCharEdit = CreateEditBox(
         panelName .. "_RecipientCharEdit", formParent, 250, 30, limits.CHARACTER_NAME, false,
-        function(val) Addon.QuestRepository:UpdateDraftFields({ recipientCharacterName = val }, true) end
+        function(val)
+            Addon.QuestRepository:UpdateDraftFields({ recipientCharacterName = val }, true)
+            if Addon.JournalEditorPane and Addon.JournalEditorPane.RefreshWorldProfileStatus then
+                Addon.JournalEditorPane.RefreshWorldProfileStatus(tab)
+            end
+        end
     )
     recipientCharBg:SetAnchor(TOPLEFT, formParent, TOPLEFT, 260, 188)
     tab.recipientCharBg = recipientCharBg
@@ -588,6 +598,9 @@ function EditorSections.BuildDialogueControls(tab, dlgBody, panelName)
             local entry = (Addon.QuestRepository:GetDraft().dialogues or {})[resultOrErr]
             if entry then
                 Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_DIALOGUE_ADDED", entry.npcName), false)
+                if Addon.TargetCapture and Addon.TargetCapture.NotifyCaptureValidationWarning then
+                    Addon.TargetCapture:NotifyCaptureValidationWarning(Addon.QuestRepository:GetDraft())
+                end
             end
             tab:RefreshEditorPane()
         elseif type(resultOrErr) == "string" then
