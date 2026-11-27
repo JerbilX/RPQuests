@@ -14,8 +14,8 @@ Usage:
 - Open the Quest Journal (J) and select the RPQuests tab in the top-right icons.
 - New players start with a built-in 3-pill progressive Tutorial Pack in
   Daggerfall (Tutorial I in Pending, unlocking II and III on completion;
-  optional, never re-seeded after rejection/deletion, and copyable into
-  Preparing as editable templates).
+  optional, never re-seeded after being abandoned or deleted, replayable via
+  "Reset", and copyable into Preparing as editable templates).
 - Aim at any living NPC or another player and press your "Capture Target Under
   Reticle (NPC)" keybind to add NPC elimination or player duel objectives.
 - Click "+ New" to create a quest (optionally assigning a Quest Icon: Black Hand,
@@ -23,11 +23,11 @@ Usage:
   "Complete"; configuring Required discovery points, Sequential order,
   reordering discovery points, or Required NPC dialogues whose execution
   persists across reloads, auto-completes dialogue-only quests, and fails
-  quests on resolution if any Required objective was missed), or use
-  "Test Quest" / "Reset" on prepared quests.
-- Assign a recipient (@AccountName) and optionally choose a From (Character)
-  from your account characters in the editor, then click "Send Quest" in the
-  quest details pane to send via in-game mail.
+  quests on resolution if any Required objective was missed), navigate form
+  fields with Tab / Shift+Tab, or use "Test Quest" / "Reset" on prepared quests.
+- Assign a recipient (@AccountName), optional To (Character), and optionally
+  choose a From (Character) from your account characters in the editor, then
+  click "Send Quest" in the quest details pane to send via in-game mail.
 - Incoming quests appear automatically in Pending (Accept or Reject), and
   Accepted, Rejected, Completed, and Failed results are reported back to the
   Quest Master automatically via mail (separately from Draft/Sent/Received
