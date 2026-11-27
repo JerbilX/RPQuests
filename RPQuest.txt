@@ -15,6 +15,10 @@ src/ShareCodec.lua
 src/WorldProfile.lua
 src/QuestDraftStore.lua
 src/QuestMigration.lua
+src/QuestRecord.lua
+src/QuestLifecycle.lua
+src/QuestExchange.lua
+src/QuestRuntime.lua
 src/QuestRepository.lua
 src/TutorialQuest.lua
 src/Announcements.lua

@@ -1681,4 +1681,99 @@ return function(T)
         _G.CloseMailbox = origClose
     end)
 
+    RunTest("Issue #365: QuestRepository submodules and public facade compatibility", function()
+        local repo = RPQuest.QuestRepository
+        AssertTrue(type(RPQuest.QuestRecord) == "table", "QuestRecord submodule registered")
+        AssertTrue(type(RPQuest.QuestLifecycle) == "table", "QuestLifecycle submodule registered")
+        AssertTrue(type(RPQuest.QuestExchange) == "table", "QuestExchange submodule registered")
+        AssertTrue(type(RPQuest.QuestRuntime) == "table", "QuestRuntime submodule registered")
+
+        local expectedFacadeMethods = {
+            -- Direct QuestRepository core
+            "GetDefaults", "MigrateCharacterSavedVars", "Initialize",
+            "InvalidateActiveTargetCache", "RegisterListener", "NotifyListeners",
+            "GetSetting", "SetSetting", "GetJournalUiState", "SetLastSectionKey", "SetLastSelectedQuestId",
+            "GetAllQuests", "GetQuestsByRole", "GetCompletedQuests", "GetQuestById", "DeleteQuest",
+            -- QuestRecord delegates
+            "NormalizeName", "NormalizeAccountName", "NormalizeCharacterName",
+            "GetPlayerCharacterName", "GetAccountCharacterNames",
+            "FormatTargetEntry", "FormatTargetsSummary",
+            "BuildQuestRecord", "DuplicateQuest", "MigratePreparedQuest",
+            -- QuestLifecycle delegates
+            "AreAllObjectivesCompleted", "CanManuallyCompleteQuest", "CompleteQuest",
+            "GetQuestLifecycle", "GetQuestResolution", "IsPreparedQuest", "IsOfferedQuest",
+            "AcceptOfferedQuest", "RejectOfferedQuest",
+            "GetActiveQuest", "HasPlayableObjectives", "HasMissingDiscoveryMessage",
+            "SetActiveQuest", "ResetQuest",
+            -- QuestExchange delegates
+            "HasIngestedMail", "FindAlreadyIngestedQuest", "NormalizeImportedTargets",
+            "ApplyImportedSenderMetadata", "FinalizeImportedQuest", "ImportQuestFromCode",
+            "ExportQuestToCode", "ExportCompletionCode", "ExportRejectionCode",
+            "ExportAcceptanceCode", "ExportFailureCode", "ValidateResultCode",
+            "RecordMailDelivery", "MarkPreparedQuestSent",
+            "MarkCompletionReported", "MarkFailureReported",
+            "SaveWorldProfile", "GetWorldProfile",
+            -- QuestRuntime delegates
+            "ComputeOffsetCenter", "SetLastInteractedNpc", "GetLastInteractedNpc",
+            "HasTargetLocation", "HasQuestTargetLocation", "HasQuestSearchAreas",
+            "HasQuestDiscoveryPoints", "SetQuestMapVisibility",
+            "IsPlayerInsideTargetLocation", "IsPlayerInsideQuestArea",
+            "FindPendingTarget", "RecordTargetEliminated",
+            "HasPendingDiscoveries", "MarkDiscoveryTriggered", "MarkDialogueTriggered",
+            "RecordPlayerDetected", "FindDialogueForActiveQuest",
+            -- QuestDraftStore delegates
+            "GetDraft", "ResetDraft", "SaveDraft", "CreateNewPreparedDraft", "CommitDraftChanges",
+        }
+
+        for _, fnName in ipairs(expectedFacadeMethods) do
+            AssertEqual(type(repo[fnName]), "function", "QuestRepository facade exposes " .. fnName)
+        end
+
+        repo:Initialize(repo:GetDefaults())
+        AssertEqual(RPQuest.QuestRecord:NormalizeName(repo, "  Bandit^m "), repo:NormalizeName("  Bandit^m "), "Direct submodule and facade NormalizeName match")
+        AssertEqual(RPQuest.QuestRecord:NormalizeAccountName(repo, "Master"), repo:NormalizeAccountName("Master"), "Direct submodule and facade NormalizeAccountName match")
+
+        -- Verify cross-submodule workflow and dynamic repo dispatch
+        local events = {}
+        repo:RegisterListener(function(ev)
+            table.insert(events, ev)
+        end)
+
+        repo:SetLastInteractedNpc("Lanobert^m", 3, 12, true)
+        local lastNpc = repo:GetLastInteractedNpc()
+        AssertEqual(lastNpc.name, "Lanobert", "QuestRuntime SetLastInteractedNpc normalizes via QuestRecord")
+        AssertEqual(lastNpc.poiIndex, 12, "QuestRuntime preserves poiIndex")
+        AssertEqual(lastNpc.masterPoiCompleted, true, "QuestRuntime preserves masterPoiCompleted")
+
+        repo:SaveWorldProfile("PlayerSubmodule", {
+            characterName = "Hero^f",
+            dlcMask = "AQ",
+            esoPlus = true,
+            poiMask = "BA",
+        })
+        local wp = repo:GetWorldProfile("@PlayerSubmodule")
+        AssertTrue(wp ~= nil and wp.characters["Hero"] ~= nil, "QuestExchange stores world profile using QuestRecord normalization")
+
+        repo:ResetDraft()
+        repo:SetDraftCapturedTarget({
+            targetName = "Smuggler^m",
+            mapId = 32,
+            zoneId = 381,
+            mapName = "Auridon",
+            targetX = 0.5,
+            targetY = 0.5,
+        })
+        local prep = repo:SaveDraft("Submodule Contract", "Verify split cohesion")
+        AssertTrue(repo:IsPreparedQuest(prep), "QuestLifecycle classifies saved draft as prepared")
+        AssertEqual(repo:GetQuestLifecycle(prep), RPQuest.Constants.QUEST_LIFECYCLE.DRAFT, "Draft lifecycle")
+
+        local clone = repo:DuplicateQuest(prep.id)
+        AssertTrue(clone ~= nil and clone.id ~= prep.id, "QuestRecord DuplicateQuest clones prepared quest")
+
+        AssertTrue(repo:MarkPreparedQuestSent(prep.id, "RecipientOne"), "QuestExchange marks prepared quest sent")
+        AssertEqual(repo:GetQuestLifecycle(prep), RPQuest.Constants.QUEST_LIFECYCLE.SENT, "Sent lifecycle reflected")
+        AssertEqual(prep.sentTo, "@RecipientOne", "Recipient normalized")
+        AssertTrue(#events >= 4, "Facade listener notifications fired across submodules")
+    end)
+
 end

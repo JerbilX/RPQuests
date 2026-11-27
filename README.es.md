@@ -137,7 +137,11 @@ RPQuest/
 │   ├── MailTransport.lua        # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestDraftStore.lua      # Estado de borrador de creación y normalización de objetivos
 │   ├── QuestMigration.lua       # Migración no destructiva de SavedVars y esquemas de misiones
-│   ├── QuestRepository.lua      # CRUD account-wide, almacenamiento y seguimiento en runtime
+│   ├── QuestRecord.lua          # Normalización de identidades, formato y clonado de registros
+│   ├── QuestLifecycle.lua       # Ciclo de vida, resolución y reglas de completado de objetivos
+│   ├── QuestExchange.lua        # Importación/exportación ShareCodec, entregas y perfiles de mundo
+│   ├── QuestRuntime.lua         # Progreso en vivo (combate/descubrimiento/diálogo) y consultas de área
+│   ├── QuestRepository.lua      # SavedVars account-wide, CRUD, ajustes y fachada del repositorio
 │   ├── TutorialQuest.lua        # Paquete tutorial progresivo de 3 misiones en Daggerfall
 │   ├── Announcements.lua        # Mensajes CENTER_SCREEN_ANNOUNCE y alertas
 │   ├── TargetCapture.lua        # Captura de NPC bajo retícula y puntos de descubrimiento
