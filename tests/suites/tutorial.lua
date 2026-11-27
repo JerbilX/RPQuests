@@ -205,6 +205,8 @@ return function(h)
         local q1 = sv.quests[1]
         Addon.JournalTab:SelectQuest(q1.id)
         AssertEqual(Addon.JournalTab.btnCopy:IsHidden(), false, "Copy button visible on offered tutorial pill")
+        AssertEqual(Addon.JournalTab.btnRejectOffered:IsHidden(), true, "Reject button hidden on offered tutorial pill")
+        AssertEqual(Addon.JournalTab:ConfirmAbandonQuest(q1.id), true, "Offered tutorial pill can be abandoned")
 
         local normalReceived = Addon.QuestRepository:BuildQuestRecord(998, "External", "Desc", {}, {
             senderDisplayName = "@ExternalGM",
@@ -214,5 +216,22 @@ return function(h)
         Addon.QuestRepository._questById[normalReceived.id] = normalReceived
         Addon.JournalTab:SelectQuest(normalReceived.id)
         AssertEqual(Addon.JournalTab.btnCopy:IsHidden(), true, "Copy button hidden on regular received quest")
+        AssertEqual(Addon.JournalTab.btnRejectOffered:IsHidden(), false, "Reject button visible on regular offered quest")
+        AssertEqual(Addon.JournalTab:ConfirmAbandonQuest(normalReceived.id), false, "Regular offered quest cannot be abandoned")
+        AssertEqual(Addon.JournalTab.btnReset:IsHidden(), true, "Reset button hidden on regular received quest")
+
+        -- Completed tutorial pill shows Reset button and can be replayed
+        Addon.QuestRepository:AcceptOfferedQuest(q1.id)
+        Addon.QuestRepository:MarkDialogueTriggered(q1.id, 1)
+        Addon.QuestRepository:MarkDialogueTriggered(q1.id, 2)
+        Addon.JournalTab:SelectQuest(q1.id)
+        AssertEqual(Addon.JournalTab.btnReset:IsHidden(), false, "Reset button visible on completed tutorial pill")
+        AssertEqual(Addon.JournalTab.btnCopy:IsHidden(), false, "Copy button visible on completed tutorial pill")
+
+        local resetOk = Addon.QuestRepository:ResetQuest(q1.id)
+        AssertEqual(resetOk, true, "Completed tutorial pill resets cleanly")
+        AssertEqual(q1.completed, false, "Reset clears completed flag")
+        AssertEqual(q1.dialogues[1].executed, false, "Reset clears dialogue 1 executed flag")
+        AssertEqual(#sv.quests, 3, "Resetting Pill I does not duplicate Pill II")
     end)
 end
