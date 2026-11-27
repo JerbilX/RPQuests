@@ -22,6 +22,9 @@ RPQuest.Locales["jp"] = {
 
     -- Buttons
     BTN_NEW_QUEST = "+ 新規",
+    BTN_SHARE_WORLD_PROFILE = "ワールドプロフィール共有",
+    DLG_SHARE_WORLD_PROFILE_TITLE = "ワールドプロフィールを共有",
+    DLG_SHARE_WORLD_PROFILE_TEXT = "DLCとPOIプロフィールを送信する @Master アカウント名を入力してください：",
     BTN_ACTIVATE = "追跡する",
     BTN_COMPLETE_QUEST = "完了",
     BTN_DEACTIVATE = "追跡解除",
@@ -274,6 +277,7 @@ RPQuest.Locales["jp"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s が「%s」を受諾しました。",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s が「%s」を辞退しました。",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest: %s が「%s」に失敗しました。",
+    ALERT_WORLD_PROFILE_SENT = "RPQuest: %s にワールドプロフィールを送信しました。",
 
     -- Quest Icons
     LABEL_QUEST_ICON = "クエストアイコン:",

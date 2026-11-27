@@ -22,6 +22,9 @@ RPQuest.Locales["ru"] = {
 
     -- Buttons
     BTN_NEW_QUEST = "+ Новое",
+    BTN_SHARE_WORLD_PROFILE = "Отправить профиль мира",
+    DLG_SHARE_WORLD_PROFILE_TITLE = "Отправить профиль мира",
+    DLG_SHARE_WORLD_PROFILE_TEXT = "Введите имя аккаунта @Master для отправки профиля DLC и POI:",
     BTN_ACTIVATE = "Отслеживать",
     BTN_COMPLETE_QUEST = "Завершить",
     BTN_DEACTIVATE = "Снять метку",
@@ -274,6 +277,7 @@ RPQuest.Locales["ru"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest: %s принял(а) «%s».",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest: %s отклонил(а) «%s».",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest: %s провалил(а) «%s».",
+    ALERT_WORLD_PROFILE_SENT = "RPQuest: Профиль мира отправлен %s.",
 
     -- Quest Icons
     LABEL_QUEST_ICON = "Значок задания:",

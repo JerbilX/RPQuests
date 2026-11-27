@@ -9,6 +9,7 @@
 -- Ref: docs/adr/0014-areas-por-objetivo-mensajes-eliminacion-y-visibilidad-mapa.md
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -173,6 +174,7 @@ local function IsQuestTable(arg)
 end
 
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 function QuestRepository:AreAllObjectivesCompleted(questOrTargets, discoveriesArg, dialoguesArg)
     local targets, discoveries, dialogues
     if discoveriesArg == nil and dialoguesArg == nil and IsQuestTable(questOrTargets) then
@@ -205,6 +207,7 @@ function QuestRepository:AreAllObjectivesCompleted(questOrTargets, discoveriesAr
 end
 
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 function QuestRepository:CanManuallyCompleteQuest(quest)
     if not quest or quest.completed or quest.failed or self:IsOfferedQuest(quest) then
         return false
@@ -431,6 +434,7 @@ function QuestRepository:GetDefaults()
         quests = {},
         ingestedMailIds = {},
         migratedCharacterIds = {},
+        worldProfiles = {},
         draft = Addon.QuestDraftStore:CreateDefaultDraft(),
         settings = {
             autoDeleteMail = true,
@@ -460,6 +464,7 @@ function QuestRepository:Initialize(savedVars)
     self.savedVars.nextId = self.savedVars.nextId or 1
     self.savedVars.quests = self.savedVars.quests or {}
     self.savedVars.ingestedMailIds = self.savedVars.ingestedMailIds or {}
+    self.savedVars.worldProfiles = self.savedVars.worldProfiles or {}
     if type(self.savedVars.settings) ~= "table" then
         self.savedVars.settings = {}
     end
@@ -1448,6 +1453,7 @@ function QuestRepository:MarkDiscoveryTriggered(questId, discoveryIndex)
 end
 
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 function QuestRepository:MarkDialogueTriggered(questId, dialogueIndex)
     local quest = self:GetQuestById(questId)
     if not quest or quest.completed or quest.failed or type(quest.dialogues) ~= "table" then
@@ -1548,4 +1554,56 @@ function QuestRepository:FindDialogueForActiveQuest(rawNpcName, zoneId)
     end
 
     return nil
+end
+
+function QuestRepository:SaveWorldProfile(accountName, profile)
+    if type(profile) ~= "table" then return nil end
+    local normAccount = self:NormalizeAccountName(accountName)
+    local charName = self:NormalizeCharacterName(profile.characterName)
+    if normAccount == "" or charName == "" then
+        return nil
+    end
+
+    self.savedVars.worldProfiles = self.savedVars.worldProfiles or {}
+    local entry = self.savedVars.worldProfiles[normAccount]
+    if type(entry) ~= "table" then
+        entry = {
+            dlcMask = "",
+            esoPlus = false,
+            updatedAt = 0,
+            characters = {},
+        }
+        self.savedVars.worldProfiles[normAccount] = entry
+    end
+    if type(entry.characters) ~= "table" then
+        entry.characters = {}
+    end
+
+    local now = GetTimeStamp() or 0
+    if type(profile.dlcMask) == "string" and profile.dlcMask ~= "" then
+        entry.dlcMask = profile.dlcMask
+    end
+    if profile.esoPlus ~= nil then
+        entry.esoPlus = (profile.esoPlus == true)
+    end
+    entry.updatedAt = now
+    entry.characters[charName] = {
+        poiMask = type(profile.poiMask) == "string" and profile.poiMask or "",
+        updatedAt = now,
+    }
+
+    self:NotifyListeners("WORLD_PROFILE_UPDATED", {
+        accountName = normAccount,
+        characterName = charName,
+        profile = entry,
+    })
+    return entry
+end
+
+function QuestRepository:GetWorldProfile(accountName)
+    local normAccount = self:NormalizeAccountName(accountName)
+    if normAccount == "" or not self.savedVars or type(self.savedVars.worldProfiles) ~= "table" then
+        return nil
+    end
+    return self.savedVars.worldProfiles[normAccount]
 end

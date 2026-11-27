@@ -6,6 +6,7 @@
 -- Ref: docs/adr/0015-separacion-ciclo-de-vida-y-estado-de-resolucion.md
 -- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -49,6 +50,8 @@ Addon.Constants = {
     SHARE_CODEC = {
         PREFIX = "RPQ3",
         COMPLETION_PREFIX = "RPQC1",
+        WORLD_PROFILE_PREFIX = "RPQW1",
+        WORLD_PROFILE_VERSION = 1,
         VERSION = 3,
     },
     TARGET = {

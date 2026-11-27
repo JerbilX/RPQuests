@@ -252,7 +252,7 @@ function JournalTab:BuildLeftColumn(panel)
     self.newBtn = CreateStyledButton(
         PANEL_NAME .. "_NewBtn",
         leftCol,
-        320,
+        130,
         28,
         Addon.Locale:Get("BTN_NEW_QUEST"),
         function()
@@ -260,6 +260,23 @@ function JournalTab:BuildLeftColumn(panel)
         end
     )
     self.newBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 4, 4)
+
+    self.shareProfileBtn = CreateStyledButton(
+        PANEL_NAME .. "_ShareProfileBtn",
+        leftCol,
+        182,
+        28,
+        Addon.Locale:Get("BTN_SHARE_WORLD_PROFILE"),
+        function()
+            local defaultMaster = ""
+            local selected = self.selectedQuestId and Addon.QuestRepository and Addon.QuestRepository:GetQuestById(self.selectedQuestId)
+            if selected and type(selected.senderDisplayName) == "string" and selected.senderDisplayName ~= "" then
+                defaultMaster = selected.senderDisplayName
+            end
+            ZO_Dialogs_ShowDialog("RPQUEST_SHARE_WORLD_PROFILE", nil, { initialEditText = defaultMaster })
+        end
+    )
+    self.shareProfileBtn:SetAnchor(TOPLEFT, leftCol, TOPLEFT, 142, 4)
 
     local emptyLabel = WINDOW_MANAGER:CreateControl(PANEL_NAME .. "_EmptyList", leftCol, CT_LABEL)
     emptyLabel:SetDimensions(310, 80)
@@ -360,6 +377,32 @@ function JournalTab:BuildLeftColumn(panel)
         Addon.QuestRepository and Addon.QuestRepository:GetSetting("autoOpenJournalOnReceive") == true
     )
     self.chkAutoOpenJournalOnReceive = chkAutoOpen
+
+    if not ESO_Dialogs["RPQUEST_SHARE_WORLD_PROFILE"] then
+        ESO_Dialogs["RPQUEST_SHARE_WORLD_PROFILE"] = {
+            title = { text = Addon.Locale:Get("DLG_SHARE_WORLD_PROFILE_TITLE") },
+            mainText = { text = Addon.Locale:Get("DLG_SHARE_WORLD_PROFILE_TEXT") },
+            editBox = {
+                maxInputCharacters = Addon.Constants.TEXT_LIMITS.ACCOUNT_NAME,
+            },
+            buttons = {
+                {
+                    requiresTextInput = true,
+                    text = Addon.Locale:Get("BTN_MAIL_SEND_CONFIRM"),
+                    callback = function(dialog)
+                        local target = ZO_Dialogs_GetEditBoxText(dialog)
+                        if target and Addon.MailTransport and Addon.MailTransport.SendWorldProfile then
+                            local ok, errKey = Addon.MailTransport:SendWorldProfile(target)
+                            if not ok and errKey and Addon.Announcements and Addon.Announcements.ShowAlert then
+                                Addon.Announcements:ShowAlert(Addon.Locale:Get(errKey), true)
+                            end
+                        end
+                    end,
+                },
+                { text = SI_DIALOG_CANCEL },
+            },
+        }
+    end
 end
 
 function JournalTab:ScrollQuestList(step)

@@ -108,6 +108,8 @@ function MailSendPane.OnTransportEvent(tab, evType, payload)
         if tab.viewMode == tab.VIEW_MODE.DETAIL then
             tab:RefreshDetailPane()
         end
+    elseif evType == "MAIL_WORLD_PROFILE_SENT" and type(payload) == "table" then
+        Addon.Announcements:ShowAlert(Addon.Locale:Get("ALERT_WORLD_PROFILE_SENT", payload.to or ""), false)
     end
 end
 

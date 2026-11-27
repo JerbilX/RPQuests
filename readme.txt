@@ -42,6 +42,9 @@ Usage:
   whenever a map/area is defined. Entering a pending active target's search area
   or exact location also illuminates the compass border in gold/amber
   (independent of map toggles, excluding hidden discovery points).
+- Click "Share World Profile" at the bottom of the quest list to mail your
+  account DLC access and character discovered POI snapshot to a @Master
+  (also piggybacked silently on Accepted and Done reports within 700 chars).
 - Bind keys under Settings -> Controls -> RPQuest - Custom Quests.
 
 Supported Languages:

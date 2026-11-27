@@ -22,6 +22,9 @@ RPQuest.Locales["zh"] = {
 
     -- Buttons
     BTN_NEW_QUEST = "+ 新建",
+    BTN_SHARE_WORLD_PROFILE = "分享世界档案",
+    DLG_SHARE_WORLD_PROFILE_TITLE = "分享世界档案",
+    DLG_SHARE_WORLD_PROFILE_TEXT = "输入要发送 DLC 与 POI 档案的 @Master 账号名：",
     BTN_ACTIVATE = "设为追踪",
     BTN_COMPLETE_QUEST = "完成",
     BTN_DEACTIVATE = "取消追踪",
@@ -274,6 +277,7 @@ RPQuest.Locales["zh"] = {
     ALERT_MAIL_ACCEPTANCE_RECEIVED = "RPQuest：%s 接受了“%s”。",
     ALERT_MAIL_REJECTION_RECEIVED = "RPQuest：%s 拒绝了“%s”。",
     ALERT_MAIL_FAILURE_RECEIVED = "RPQuest：%s 未能完成“%s”。",
+    ALERT_WORLD_PROFILE_SENT = "RPQuest：已将世界档案发送至 %s。",
 
     -- Quest Icons
     LABEL_QUEST_ICON = "任务图标：",

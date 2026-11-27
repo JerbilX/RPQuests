@@ -88,6 +88,7 @@ La pestaña **RPQuests** dentro del Diario de Misiones (`J`) usa un acordeón ex
 - **Aviso de Llegada y Apertura Automática:** Cuando llega un correo de misión, RPQuest lo importa automáticamente y muestra un aviso en pantalla alertando al jugador de que tiene una nueva misión en **Pendientes** (o lo rechaza con alerta de error si el idioma no coincide con el cliente). Por defecto, **Abrir automáticamente el diario RPQuests al recibir una misión nueva** está activado para abrir la pestaña **RPQuests** y seleccionar la misión recién recibida (se omite si estás en combate), y puede desactivarse en la parte inferior del panel de la lista de misiones.
 - **Aceptar y Rechazar:** Pulsar **Aceptar** activa la misión y los diálogos de NPC (las marcas del mapa permanecen desactivadas por defecto hasta activarlas en el detalle), y notifica al Quest Master. Pulsar **Rechazar** declina la oferta y avisa al Quest Master.
 - **Reporte de Finalización y Fallo:** Cuando el jugador completa todos los objetivos (o completa manualmente una misión *free-form* o con solo objetivos opcionales pendientes) o falla una condición obligatoria (como sigilo, ubicación o un descubrimiento/diálogo **Obligatorio** omitido al resolver), RPQuest envía automáticamente el reporte (`RPQC1`) al Quest Master y actualiza la resolución del contrato en **Enviadas**.
+- **Sincronización de Perfil de Mundo:** Pulsa **Compartir Perfil de Mundo** en la parte superior de la lista de misiones para enviar tu snapshot compacto (`RPQW1`) de DLCs de `@Cuenta` y POIs descubiertos del `Personaje` a un `@Master`; los reportes de aceptación y finalización también adjuntan el perfil actualizado silenciosamente si cabe en el límite de 700 caracteres.
 
 ---
 
@@ -130,7 +131,8 @@ RPQuest/
 │   ├── Constants.lua            # Constantes, radios y metadatos
 │   ├── Locale.lua               # Selector de idioma del cliente e i18n
 │   ├── BinaryCodec.lua          # Primitivas binarias Base85, Base64Url, LZSS y Varint
-│   ├── ShareCodec.lua           # Serialización de misiones/resultados RPQ3 y RPQC1
+│   ├── ShareCodec.lua           # Serialización de misiones/resultados/perfil RPQ3, RPQC1 y RPQW1
+│   ├── WorldProfile.lua         # Escáner y códec de bitmask de DLCs por cuenta y POIs por personaje
 │   ├── MailInbox.lua            # Escaneo de bandeja, reensamblado RPQP e ingesta de correos
 │   ├── MailTransport.lua        # Envío y recepción de misiones y reportes por correo in-game
 │   ├── QuestDraftStore.lua      # Estado de borrador de creación y normalización de objetivos

@@ -12,6 +12,7 @@ lang/$(language).lua
 src/Locale.lua
 src/BinaryCodec.lua
 src/ShareCodec.lua
+src/WorldProfile.lua
 src/QuestDraftStore.lua
 src/QuestMigration.lua
 src/QuestRepository.lua

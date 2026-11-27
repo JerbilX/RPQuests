@@ -88,6 +88,7 @@ The **RPQuests** tab inside the Quest Journal (`J`) uses an exclusive accordion�
 - **Arrival Announcement & Auto-Open:** When a quest mail arrives, RPQuest ingests it automatically and displays an on-screen announcement alerting the player that a new quest is waiting in **Pending** (or rejects and alerts if the quest language does not match the client). By default, **Auto-open RPQuests journal when receiving a new quest** is enabled to automatically open the **RPQuests** tab and select the newly received quest (skipped if you are in combat), and can be toggled off at the bottom of the quest list panel.
 - **Accepting & Rejecting:** Clicking **Accept** activates the quest and NPC dialogues (map markers remain off by default until toggled in the quest details), and notifies the Quest Master. Clicking **Reject** declines the offer and notifies the Quest Master.
 - **Completion & Failure Reporting:** When the player finishes all objectives (or manually completes a *free-form* quest or one with only optional targets remaining), or fails a required condition (such as stealth, target location, or a **Required** discovery/dialogue missed at resolution), RPQuest automatically mails the `RPQC1` report back to the Quest Master and updates the contract's resolution in **Sent**.
+- **World Profile Sync:** Click **Share World Profile** at the top of the quest list to send your `@Account` DLC access and `Character` discovered POI snapshot (`RPQW1`) to a `@Master`; acceptance and completion reports also piggyback your updated profile silently when fitting within ESO's 700-character mail limit.
 
 ---
 
@@ -130,7 +131,8 @@ RPQuest/
 │   ├── Constants.lua            # Constants, radii, and metadata
 │   ├── Locale.lua               # Client language selector & i18n
 │   ├── BinaryCodec.lua          # Base85, Base64Url, LZSS, and Varint binary primitives
-│   ├── ShareCodec.lua           # RPQ3 & RPQC1 quest/result serialization
+│   ├── ShareCodec.lua           # RPQ3, RPQC1 & RPQW1 quest/result/world-profile serialization
+│   ├── WorldProfile.lua         # Account DLC & character POI bitmask scanner/codec
 │   ├── MailInbox.lua            # Inbox scanning, RPQP multipart reassembly & ingestion
 │   ├── MailTransport.lua        # In-game quest & completion mail transport
 │   ├── QuestDraftStore.lua      # Draft authoring state & objective normalization

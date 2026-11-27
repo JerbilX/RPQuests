@@ -8,6 +8,7 @@
 -- Ref: docs/adr/0016-limites-texto-y-entidades-presupuesto-correo.md
 -- Ref: docs/adr/0017-objetivos-duelo-jugadores-y-event-duel-finished.md
 -- Ref: docs/adr/0018-ejes-de-victoria-modo-freeform-y-objetivos-requeridos.md
+-- Ref: docs/adr/0019-protocolo-world-profile-rpqw1-y-sincronizacion-correo.md
 
 RPQuest = RPQuest or {}
 local Addon = RPQuest
@@ -1091,4 +1092,101 @@ function ShareCodec:ValidateCompletionForQuest(quest, codeString)
     end
 
     return true, resOrErr
+end
+
+function ShareCodec:EncodeWorldProfile(snapshot)
+    if type(snapshot) ~= "table" then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local version = Addon.Constants.SHARE_CODEC.WORLD_PROFILE_VERSION or 1
+    local prefix = Addon.Constants.SHARE_CODEC.WORLD_PROFILE_PREFIX or "RPQW1"
+    local numZones = math.max(0, math.floor(tonumber(snapshot.numZones) or 0))
+    local totalPois = math.max(0, math.floor(tonumber(snapshot.totalPois) or 0))
+    local flags = (snapshot.esoPlus == true) and 1 or 0
+    local charName = tostring(snapshot.characterName or "")
+
+    local dlcBits = snapshot.dlcBits
+    if type(dlcBits) ~= "table" and type(snapshot.dlcMask) == "string" and snapshot.dlcMask ~= "" then
+        dlcBits = BinaryCodec:DecodeBitsetBase85(snapshot.dlcMask, numZones) or {}
+    end
+    local poiBits = snapshot.poiBits
+    if type(poiBits) ~= "table" and type(snapshot.poiMask) == "string" and snapshot.poiMask ~= "" then
+        poiBits = BinaryCodec:DecodeBitsetBase85(snapshot.poiMask, totalPois) or {}
+    end
+
+    local buf = {}
+    BinaryCodec:WriteByte(buf, version)
+    BinaryCodec:WriteByte(buf, flags)
+    BinaryCodec:WriteStr(buf, charName)
+    BinaryCodec:WriteUVarint(buf, numZones)
+    BinaryCodec:WriteBitset(buf, dlcBits or {}, numZones)
+    BinaryCodec:WriteUVarint(buf, totalPois)
+    BinaryCodec:WriteBitset(buf, poiBits or {}, totalPois)
+
+    local compressed = BinaryCodec:CompressLZSS(table.concat(buf))
+    local checksum = ComputeChecksum16(compressed)
+    local encoded = BinaryCodec:Base85Encode(compressed)
+    return string.format("%s:%s:%s", prefix, checksum, encoded)
+end
+
+function ShareCodec:DecodeWorldProfile(codeString)
+    if type(codeString) ~= "string" then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local prefix = Addon.Constants.SHARE_CODEC.WORLD_PROFILE_PREFIX or "RPQW1"
+    local trimmed = codeString:gsub("^%s+", ""):gsub("%s+$", "")
+    local pfx, checksum, encodedPayload = string.match(trimmed, "^([A-Z0-9]+):([0-9A-Fa-f]+):([^%s]+)$")
+    if pfx ~= prefix or not checksum or #checksum ~= 4 or not encodedPayload then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local rawCompressed = BinaryCodec:Base85Decode(encodedPayload)
+    if not rawCompressed then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local expectedChecksum = ComputeChecksum16(rawCompressed)
+    if checksum:upper() ~= expectedChecksum:upper() then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local raw = BinaryCodec:DecompressLZSS(rawCompressed)
+    if not raw then
+        return nil, "ERR_INVALID_CODE"
+    end
+
+    local len = #raw
+    local pos = 1
+    local version, flags, charName, numZones, dlcBits, totalPois, poiBits
+
+    version, pos = BinaryCodec:ReadByte(raw, pos, len)
+    if version ~= (Addon.Constants.SHARE_CODEC.WORLD_PROFILE_VERSION or 1) then
+        return nil, "ERR_INVALID_CODE"
+    end
+    flags, pos = BinaryCodec:ReadByte(raw, pos, len)
+    if not flags then return nil, "ERR_INVALID_CODE" end
+    charName, pos = BinaryCodec:ReadStr(raw, pos, len)
+    if not charName or charName == "" then return nil, "ERR_INVALID_CODE" end
+    numZones, pos = BinaryCodec:ReadUVarint(raw, pos, len)
+    if not numZones then return nil, "ERR_INVALID_CODE" end
+    dlcBits, pos = BinaryCodec:ReadBitset(raw, pos, len, numZones)
+    if not dlcBits then return nil, "ERR_INVALID_CODE" end
+    totalPois, pos = BinaryCodec:ReadUVarint(raw, pos, len)
+    if not totalPois then return nil, "ERR_INVALID_CODE" end
+    poiBits = BinaryCodec:ReadBitset(raw, pos, len, totalPois)
+    if not poiBits then return nil, "ERR_INVALID_CODE" end
+
+    return {
+        version = version,
+        esoPlus = (flags % 2) == 1,
+        characterName = charName,
+        numZones = numZones,
+        dlcBits = dlcBits,
+        dlcMask = BinaryCodec:EncodeBitsetBase85(dlcBits, numZones),
+        totalPois = totalPois,
+        poiBits = poiBits,
+        poiMask = BinaryCodec:EncodeBitsetBase85(poiBits, totalPois),
+    }
 end
