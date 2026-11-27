@@ -109,9 +109,11 @@ Addon.Constants = {
         HUGE = 7000,
     },
     DISCOVERY_POLL_INTERVAL_MS = 750,
+    COMPASS_AREA_GLOW_POLL_INTERVAL_MS = 500,
     UI = {
         CHAT_PREFIX = "|cE8D5A0[RPQuest]|r ",
         TAB_DESCRIPTOR = "rpquest_custom_quests",
+        COMPASS_AREA_GLOW_COLOR = { r = 1.0, g = 0.78, b = 0.22, a = 1.0 },
         PIN_TYPE_STRING = "RPQUEST_SEARCH_AREA_PIN",
         SEARCH_AREA_COLOR = { r = 0.16, g = 0.78, b = 0.48, a = 0.65 },
         LOCATION_PIN_TYPE_STRING = "RPQUEST_TARGET_LOCATION_PIN",
