@@ -31,6 +31,10 @@ src/CompassAreaGlow.lua
 src/MailInbox.lua
 src/MailTransport.lua
 src/JournalWidgets.lua
+src/JournalModeBar.lua
+src/JournalAccordion.lua
+src/JournalQuestList.lua
+src/JournalActions.lua
 src/JournalDetailPane.lua
 src/JournalEditorSections.lua
 src/JournalEditorPane.lua

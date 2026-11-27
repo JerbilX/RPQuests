@@ -9,6 +9,12 @@ local Widgets = Addon.JournalWidgets
 
 Widgets.PANEL_NAME = "RPQuest_JournalPanel"
 
+Widgets.VIEW_MODE = {
+    DETAIL = "DETAIL",
+    EDITOR = "EDITOR",
+    MAIL_SEND = "MAIL_SEND",
+}
+
 function Widgets.CreateStyledButton(name, parent, width, height, text, onClick)
     local btn = WINDOW_MANAGER:CreateControl(name, parent, CT_BUTTON)
     btn:SetDimensions(width, height)

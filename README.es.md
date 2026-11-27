@@ -151,11 +151,15 @@ RPQuest/
 │   ├── WorldMapArea.lua         # Áreas de búsqueda y zoom-out verde esmeralda, círculos de ubicación naranja y descubrimiento púrpura en ZO_WorldMap
 │   ├── CompassAreaGlow.lua      # Brillo dorado/ámbar en el borde de la brújula dentro de áreas activas
 │   ├── JournalWidgets.lua       # Helpers de widgets UI y formato reutilizables para JournalTab
+│   ├── JournalModeBar.lua       # Integración en barra de modos y escena del Diario nativo
+│   ├── JournalAccordion.lua     # Controles, filas y animaciones del acordeón izquierdo
+│   ├── JournalQuestList.lua     # Lista izquierda de misiones, paginación y estado UI
+│   ├── JournalActions.lua       # Acciones de ciclo de vida, listener y sincronización de borrador
 │   ├── JournalDetailPane.lua    # Panel de detalle de misión y actualización de acciones
 │   ├── JournalEditorSections.lua# Constructores de secciones acordeón y campos del editor
 │   ├── JournalEditorPane.lua    # Panel editor multi-sección: layout y actualización
 │   ├── JournalMailSendPane.lua  # Panel de envío por correo in-game y progreso de transporte
-│   └── JournalTab.lua           # Coordinador de la pestaña en el Diario de Misiones
+│   └── JournalTab.lua           # Fachada y coordinador de refresco de la pestaña en el Diario
 ├── scripts/
 │   ├── bump-version.sh          # Incremento sincronizado de versión SemVer
 │   ├── check-esoui.sh           # Validación de cumplimiento ESOUI y términos retirados
