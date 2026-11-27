@@ -86,9 +86,11 @@ jobs:
 
           API_VERSION=$(awk -F': *' '/^## APIVersion:/{print $2; exit}' RPQuest.txt | tr -d '\r' | awk '{print $NF}')
           COMPATIBLE_JSON=$(curl -fsS -H "x-api-token: ${ESOUI_API_TOKEN}" "https://api.esoui.com/addons/compatible.json" || true)
-          COMPATIBILITY=$(printf '%s' "$COMPATIBLE_JSON" | jq -r --arg api "$API_VERSION" 'map(select(.interface == $api)) | .[0].id // empty' 2>/dev/null || true)
+          # Several game versions may share the same interface; pick the latest (highest semantic id).
+          COMPATIBILITY=$(printf '%s' "$COMPATIBLE_JSON" | jq -r --arg api "$API_VERSION" \
+            'map(select((.interface | tostring) == $api)) | sort_by(.id | split(".") | map(tonumber? // 0)) | last | .id // empty' 2>/dev/null || true)
           if [ -z "$COMPATIBILITY" ]; then
-            echo "::warning::Could not resolve ESOUI compatible version for APIVersion '${API_VERSION}'; omitting compatible parameter."
+            echo "::warning::No ESOUI compatible entry matches APIVersion '${API_VERSION}' in compatible.json; omitting compatible parameter. Verify APIVersion (eso_validate_addon) before releasing."
           fi
 
           ENDPOINT="https://api.esoui.com/addons/update"
