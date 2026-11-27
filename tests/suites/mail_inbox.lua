@@ -709,7 +709,12 @@ return function(T)
         RPQuest.QuestRepository:Initialize(sv)
         RPQuest.MailTransport:Initialize()
 
-        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), false, "autoOpenJournalOnReceive defaults to false")
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), true, "autoOpenJournalOnReceive defaults to true")
+
+        -- Preserve existing SavedVariables value when explicitly set to false
+        RPQuest.QuestRepository:Initialize({ settings = { autoOpenJournalOnReceive = false } })
+        AssertEqual(RPQuest.QuestRepository:GetSetting("autoOpenJournalOnReceive"), false, "autoOpenJournalOnReceive preserves existing false SavedVariables value")
+        RPQuest.QuestRepository:Initialize(sv)
 
         local openCalls = 0
         local selectedIds = {}
@@ -754,7 +759,8 @@ return function(T)
         local origPlayerInCombat = mockState.playerInCombat
         mockState.playerInCombat = false
 
-        -- 1. Setting disabled (default): does not open journal
+        -- 1. Setting disabled explicitly: does not open journal
+        RPQuest.QuestRepository:SetSetting("autoOpenJournalOnReceive", false)
         RPQuest.MailInbox:UpsertReceivedEntry(MakeEntry(961, "@SenderOne"))
         AssertEqual(openCalls, 0, "OpenTab not called when autoOpenJournalOnReceive is false")
         AssertEqual(#selectedIds, 0, "SelectQuest not called when autoOpenJournalOnReceive is false")

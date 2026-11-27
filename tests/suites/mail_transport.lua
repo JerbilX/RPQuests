@@ -41,6 +41,7 @@ return function(T)
             IsShowing = function(_, name)
                 return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
             end,
+            Show = function() end,
         }
 
         -- Create a prepared quest
@@ -278,6 +279,7 @@ return function(T)
             IsShowing = function(_, name)
                 return nativeMailOpen and (name == "mailInbox" or name == "mailSend")
             end,
+            Show = function() end,
         }
         _G.SendMail = function(to, subject, body)
             table.insert(sentMails, { to = to, subject = subject, body = body })
@@ -623,6 +625,7 @@ return function(T)
             IsShowing = function(_, sceneName)
                 return sceneName == "mailSend"
             end,
+            Show = function() end,
         }
         _G.SendMail = function(to, subject, body)
             table.insert(sentMails, { to = to, subject = subject, body = body })
